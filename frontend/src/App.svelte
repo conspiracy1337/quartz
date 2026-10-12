@@ -39,11 +39,13 @@
   import Welcome from './routes/setup/Welcome.svelte';
   import Skins from './routes/Skins.svelte';
   import Syncing from './routes/Syncing.svelte';
+  import { revs } from '$lib/revs.svelte';
   import { tasks } from '$lib/tasks.svelte';
 
   $effect(() => router.start());
   $effect(() => prefs.listen());
   $effect(() => tasks.listen());
+  $effect(() => revs.listen());
   $effect(() => applyAppearance());
   $effect(() => installShortcuts());
   void prefs.load();

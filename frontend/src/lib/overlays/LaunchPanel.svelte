@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '../api';
+  import { revs } from '../revs.svelte';
   import { query } from '../query.svelte';
   import { LAUNCH_STEPS, session } from '../session.svelte';
   import Bar from '../ui/Bar.svelte';
@@ -10,7 +11,7 @@
   interface Props { instanceId: string; stage: number }
   let { instanceId, stage }: Props = $props();
   const inst = query(() => api.instances.get(instanceId));
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => revs.load('accounts', api.accounts.list));
   const me = $derived(accounts.data?.find((a) => a.isDefault)?.name ?? '');
   const META = $derived([`0.3 s`, '0.4 s', 'ready', '2,318 / 3,604', 'bubblewrap', '']);
   const names = $derived(LAUNCH_STEPS.map((s, i) => (i === 0 ? `Signing in as ${me}` : i === 1 ? `Checking ${inst.data?.counts.mods ?? ''} mods` : i === 2 ? 'Java 21.0.5' : s)));

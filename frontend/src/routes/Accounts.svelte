@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { revs } from '$lib/revs.svelte';
   import type { Account } from '$lib/api/types';
   import { query } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
@@ -7,7 +8,12 @@
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => revs.load('accounts', api.accounts.list));
+
+  async function makeDefault(id: string) {
+    await api.accounts.setDefault(id);
+    revs.bump('accounts');
+  }
   let refresh = $state(true);
   let askAtLaunch = $state(false);
   let offlineFallback = $state(true);
@@ -30,7 +36,7 @@
           <span style="min-width: 0"><span style="display: flex; gap: 8px; align-items: center"><span class="trunc" style="font-weight: 500">{a.name}</span>{#if a.isDefault}<span class="badge badge-accent">Default</span>{/if}</span><span class="trunc small faint" style="display: block">{a.detail}</span></span>
           <span class="small opt" style="display: flex; gap: 6px; align-items: center; color: {st.color}"><span class="dot" style="background: {st.color}" aria-hidden="true"></span>{st.label}</span>
           <span style="display: flex; gap: 6px">
-            {#if !a.isDefault}<button class="btn btn-sm">Make default</button>{/if}
+            {#if !a.isDefault}<button class="btn btn-sm" onclick={() => makeDefault(a.id)}>Make default</button>{/if}
             {#if a.status === 'expired'}<button class="btn btn-sm btn-accent" onclick={() => session.open({ kind: 'add-account', mode: 'browser' })}>Sign in again</button>{/if}
             <button class="btn btn-sm btn-icon btn-ghost" aria-label="More for {a.name}"><Icon name="more" size={14} /></button>
           </span>

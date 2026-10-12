@@ -36,3 +36,18 @@ export const capes: Cape[] = [
 ];
 
 export const wornCape = 'migrator';
+
+/** Preview stand-in for Go's account store. */
+export const mockAccounts = {
+  list: () => accounts,
+  addOffline: (name: string): Account => {
+    const a: Account = { id: `o${accounts.length + 1}`.padEnd(32, '0'), name, kind: 'offline', status: 'offline', detail: 'Offline account, for local testing', isDefault: !accounts.length, skin: palettes.frost };
+    accounts.push(a);
+    return a;
+  },
+  setDefault: (id: string) => accounts.forEach((a) => (a.isDefault = a.id === id)),
+  remove: (id: string) => {
+    const i = accounts.findIndex((a) => a.id === id);
+    if (i >= 0) accounts.splice(i, 1);
+  },
+};

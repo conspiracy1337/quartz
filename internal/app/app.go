@@ -18,6 +18,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"quartz/internal/accounts"
 	"quartz/internal/api"
 	"quartz/internal/brand"
 	"quartz/internal/core/download"
@@ -57,6 +58,7 @@ type app struct {
 	cache    *httpcache.Cache
 	meta     *meta.Service
 	java     *java.Manager
+	accounts *accounts.Store
 	ctx      *api.Ctx
 }
 
@@ -90,6 +92,7 @@ func Run(o Options) error {
 			api.NewDownloads(a.tasks),
 			api.NewVersions(a.ctx, a.meta),
 			api.NewJava(a.ctx, a.java, a.meta, a.tasks, a.settings),
+			api.NewAccounts(a.accounts, a.bus),
 		},
 	})
 }
@@ -139,6 +142,10 @@ func build(o Options) (*app, error) {
 	if err != nil {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("loading Java runtimes: %w", err)
+	}
+	if a.accounts, err = accounts.Open(p.Accounts(), log); err != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("loading accounts: %w", err)
 	}
 	if err := a.buildTasks(); err != nil {
 		_ = logFile.Close()
@@ -203,6 +210,9 @@ func (a *app) shutdown(context.Context) {
 	}
 	if err := a.verified.Flush(); err != nil {
 		a.log.Error("saving verified index on exit failed", "err", err)
+	}
+	if err := a.accounts.Flush(); err != nil {
+		a.log.Error("saving accounts on exit failed", "err", err)
 	}
 	if err := a.java.Flush(); err != nil {
 		a.log.Error("saving Java probes on exit failed", "err", err)

@@ -1,5 +1,78 @@
+export namespace accounts {
+	
+	export class SkinColors {
+	    skin: string;
+	    hair: string;
+	    eye: string;
+	    mouth: string;
+	    top: string;
+	    topD: string;
+	    pants: string;
+	    shoes: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SkinColors(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.skin = source["skin"];
+	        this.hair = source["hair"];
+	        this.eye = source["eye"];
+	        this.mouth = source["mouth"];
+	        this.top = source["top"];
+	        this.topD = source["topD"];
+	        this.pants = source["pants"];
+	        this.shoes = source["shoes"];
+	    }
+	}
+
+}
+
 export namespace api {
 	
+	export class AccountView {
+	    id: string;
+	    name: string;
+	    kind: string;
+	    status: string;
+	    detail: string;
+	    isDefault: boolean;
+	    skin: accounts.SkinColors;
+	
+	    static createFrom(source: any = {}) {
+	        return new AccountView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.status = source["status"];
+	        this.detail = source["detail"];
+	        this.isDefault = source["isDefault"];
+	        this.skin = this.convertValues(source["skin"], accounts.SkinColors);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class AppInfo {
 	    name: string;
 	    shortName: string;

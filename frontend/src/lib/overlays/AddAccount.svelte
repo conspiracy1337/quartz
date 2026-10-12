@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { api } from '../api';
+  import { revs } from '../revs.svelte';
   import { session, type AddAccountMode } from '../session.svelte';
   import Dialog from '../ui/Dialog.svelte';
   import Seg from '../ui/Seg.svelte';
@@ -8,9 +10,23 @@
   // The dialog opens on the requested method; later changes are the user's own.
   // svelte-ignore state_referenced_locally
   let mode = $state<AddAccountMode>(initial ?? 'code');
-  let name = $state('TestDummy');
+  let name = $state('');
+  let saving = $state(false);
   const MODES = [{ value: 'browser', label: 'Browser' }, { value: 'code', label: 'Code' }, { value: 'offline', label: 'Offline' }] as const;
   const NAME = /^[A-Za-z0-9_]{3,16}$/;
+
+  async function addOffline() {
+    saving = true;
+    try {
+      await api.accounts.addOffline(name);
+      revs.bump('accounts');
+      session.close();
+    } catch (e) {
+      session.notify({ subject: 'Offline account', text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      saving = false;
+    }
+  }
 
   // Placeholder QR pattern until M3 renders the real device-code QR: three finder squares plus noise.
   const cells = (() => {
@@ -51,13 +67,13 @@
     </div>
   {:else}
     <div style="display: flex; flex-direction: column; gap: 12px">
-      <label class="field"><span class="field-label">Player name</span><span class="input"><input bind:value={name} maxlength="16" /></span><span class="field-help">3 to 16 letters, numbers or underscores.</span></label>
+      <label class="field"><span class="field-label">Player name</span><span class="input"><input bind:value={name} maxlength="16" placeholder="TestDummy" /></span><span class="field-help">3 to 16 letters, numbers or underscores.</span></label>
       <div class="card" style="padding: 10px 12px"><span class="small muted">Offline accounts can play singleplayer and LAN, and servers that allow it. Skins only show locally.</span></div>
     </div>
   {/if}
   {#snippet foot()}
     <button class="btn" onclick={() => session.close()}>Cancel</button>
-    {#if mode === 'offline'}<button class="btn btn-accent" disabled={!NAME.test(name)} onclick={() => session.close()}>Add offline account</button>{/if}
+    {#if mode === 'offline'}<button class="btn btn-accent" disabled={saving || !NAME.test(name)} onclick={addOffline}>Add offline account</button>{/if}
   {/snippet}
 </Dialog>
 

@@ -11,6 +11,7 @@ import * as misc from './mock/misc';
 import * as versions from './mock/versions';
 import type { ContentKind, Instance, InstanceSummary, ProjectType } from './types';
 import { bridged, preview } from '../bridge';
+import * as AccountsGo from '../wailsjs/go/api/Accounts';
 import * as JavaGo from '../wailsjs/go/api/Java';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { downloadsApi } from './downloads';
@@ -63,7 +64,10 @@ export const api = {
     loaders: (_minecraft: string) => serve(versions.loaders),
   },
   accounts: {
-    list: () => serve(accounts.accounts),
+    list: bridged(AccountsGo.List, accounts.mockAccounts.list),
+    addOffline: bridged(AccountsGo.AddOffline, accounts.mockAccounts.addOffline),
+    setDefault: bridged(AccountsGo.SetDefault, accounts.mockAccounts.setDefault),
+    remove: bridged(AccountsGo.Remove, accounts.mockAccounts.remove),
     skins: () => serve(accounts.skins),
     capes: () => serve({ capes: accounts.capes, worn: accounts.wornCape }),
   },

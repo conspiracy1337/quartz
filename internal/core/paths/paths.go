@@ -124,6 +124,9 @@ func (p Paths) Themes() string    { return filepath.Join(p.Root, "themes") }
 // DownloadHistory holds the last 24 hours of ended download jobs.
 func (p Paths) DownloadHistory() string { return filepath.Join(p.Root, "downloads.json") }
 
+// Accounts lists the player's accounts (never their tokens).
+func (p Paths) Accounts() string { return filepath.Join(p.Root, "accounts.json") }
+
 // Java holds the Java runtimes the launcher installs.
 func (p Paths) Java() string { return filepath.Join(p.Store(), "java") }
 

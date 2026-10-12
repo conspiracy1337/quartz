@@ -4,6 +4,7 @@
 
 <script lang="ts">
   import { api } from '../api';
+  import { revs } from '../revs.svelte';
   import { query } from '../query.svelte';
   import { href, type Route } from '../router.svelte';
   import { session } from '../session.svelte';
@@ -16,7 +17,7 @@
 
   const recent = query(() => api.instances.recent());
   const all = query(() => api.instances.list());
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => revs.load('accounts', api.accounts.list));
   const me = $derived(accounts.data?.find((a) => a.isDefault));
 
   const nav: { key: SideKey; label: string; icon: IconName; route: Route }[] = [
