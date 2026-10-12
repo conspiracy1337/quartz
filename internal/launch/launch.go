@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"quartz/internal/accounts"
+	"quartz/internal/auth"
 	"quartz/internal/core/events"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/sysinfo"
@@ -51,10 +52,16 @@ type Hooks struct {
 	AllExited   func()
 }
 
+// Sessions hands out the account and session to launch with (id "" means
+// the default account), refreshing Microsoft sign-ins as needed.
+type Sessions interface {
+	Session(ctx context.Context, id string) (accounts.Account, accounts.Session, error)
+}
+
 // Config wires a Launcher.
 type Config struct {
 	Instances *instance.Store
-	Accounts  *accounts.Store
+	Accounts  Sessions
 	Installer *install.Installer
 	Java      *java.Manager
 	Tasks     *tasks.Engine
@@ -93,12 +100,13 @@ type Progress struct {
 }
 
 // Failure is what launch:failed carries. Code "no-account" asks the UI to
-// open the add-account dialog.
+// open the add-account dialog, "sign-in-expired" to sign AccountID in again.
 type Failure struct {
 	InstanceID string `json:"instanceId"`
 	Stage      int    `json:"stage"`
 	Message    string `json:"message"`
 	Code       string `json:"code,omitempty"`
+	AccountID  string `json:"accountId,omitempty"`
 }
 
 // State is what game:state carries.
@@ -130,6 +138,18 @@ func (l *Launcher) Status() Status {
 	return s
 }
 
+// AccountInUse reports whether a running game plays with an account.
+func (l *Launcher) AccountInUse(id string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, r := range l.running {
+		if r.accountID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // Running reports whether an instance's game is running.
 func (l *Launcher) Running(id string) bool {
 	l.mu.Lock()
@@ -138,9 +158,10 @@ func (l *Launcher) Running(id string) bool {
 	return ok
 }
 
-// Play starts the launch pipeline in the background. Progress and the
-// outcome arrive as events.
-func (l *Launcher) Play(id string) error {
+// Play starts the launch pipeline in the background with an account
+// (accountID "" means the default one; "Launch as" passes another, for this
+// launch only). Progress and the outcome arrive as events.
+func (l *Launcher) Play(id, accountID string) error {
 	inst, err := l.cfg.Instances.Get(id)
 	if err != nil {
 		return err
@@ -157,7 +178,7 @@ func (l *Launcher) Play(id string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	l.launching[id] = cancel
 	l.mu.Unlock()
-	go l.pipeline(ctx, inst)
+	go l.pipeline(ctx, inst, accountID)
 	return nil
 }
 
@@ -191,8 +212,11 @@ func (l *Launcher) Runs(id string) []Record { return listRecords(l.cfg.Instances
 // details is also written from the task engine's event goroutine, so it is
 // guarded.
 type pipeline struct {
-	l    *Launcher
-	inst instance.Instance
+	l       *Launcher
+	inst    instance.Instance
+	account string
+	// signedIn is the account the sign-in step resolved, for failure events.
+	signedIn string
 
 	mu      sync.Mutex
 	details []string
@@ -211,8 +235,8 @@ func (p *pipeline) progress(stage, pct int) {
 	p.l.cfg.Bus.Emit(events.LaunchProgress, Progress{InstanceID: p.inst.ID, Stage: stage, Details: d, Pct: pct})
 }
 
-func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance) {
-	p := &pipeline{l: l, inst: inst, details: make([]string, stageCount)}
+func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance, accountID string) {
+	p := &pipeline{l: l, inst: inst, account: accountID, details: make([]string, stageCount)}
 	stage, err := p.run(ctx)
 	l.mu.Lock()
 	delete(l.launching, inst.ID)
@@ -224,6 +248,8 @@ func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance) {
 	switch {
 	case errors.Is(err, accounts.ErrNone):
 		f.Code, f.Message = "no-account", "Add an account first"
+	case errors.Is(err, accounts.ErrSignIn):
+		f.Code, f.AccountID, f.Message = "sign-in-expired", p.signedIn, "Sign in again: "+auth.Describe(err).Message
 	case ctx.Err() != nil:
 		f.Code, f.Message = "cancelled", "Launch cancelled"
 	}
@@ -237,11 +263,16 @@ func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance) {
 func (p *pipeline) run(ctx context.Context) (int, error) {
 	l := p.l
 	p.progress(StageSignIn, 0)
-	acc, err := l.cfg.Accounts.Default()
+	acc, sess, err := l.cfg.Accounts.Session(ctx, p.account)
+	p.signedIn = acc.ID
 	if err != nil {
 		return StageSignIn, err
 	}
-	p.set(StageSignIn, acc.Name)
+	if sess.Fallback {
+		p.set(StageSignIn, acc.Name+", offline: Microsoft is unreachable")
+	} else {
+		p.set(StageSignIn, acc.Name)
+	}
 
 	p.set(StageMods, "No mods")
 	p.progress(StageJava, 10)
@@ -291,7 +322,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	p.set(StageSandbox, "Off")
 	p.progress(StageStart, 90)
 
-	r, err := l.start(ctx, p.inst, acc, res, rt, mem, env)
+	r, err := l.start(ctx, p.inst, acc, sess, res, rt, mem, env)
 	if err != nil {
 		return StageStart, err
 	}

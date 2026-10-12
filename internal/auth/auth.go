@@ -12,6 +12,7 @@ import (
 	"quartz/internal/auth/msa"
 	"quartz/internal/auth/xbox"
 	"quartz/internal/core/netx"
+	"quartz/internal/core/secrets"
 	"quartz/internal/mcapi"
 )
 
@@ -93,7 +94,8 @@ func Transient(err error) bool {
 	switch {
 	case err == nil, NeedsReauth(err), errors.As(err, &oe),
 		errors.Is(err, msa.ErrNotConfigured), errors.Is(err, msa.ErrDenied),
-		errors.Is(err, msa.ErrExpired), errors.Is(err, msa.ErrTimeout):
+		errors.Is(err, msa.ErrExpired), errors.Is(err, msa.ErrTimeout),
+		errors.Is(err, secrets.ErrUnavailable):
 		return false
 	}
 	cls, _ := netx.Classify(err)
@@ -117,6 +119,8 @@ func Describe(err error) Problem {
 	switch {
 	case errors.As(err, &xe):
 		return Problem{Reason: xe.Reason, Message: xe.Message, FixURL: xe.FixURL}
+	case errors.Is(err, secrets.ErrUnavailable):
+		return Problem{Reason: "keychain", Message: "Your system keychain isn't available, so sign-ins can't be stored safely."}
 	case errors.Is(err, msa.ErrNotConfigured):
 		return Problem{Reason: "not-configured", Message: "Microsoft sign-in isn't set up in this build."}
 	case errors.Is(err, msa.ErrReauth):

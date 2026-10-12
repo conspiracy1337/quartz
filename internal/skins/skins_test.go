@@ -161,3 +161,32 @@ func TestImportFromLink(t *testing.T) {
 		t.Fatal("plain http accepted")
 	}
 }
+
+func TestHandlerServesOnlyHexNames(t *testing.T) {
+	lib := openLib(t, nil)
+	s, err := lib.Add(skinPNG(t, 64, 64, false, 5), "x", "file", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := Handler(lib, lib.tex)
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+	if rec := get("/tex/skin/" + s.Hash + ".png"); rec.Code != 200 || rec.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("skin: %d", rec.Code)
+	}
+	for _, bad := range []string{
+		"/tex/skin/../index.json",
+		"/tex/skin/" + s.Hash,
+		"/tex/skin/" + strings.ToUpper(s.Hash) + ".png",
+		"/tex/other/" + s.Hash + ".png",
+		"/tex/mc/..%2f..%2fetc.png",
+		"/index.json",
+	} {
+		if rec := get(bad); rec.Code != 404 {
+			t.Fatalf("%s: %d", bad, rec.Code)
+		}
+	}
+}

@@ -36,7 +36,7 @@ func (t *Textures) Path(ctx context.Context, hash string) (string, error) {
 		return "", mcapi.ErrTexture
 	}
 	path := filepath.Join(t.dir, hash+".png")
-	if _, err := os.Stat(path); err == nil {
+	if _, err := os.Stat(path); err == nil { //nolint:gosec // hash matched textureHash, so path stays in dir
 		return path, nil
 	}
 	_, err, _ := t.flight.Do(hash, func() (any, error) { return nil, t.fetch(ctx, hash, path) })

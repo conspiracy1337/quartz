@@ -13,6 +13,7 @@ const (
 	SecondInstance   Topic = "app:second-instance"
 	TasksChanged     Topic = "tasks:changed"
 	AccountsChanged  Topic = "accounts:changed"
+	AccountsSignIn   Topic = "accounts:signin"
 	InstancesChanged Topic = "instances:changed"
 	LaunchProgress   Topic = "launch:progress"
 	LaunchFailed     Topic = "launch:failed"

@@ -21,12 +21,18 @@ func checkInstance(id string) error {
 	return nil
 }
 
-// Play starts an instance; progress arrives as launch:progress events.
-func (a *Launch) Play(id string) error {
+// Play starts an instance with the default account (accountID "") or, for
+// "Launch as", another one. Progress arrives as launch:progress events.
+func (a *Launch) Play(id, accountID string) error {
 	if err := checkInstance(id); err != nil {
 		return err
 	}
-	return a.l.Play(id)
+	if accountID != "" {
+		if err := checkAccount(accountID); err != nil {
+			return err
+		}
+	}
+	return a.l.Play(id, accountID)
 }
 
 // CancelLaunch stops a launch before the game starts.
