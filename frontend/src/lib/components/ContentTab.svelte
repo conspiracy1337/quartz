@@ -111,9 +111,10 @@
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     menu = { item, x: r.right - 240, y: r.bottom + 4 };
   }
+  // Act first: closing the menu ends the block its item comes from.
   function act(fn: () => Promise<unknown>, what: string) {
-    menu = null;
     fn().catch((e: unknown) => session.fail(what, e));
+    menu = null;
   }
   async function remove(c: ContentItem) {
     const token = await api.content.remove(instanceId, kind, [c.id]);

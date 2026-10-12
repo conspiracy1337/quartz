@@ -2,13 +2,16 @@
 // instance settings), written once so they behave and word themselves the same.
 import { api } from './api';
 import type { Instance } from './api/types';
+
+/** What the shared actions need to know about an instance. */
+type Named = Pick<Instance, 'id' | 'name'>;
 import { revs } from './revs.svelte';
 import { go } from './router.svelte';
 import { session } from './session.svelte';
 import { tasks } from './tasks.svelte';
 
 /** Re-checks the game files; a toast says so when nothing needed fixing. */
-export async function repair(i: Instance) {
+export async function repair(i: Named) {
   try {
     const job = await api.launch.repair(i.id);
     if (job) await tasks.load();
@@ -19,7 +22,7 @@ export async function repair(i: Instance) {
 }
 
 /** Moves the instance to the trash and offers Undo (it stays restorable for 30 days). */
-export async function trash(i: Instance) {
+export async function trash(i: Named) {
   try {
     const entry = await api.instances.trash(i.id);
     revs.bump('instances');
@@ -42,7 +45,7 @@ export async function trash(i: Instance) {
 }
 
 /** Moves the game folder to a folder the user picks, as a download-style job. */
-export async function move(i: Instance, back = false) {
+export async function move(i: Named, back = false) {
   try {
     const job = await (back ? api.instances.moveDefault(i.id) : api.instances.move(i.id));
     if (job) await tasks.load();

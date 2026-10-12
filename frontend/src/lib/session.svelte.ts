@@ -15,7 +15,9 @@ export type Overlay =
   | { kind: 'blocked' }
   | { kind: 'host'; instanceId: string }
   | { kind: 'palette'; mode: 'commands' | 'instances' }
-  | { kind: 'shortcuts' };
+  | { kind: 'shortcuts' }
+  | { kind: 'rename'; instanceId: string }
+  | { kind: 'icon'; instanceId: string };
 
 export type AddAccountMode = 'browser' | 'code' | 'offline';
 
@@ -88,7 +90,7 @@ class Session {
     }, STEP_MS);
   }
 
-  /** Opens "Play as" for a right-click, or for Shift+F10 / the Menu key (no pointer position). */
+  /** Opens an instance's menu (its actions and "Play as") for a right-click, or for Shift+F10 / the Menu key (no pointer position). */
   openLaunchAs(instanceId: string, e: MouseEvent) {
     e.preventDefault();
     let { clientX: x, clientY: y } = e;
