@@ -1,0 +1,18 @@
+import type { settings } from '../../wailsjs/go/models';
+
+/** Browser-preview copy of Go's settings.Defaults(). Only used when the Wails bridge is absent. */
+export const defaultSettings = (): settings.Settings => ({
+  version: 1,
+  general: { language: 'system', onGameStart: 'hide', startPage: 'home', startWithComputer: false },
+  downloads: { parallel: 8, watchDownloads: true, proxy: 'system' },
+  integrations: { discordStatus: true, handleLinks: true },
+  appearance: {
+    theme: 'monolith', accent: '#3ecf8e', density: 'comfortable', textSize: 'default', reduceMotion: 'system',
+    customCss: { enabled: false, path: '' },
+  },
+  java: {
+    autoPick: true, downloadVendor: 'temurin', memoryMinMb: 1024, memoryMaxMb: 4096,
+    jvmArgs: '-XX:+UseG1GC -XX:+ParallelRefProcEnabled', warnLowMemory: true, suggestMemory: true,
+  },
+  updates: { autoCheck: true, modChannel: 'release' },
+}) as settings.Settings;

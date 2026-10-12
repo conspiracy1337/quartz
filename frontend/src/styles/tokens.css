@@ -1,0 +1,16 @@
+/* Design tokens from monolith.css. They live in the "tokens" cascade layer so the user's custom
+   CSS file, which is unlayered and loaded last, always overrides them whatever its selectors. */
+@layer tokens{
+:root{
+  --bg:#0a0a0b; --side:#0c0c0e; --panel:#0f0f11; --raise:#151518; --hover:#1a1a1e; --line:#1e1e22; --line-2:#2a2a30;
+  --text:#ededef; --muted:#9a9aa3; --faint:#7a7a83;
+  --accent:#3ecf8e; --accent-ink:#04140c;
+  --warn:#f5b54a; --danger:#f0565b; --info:#6ea8fe;
+  --radius:6px; --radius-lg:10px;
+  --row-sm:36px; --row:48px; --row-lg:56px;
+  /* layout rhythm: one page gutter, one gap between cards, one inset inside cards */
+  --gutter:24px; --gap:16px; --inset:16px; --alert-h:40px; --strip-h:72px;
+  --ease:cubic-bezier(.23,1,.32,1);
+  --font:'Geist',system-ui,sans-serif; --mono:'Geist Mono',ui-monospace,monospace;
+}
+}

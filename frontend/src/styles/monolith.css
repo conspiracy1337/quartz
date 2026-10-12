@@ -1,0 +1,234 @@
+/* Monolith: shared tokens and components for every screen.
+   Users theme the launcher by overriding the custom properties on :root. */
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg)}
+body{font-family:var(--font);color:var(--text);font-size:13px;line-height:20px;-webkit-font-smoothing:antialiased}
+::selection{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:inherit}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px;border:3px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- app shell ---------- */
+.app{display:flex;height:100vh;min-height:600px;overflow:hidden;background:var(--bg)}
+.app-side{flex:0 0 auto;height:100%}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.scroll{flex:1 1 auto;min-height:0;overflow:auto}
+.page{padding:20px 28px 28px;display:flex;flex-direction:column;gap:20px}
+/* Pages fill the width and start on the header's left edge, so a maximised window has no dead strip on the right. */
+.page-narrow{max-width:none}
+/* Settings-style pages: on wide windows the sections flow into two balanced columns,
+   top-aligned and ending at about the same height. A section never splits across columns. */
+@media (min-width:1600px){
+  .page-cols{display:block;columns:2;column-gap:var(--gutter)}
+  .page-cols > *{break-inside:avoid;margin-bottom:22px}
+}
+/* Two fixed columns whose tops line up: the first child div is the left column, the second the right.
+   Stacks into one column (left, then right) below 1600px, like .page-cols. */
+.page-split{display:flex;flex-direction:column;gap:var(--gutter)}
+.page-split > *{display:flex;flex-direction:column;gap:var(--gutter);min-width:0}
+@media (min-width:1600px){.page-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:var(--gutter);align-items:start}}
+.topbar{height:52px;flex:0 0 52px;display:flex;align-items:center;gap:10px;padding:0 20px 0 28px;border-bottom:1px solid var(--line)}
+@media (max-width:760px){.app{height:auto;flex-direction:column;overflow:visible}.main{overflow:visible}}
+
+/* sidebar */
+.side{width:232px;height:100vh;min-height:600px;position:sticky;top:0;display:flex;flex-direction:column;gap:18px;padding:14px 10px;background:var(--side);border-right:1px solid var(--line)}
+.side-brand{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;font-weight:600;letter-spacing:-.01em}
+.side-nav{display:flex;flex-direction:column;gap:2px}
+.side-link{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:var(--radius);color:var(--muted);text-decoration:none;transition:background-color 120ms ease,color 120ms ease}
+.side-link:hover{background:var(--raise);color:var(--text)}
+.side-link.on{background:var(--raise);color:var(--text)}
+.side-label{height:24px;padding:0 10px;font-size:12px;color:var(--faint);display:flex;align-items:center;justify-content:space-between}
+.side-inst{display:grid;grid-template-columns:20px minmax(0,1fr) 8px;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:var(--radius);color:var(--muted);text-decoration:none}
+.side-inst:hover{background:var(--raise);color:var(--text)}
+.side-inst.on{background:var(--raise);color:var(--text)}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}
+.side-acct{display:grid;grid-template-columns:28px minmax(0,1fr) 16px;align-items:center;gap:10px;height:44px;padding:0 10px;border-radius:var(--radius);border:0;background:transparent;text-align:left;width:100%}
+.side-acct:hover{background:var(--raise)}
+.side .hide-c{display:block}
+@media (max-width:1100px){
+  .side{width:60px;padding:14px 8px;align-items:stretch}
+  .side .hide-c{display:none}
+  .side-link,.side-inst{grid-template-columns:1fr;justify-items:center;padding:0}
+  .side-link > :not(svg),.side-inst > :not(:first-child){display:none}
+  .side-brand{justify-content:center;padding:0}
+  .side-acct{grid-template-columns:1fr;justify-items:center;padding:0}
+  .side-acct > :not(:first-child){display:none}
+}
+
+/* ---------- type ---------- */
+.h1{margin:0;font-size:22px;line-height:28px;font-weight:600;letter-spacing:-.02em}
+.h2{margin:0;font-size:16px;line-height:22px;font-weight:600;letter-spacing:-.01em}
+.h3{margin:0;font-size:13px;line-height:20px;font-weight:600}
+.muted{color:var(--muted)} .faint{color:var(--faint)} .small{font-size:12px;line-height:16px}
+.mono{font-family:var(--mono);font-size:12px}
+.tnum{font-variant-numeric:tabular-nums}
+.trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.crumbs{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--faint);height:20px}
+.crumbs a{text-decoration:none;color:var(--faint)} .crumbs a:hover{color:var(--text)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---------- buttons ---------- */
+.btn{height:32px;padding:0 12px;border-radius:var(--radius);border:1px solid var(--line-2);background:transparent;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;text-decoration:none;color:var(--text);transition:transform 140ms var(--ease),background-color 120ms ease,border-color 120ms ease}
+.btn:hover{background:var(--raise)}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+.btn-sm{height:28px;padding:0 10px;font-size:12px}
+.btn-lg{height:40px;padding:0 16px}
+.btn-icon{width:32px;padding:0}
+.btn-icon.btn-sm{width:28px}
+.btn-ghost{border-color:transparent}
+.btn-accent{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:500}
+.btn-accent:hover{background:var(--accent);filter:brightness(1.07)}
+.btn-play{height:40px;padding:0 20px 0 16px;border:0;background:#f4f4f5;color:#0a0a0b;font-weight:600;gap:10px}
+.btn-play:hover{background:#fff}
+.btn-stop{height:40px;padding:0 18px 0 14px;border:0;background:var(--danger);color:#1a0405;font-weight:600;gap:10px}
+.btn-danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.btn-danger:hover{background:color-mix(in srgb,var(--danger) 10%,transparent)}
+.btn-block{width:100%}
+
+/* ---------- inputs ---------- */
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field-label{font-size:12px;color:var(--muted);font-weight:500}
+.field-help{font-size:12px;line-height:16px;color:var(--faint)}
+.input{height:32px;border-radius:var(--radius);border:1px solid var(--line-2);background:var(--panel);display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--faint);min-width:0}
+.input:focus-within{border-color:color-mix(in srgb,var(--accent) 60%,var(--line-2))}
+.input input,.input select{all:unset;flex:1;min-width:0;color:var(--text)}
+.input input::placeholder{color:var(--faint)}
+.input .suffix{color:var(--faint);font-size:12px}
+.textarea{border-radius:var(--radius);border:1px solid var(--line-2);background:var(--panel);padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px;line-height:18px;resize:vertical;width:100%}
+.select{height:32px;border-radius:var(--radius);border:1px solid var(--line-2);background:var(--panel);display:inline-flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;min-width:0;text-align:left;white-space:nowrap}
+.select:hover{background:var(--raise)}
+.range{width:100%;accent-color:var(--accent)}
+
+/* ---------- tabs and segmented ---------- */
+.tabs{display:flex;gap:22px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tab{height:40px;display:inline-flex;align-items:center;gap:8px;color:var(--muted);text-decoration:none;border-bottom:1px solid transparent;margin-bottom:-1px;white-space:nowrap;flex:0 0 auto}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);border-bottom-color:var(--text)}
+.count{font-family:var(--mono);font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.seg{display:inline-flex;padding:2px;gap:2px;border-radius:var(--radius);background:var(--panel);border:1px solid var(--line-2)}
+.seg button{height:26px;padding:0 10px;border:0;border-radius:4px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.seg button.on{background:var(--hover);color:var(--text)}
+.seg button:hover{color:var(--text)}
+
+/* ---------- page header: a title row over a tab strip, built like the instance header ---------- */
+.phead{flex:0 0 auto;padding:20px 28px 0;background:var(--bg)}
+.phead-row{display:flex;align-items:center;gap:8px;height:36px;min-width:0}
+.phead-row > .h1{margin-right:auto}
+.phead .tabs{margin-top:16px}
+button.tab{border:0;border-bottom:1px solid transparent;background:none;padding:0;font:inherit;cursor:pointer}
+button.tab.on{border-bottom-color:var(--text)}
+
+/* ---------- two-column picker: groups on the left, the chosen group's versions on the right ----------
+   Used by the loader picker and the Minecraft version picker. */
+.picker{display:grid;grid-template-columns:240px minmax(0,1fr);gap:var(--gap);align-items:start}
+@media (max-width:1100px){.picker{grid-template-columns:200px minmax(0,1fr)}}
+.plabel{height:28px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--faint)}
+.plist{overflow-y:auto;overscroll-behavior:contain}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;height:44px;padding:0 var(--inset);border:0;background:transparent;width:100%;text-align:left;color:var(--text);border-top:1px solid var(--line)}
+.prow:first-child{border-top:0}
+.prow:hover{background:color-mix(in srgb,var(--raise) 60%,transparent)}
+.prow.on{background:var(--raise);box-shadow:inset 2px 0 0 var(--accent)}
+.prow:disabled{opacity:.45;cursor:default;background:transparent}
+.prow.min{grid-template-columns:16px minmax(0,1fr) 96px}
+
+/* ---------- chips and badges ---------- */
+.chip{height:24px;padding:0 9px;border-radius:12px;border:1px solid var(--line-2);display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap;background:transparent}
+.chip.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+button.chip:hover{color:var(--text)}
+.badge{height:20px;padding:0 7px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:11px;white-space:nowrap;background:var(--raise);color:var(--muted)}
+.badge-accent{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.badge-warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.badge-danger{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
+.badge-info{color:var(--info);background:color-mix(in srgb,var(--info) 12%,transparent)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:0 0 8px}
+.dot.live{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:4px;border:1px solid var(--line-2);font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+/* ---------- toggles ---------- */
+.tg{width:30px;height:18px;flex:0 0 30px;border-radius:9px;border:0;padding:2px;background:var(--line-2);display:flex;transition:background-color 160ms ease}
+.tg span{width:14px;height:14px;border-radius:50%;background:#a1a1aa;transition:transform 180ms var(--ease),background-color 160ms ease}
+.tg.on{background:var(--accent)}
+.tg.on span{transform:translateX(12px);background:var(--accent-ink)}
+.check{width:16px;height:16px;flex:0 0 16px;border-radius:4px;border:1px solid var(--line-2);background:var(--panel);padding:0;display:grid;place-items:center;color:var(--accent-ink)}
+.check.on{background:var(--accent);border-color:var(--accent)}
+.radio{width:16px;height:16px;flex:0 0 16px;border-radius:50%;border:1px solid var(--line-2);background:var(--panel);padding:0;display:grid;place-items:center}
+.radio.on{border-color:var(--accent)}
+.radio.on::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent)}
+
+/* ---------- surfaces ---------- */
+.card{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel)}
+.card-pad{padding:16px}
+.card-head{height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border-bottom:1px solid var(--line)}
+.list{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel);overflow:hidden}
+.list > *+*{border-top:1px solid var(--line)}
+.row{display:grid;align-items:center;column-gap:14px;height:var(--row-lg);padding:0 12px}
+.row-md{height:var(--row)}
+.row-sm{height:var(--row-sm)}
+.row-head{height:32px;font-size:12px;color:var(--faint);background:var(--bg)}
+.row:hover:not(.row-head){background:color-mix(in srgb,var(--raise) 60%,transparent)}
+.row.sel{background:var(--raise)}
+.row.off .dim{opacity:.45}
+.divider{height:1px;background:var(--line);border:0;margin:0}
+.kv{display:grid;grid-template-columns:140px minmax(0,1fr);row-gap:10px;column-gap:16px;align-items:center}
+.kv > :nth-child(odd){color:var(--faint)}
+.setting{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:24px;min-height:56px;padding:10px 16px}
+.setting-title{font-weight:500}
+.setting-desc{font-size:12px;line-height:16px;color:var(--faint);margin-top:2px}
+/* Settings rows: every control sits in one 300px column. Pickers, selects, inputs and sliders fill it, so they
+   line up row to row; toggles, buttons and badges keep their size and sit on its right edge. */
+.set-grid{--ctl-w:300px}
+.set-grid .setting{grid-template-columns:minmax(0,1fr) var(--ctl-w)}
+.set-grid .setting > :last-child:not(.tg):not(.btn):not(.badge){width:100%;min-width:0}
+.set-grid .setting > .tg,.set-grid .setting > .btn,.set-grid .setting > .badge{justify-self:end}
+.set-grid .setting > .seg{display:flex}
+.set-grid .setting > .seg > button{flex:1 1 0;justify-content:center}
+.override{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+/* Toggle grid: compact on/off rows in two columns inside a card. Used by the Syncing page and instance settings.
+   Each row: label (optional mono hint inside), optional .count, then a .tg toggle. .tgl.off greys out an unavailable row. */
+.tgl-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.tgl-grid > *{border-top:1px solid var(--line)}
+.tgl-grid > :nth-child(-n+2){border-top:0}
+.tgl-grid > :nth-child(odd){border-right:1px solid var(--line)}
+@media (max-width:900px){
+  .tgl-grid{grid-template-columns:minmax(0,1fr)}
+  .tgl-grid > :nth-child(2){border-top:1px solid var(--line)}
+  .tgl-grid > :nth-child(odd){border-right:0}
+}
+.tgl{display:grid;grid-template-columns:minmax(0,1fr);grid-auto-flow:column;grid-auto-columns:auto;align-items:center;column-gap:12px;height:44px;padding:0 var(--inset);min-width:0}
+.tgl .mono{color:var(--faint);margin-left:6px}
+.tgl .count{width:56px;text-align:right}
+.tgl.off > :not(.tg){opacity:.45}
+.tgl.off .tg{opacity:.45;cursor:default}
+
+/* ---------- media tiles ---------- */
+.ico{width:32px;height:32px;flex:0 0 32px;border-radius:6px;display:grid;place-items:center;font-weight:600;font-size:13px;color:#0a0a0b}
+.ico-sm{width:20px;height:20px;flex:0 0 20px;border-radius:4px;font-size:10px}
+.ico-lg{width:48px;height:48px;flex:0 0 48px;border-radius:9px;font-size:18px}
+.ico-xl{width:64px;height:64px;flex:0 0 64px;border-radius:12px;font-size:24px}
+.avatar{width:28px;height:28px;flex:0 0 28px;border-radius:5px;background:linear-gradient(#4a3426 0 38%,#c99a72 38% 100%)}
+.cover{position:relative;overflow:hidden;background:#123}
+.thumb{border-radius:8px;overflow:hidden;position:relative;background:var(--raise)}
+
+/* ---------- progress, skeleton, empty ---------- */
+/* Progress: a squared slot with a solid fill. The track rounds the ends; the fill keeps a square leading edge. */
+.bar{height:8px;border-radius:2px;background:var(--line-2);overflow:hidden}
+.bar > span{display:block;height:100%;background:var(--accent);border-radius:0}
+.sk{border-radius:4px;background:linear-gradient(90deg,#17171a 0%,#212125 40%,#17171a 80%);background-size:300% 100%}
+@media (prefers-reduced-motion:no-preference){.sk{animation:sk 1.3s linear infinite}}
+@keyframes sk{from{background-position:100% 0}to{background-position:-50% 0}}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:40px 20px;color:var(--muted)}
+
+/* ---------- overlays ---------- */
+.scrim{position:absolute;inset:0;background:rgba(5,5,6,.66);display:grid;place-items:center;padding:24px;z-index:20}
+.dialog{width:min(520px,100%);max-height:100%;overflow:auto;border:1px solid var(--line-2);border-radius:12px;background:var(--panel);box-shadow:0 24px 64px -16px rgba(0,0,0,.7)}
+.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px 0}
+.dialog-body{padding:14px 18px 18px;display:flex;flex-direction:column;gap:14px}
+.dialog-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
+.menu{border:1px solid var(--line-2);border-radius:8px;background:var(--raise);padding:4px;box-shadow:0 16px 40px -12px rgba(0,0,0,.7);min-width:200px}
+.menu-item{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:10px;height:30px;padding:0 8px;border-radius:4px;color:var(--text);border:0;background:transparent;width:100%;text-align:left}
+.menu-item:hover{background:var(--hover)}
+.toast{display:flex;align-items:center;gap:12px;height:44px;padding:0 8px 0 14px;border:1px solid var(--line-2);border-radius:8px;background:var(--raise);box-shadow:0 12px 32px -10px rgba(0,0,0,.7)}
