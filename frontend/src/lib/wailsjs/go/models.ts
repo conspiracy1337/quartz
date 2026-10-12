@@ -82,10 +82,29 @@ export namespace settings {
 		}
 	}
 	
+	export class ProxyCustom {
+	    type: string;
+	    host: string;
+	    port: number;
+	    user: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProxyCustom(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	    }
+	}
 	export class Downloads {
 	    parallel: number;
 	    watchDownloads: boolean;
 	    proxy: string;
+	    proxyCustom: ProxyCustom;
 	
 	    static createFrom(source: any = {}) {
 	        return new Downloads(source);
@@ -96,7 +115,26 @@ export namespace settings {
 	        this.parallel = source["parallel"];
 	        this.watchDownloads = source["watchDownloads"];
 	        this.proxy = source["proxy"];
+	        this.proxyCustom = this.convertValues(source["proxyCustom"], ProxyCustom);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class General {
 	    language: string;
@@ -154,6 +192,7 @@ export namespace settings {
 	        this.suggestMemory = source["suggestMemory"];
 	    }
 	}
+	
 	export class Updates {
 	    autoCheck: boolean;
 	    modChannel: string;

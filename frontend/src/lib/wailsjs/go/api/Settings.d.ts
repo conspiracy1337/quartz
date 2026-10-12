@@ -9,6 +9,10 @@ export function ExportTheme(arg1:string):Promise<void>;
 
 export function Get():Promise<settings.Settings>;
 
+export function HasProxyPassword():Promise<boolean>;
+
 export function PickCustomCSS():Promise<settings.Settings>;
 
 export function Save(arg1:settings.Settings):Promise<settings.Settings>;
+
+export function SetProxyPassword(arg1:string):Promise<void>;

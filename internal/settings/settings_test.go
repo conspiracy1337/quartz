@@ -101,3 +101,22 @@ func TestResolve(t *testing.T) {
 		t.Fatal("Resolve wrong")
 	}
 }
+
+func TestProxyCustomValidation(t *testing.T) {
+	cases := []struct {
+		in   ProxyCustom
+		want ProxyCustom
+	}{
+		{ProxyCustom{Type: "socks5", Host: "proxy.lan", Port: 1080, User: "me"}, ProxyCustom{Type: "socks5", Host: "proxy.lan", Port: 1080, User: "me"}},
+		{ProxyCustom{Type: "ftp", Host: "http://evil/path", Port: 70000, User: "a\nb"}, ProxyCustom{Type: "http", Host: "", Port: 65535, User: ""}},
+		{ProxyCustom{Type: "https", Host: "[::1]", Port: 0}, ProxyCustom{Type: "https", Host: "[::1]", Port: 8080}},
+		{ProxyCustom{Host: "has space"}, ProxyCustom{Type: "http", Port: 8080}},
+	}
+	for _, c := range cases {
+		s := Defaults()
+		s.Downloads.ProxyCustom = c.in
+		if got := s.Normalize().Downloads.ProxyCustom; got != c.want {
+			t.Errorf("normalize(%+v) = %+v, want %+v", c.in, got, c.want)
+		}
+	}
+}

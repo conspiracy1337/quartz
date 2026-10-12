@@ -2,7 +2,11 @@
 // defaults, validation and persistence.
 package settings
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+	"unicode"
+)
 
 // SchemaVersion is bumped whenever a migration is needed.
 const SchemaVersion = 1
@@ -28,10 +32,23 @@ type General struct {
 }
 
 type Downloads struct {
-	Parallel       int    `json:"parallel"` // 1–16
-	WatchDownloads bool   `json:"watchDownloads"`
-	Proxy          string `json:"proxy"` // system | none | custom
+	Parallel       int         `json:"parallel"` // 1–16
+	WatchDownloads bool        `json:"watchDownloads"`
+	Proxy          string      `json:"proxy"` // system | none | custom
+	ProxyCustom    ProxyCustom `json:"proxyCustom"`
 }
+
+// ProxyCustom is used when Proxy is "custom". The password is never part of
+// the settings: it lives in the OS keychain (see api.Settings.SetProxyPassword).
+type ProxyCustom struct {
+	Type string `json:"type"` // http | https | socks5
+	Host string `json:"host"` // name or IP, no scheme
+	Port int    `json:"port"` // 1–65535
+	User string `json:"user"`
+}
+
+// Usable reports whether the custom proxy is complete enough to use.
+func (p ProxyCustom) Usable() bool { return p.Host != "" }
 
 type Integrations struct {
 	DiscordStatus bool `json:"discordStatus"`
@@ -72,7 +89,10 @@ func Defaults() Settings {
 	return Settings{
 		Version:      SchemaVersion,
 		General:      General{Language: "system", OnGameStart: "hide", StartPage: "home"},
-		Downloads:    Downloads{Parallel: 8, WatchDownloads: true, Proxy: "system"},
+		Downloads: Downloads{
+			Parallel: 8, WatchDownloads: true, Proxy: "system",
+			ProxyCustom: ProxyCustom{Type: "http", Port: 8080},
+		},
 		Integrations: Integrations{DiscordStatus: true, HandleLinks: true},
 		Appearance: Appearance{
 			Theme: "monolith", Accent: "#3ecf8e", Density: "comfortable",
@@ -88,6 +108,7 @@ func Defaults() Settings {
 
 var (
 	hexColor  = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+	proxyHost = regexp.MustCompile(`^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]{1,253})$`)
 	localeTag = regexp.MustCompile(`^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$`)
 )
 
@@ -96,6 +117,7 @@ const (
 	minMemoryMB = 256
 	maxMemoryMB = 1 << 20
 	maxPathLen  = 4096
+	maxUserLen  = 256
 )
 
 // Normalize replaces every invalid field with its default, field by field, so one
@@ -112,6 +134,7 @@ func (s Settings) Normalize() Settings {
 
 	s.Downloads.Parallel = clamp(s.Downloads.Parallel, 1, 16, d.Downloads.Parallel)
 	s.Downloads.Proxy = oneOf(s.Downloads.Proxy, d.Downloads.Proxy, "system", "none", "custom")
+	s.Downloads.ProxyCustom = s.Downloads.ProxyCustom.normalize(d.Downloads.ProxyCustom)
 
 	a := &s.Appearance
 	a.Theme = oneOf(a.Theme, d.Appearance.Theme, "monolith", "graphite", "oled", "light", "system")
@@ -137,6 +160,21 @@ func (s Settings) Normalize() Settings {
 	}
 	s.Updates.ModChannel = oneOf(s.Updates.ModChannel, d.Updates.ModChannel, "release", "beta", "alpha")
 	return s
+}
+
+// normalize keeps a half-typed proxy (empty host) but drops anything malformed:
+// a host with a scheme, path or spaces, an out-of-range port, a control
+// character in the user name.
+func (p ProxyCustom) normalize(def ProxyCustom) ProxyCustom {
+	p.Type = oneOf(p.Type, def.Type, "http", "https", "socks5")
+	if p.Host != "" && !proxyHost.MatchString(p.Host) {
+		p.Host = ""
+	}
+	p.Port = clamp(p.Port, 1, 65535, def.Port)
+	if len(p.User) > maxUserLen || strings.ContainsFunc(p.User, unicode.IsControl) {
+		p.User = ""
+	}
+	return p
 }
 
 func oneOf(v, def string, allowed ...string) string {

@@ -22,7 +22,10 @@ import (
 	"quartz/internal/brand"
 	"quartz/internal/core/events"
 	"quartz/internal/core/logging"
+	"quartz/internal/core/netx"
 	"quartz/internal/core/paths"
+	"quartz/internal/core/secrets"
+	"quartz/internal/network"
 	"quartz/internal/settings"
 	"quartz/internal/theme"
 )
@@ -37,9 +40,13 @@ type app struct {
 	paths    paths.Paths
 	log      *slog.Logger
 	logFile  io.Closer
+	redactor *logging.Redactor
 	bus      *events.Bus
 	settings *settings.Store
 	css      *theme.CustomCSS
+	secrets  secrets.Store
+	http     *netx.Client
+	network  *network.Service
 	ctx      *api.Ctx
 }
 
@@ -69,7 +76,7 @@ func Run(o Options) error {
 		Linux: &linux.Options{ProgramName: brand.Slug},
 		Bind: []any{
 			api.NewApp(a.ctx, a.paths),
-			api.NewSettings(a.ctx, a.settings, a.css),
+			api.NewSettings(a.ctx, a.settings, a.css, a.network),
 		},
 	})
 }
@@ -86,7 +93,8 @@ func build(o Options) (*app, error) {
 	if u, err := user.Current(); err == nil {
 		userName = u.Username
 	}
-	log, logFile, err := logging.New(p.Logs(), slog.LevelInfo, logging.NewRedactor(userName))
+	redactor := logging.NewRedactor(userName)
+	log, logFile, err := logging.New(p.Logs(), slog.LevelInfo, redactor)
 	if err != nil {
 		return nil, fmt.Errorf("opening log: %w", err)
 	}
@@ -96,12 +104,26 @@ func build(o Options) (*app, error) {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("loading settings: %w", err)
 	}
-	a := &app{
-		paths: p, log: log, logFile: logFile, bus: bus, settings: store,
-		css: theme.NewCustomCSS(bus, log), ctx: &api.Ctx{},
+	httpClient, err := netx.New(netx.Proxy{Mode: netx.ProxySystem}, netx.Options{})
+	if err != nil {
+		_ = logFile.Close()
+		return nil, err
 	}
+	a := &app{
+		paths: p, log: log, logFile: logFile, redactor: redactor, bus: bus, settings: store,
+		css: theme.NewCustomCSS(bus, log), secrets: secrets.NewKeychain(), http: httpClient, ctx: &api.Ctx{},
+	}
+	a.network = network.New(httpClient, store.Get().Downloads, a.secrets, redactor, log)
 	a.watchCustomCSS()
+	a.watchDownloads()
 	return a, nil
+}
+
+// watchDownloads keeps the HTTP client's proxy in step with the settings.
+func (a *app) watchDownloads() {
+	a.bus.Subscribe(events.SettingsChanged, func(p any) {
+		a.network.Apply(p.(settings.Settings).Downloads)
+	})
 }
 
 // watchCustomCSS keeps the CSS watcher in step with the custom CSS settings.

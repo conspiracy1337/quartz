@@ -11,6 +11,7 @@ export type AppInfo = goapi.AppInfo;
 export type CustomCSSState = theme.CSSState;
 
 let previewSettings = defaultSettings();
+let previewProxyPassword = false;
 
 export const app = {
   info: (): Promise<AppInfo> =>
@@ -31,4 +32,11 @@ export const settingsApi = {
   pickCustomCSS: (): Promise<Settings> => (hasBridge() ? SettingsGo.PickCustomCSS() : Promise.resolve(structuredClone(previewSettings))),
   customCSS: (): Promise<CustomCSSState> => (hasBridge() ? SettingsGo.CustomCSS() : Promise.resolve({ path: '', css: '', error: '' })),
   exportTheme: (css: string): Promise<void> => (hasBridge() ? SettingsGo.ExportTheme(css) : Promise.resolve()),
+  /** Stores the custom proxy password in the OS keychain; an empty string removes it. */
+  setProxyPassword: (pw: string): Promise<void> => {
+    if (hasBridge()) return SettingsGo.SetProxyPassword(pw);
+    previewProxyPassword = pw !== '';
+    return Promise.resolve();
+  },
+  hasProxyPassword: (): Promise<boolean> => (hasBridge() ? SettingsGo.HasProxyPassword() : Promise.resolve(previewProxyPassword)),
 };
