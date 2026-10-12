@@ -37,6 +37,7 @@ const (
 	defaultIdleTimeout = 60 * time.Second
 	defaultRateWait    = 10 * time.Second
 	maxRateWait        = 10 * time.Minute
+	maxErrorBody       = 4 << 10
 )
 
 // ProxyMode mirrors settings.Downloads.Proxy.
@@ -188,6 +189,10 @@ type StatusError struct {
 	Code       int
 	URL        string
 	RetryAfter time.Duration // parsed Retry-After, 0 if absent
+	// Body is the start of the error body (at most 4 KiB). OAuth and Xbox put
+	// their error codes there. It may hold personal data, so Error never
+	// prints it and callers must not log it.
+	Body []byte
 }
 
 func (e *StatusError) Error() string {
@@ -195,7 +200,7 @@ func (e *StatusError) Error() string {
 }
 
 // Do sends req after waiting out any rate-limit gate on its host. Non-success
-// statuses come back as *StatusError with the body closed. The returned body
+// statuses come back as *StatusError with the body read (capped) and closed. The returned body
 // fails with ErrIdleTimeout when it stalls for longer than the idle timeout.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	host := req.URL.Host
@@ -210,7 +215,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	}
 	if resp.StatusCode >= 300 && resp.StatusCode != http.StatusNotModified {
 		se := &StatusError{Code: resp.StatusCode, URL: redactURL(req.URL), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		se.Body, _ = io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		_ = resp.Body.Close()
 		cancel(nil)
 		if se.Code == http.StatusTooManyRequests || (se.Code == http.StatusServiceUnavailable && se.RetryAfter > 0) {
