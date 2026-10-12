@@ -11,7 +11,9 @@ import * as misc from './mock/misc';
 import * as versions from './mock/versions';
 import type { ContentKind, Instance, InstanceSummary, ProjectType } from './types';
 import { bridged, preview } from '../bridge';
+import { revs } from '../revs.svelte';
 import * as AccountsGo from '../wailsjs/go/api/Accounts';
+import * as InstancesGo from '../wailsjs/go/api/Instances';
 import * as JavaGo from '../wailsjs/go/api/Java';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { downloadsApi } from './downloads';
@@ -31,9 +33,13 @@ export const api = {
   app,
   settings: settingsApi,
   instances: {
-    list: () => serve(inst.instances.map(summary)),
-    get: (id: string) => serve(byId(id)),
-    recent: () => serve(inst.recentIds.map((id) => summary(byId(id)))),
+    list: () => revs.load('instances', bridged(InstancesGo.List, () => inst.instances.map(summary))),
+    get: (id: string) => revs.load('instances', bridged(() => InstancesGo.Get(id), () => byId(id))),
+    /** The sidebar's recent list: the instances played or created last. */
+    recent: () => revs.load('instances', bridged(() => InstancesGo.List().then((l) => l.slice(0, 4)), () => inst.recentIds.map((id) => summary(byId(id))))),
+    create: bridged(InstancesGo.Create, inst.mockInstances.create),
+    updateSettings: bridged(InstancesGo.UpdateSettings, inst.mockInstances.updateSettings),
+    openFolder: bridged(InstancesGo.OpenFolder, (_id: string) => undefined),
     activity: (_id: string) => serve(inst.activity),
     pendingUpdates: (_id: string) => serve(inst.pendingUpdates),
   },
@@ -64,7 +70,7 @@ export const api = {
     loaders: (_minecraft: string) => serve(versions.loaders),
   },
   accounts: {
-    list: bridged(AccountsGo.List, accounts.mockAccounts.list),
+    list: () => revs.load('accounts', bridged(AccountsGo.List, accounts.mockAccounts.list)),
     addOffline: bridged(AccountsGo.AddOffline, accounts.mockAccounts.addOffline),
     setDefault: bridged(AccountsGo.SetDefault, accounts.mockAccounts.setDefault),
     remove: bridged(AccountsGo.Remove, accounts.mockAccounts.remove),

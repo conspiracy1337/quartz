@@ -29,6 +29,7 @@ import (
 	"quartz/internal/core/paths"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
+	"quartz/internal/instance"
 	"quartz/internal/java"
 	"quartz/internal/meta"
 	"quartz/internal/network"
@@ -43,23 +44,24 @@ type Options struct {
 }
 
 type app struct {
-	paths    paths.Paths
-	log      *slog.Logger
-	logFile  io.Closer
-	redactor *logging.Redactor
-	bus      *events.Bus
-	settings *settings.Store
-	css      *theme.CustomCSS
-	secrets  secrets.Store
-	http     *netx.Client
-	network  *network.Service
-	verified *download.Verified
-	tasks    *tasks.Engine
-	cache    *httpcache.Cache
-	meta     *meta.Service
-	java     *java.Manager
-	accounts *accounts.Store
-	ctx      *api.Ctx
+	paths     paths.Paths
+	log       *slog.Logger
+	logFile   io.Closer
+	redactor  *logging.Redactor
+	bus       *events.Bus
+	settings  *settings.Store
+	css       *theme.CustomCSS
+	secrets   secrets.Store
+	http      *netx.Client
+	network   *network.Service
+	verified  *download.Verified
+	tasks     *tasks.Engine
+	cache     *httpcache.Cache
+	meta      *meta.Service
+	java      *java.Manager
+	accounts  *accounts.Store
+	instances *instance.Store
+	ctx       *api.Ctx
 }
 
 // Run builds the app and blocks until the window closes.
@@ -93,6 +95,7 @@ func Run(o Options) error {
 			api.NewVersions(a.ctx, a.meta),
 			api.NewJava(a.ctx, a.java, a.meta, a.tasks, a.settings),
 			api.NewAccounts(a.accounts, a.bus),
+			api.NewInstances(a.ctx, a.instances, a.meta, a.settings, a.bus, func(string) bool { return false }),
 		},
 	})
 }
@@ -146,6 +149,10 @@ func build(o Options) (*app, error) {
 	if a.accounts, err = accounts.Open(p.Accounts(), log); err != nil {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("loading accounts: %w", err)
+	}
+	if a.instances, err = instance.Open(p.Instances(), log); err != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("loading instances: %w", err)
 	}
 	if err := a.buildTasks(); err != nil {
 		_ = logFile.Close()
@@ -210,6 +217,9 @@ func (a *app) shutdown(context.Context) {
 	}
 	if err := a.verified.Flush(); err != nil {
 		a.log.Error("saving verified index on exit failed", "err", err)
+	}
+	if err := a.instances.Flush(); err != nil {
+		a.log.Error("saving instances on exit failed", "err", err)
 	}
 	if err := a.accounts.Flush(); err != nil {
 		a.log.Error("saving accounts on exit failed", "err", err)

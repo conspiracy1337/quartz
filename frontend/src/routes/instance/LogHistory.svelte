@@ -11,7 +11,7 @@
   let { instanceId }: Props = $props();
 
   const runs = query(() => api.logs.runs(instanceId));
-  const accounts = query(() => revs.load('accounts', api.accounts.list));
+  const accounts = query(() => api.accounts.list());
   let cur = $state(2);
   const RESULT: Record<RunResult, [string, string]> = { ok: ['Closed', ''], crash: ['Crashed', 'badge-danger'], killed: ['Stopped', 'badge-warn'], failed: ['Failed to start', 'badge-danger'] };
   const run = $derived(runs.data?.[cur]);

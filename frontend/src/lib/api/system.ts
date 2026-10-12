@@ -17,7 +17,7 @@ export const app = {
   info: (): Promise<AppInfo> =>
     hasBridge()
       ? AppGo.Info()
-      : Promise.resolve({ name: 'Quartz Client', shortName: 'Quartz', version: 'preview', dataDir: '~/.local/share/Quartz', portable: false, os: 'linux' }),
+      : Promise.resolve({ name: 'Quartz Client', shortName: 'Quartz', version: 'preview', dataDir: '~/.local/share/Quartz', portable: false, os: 'linux', memoryMb: 32768 }),
   /** Opens an https link in the system browser (Go refuses any other scheme). */
   openUrl: (url: string): Promise<void> => (hasBridge() ? AppGo.OpenURL(url) : (window.open(url, '_blank', 'noopener'), Promise.resolve())),
 };

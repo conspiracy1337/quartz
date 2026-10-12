@@ -17,7 +17,7 @@
 
   const recent = query(() => api.instances.recent());
   const all = query(() => api.instances.list());
-  const accounts = query(() => revs.load('accounts', api.accounts.list));
+  const accounts = query(() => api.accounts.list());
   const me = $derived(accounts.data?.find((a) => a.isDefault));
 
   const nav: { key: SideKey; label: string; icon: IconName; route: Route }[] = [

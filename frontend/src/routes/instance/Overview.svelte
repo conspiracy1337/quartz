@@ -40,7 +40,7 @@
       </div>
     </section>
     <section class="card ov-card" aria-label="Details" style="grid-area: details">
-      <div class="card-head"><h2 class="h3">Details</h2><button class="btn btn-sm btn-ghost">Open folder</button></div>
+      <div class="card-head"><h2 class="h3">Details</h2><button class="btn btn-sm btn-ghost" onclick={() => api.instances.openFolder(i.id)}>Open folder</button></div>
       <div class="ov-body">
         <div class="kv ov-kv">
           <span>Minecraft</span><span>{i.minecraft}</span>

@@ -26,7 +26,12 @@ export function preview<T>(value: T): Promise<T> {
   return latency ? new Promise((r) => setTimeout(() => r(copy), latency)) : Promise.resolve(copy);
 }
 
-/** Picks the Go binding inside the desktop window and the preview fallback elsewhere. */
-export function bridged<A extends unknown[], R>(go: (...a: A) => Promise<unknown>, fallback: (...a: A) => R): (...a: A) => Promise<R> {
-  return (...a: A) => (hasBridge() ? (go(...a) as Promise<R>) : preview(fallback(...a)));
+/**
+ * Picks the Go binding inside the desktop window and the preview fallback elsewhere.
+ * Argument types come from the fallback: Wails' generated classes only add a
+ * convertValues helper, and plain objects serialise to the same JSON.
+ */
+export function bridged<A extends unknown[], R>(go: (...a: never[]) => Promise<unknown>, fallback: (...a: A) => R): (...a: A) => Promise<R> {
+  const call = go as unknown as (...a: A) => Promise<R>;
+  return (...a: A) => (hasBridge() ? call(...a) : preview(fallback(...a)));
 }

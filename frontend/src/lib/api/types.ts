@@ -22,6 +22,13 @@ export interface InstanceSummary {
   running: boolean;
 }
 
+/** Per-instance settings (mirrors Go's instance.Settings). */
+export interface InstanceSettings {
+  java: { override: boolean; javaPath: string; memoryMinMb: number; memoryMaxMb: number; jvmArgs: string };
+  window: { width: number; height: number; fullscreen: boolean; onGameStart: string };
+}
+/** What the New instance screen sends. */
+export interface CreateInstance { name: string; art: Art; minecraft: string; loader: string; group: string; sandbox: boolean; shares: string[] }
 export interface Instance extends InstanceSummary {
   icon?: 'bolt';
   sandboxed: boolean;
@@ -32,6 +39,7 @@ export interface Instance extends InstanceSummary {
   folder: string;
   syncTargets: number;
   discordStatus: boolean;
+  settings: InstanceSettings;
 }
 
 export type ActivityKind = 'session' | 'change';

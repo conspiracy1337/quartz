@@ -1,4 +1,4 @@
-import type { ActivityEvent, Instance, PendingUpdate } from '../types';
+import type { ActivityEvent, CreateInstance, Instance, InstanceSettings, PendingUpdate } from '../types';
 import { daysAgo, date } from './time';
 
 type Seed = [id: string, name: string, initial: string, tint: string, mc: string, loader: Instance['loader'], kind: Instance['kind'], lastDays: number | undefined, hours: number];
@@ -37,7 +37,27 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   folder: 'instances/' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
   syncTargets: 4,
   discordStatus: true,
+  settings: {
+    java: { override: true, javaPath: '', memoryMinMb: 2048, memoryMaxMb: 6144, jvmArgs: '-XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+UnlockExperimentalVMOptions' },
+    window: { width: 1920, height: 1080, fullscreen: false, onGameStart: 'hide' },
+  },
 }));
+
+/** Preview stand-in for Go's instance store. */
+export const mockInstances = {
+  create: (req: CreateInstance): Instance => {
+    const base = instances[2]!;
+    const inst: Instance = { ...structuredClone(base), id: `new-${instances.length}`, name: req.name, art: req.art, minecraft: req.minecraft, kind: 'vanilla', playtimeMin: 0, created: Date.now() };
+    delete inst.lastPlayed;
+    instances.unshift(inst);
+    return inst;
+  },
+  updateSettings: (id: string, settings: InstanceSettings): Instance => {
+    const inst = instances.find((i) => i.id === id) ?? instances[0]!;
+    inst.settings = settings;
+    return inst;
+  },
+};
 
 /** Sidebar "Recent" order from the design. */
 export const recentIds = ['fo', 'cab', 'van', 'snap'];

@@ -8,7 +8,7 @@
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
-  const accounts = query(() => revs.load('accounts', api.accounts.list));
+  const accounts = query(() => api.accounts.list());
 
   async function makeDefault(id: string) {
     await api.accounts.setDefault(id);

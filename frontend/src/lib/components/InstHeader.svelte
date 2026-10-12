@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { api } from '../api';
   import type { Instance } from '../api/types';
   import { hours } from '../format';
   import { href, type InstanceTab } from '../router.svelte';
@@ -44,7 +45,7 @@
       </div>
     </div>
     <div style="display: flex; gap: 8px; align-items: center">
-      <button class="btn btn-icon" aria-label="Open folder"><Icon name="folder" /></button>
+      <button class="btn btn-icon" aria-label="Open folder" onclick={() => api.instances.openFolder(i.id)}><Icon name="folder" /></button>
       <button class="btn btn-icon" aria-label="More actions"><Icon name="more" /></button>
       {#if hosting}
         <span class="btn" style="height: 40px; border-color: color-mix(in srgb, var(--accent) 45%, transparent); cursor: default" title="Server running"><span class="dot live" aria-hidden="true"></span><span class="mono" style="font-size: 12px">localhost:25565</span></span>
