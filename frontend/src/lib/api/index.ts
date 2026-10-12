@@ -10,20 +10,15 @@ import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
 import type { ContentKind, Instance, InstanceSummary, ProjectType } from './types';
+import { bridged, preview } from '../bridge';
+import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { downloadsApi } from './downloads';
 import { app, settingsApi } from './system';
 
 export type { ProjectPage } from './mock/browse';
 export type { AppInfo, CustomCSSState, Settings } from './system';
 
-// Open the app with ?slow to see every skeleton state.
-const latency = typeof location !== 'undefined' && new URLSearchParams(location.search).has('slow') ? 1200 : 0;
-
-/** Resolves with a private copy, so screens can never mutate the fixtures. */
-function serve<T>(value: T): Promise<T> {
-  const copy = structuredClone(value);
-  return latency ? new Promise((r) => setTimeout(() => r(copy), latency)) : Promise.resolve(copy);
-}
+const serve = preview;
 
 const summary = ({ id, name, art, minecraft, loader, kind, hasServers, lastPlayed, playtimeMin, running }: Instance): InstanceSummary =>
   ({ id, name, art, minecraft, kind, hasServers, playtimeMin, running, ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
@@ -63,7 +58,7 @@ export const api = {
     runs: (_instanceId: string) => serve(logs.runs),
   },
   versions: {
-    minecraft: () => serve(versions.families),
+    minecraft: bridged(VersionsGo.Minecraft, () => versions.families),
     loaders: (_minecraft: string) => serve(versions.loaders),
   },
   accounts: {

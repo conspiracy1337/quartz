@@ -87,8 +87,8 @@ type Updates struct {
 // Defaults returns the settings a fresh install starts with.
 func Defaults() Settings {
 	return Settings{
-		Version:      SchemaVersion,
-		General:      General{Language: "system", OnGameStart: "hide", StartPage: "home"},
+		Version: SchemaVersion,
+		General: General{Language: "system", OnGameStart: "hide", StartPage: "home"},
 		Downloads: Downloads{
 			Parallel: 8, WatchDownloads: true, Proxy: "system",
 			ProxyCustom: ProxyCustom{Type: "http", Port: 8080},

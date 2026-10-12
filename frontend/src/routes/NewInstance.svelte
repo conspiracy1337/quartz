@@ -18,7 +18,7 @@
   const SHARES = ['Keybinds', 'Game options', 'Servers', 'Worlds', 'Resource packs', 'Shaders', 'Screenshots', 'Hotbars'];
 
   let name = $state('Survival 1.21.5');
-  let version = $state('1.21.5');
+  let version = $state('');
   let loader = $state(1);
   let more = $state(false);
   let group = $state('none');
