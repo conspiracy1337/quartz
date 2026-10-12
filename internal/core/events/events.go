@@ -21,6 +21,8 @@ const (
 	GameLog          Topic = "game:log"
 	ContentChanged   Topic = "content:changed"
 	ContentDropped   Topic = "content:dropped"
+	ManualChanged    Topic = "manual:changed"
+	ModpacksChanged  Topic = "modpacks:changed"
 )
 
 // Sink receives every emitted event, used to bridge events to the UI.

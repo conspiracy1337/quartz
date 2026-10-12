@@ -19,6 +19,7 @@ import (
 	"quartz/internal/core/hashx"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/tasks"
+	"quartz/internal/manual"
 	"quartz/internal/modplatform"
 )
 
@@ -404,7 +405,7 @@ func (s *Service) ApplyUpdates(checkID string, ids []string) (string, error) {
 	}
 	var picked []*planned
 	for _, id := range ids {
-		if pi, ok := pl.items[id]; ok && pi.v.File.URL != "" {
+		if pi, ok := pl.items[id]; ok {
 			picked = append(picked, pi)
 		}
 	}
@@ -425,22 +426,49 @@ func (s *Service) ApplyUpdates(checkID string, ids []string) (string, error) {
 	}, nil)
 }
 
-// submit runs one content job: download every file into the store, place
-// each, then finish (a rescan, an activity entry, a version switch).
+// submit runs one content job: download every file into the store (files
+// only the website may serve wait for the player, see manual), place each,
+// then finish (a rescan, an activity entry, a version switch).
 func (s *Service) submit(inst string, k Kind, title, subtitle string, picked []*planned, done func(), finish func(context.Context) error) (string, error) {
 	var downloads, installs []tasks.Work
+	var needs []manual.Need
 	for _, pi := range picked {
-		it, err := s.item(pi.v.File)
-		if err != nil {
-			return "", fmt.Errorf("%s: %w", pi.name, err)
+		if pi.v.File.URL == "" {
+			n, err := s.need(pi)
+			if err != nil {
+				return "", fmt.Errorf("%s: %w", pi.name, err)
+			}
+			needs = append(needs, n)
+		} else {
+			it, err := s.item(pi.v.File)
+			if err != nil {
+				return "", fmt.Errorf("%s: %w", pi.name, err)
+			}
+			downloads = append(downloads, tasks.Download(it))
 		}
-		downloads = append(downloads, tasks.Download(it))
-		installs = append(installs, tasks.Func("install "+pi.name, func(context.Context) error { return s.install(inst, k, pi) }))
+	}
+	var set *manual.Set
+	if len(needs) > 0 {
+		set = s.d.Manual.Register(needs)
+	}
+	for _, pi := range picked {
+		installs = append(installs, tasks.Func("install "+pi.name, func(context.Context) error {
+			if set != nil && set.Skipped(pi.v.File.SHA1) {
+				return nil // the player skipped it
+			}
+			return s.install(inst, k, pi)
+		}))
 	}
 	in, _ := s.d.Instances.Get(inst)
 	spec := tasks.NewJob(tasks.Meta{Title: title, Subtitle: subtitle, Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "update"})
 	if len(downloads) > 0 {
-		spec.Step("Downloads", tasks.Bytes, downloads...).After("Installing", tasks.Count, installs...)
+		spec.Step("Downloads", tasks.Bytes, downloads...)
+	}
+	if set != nil {
+		spec.Step(manual.Label(len(needs), noun(k, 1)), tasks.Count, set.Work())
+	}
+	if len(installs) > 0 {
+		spec.After("Installing", tasks.Count, installs...)
 	}
 	spec.After("Finishing", tasks.Count, tasks.Func("finish", func(ctx context.Context) error {
 		if finish != nil {
@@ -455,7 +483,34 @@ func (s *Service) submit(inst string, k Kind, title, subtitle string, picked []*
 		s.emit(inst, k)
 		return nil
 	}))
-	return s.d.Tasks.Submit(spec)
+	id, err := s.d.Tasks.Submit(spec)
+	if set != nil {
+		set.Bind(id)
+	}
+	return id, err
+}
+
+// need describes a file the player must download from the website.
+func (s *Service) need(pi *planned) (manual.Need, error) {
+	f := pi.v.File
+	if s.d.Manual == nil {
+		return manual.Need{}, errors.New("its author only allows downloads from the website")
+	}
+	if !store.ValidSHA1(f.SHA1) || f.Size <= 0 || f.Size > maxContentFile {
+		return manual.Need{}, errors.New("the platform gave no checksum for it")
+	}
+	page := f.Page
+	if page == "" {
+		// Update checks read file lists, which carry no page: ask once.
+		if cat := s.catalogOf(pi.v.Source); cat != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			if vs, err := cat.Files(ctx, []string{pi.v.ID}); err == nil {
+				page = vs[pi.v.ID].File.Page
+			}
+			cancel()
+		}
+	}
+	return manual.Need{Name: pi.name, FileName: f.Name, Size: f.Size, SHA1: f.SHA1, Page: page}, nil
 }
 
 // item turns a platform file into a verified store download.

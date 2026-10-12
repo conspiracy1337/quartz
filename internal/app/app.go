@@ -45,6 +45,7 @@ import (
 	"quartz/internal/launch"
 	"quartz/internal/loader"
 	"quartz/internal/meta"
+	"quartz/internal/manual"
 	"quartz/internal/modplatform"
 	"quartz/internal/modplatform/curseforge"
 	"quartz/internal/modplatform/modrinth"
@@ -87,6 +88,7 @@ type app struct {
 	launcher  *launch.Launcher
 	content   *content.Service
 	platforms []modplatform.Platform // Modrinth first, then CurseForge
+	manual    *manual.Service        // files only the CurseForge website serves
 	store     *store.Store
 	modIcons  *icons.Library
 	pictures  *remoteimg.Cache // project pictures from the platform CDNs
@@ -300,11 +302,16 @@ func (a *app) buildContent() error {
 	for i, p := range a.platforms {
 		providers[i] = p
 	}
+	a.manual = manual.New(manual.Deps{
+		Store: a.store, Download: download.New(a.http, a.verified), Modrinth: a.platforms[0], Bus: a.bus, Tasks: a.tasks,
+		Folder: manual.DownloadsFolder(), Log: a.log,
+	})
 	a.content, err = content.New(content.Deps{
 		Instances: a.instances, Store: a.store, Icons: a.modIcons, Bus: a.bus, Tasks: a.tasks, Log: a.log,
 		Running:   func(id string) bool { return a.launcher.Running(id) },
 		ClientJar: func(mc string) string { return filepath.Join(a.paths.Versions(), mc, mc+".jar") },
 		Platforms: providers,
+		Manual:    a.manual,
 		Picture:   a.pictures.Src,
 	}, a.paths.Content())
 	if err != nil {

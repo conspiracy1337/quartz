@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"quartz/internal/core/tasks"
+	"quartz/internal/manual"
 	"quartz/internal/modplatform"
 )
 
@@ -99,5 +102,58 @@ func TestPlanInstallEdges(t *testing.T) {
 	}
 	if _, err := e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.CurseForge, Project: "1"}); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("missing platform: %v", err)
+	}
+}
+
+func TestBlockedFileWaitsForTheDownloadsFolder(t *testing.T) {
+	e := newEnv(t)
+	balm := jarBytes(t, "balm")
+	f := fileOf("balm-1.0.jar", "", balm)
+	f.Page = "https://www.curseforge.com/minecraft/mc-mods/balm/download/9"
+	bv := modplatform.Version{Source: modplatform.CurseForge, ProjectID: "531761", ID: "9", Number: "1.0", Type: "release", Published: day, File: f}
+	e.svc.d.Platforms = []modplatform.Provider{&fakePlatform{src: modplatform.CurseForge,
+		projects: map[string]modplatform.Project{"531761": {Slug: "balm", Title: "Balm"}},
+		versions: map[string][]modplatform.Version{"531761": {bv}}}}
+	eng := e.withTasks(cdn{})
+	folder := t.TempDir()
+	e.svc.d.Manual = manual.New(manual.Deps{Store: e.svc.d.Store, Tasks: eng, Folder: folder})
+
+	ctx := context.Background()
+	pl, err := e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.CurseForge, Project: "531761"})
+	if err != nil || !pl.Blocked {
+		t.Fatalf("plan %+v %v", pl, err)
+	}
+	job, err := e.svc.ApplyInstall(pl.PlanID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waiting := func() bool {
+		for _, j := range eng.Snapshot().Active {
+			for _, st := range j.Steps {
+				if j.ID == job && st.State == tasks.StepWarn && st.Name == "1 mod needs a manual download" {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for deadline := time.Now().Add(5 * time.Second); !waiting(); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("no waiting step")
+		}
+	}
+	if v, err := e.svc.d.Manual.View(job); err != nil || len(v.Items) != 1 || v.Items[0].Name != "Balm" {
+		t.Fatalf("view %+v %v", v, err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "balm-1.0.jar"), balm, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := eng.Wait(wctx, job); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.game, "mods", "balm-1.0.jar")); err != nil {
+		t.Fatal("the manually downloaded mod was not installed")
 	}
 }

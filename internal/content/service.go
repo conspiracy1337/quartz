@@ -13,6 +13,7 @@ import (
 	"quartz/internal/core/jsonfile"
 	"quartz/internal/core/tasks"
 	"quartz/internal/instance"
+	"quartz/internal/manual"
 	"quartz/internal/modplatform"
 )
 
@@ -30,6 +31,9 @@ type Deps struct {
 	Platforms []modplatform.Provider
 	// Tasks runs update downloads as jobs on the Downloads page.
 	Tasks *tasks.Engine
+	// Manual waits for files their authors only allow from the website
+	// (nil refuses such files).
+	Manual *manual.Service
 	// Picture maps a platform picture URL to its same-origin address ("" to
 	// drop it); nil leaves pictures out.
 	Picture func(url string) string
