@@ -116,3 +116,45 @@ func (r *Reader) HasPrefix(prefix string) bool {
 	}
 	return false
 }
+
+// Entry is one file in a zip.
+type Entry struct {
+	Name    string // slash-separated, as stored
+	Size    int64  // uncompressed, as the header claims
+	Regular bool   // false for links and other special entries
+}
+
+// Entries lists the files (not folders) under prefix, in archive order.
+func (r *Reader) Entries(prefix string) []Entry {
+	var out []Entry
+	for _, f := range r.zr.File {
+		if !strings.HasPrefix(f.Name, prefix) || strings.HasSuffix(f.Name, "/") {
+			continue
+		}
+		mode := f.Mode()
+		out = append(out, Entry{Name: f.Name, Size: int64(f.UncompressedSize64), Regular: mode.IsRegular()}) //nolint:gosec // sizes are capped by callers
+	}
+	return out
+}
+
+// Copy streams one entry to w, failing once more than limit bytes came out
+// after decompression, whatever the header claims.
+func (r *Reader) Copy(name string, w io.Writer, limit int64) (int64, error) {
+	f := r.lookup(name)
+	if f == nil {
+		return 0, fmt.Errorf("archive: %s has no %s: %w", r.name, name, fs.ErrNotExist)
+	}
+	rc, err := f.Open()
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rc.Close() }()
+	n, err := io.Copy(w, io.LimitReader(rc, limit+1))
+	if err != nil {
+		return n, err
+	}
+	if n > limit {
+		return n, fmt.Errorf("%w: %s", ErrTooLarge, name)
+	}
+	return n, nil
+}
