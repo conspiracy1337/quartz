@@ -5,6 +5,7 @@
   import { Day, clock, hm } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
@@ -30,6 +31,8 @@
         <div class="row row-head hrow"><span>Started</span><span class="opt">Length</span><span>Exit</span><span>Result</span></div>
         {#each runs.data ?? [] as r, i (r.id)}
           <button class="row hrow" class:sel={cur === i} onclick={() => (cur = i)} aria-pressed={cur === i}><span class="trunc">{when(r.startedAt)}</span><span class="mono muted opt">{hm(r.lengthMin).replace(/^(\d+) m$/, '0 h $1 m')}</span><span class="mono muted">{r.exitCode}</span><span><span class="badge {RESULT[r.result][1]}">{RESULT[r.result][0]}</span></span></button>
+        {:else}
+          {#if runs.data}<Empty text="No launches yet. Each launch is kept here with its log." />{/if}
         {/each}
       </div>
       {#if run}

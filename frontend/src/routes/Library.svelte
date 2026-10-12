@@ -9,6 +9,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import SearchField from '$lib/ui/SearchField.svelte';
   import Select from '$lib/ui/Select.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   type Filter = 'all' | 'modded' | 'modpack' | 'vanilla' | 'servers';
   type Sort = 'last' | 'name' | 'playtime';
@@ -67,6 +68,12 @@
             </div>
             <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={() => session.play(r.id)}><Icon name="play" size={14} /></button>
           </div>
+        {:else}
+          {#if list.data.length}
+            <Empty text="No instances match this filter." style="grid-column: 1 / -1" />
+          {:else}
+            <Empty text="No instances yet. Create one to start playing." action="New instance" href={href({ name: 'new-instance' })} style="grid-column: 1 / -1" />
+          {/if}
         {/each}
       {:else}
         {#each SKELETON_WIDTHS as w, k (k)}

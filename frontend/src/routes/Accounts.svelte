@@ -7,6 +7,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   const accounts = query(() => api.accounts.list());
 
@@ -42,9 +43,13 @@
           </span>
         </div>
       {:else}
+        {#if accounts.data}
+          <Empty text="No accounts yet. Add an offline account to play now; Microsoft sign-in arrives soon." action="Add account" onclick={() => session.open({ kind: 'add-account', mode: 'offline' })} />
+        {:else}
         {#each { length: 3 } as _, k (k)}
           <div class="row ar" aria-hidden="true"><div class="sk" style="width: 40px; height: 40px; border-radius: 8px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 30%"></div><div class="sk" style="height: 10px; width: 55%"></div></div><div class="sk opt" style="height: 10px; width: 80px"></div><div class="sk" style="height: 28px; width: 100px"></div></div>
         {/each}
+        {/if}
       {/each}
     </div>
     <section class="card" aria-label="Account behaviour">

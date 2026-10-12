@@ -9,8 +9,8 @@ import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
-import type { ContentKind, Instance, InstanceSummary, ProjectType } from './types';
-import { bridged, preview } from '../bridge';
+import type { ContentKind, Instance, InstanceSummary, ProjectHit, ProjectType } from './types';
+import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
 import * as AccountsGo from '../wailsjs/go/api/Accounts';
 import * as InstancesGo from '../wailsjs/go/api/Instances';
@@ -26,6 +26,12 @@ export type { AppInfo, CustomCSSState, Settings } from './system';
 
 const serve = preview;
 
+/**
+ * A domain whose Go service arrives in a later milestone: the browser preview shows the
+ * design's fixtures, the app shows nothing rather than fake data.
+ */
+const unbuilt = <A extends unknown[], T>(mock: (...a: A) => T, empty: T) => (...a: A): Promise<T> => (hasBridge() ? Promise.resolve(empty) : serve(mock(...a)));
+
 const summary = ({ id, name, art, minecraft, loader, kind, hasServers, lastPlayed, playtimeMin, running }: Instance): InstanceSummary =>
   ({ id, name, art, minecraft, kind, hasServers, playtimeMin, running, ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
 
@@ -39,14 +45,19 @@ export const api = {
     get: (id: string) => revs.load('instances', bridged(() => InstancesGo.Get(id), () => byId(id))),
     /** The sidebar's recent list: the instances played or created last. */
     recent: () => revs.load('instances', bridged(() => InstancesGo.List().then((l) => l.slice(0, 4)), () => inst.recentIds.map((id) => summary(byId(id))))),
+    /** The instance Browse installs into by default: the most recently played one. */
+    first: async (): Promise<Instance | undefined> => {
+      const [top] = await api.instances.list();
+      return top ? api.instances.get(top.id) : undefined;
+    },
     create: bridged(InstancesGo.Create, inst.mockInstances.create),
     updateSettings: bridged(InstancesGo.UpdateSettings, inst.mockInstances.updateSettings),
     openFolder: bridged(InstancesGo.OpenFolder, (_id: string) => undefined),
-    activity: (_id: string) => serve(inst.activity),
-    pendingUpdates: (_id: string) => serve(inst.pendingUpdates),
+    activity: unbuilt((_id: string) => inst.activity, []),
+    pendingUpdates: unbuilt((_id: string) => inst.pendingUpdates, []),
   },
   content: {
-    list: (_instanceId: string, kind: ContentKind) => serve(content[kind]),
+    list: unbuilt((_instanceId: string, kind: ContentKind) => content[kind], []),
     setEnabled: (_instanceId: string, kind: ContentKind, itemId: string, enabled: boolean) => {
       const item = content[kind].find((c) => c.id === itemId);
       if (item) item.enabled = enabled;
@@ -54,13 +65,13 @@ export const api = {
     },
   },
   home: {
-    alerts: () => serve(home.alerts),
-    news: () => serve(home.news),
-    week: () => serve(home.week),
-    servers: () => serve(home.servers),
-    recentShots: () => serve(home.recentShots),
+    alerts: unbuilt(() => home.alerts, []),
+    news: unbuilt((): typeof home.news | null => home.news, null),
+    week: unbuilt(() => home.week, home.week.map((d) => ({ ...d, minutes: 0 }))),
+    servers: unbuilt(() => home.servers, []),
+    recentShots: unbuilt(() => home.recentShots, []),
   },
-  screenshots: { list: (_instanceId: string) => serve(home.instanceShots) },
+  screenshots: { list: unbuilt((_instanceId: string) => home.instanceShots, []) },
   launch: {
     play: bridged(LaunchGo.Play, (_id: string) => undefined),
     stop: bridged(LaunchGo.Stop, (_id: string) => undefined),
@@ -71,32 +82,32 @@ export const api = {
   },
   logs: {
     live: bridged(LogsGo.Live, (_instanceId: string) => logs.liveLog),
-    files: (_instanceId: string) => serve(logs.logFiles),
-    text: (_instanceId: string, _name: string) => serve(logs.latestLogText),
+    files: unbuilt((_instanceId: string) => logs.logFiles, []),
+    text: unbuilt((_instanceId: string, _name: string) => logs.latestLogText, ''),
     runs: bridged(LogsGo.Runs, (_instanceId: string) => logs.runs),
   },
   versions: {
     minecraft: bridged(VersionsGo.Minecraft, () => versions.families),
     /** Bytes the first launch of a version still downloads. */
     estimate: bridged(VersionsGo.Estimate, (_id: string) => 180_000_000),
-    loaders: (_minecraft: string) => serve(versions.loaders),
+    loaders: unbuilt((_minecraft: string) => versions.loaders, versions.loaders.filter((l) => l.kind === 'none')),
   },
   accounts: {
     list: () => revs.load('accounts', bridged(AccountsGo.List, accounts.mockAccounts.list)),
     addOffline: bridged(AccountsGo.AddOffline, accounts.mockAccounts.addOffline),
     setDefault: bridged(AccountsGo.SetDefault, accounts.mockAccounts.setDefault),
     remove: bridged(AccountsGo.Remove, accounts.mockAccounts.remove),
-    skins: () => serve(accounts.skins),
-    capes: () => serve({ capes: accounts.capes, worn: accounts.wornCape }),
+    skins: unbuilt(() => accounts.skins, []),
+    capes: unbuilt(() => ({ capes: accounts.capes, worn: accounts.wornCape }), { capes: [], worn: '' }),
   },
   browse: {
-    catalog: (type: ProjectType) => serve(browse.catalog[type]),
+    catalog: unbuilt((type: ProjectType) => browse.catalog[type], { categories: [] as string[], hits: [] as ProjectHit[] }),
     project: (_id: string) => serve(browse.iris),
   },
   downloads: downloadsApi,
   sync: {
-    groups: () => serve({ ...misc.sync, total: misc.totalInstances }),
-    keybinds: () => serve(misc.keybinds),
+    groups: unbuilt(() => ({ ...misc.sync, total: misc.totalInstances }), { files: [], folders: [], mods: [], custom: [], total: 0 }),
+    keybinds: unbuilt(() => misc.keybinds, []),
   },
   java: {
     runtimes: bridged(JavaGo.Runtimes, () => misc.runtimes),
@@ -106,10 +117,10 @@ export const api = {
     download: bridged(JavaGo.Download, () => ''),
   },
   review: {
-    modUpdates: (_instanceId: string) => serve(misc.modUpdates),
-    modpackDiff: (_instanceId: string) => serve(misc.modpackDiff),
+    modUpdates: unbuilt((_instanceId: string) => misc.modUpdates, []),
+    modpackDiff: unbuilt((_instanceId: string) => misc.modpackDiff, { ...misc.modpackDiff, summary: '', keptEdits: [], rows: [] }),
   },
-  imports: { launchers: () => serve(misc.otherLaunchers) },
+  imports: { launchers: unbuilt(() => misc.otherLaunchers, []) },
 };
 
 export type Api = typeof api;

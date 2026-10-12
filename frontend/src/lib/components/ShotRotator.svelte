@@ -4,6 +4,7 @@
   import { query } from '../query.svelte';
   import { href } from '../router.svelte';
   import Icon from '../ui/Icon.svelte';
+  import Empty from '../ui/Empty.svelte';
 
   /** Recent screenshots from every instance, shown one at a time. */
   interface Props { bare?: boolean; inset?: number }
@@ -41,6 +42,8 @@
       <button class="shr-nv" onclick={() => (i = (i + n - 1) % n)} aria-label="Previous screenshot"><Icon name="chevron-left" size={12} sw={2.2} /></button>
       <button class="shr-nv" onclick={() => (i = (i + 1) % n)} aria-label="Next screenshot"><Icon name="chevron-right" size={12} sw={2.2} /></button>
     </div>
+  {:else if shots.data}
+    <Empty text="Screenshots you take in any instance show up here." style="position: absolute; inset: 0" />
   {:else}
     <div class="sk" style="position: absolute; inset: 0; border-radius: 0" aria-hidden="true"></div>
   {/if}

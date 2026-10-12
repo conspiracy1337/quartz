@@ -5,6 +5,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import PageHeader from '$lib/ui/PageHeader.svelte';
   import ToggleRow from '$lib/ui/ToggleRow.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   const groups = query(() => api.sync.groups());
   const keys = query(() => api.sync.keybinds());
@@ -34,6 +35,8 @@
               <div class="card tgl-grid">
                 {#each g[sec.key] as e (e.id)}
                   <ToggleRow name={e.name} hint={e.path} count={users(e, g.total)} bind:on={e.enabled} disabled={!e.available} title={e.available ? undefined : 'Not installed in any instance'} />
+                {:else}
+                  <Empty text="Sharing between instances arrives in a later update." />
                 {/each}
               </div>
             </section>

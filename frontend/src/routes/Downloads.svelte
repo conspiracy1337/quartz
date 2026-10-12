@@ -8,6 +8,7 @@
   import PageHeader from '$lib/ui/PageHeader.svelte';
   import Tabs from '$lib/ui/Tabs.svelte';
   import Tile from '$lib/ui/Tile.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   let tab = $state<0 | 1 | 2>(0);
   let open = $state<Record<string, boolean>>({});
@@ -51,7 +52,11 @@
 </PageHeader>
 <div class="scroll">
   <div class="page" style="gap: 12px">
-    {#if tab === 0}
+    {#if tab === 0 && !list.length}
+      <div class="list"><Empty text="No downloads running." /></div>
+    {:else if tab !== 0 && !shown.length}
+      <div class="list"><Empty text={isFinished ? 'Nothing finished in the last 24 hours.' : 'No failed downloads.'} /></div>
+    {:else if tab === 0}
       <div class="list" role="list" aria-label="Active downloads">
         <div class="dl-row dl-sum" role="listitem" aria-label="All downloads">
           <span style="min-width: 0; grid-column: 1 / span 3"><span class="trunc" style="display: block; font-weight: 600">All downloads</span><span class="trunc small faint tnum" style="display: block">{plural(list.length, 'download')}, {allPaused ? 'paused' : rate(tasks.speed)}</span></span>

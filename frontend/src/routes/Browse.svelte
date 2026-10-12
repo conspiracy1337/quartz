@@ -11,6 +11,7 @@
   import Select from '$lib/ui/Select.svelte';
   import Tabs from '$lib/ui/Tabs.svelte';
   import Tile from '$lib/ui/Tile.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   const TYPES: ProjectType[] = ['Mods', 'Modpacks', 'Resource packs', 'Shaders', 'Data packs'];
   const SORTS = [{ value: 'relevance', label: 'Relevance' }, { value: 'downloads', label: 'Downloads' }, { value: 'updated', label: 'Recently updated' }] as const;
@@ -23,7 +24,7 @@
   let hide = $state({ ai: true, ads: false, installed: true });
 
   const catalog = query(() => api.browse.catalog(type));
-  const target = query(() => api.instances.get('fo'));
+  const target = query(() => api.instances.first());
   const showTarget = $derived(type !== 'Modpacks');
 
   // Results merge both sources: downloads are added up, and the date is the most recent update on either side.
@@ -73,6 +74,8 @@
               <span class="opt" style="display: flex; flex-direction: column; gap: 2px"><span class="tnum muted small">{compact(r.downloads)} downloads</span><span class="small faint">Updated {ago(r.updated)}</span></span>
               <span style="display: flex; justify-content: flex-end"><button class="btn btn-sm" onclick={() => session.open({ kind: 'install', projectId: r.id })}>Install</button></span>
             </div>
+          {:else}
+            <Empty text={catalog.data.hits.length ? 'No projects match these filters.' : 'Browsing Modrinth and CurseForge arrives in a later update.'} />
           {/each}
         {:else}
           {#each SKELETON as [a, b], k (k)}

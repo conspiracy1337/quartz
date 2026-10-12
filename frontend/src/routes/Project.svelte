@@ -18,7 +18,7 @@
   const CHANNELS = ['Release', 'Beta', 'Alpha'] as const;
 
   const project = query(() => api.browse.project(id));
-  const target = query(() => api.instances.get('fo'));
+  const target = query(() => api.instances.first());
   let tab = $state(0);
   let openVersion = $state(0);
   let onlyCompatible = $state(true);

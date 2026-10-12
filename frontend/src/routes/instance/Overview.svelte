@@ -10,6 +10,7 @@
   import Setting from '$lib/ui/Setting.svelte';
   import Tile from '$lib/ui/Tile.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
@@ -36,6 +37,8 @@
             <span style="min-width: 0"><span class="trunc" style="display: block">{e.title}</span><span class="trunc small faint" style="display: block">{e.detail}</span></span>
             <span class="small faint tnum" style="white-space: nowrap">{Day(e.at)}</span>
           </div>
+        {:else}
+          {#if activity.data}<Empty text="No activity yet. Sessions and changes show up here." />{/if}
         {/each}
       </div>
     </section>
@@ -58,6 +61,8 @@
       <div class="ov-body">
         {#each updates.data ?? [] as u (u.name)}
           <div class="up"><Tile art={u.art} size="sm" /><span class="trunc">{u.name}</span><span class="mono muted">{u.from} to {u.to}</span></div>
+        {:else}
+          {#if updates.data}<Empty text="Everything is up to date." />{/if}
         {/each}
       </div>
     </section>

@@ -44,7 +44,8 @@ class Session {
   running = $state<Record<string, boolean>>({});
   hosting = $state<Record<string, 'starting' | 'running'>>({});
   toast = $state<Toast | null>(null);
-  updateReady = $state(true);
+  /** Self-update arrives in M11; until then only the preview shows the design's banner. */
+  updateReady = $state(!hasBridge());
 
   #launchTimer: ReturnType<typeof setInterval> | undefined;
   #toastTimer: ReturnType<typeof setTimeout> | undefined;

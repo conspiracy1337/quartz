@@ -10,7 +10,7 @@
   /** Install a project into the target instance, with its dependencies. */
   interface Props { projectId: string }
   let { projectId }: Props = $props();
-  const target = query(() => api.instances.get('fo'));
+  const target = query(() => api.instances.first());
   let optional = $state(true);
   const count = $derived(optional ? 2 : 1);
 
