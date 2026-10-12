@@ -17,15 +17,16 @@ class Prefs {
     this.customCSS = css;
   }
 
-  /** Applies a change locally right away, then saves it; Go returns the validated result. */
-  update(change: (s: Settings) => void) {
-    if (!this.value) return;
+  /** Applies a change locally right away, then saves it; Go returns the validated result. Resolves once saved. */
+  update(change: (s: Settings) => void): Promise<unknown> {
+    if (!this.value) return Promise.resolve();
     const next = $state.snapshot(this.value) as Settings;
     change(next);
     this.value = next;
     this.#pending = this.#pending.then(() => api.settings.save(next)).then((stored) => {
       if (this.value === next) this.value = stored;
     });
+    return this.#pending;
   }
 
   async pickCustomCSS() {

@@ -23,7 +23,14 @@
   const release = $derived(family && [...family.releases, ...family.snapshots].find((r) => r.id === i.minecraft));
   const mcLine = $derived(release ? `${release.snapshot ? 'Snapshot' : 'Release'}, ${fullDate(release.released)}. Java ${release.java} required.` : '');
   // The newest release in the same family is offered, as the design shows (1.21.4 → 1.21.5).
-  const newer = $derived(family?.releases[0] && family.releases[0].id !== i.minecraft && !release?.snapshot && (family.releases.findIndex((r) => r.id === i.minecraft) > 0) ? family.releases[0] : undefined);
+  // Following the latest release offers the newest of all (the switch is still yours).
+  const sameFamily = $derived(family?.releases[0] && family.releases[0].id !== i.minecraft && !release?.snapshot && (family.releases.findIndex((r) => r.id === i.minecraft) > 0) ? family.releases[0] : undefined);
+  const newest = $derived.by(() => {
+    const all = (families.data ?? []).flatMap((f) => f.releases);
+    const at = all.findIndex((r) => r.id === i.minecraft);
+    return i.followLatest && !release?.snapshot && at > 0 ? all[0] : undefined;
+  });
+  const newer = $derived(newest ?? sameFamily);
   const compat = query(() => (newer ? api.instances.compatibility(i.id, newer.id) : Promise.resolve(null)));
 
   const opt = $derived(loaders.data?.find((o) => o.kind === i.loader?.kind));

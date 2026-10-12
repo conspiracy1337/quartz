@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { managed } from '$lib/api/content';
   import type { ContentKind } from '$lib/api/types';
   import ContentTab from '$lib/components/ContentTab.svelte';
   import InstHeader from '$lib/components/InstHeader.svelte';
@@ -27,12 +28,17 @@
   const instance = query(() => api.instances.get(id));
   const i = $derived(instance.data?.id === id ? instance.data : undefined);
   // Review screens replace the instance header with their own top bar.
-  const review = $derived((tab === 'mods' && sub === 'updates') || (tab === 'overview' && sub === 'update'));
+  const review = $derived((managed(tab as ContentKind) && CONTENT.includes(tab) && sub === 'updates') || (tab === 'overview' && sub === 'update'));
+  // Files changed outside the launcher show up while the instance is open.
+  $effect(() => {
+    void api.content.watch(id);
+    return () => void api.content.watch('');
+  });
 </script>
 
 {#if i}
   {#if review}
-    {#if tab === 'mods'}<ModUpdates instance={i} />{:else}<ModpackUpdate instance={i} />{/if}
+    {#if tab === 'overview'}<ModpackUpdate instance={i} />{:else}<ModUpdates instance={i} kind={tab as ContentKind} />{/if}
   {:else}
     <InstHeader instance={i} {tab} />
     {#if tab === 'overview'}

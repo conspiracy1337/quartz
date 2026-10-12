@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/linkx"
 )
 
 // Errors returned for hostile or oversized archives.
@@ -222,34 +223,13 @@ func (e *extractor) makeLink(l link) error {
 	if err == nil {
 		return nil
 	}
-	if cerr := copyFile(l.target, l.path); cerr != nil {
+	if info, serr := os.Stat(l.target); serr == nil && info.IsDir() {
+		return nil // a link to a directory that could not be created is dropped
+	}
+	if _, cerr := linkx.Place(l.target, l.path, linkx.Options{NoHardlink: !l.hard}); cerr != nil {
 		return fmt.Errorf("creating link %s: %w", l.path, errors.Join(err, cerr))
 	}
 	return nil
-}
-
-func copyFile(src, dst string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if info.IsDir() {
-		return nil // a link to a directory that could not be created is dropped
-	}
-	in, err := os.Open(src) //nolint:gosec // src was validated to lie inside dest
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm()) //nolint:gosec // dst passed SafeJoin
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(out, in)
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
-	return err
 }
 
 // ExtractZip extracts the zip at src into dest.
@@ -309,33 +289,12 @@ func (e *extractor) zipEntry(f *zip.File) error {
 // ReadFile returns one entry of the zip at src, refusing entries larger than
 // limit bytes (counted after decompression, whatever the header claims).
 func ReadFile(src, name string, limit int64) ([]byte, error) {
-	zr, err := zip.OpenReader(src)
+	r, err := Open(src)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = zr.Close() }()
-	for _, f := range zr.File {
-		if f.Name != name {
-			continue
-		}
-		if f.UncompressedSize64 > uint64(limit) { //nolint:gosec // limit is a positive constant
-			return nil, fmt.Errorf("%w: %s", ErrTooLarge, name)
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = rc.Close() }()
-		data, err := io.ReadAll(io.LimitReader(rc, limit+1))
-		if err != nil {
-			return nil, err
-		}
-		if int64(len(data)) > limit {
-			return nil, fmt.Errorf("%w: %s", ErrTooLarge, name)
-		}
-		return data, nil
-	}
-	return nil, fmt.Errorf("archive: %s has no %s: %w", filepath.Base(src), name, fs.ErrNotExist)
+	defer func() { _ = r.Close() }()
+	return r.Read(name, limit)
 }
 
 // ExtractTarGz extracts the gzip-compressed tar at src into dest.

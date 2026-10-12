@@ -145,15 +145,6 @@ func TestIdleTimeout(t *testing.T) {
 	}
 }
 
-type keyInjector struct{ host string }
-
-func (k keyInjector) Headers(host string) http.Header {
-	if host == k.host {
-		return http.Header{"X-Api-Key": {"secret"}}
-	}
-	return nil
-}
-
 func TestHeadersOnlyForTheirHost(t *testing.T) {
 	var gotOther, gotUA string
 	other := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -168,7 +159,7 @@ func TestHeadersOnlyForTheirHost(t *testing.T) {
 		http.Redirect(w, r, strings.Replace(other.URL, "127.0.0.1", "localhost", 1), http.StatusFound)
 	}))
 	defer api.Close()
-	c := newClient(t, Options{Injectors: []HeaderInjector{keyInjector{host: "127.0.0.1"}}})
+	c := newClient(t, Options{Injectors: []HeaderInjector{HostHeader{Host: "127.0.0.1", Name: "x-api-key", Value: func() string { return "secret" }}}})
 	resp, err := c.Get(context.Background(), api.URL, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -262,5 +253,38 @@ func TestJSONHelpersKeepErrorBody(t *testing.T) {
 	var out struct{ Echo string }
 	if err := c.JSON(context.Background(), http.MethodPost, srv.URL+"/json", nil, map[string]string{"v": "hi"}, &out); err != nil || out.Echo != "hi" {
 		t.Fatalf("json: %+v %v", out, err)
+	}
+}
+
+func TestHostHeader(t *testing.T) {
+	key := ""
+	h := HostHeader{Host: "api.curseforge.com", Name: "x-api-key", Value: func() string { return key }}
+	if h.Headers("api.curseforge.com") != nil {
+		t.Fatal("no key configured must send no header")
+	}
+	key = "k"
+	if got := h.Headers("API.CurseForge.com").Get("X-Api-Key"); got != "k" {
+		t.Fatalf("own host: %q", got)
+	}
+	for _, other := range []string{"edge.forgecdn.net", "api.curseforge.com.evil.example", "curseforge.com"} {
+		if h.Headers(other) != nil {
+			t.Fatalf("key sent to %s", other)
+		}
+	}
+}
+
+func TestRateLimitResetHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Ratelimit-Reset", "7")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	resp, err := newClient(t, Options{}).Get(context.Background(), srv.URL, nil)
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+	var se *StatusError
+	if !errors.As(err, &se) || se.RetryAfter != 7*time.Second {
+		t.Fatalf("err = %v", err)
 	}
 }

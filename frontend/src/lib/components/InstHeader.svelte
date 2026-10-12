@@ -8,32 +8,18 @@
   import InstanceMark from '../ui/InstanceMark.svelte';
   import Tabs from '../ui/Tabs.svelte';
   import Menu from '../ui/Menu.svelte';
-  import PromptDialog from '../ui/PromptDialog.svelte';
-  import IconDialog from '../overlays/IconDialog.svelte';
-  import { move, repair, trash } from '../instanceActions';
-  import { revs } from '../revs.svelte';
-  import type { Art } from '../api/types';
+  import InstanceActions from './InstanceActions.svelte';
   import { loaderLabel } from '../labels';
 
   interface Props { instance: Instance; tab: InstanceTab }
   let { instance: i, tab }: Props = $props();
 
   const running = $derived(!!session.running[i.id]);
-  // "More actions" (composed from the Accounts "…" menu and its dialogs).
+  // "More actions" (composed from the Accounts "…" menu); the right-click menu shares its rows.
   let menu = $state<{ x: number; y: number } | null>(null);
-  let dialog = $state<'rename' | 'icon' | null>(null);
   function openMenu(e: MouseEvent) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     menu = { x: r.right - 220, y: r.bottom + 6 };
-  }
-  function act(fn: () => unknown) {
-    menu = null;
-    void fn();
-  }
-  async function saveIcon(art: Art, icon: string) {
-    await api.instances.setArt(i.id, art);
-    if (icon) await api.instances.setIcon(i.id, icon);
-    revs.bump('instances');
   }
   const hosting = $derived(session.hosting[i.id] === 'running');
   const to = (t: InstanceTab) => href({ name: 'instance', id: i.id, tab: t });
@@ -87,16 +73,6 @@
 
 {#if menu}
   <Menu x={menu.x} y={menu.y} label="More for {i.name}" onclose={() => (menu = null)}>
-    <button class="mi" role="menuitem" onclick={() => act(() => (dialog = 'rename'))}><Icon name="file" size={14} /><span>Rename</span><span></span></button>
-    <button class="mi" role="menuitem" onclick={() => act(() => (dialog = 'icon'))}><Icon name="camera" size={14} /><span>Change icon</span><span></span></button>
-    <button class="mi" role="menuitem" onclick={() => act(() => repair(i))}><Icon name="refresh" size={14} /><span>Repair game files</span><span></span></button>
-    <button class="mi" role="menuitem" onclick={() => act(() => move(i))}><Icon name="folder" size={14} /><span>Move game folder</span><span></span></button>
-    <button class="mi" role="menuitem" onclick={() => act(() => trash(i))}><Icon name="trash" size={14} /><span>Move to trash</span><span></span></button>
+    <InstanceActions instance={i} header onpick={() => (menu = null)} />
   </Menu>
-{/if}
-{#if dialog === 'rename'}
-  <PromptDialog title="Rename {i.name}" label="Name" help="Only the name changes; the instance's folder stays where it is." action="Rename" value={i.name} maxlength={64}
-    submit={async (v) => { await api.instances.rename(i.id, v); revs.bump('instances'); }} onclose={() => (dialog = null)} />
-{:else if dialog === 'icon'}
-  <IconDialog art={i.art} icon={i.icon} choose={api.instances.chooseIcon} save={saveIcon} onclose={() => (dialog = null)} />
 {/if}

@@ -75,6 +75,7 @@ type spec struct {
 	env     mojang.Env
 	gameDir string
 	vars    map[string]string // $INST_* values
+	mods    int
 }
 
 // moduleExports are the named-module main classes the wrapper jar calls
@@ -176,7 +177,7 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	r := &run{
 		id: newRunID(now), instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), accountID: acc.ID,
 		firstOutput: make(chan struct{}), done: make(chan struct{}),
-		record:   Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID},
+		record:   Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID, Mods: sp.mods},
 		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: cmd.Env, gameDir: sp.gameDir,
 	}
 	r.record.ID = r.id

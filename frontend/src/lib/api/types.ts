@@ -56,6 +56,8 @@ export interface Instance extends InstanceSummary {
   settings: InstanceSettings;
   /** The dedicated GPU's name (Linux), "" when there is none. */
   gpu: string;
+  /** Only from setVersion: the job moving the mods to the new version. */
+  switch?: SwitchResult;
 }
 
 export interface Group { name: string; collapsed?: boolean }
@@ -65,7 +67,7 @@ export interface TrashEntry { key: string; id: string; name: string; art: Art; i
 export type ActivityKind = 'session' | 'change';
 export interface ActivityEvent {
   kind: ActivityKind;
-  icon: 'play' | 'arrow-up' | 'plus' | 'warn' | 'camera';
+  icon: 'play' | 'arrow-up' | 'plus' | 'warn' | 'camera' | 'trash';
   tone: 'muted' | 'accent' | 'danger';
   title: string;
   detail: string;
@@ -83,7 +85,9 @@ export type ContentStatus =
   | { kind: 'unknown' }
   | { kind: 'outdated'; label: string }
   | { kind: 'world'; world: string }
-  | { kind: 'offline' };
+  | { kind: 'offline' }
+  /** A missing dependency, a conflict, a duplicate, or a library nothing needs. */
+  | { kind: 'problem'; label: string; tone: 'warn' | 'danger' | 'info' };
 
 export interface ContentItem {
   id: string;
@@ -98,7 +102,24 @@ export interface ContentItem {
   /** Filter group: the world for data packs, the game mode for worlds. */
   group?: string;
   online?: boolean;
+  /** Update checks skip it (its .pw.toml is pinned). */
+  locked?: boolean;
+  /** Its page on Modrinth or CurseForge, when identified. */
+  project?: string;
 }
+
+/** What a content tab shows besides its rows. */
+export interface ContentInfo { shaderMod: string; worlds: string[] }
+/** The outcome of dropping files on a content tab. */
+export interface AddResult { added: string[]; rejected: { name: string; reason: string }[] }
+/** The shared content store's size, and how much of it nothing uses. */
+export interface StoreUsage { blobs: number; bytes: number; unused: number; unusedBytes: number }
+/** How many enabled mods have a build for another version; `unknown` aren't on a platform. */
+export interface Compat { matching: number; total: number; unknown?: number }
+/** What a version switch did with the mods. */
+export interface SwitchResult { job: string; updated: number; disabled: string[]; unknown: string[] }
+/** A content change in the Overview feed (Go's log of additions, updates and removals). */
+export interface ContentChange { at: number; kind: 'added' | 'updated' | 'removed'; title: string; detail: string }
 
 // ---- home ----
 export interface Alert { tone: 'warn' | 'info'; subject: string; text: string; action: string; target: AlertTarget }
@@ -140,7 +161,7 @@ export type RunResult = 'ok' | 'crash' | 'killed' | 'failed';
 export interface Run {
   id: string; startedAt: number; lengthMin: number; exitCode: number; result: RunResult;
   /** What the run used (recorded by Go; absent in older fixtures). */
-  java?: string; memory?: { min: number; max: number }; account?: string;
+  java?: string; memory?: { min: number; max: number }; account?: string; mods?: number;
 }
 
 // ---- versions ----
@@ -238,7 +259,19 @@ export interface Keybind { name: string; key: string }
 export interface JavaRuntime { major: number; name: string; source: 'Managed' | 'System' | 'SDKMAN' | 'Found'; path: string; usedBy: number }
 
 // ---- review screens ----
-export interface ModUpdate { name: string; note: string; from: string; to: string; art: Art; versions: { id: string; date: number; items: string[] }[] }
+export interface ChangelogVersion { id: string; date: number; items: string[] }
+/** One update in a review; `versions` (its changelog) loads when the dialog opens. */
+export interface ModUpdate {
+  id: string; name: string; note: string; from: string; to: string; art: Art; size: number;
+  versions: ChangelogVersion[];
+  /** CurseForge forbids third-party downloads of it. */
+  blocked?: boolean;
+  dependency?: boolean;
+  /** Its version list on its platform's site. */
+  versionsUrl?: string;
+}
+/** An update check: what to update, what was skipped because it is locked. */
+export interface UpdateReview { checkId: string; updates: ModUpdate[]; locked: { id: string; name: string; version: string }[]; failed: string[] }
 export type DiffKind = 'Added' | 'Updated' | 'Removed';
 export interface ModpackDiffRow { name: string; version: string; kind: DiffKind }
 

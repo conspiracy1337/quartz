@@ -215,3 +215,30 @@ func TestZipPrefixAndReadFile(t *testing.T) {
 		t.Fatalf("missing entry: %v", err)
 	}
 }
+
+func TestReaderOneOpenManyEntries(t *testing.T) {
+	src := writeZip(t, map[string]string{"fabric.mod.json": "{}", "assets/icon.png": "png", "META-INF/jars/inner.jar": "jar"})
+	r, err := Open(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	if b, err := r.Read("fabric.mod.json", 8); err != nil || string(b) != "{}" {
+		t.Fatalf("Read = %q, %v", b, err)
+	}
+	if !r.Has("assets/icon.png") || r.Has("assets/") {
+		t.Fatal("Has")
+	}
+	if got := r.Glob("META-INF/jars/", ".jar"); len(got) != 1 {
+		t.Fatalf("Glob = %v", got)
+	}
+	if !r.HasPrefix("assets/") || r.HasPrefix("shaders/") {
+		t.Fatal("HasPrefix")
+	}
+	if _, err := r.Read("assets/icon.png", 2); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("limit: %v", err)
+	}
+	if _, err := r.Read("nope", 2); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing: %v", err)
+	}
+}

@@ -3,10 +3,9 @@
   import type { Instance } from '$lib/api/types';
   import { shortDate } from '$lib/format';
   import { loaderLabel } from '$lib/labels';
+  import { switchVersion } from '$lib/instanceActions';
   import { query } from '$lib/query.svelte';
-  import { go, href } from '$lib/router.svelte';
-  import { revs } from '$lib/revs.svelte';
-  import { session } from '$lib/session.svelte';
+  import { href } from '$lib/router.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
@@ -28,18 +27,15 @@
   const isCurrent = $derived(i.loader ? opt?.kind === i.loader.kind && selId === i.loader.id : opt?.kind === 'none');
   const action = $derived(isCurrent ? 'Already installed' : list.length ? `Install ${opt?.name} ${sel?.name}` : 'Remove loader');
   let busy = $state(false);
+  // Moving to another loader: how many mods have a build for it (same wording as Change Minecraft).
+  const other = $derived(list.length > 0 && !!i.loader && opt?.kind !== i.loader.kind ? opt?.kind : undefined);
+  const check = query(() => (other ? api.instances.compatibility(i.id, i.minecraft, other) : Promise.resolve(null)));
+  const compat = $derived(!other ? '' : check.data ? `${check.data.matching} of ${check.data.total} mods have a matching version` : 'Mods will be checked before switching');
 
   async function apply() {
     busy = true;
-    try {
-      await api.instances.setVersion(i.id, i.minecraft, list.length ? (opt?.kind ?? '') : '', list.length ? selId : '');
-      revs.bump('instances');
-      go({ name: 'instance', id: i.id, tab: 'version' });
-    } catch (e) {
-      session.fail('Mod loader', e);
-    } finally {
-      busy = false;
-    }
+    await switchVersion(i, i.minecraft, list.length ? (opt?.kind ?? '') : '', list.length ? selId : '', 'Mod loader');
+    busy = false;
   }
 </script>
 
@@ -72,5 +68,6 @@
 </div>
 <div class="pfoot">
   <span class="muted">{i.loader ? loaderLabel(i.loader) : 'No loader'}</span><Icon name="arrow-right" size={12} sw={2} /><span>{list.length ? `${opt?.name} ${sel?.name}` : 'No loader'}</span>
+  {#if compat}<span class="small faint" style="margin-left: 8px">{compat}</span>{/if}
   <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={isCurrent || busy} onclick={apply}>{action}</button></span>
 </div>

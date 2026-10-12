@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -25,6 +26,8 @@ import (
 	"quartz/internal/api"
 	"quartz/internal/auth"
 	"quartz/internal/brand"
+	"quartz/internal/content"
+	"quartz/internal/content/store"
 	"quartz/internal/core/download"
 	"quartz/internal/core/events"
 	"quartz/internal/core/httpcache"
@@ -41,6 +44,9 @@ import (
 	"quartz/internal/launch"
 	"quartz/internal/loader"
 	"quartz/internal/meta"
+	"quartz/internal/modplatform"
+	"quartz/internal/modplatform/curseforge"
+	"quartz/internal/modplatform/modrinth"
 	"quartz/internal/network"
 	"quartz/internal/settings"
 	"quartz/internal/skins"
@@ -78,6 +84,10 @@ type app struct {
 	stopPurge func()
 	loaders   *loader.Registry
 	launcher  *launch.Launcher
+	content   *content.Service
+	store     *store.Store
+	modIcons  *icons.Library
+	drops     *api.Drops
 	hidden    atomic.Bool // the window was hidden because a game started
 	ctx       *api.Ctx
 }
@@ -99,8 +109,10 @@ func Run(o Options) error {
 		MinHeight:        600,
 		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0b, A: 0xff},
 		AssetServer:      &assetserver.Options{Assets: o.Assets, Handler: a.images()},
-		OnStartup:        a.startup,
-		OnShutdown:       a.shutdown,
+		// Dropped files reach Go only (api.Drops); the webview never opens them.
+		DragAndDrop: &options.DragAndDrop{EnableFileDrop: true, DisableWebViewDrop: true},
+		OnStartup:   a.startup,
+		OnShutdown:  a.shutdown,
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               brand.AppID,
 			OnSecondInstanceLaunch: a.secondInstance,
@@ -115,8 +127,9 @@ func Run(o Options) error {
 			api.NewAccounts(a.ctx, a.accounts, a.skins, a.bus),
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
-				Running: a.launcher.Running, Busy: a.launcher.Busy,
+				Running: a.launcher.Running, Busy: a.launcher.Busy, Content: a.content,
 			}),
+			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops}),
 			api.NewLaunch(a.ctx, a.launcher),
 			api.NewLogs(a.launcher),
 		},
@@ -129,6 +142,8 @@ func (a *app) images() http.Handler {
 		"skin": func(_ context.Context, h string) (string, error) { return a.skins.Path(h) },
 		"mc":   a.textures.Path,
 		"icon": func(_ context.Context, h string) (string, error) { return a.icons.Path(h) },
+		// Icons read from mods and packs, re-encoded when they were stored.
+		"content": func(_ context.Context, h string) (string, error) { return a.modIcons.Path(h) },
 	})
 }
 
@@ -155,7 +170,13 @@ func build(o Options) (*app, error) {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("loading settings: %w", err)
 	}
-	httpClient, err := netx.New(netx.Proxy{Mode: netx.ProxySystem}, netx.Options{})
+	cfKey := brand.CurseForgeKey()
+	if cfKey != "" {
+		redactor.AddSecret(cfKey)
+	}
+	httpClient, err := netx.New(netx.Proxy{Mode: netx.ProxySystem}, netx.Options{Injectors: []netx.HeaderInjector{
+		netx.HostHeader{Host: curseforge.Host, Name: "x-api-key", Value: func() string { return cfKey }},
+	}})
 	if err != nil {
 		_ = logFile.Close()
 		return nil, err
@@ -239,6 +260,9 @@ func (a *app) buildTasks() error {
 		return fmt.Errorf("starting downloads: %w", err)
 	}
 	a.verified, a.tasks = ver, eng
+	if err := a.buildContent(); err != nil {
+		return err
+	}
 	dl := download.New(a.http, ver)
 	a.loaders = loader.New(loader.Deps{
 		Meta: a.meta, Downloader: dl, Verified: ver, Log: a.log,
@@ -251,8 +275,39 @@ func (a *app) buildTasks() error {
 	a.launcher = launch.New(launch.Config{
 		Instances: a.instances, Accounts: a.accounts, Installer: a.installer, Loaders: a.loaders, Java: a.java, Tasks: eng,
 		Settings: a.settings, Bus: a.bus, Redactor: a.redactor, BinDir: a.paths.Bin(), Log: a.log,
-		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited},
+		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited}, Mods: a.content,
 	})
+	return nil
+}
+
+// buildContent wires the content store, the mod platforms and the content
+// service. The launcher is built after it, so Running looks it up when called.
+func (a *app) buildContent() error {
+	var err error
+	if a.store, err = store.Open(a.paths.Content(), a.verified, a.log); err != nil {
+		return fmt.Errorf("opening the content store: %w", err)
+	}
+	a.modIcons = icons.OpenSized(a.paths.ContentIcons(), 64)
+	cfReady := brand.CurseForgeKey() != ""
+	a.content, err = content.New(content.Deps{
+		Instances: a.instances, Store: a.store, Icons: a.modIcons, Bus: a.bus, Tasks: a.tasks, Log: a.log,
+		Running:   func(id string) bool { return a.launcher.Running(id) },
+		ClientJar: func(mc string) string { return filepath.Join(a.paths.Versions(), mc, mc+".jar") },
+		Platforms: []modplatform.Provider{modrinth.New(a.http), curseforge.New(a.http, func() bool { return cfReady })},
+	}, a.paths.Content())
+	if err != nil {
+		return fmt.Errorf("loading content: %w", err)
+	}
+	a.drops = api.NewDrops(a.bus)
+	// Edits to files the game owns wait for it to exit.
+	a.bus.Subscribe(events.GameState, func(p any) {
+		if st, ok := p.(launch.State); ok && st.State == "exited" {
+			a.content.GameExited(st.InstanceID)
+		}
+	})
+	if !cfReady {
+		a.log.Info("CurseForge is not set up in this build", "env", brand.EnvCurseForgeKey)
+	}
 	return nil
 }
 
@@ -318,10 +373,15 @@ func (a *app) startup(ctx context.Context) {
 	})
 	a.accounts.Start()
 	a.stopPurge = a.purgeTrash()
+	wruntime.OnFileDrop(ctx, a.drops.Receive)
 }
 
-// purgeTrash empties trash entries older than 30 days now and once a day
-// (a timer, not polling); it returns the stop function.
+// storeGrace is how long a stored file must be unused before it is deleted.
+const storeGrace = 7 * 24 * time.Hour
+
+// purgeTrash empties trash entries older than 30 days and stored content
+// unused for a week, now and once a day (a timer, not polling); it returns
+// the stop function.
 func (a *app) purgeTrash() func() {
 	done := make(chan struct{})
 	go func() {
@@ -330,6 +390,11 @@ func (a *app) purgeTrash() func() {
 		for {
 			if n := a.instances.PurgeExpired(time.Now()); n > 0 {
 				a.log.Info("emptied old trash", "instances", n)
+			}
+			if freed, n, err := a.store.GC(a.content.Refs, storeGrace); err != nil {
+				a.log.Warn("cleaning the content store failed", "err", err)
+			} else if n > 0 {
+				a.log.Info("cleaned the content store", "files", n, "bytes", freed)
 			}
 			select {
 			case <-t.C:
@@ -354,6 +419,11 @@ func (a *app) shutdown(context.Context) {
 	}
 	if err := a.verified.Flush(); err != nil {
 		a.log.Error("saving verified index on exit failed", "err", err)
+	}
+	a.content.Watch("")
+	a.content.Flush()
+	if err := a.store.Flush(); err != nil {
+		a.log.Error("saving the content store on exit failed", "err", err)
 	}
 	if err := a.instances.Flush(); err != nil {
 		a.log.Error("saving instances on exit failed", "err", err)

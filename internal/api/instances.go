@@ -8,6 +8,7 @@ import (
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"quartz/internal/content"
 	"quartz/internal/core/events"
 	"quartz/internal/core/procx"
 	"quartz/internal/core/sysinfo"
@@ -16,6 +17,7 @@ import (
 	"quartz/internal/instance"
 	"quartz/internal/loader"
 	"quartz/internal/meta"
+	"quartz/internal/modplatform"
 	"quartz/internal/settings"
 )
 
@@ -30,6 +32,8 @@ type InstanceDeps struct {
 	Bus      *events.Bus
 	Running  func(id string) bool // the game is running
 	Busy     func(id string) bool // starting or running: files must stay put
+	// Content counts items and moves mods along with version changes; nil in tests.
+	Content *content.Service
 }
 
 // Instances exposes the instance list and everything done to one instance.
@@ -88,6 +92,8 @@ type InstanceView struct {
 	DiscordStatus     bool              `json:"discordStatus"`
 	Settings          instance.Settings `json:"settings"`
 	GPU               string            `json:"gpu"` // the dedicated GPU's name, Linux only
+	// Switch reports a version change's mod job (SetVersion only).
+	Switch *content.SwitchResult `json:"switch,omitempty"`
 }
 
 // Errors returned to the UI.
@@ -131,9 +137,20 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 		Sandboxed:       in.Sandbox, Java: java, JavaAuto: auto, MemoryMB: MemoryRange{Min: eff.MemoryMinMB, Max: eff.MemoryMaxMB},
 		Created: in.Created.UnixMilli(), Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
-		Counts:        map[string]int{"mods": 0, "resourcepacks": 0, "shaders": 0, "datapacks": 0, "worlds": 0, "servers": 0},
+		Counts:        s.counts(in.ID),
 		DiscordStatus: g.Integrations.DiscordStatus, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),
 	}
+}
+
+// counts is how many items each content tab has (worlds and servers: M7).
+func (s *Instances) counts(id string) map[string]int {
+	out := map[string]int{"mods": 0, "resourcepacks": 0, "shaders": 0, "datapacks": 0, "worlds": 0, "servers": 0}
+	if s.d.Content != nil {
+		for k, n := range s.d.Content.Counts(id) {
+			out[string(k)] = n
+		}
+	}
+	return out
 }
 
 // changed tells every screen and returns the instance's new view.
@@ -365,7 +382,26 @@ func (s *Instances) SetVersion(id, minecraft, kind, loaderVersion string) (Insta
 	} else {
 		loaderVersion = ""
 	}
-	return s.changed(s.d.Store.SetVersion(id, minecraft, kind, loaderVersion))
+	apply := func(context.Context) error {
+		_, err := s.changed(s.d.Store.SetVersion(id, minecraft, kind, loaderVersion))
+		return err
+	}
+	if s.d.Content == nil {
+		if err := apply(ctx); err != nil {
+			return InstanceView{}, err
+		}
+		return s.Get(id)
+	}
+	// Mods move with the version: a job updates them, then applies the change.
+	res, err := s.d.Content.Switch(ctx, id, minecraft, kind, modplatform.ParseChannel(s.d.Settings.Get().Updates.ModChannel), apply)
+	if err != nil {
+		return InstanceView{}, err
+	}
+	v, err := s.Get(id)
+	if err == nil && (res.Job != "" || len(res.Disabled) > 0 || len(res.Unknown) > 0) {
+		v.Switch = &res
+	}
+	return v, err
 }
 
 // SetVersionOptions stores the Version tab's two switches.
@@ -383,6 +419,9 @@ func (s *Instances) Trash(id string) (instance.TrashEntry, error) {
 	}
 	if s.d.Busy(id) {
 		return instance.TrashEntry{}, ErrBusy
+	}
+	if s.d.Content != nil {
+		s.d.Content.Forget(id)
 	}
 	e, err := s.d.Store.Trash(id, time.Now())
 	if err == nil {

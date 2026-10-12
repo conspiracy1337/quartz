@@ -136,6 +136,12 @@ func (p Paths) Icons() string { return filepath.Join(p.Root, "icons") }
 // Textures caches skin and cape textures from textures.minecraft.net.
 func (p Paths) Textures() string { return filepath.Join(p.Cache(), "textures") }
 
+// ContentIcons caches icons read from mods and packs.
+func (p Paths) ContentIcons() string { return filepath.Join(p.Cache(), "content-icons") }
+
+// Content is the content-addressed, read-only store of mods and packs.
+func (p Paths) Content() string { return filepath.Join(p.Store(), "content") }
+
 // Libraries is the shared Maven-layout library folder.
 func (p Paths) Libraries() string { return filepath.Join(p.Store(), "libraries") }
 

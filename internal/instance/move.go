@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/linkx"
 )
 
 // Errors a move reports to the UI.
@@ -165,7 +166,7 @@ func copyFile(from, to *os.Root, rel string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	n, err := io.Copy(out, in)
+	n, err := linkx.CopyFile(out, in)
 	if err == nil {
 		err = out.Sync()
 	}

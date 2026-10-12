@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { TrashEntry } from '$lib/api/types';
-  import { ago, plural } from '$lib/format';
+  import { ago, bytes, plural } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { go } from '$lib/router.svelte';
@@ -11,6 +11,24 @@
   import SettingsTab from './SettingsTab.svelte';
 
   const info = query(() => api.app.info());
+  const usage = query(() => api.content.usage());
+  let cleaning = $state(false);
+  const unusedDesc = $derived(usage.data
+    ? usage.data.unusedBytes > 0 ? `${bytes(usage.data.unusedBytes)} of mods and packs no instance uses any more.` : 'Mods and packs no instance uses any more. Nothing to clean right now.'
+    : 'Mods and packs that no instance uses any more.');
+  async function cleanUp() {
+    cleaning = true;
+    try {
+      const before = usage.data?.unusedBytes ?? 0;
+      const after = await api.content.cleanUp();
+      revs.bump('content');
+      session.notify({ subject: 'Cleaned up', text: `${bytes(Math.max(0, before - after.unusedBytes))} freed` });
+    } catch (err) {
+      session.fail('Clean up', err);
+    } finally {
+      cleaning = false;
+    }
+  }
   const trash = query(() => api.instances.trashList());
   const KEEP_DAYS = 30;
   const daysLeft = (e: TrashEntry) => Math.max(0, KEEP_DAYS - Math.floor((Date.now() - e.trashedAt) / 86_400_000));
@@ -67,7 +85,7 @@
     <div class="card">
       <Setting title="Old logs" desc="Compressed game logs older than 30 days."><button class="btn btn-sm">Delete old logs</button></Setting>
       <div class="divider"></div>
-      <Setting title="Unused files in the shared store" desc="Mods, libraries and assets that no instance uses any more."><button class="btn btn-sm">Clean up</button></Setting>
+      <Setting title="Unused files in the shared store" desc={unusedDesc}><button class="btn btn-sm" disabled={cleaning || !usage.data?.unusedBytes} onclick={cleanUp}>Clean up</button></Setting>
     </div>
   </section>
 </SettingsTab>

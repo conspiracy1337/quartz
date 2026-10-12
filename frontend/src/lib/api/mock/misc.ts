@@ -27,11 +27,11 @@ export const runtimes: JavaRuntime[] = [
 
 const V = (id: string, d: number, items: string[]) => ({ id, date: d, items });
 export const modUpdates: ModUpdate[] = [
-  { name: 'Iris Shaders', note: 'Modrinth, release', from: '1.8.1', to: '1.8.3', art: { background: '#b48cf2', initial: 'I' }, versions: [V('1.8.3', date(2025, 2, 28), ['Fixes shadows flickering with Distant Horizons', 'Faster shader pack loading on first launch']), V('1.8.2', date(2025, 1, 30), ['Updated for Sodium 0.6.5', 'Fixes a crash with some AMD drivers'])] },
-  { name: 'Not Enough Animations: Extended Compatibility Edition', note: 'CurseForge, release', from: '1.9.2', to: '1.9.4', art: { background: '#f2a25c', initial: 'N' }, versions: [V('1.9.4', date(2025, 2, 2), ['Fixes crossbow animation in first person']), V('1.9.3', date(2025, 1, 18), ['Adds support for 1.21.4 maps'])] },
-  { name: 'Sodium Extra', note: 'Modrinth, release', from: '0.6.0', to: '0.6.1', art: { background: '#e8e8e8', initial: 'S' }, versions: [V('0.6.1', date(2025, 1, 22), ['Restores the fog toggle', 'Translation updates'])] },
-  { name: 'Zoomify', note: 'CurseForge, release', from: '2.14.1', to: '2.14.2', art: { background: '#f2d45c', initial: 'Z' }, versions: [V('2.14.2', date(2025, 1, 9), ['Smoother scroll zoom on high refresh rate screens'])] },
-  { name: 'YetAnotherConfigLib', note: 'Modrinth, release, needed by Zoomify', from: '3.6.1', to: '3.6.2', art: { background: '#c9b6f2', initial: 'Y' }, versions: [V('3.6.2', date(2025, 1, 5), ['Bug fixes'])] },
+  { id: 'u1', size: 1_300_000, name: 'Iris Shaders', note: 'Modrinth, release', from: '1.8.1', to: '1.8.3', art: { background: '#b48cf2', initial: 'I' }, versions: [V('1.8.3', date(2025, 2, 28), ['Fixes shadows flickering with Distant Horizons', 'Faster shader pack loading on first launch']), V('1.8.2', date(2025, 1, 30), ['Updated for Sodium 0.6.5', 'Fixes a crash with some AMD drivers'])] },
+  { id: 'u2', size: 1_300_000, name: 'Not Enough Animations: Extended Compatibility Edition', note: 'CurseForge, release', from: '1.9.2', to: '1.9.4', art: { background: '#f2a25c', initial: 'N' }, versions: [V('1.9.4', date(2025, 2, 2), ['Fixes crossbow animation in first person']), V('1.9.3', date(2025, 1, 18), ['Adds support for 1.21.4 maps'])] },
+  { id: 'u3', size: 1_300_000, name: 'Sodium Extra', note: 'Modrinth, release', from: '0.6.0', to: '0.6.1', art: { background: '#e8e8e8', initial: 'S' }, versions: [V('0.6.1', date(2025, 1, 22), ['Restores the fog toggle', 'Translation updates'])] },
+  { id: 'u4', size: 1_300_000, name: 'Zoomify', note: 'CurseForge, release', from: '2.14.1', to: '2.14.2', art: { background: '#f2d45c', initial: 'Z' }, versions: [V('2.14.2', date(2025, 1, 9), ['Smoother scroll zoom on high refresh rate screens'])] },
+  { id: 'u5', size: 1_300_000, name: 'YetAnotherConfigLib', note: 'Modrinth, release, needed by Zoomify', from: '3.6.1', to: '3.6.2', art: { background: '#c9b6f2', initial: 'Y' }, versions: [V('3.6.2', date(2025, 1, 5), ['Bug fixes'])] },
 ];
 
 export const modpackDiff = {

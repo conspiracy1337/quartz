@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Art } from '../api/types';
   import { errorText } from '../format';
+  import { TINTS } from '../look';
   import Dialog from '../ui/Dialog.svelte';
   import InstanceMark from '../ui/InstanceMark.svelte';
   import Swatches from '../ui/Swatches.svelte';
@@ -19,8 +20,6 @@
   }
   let { art, icon, choose, save, onclose }: Props = $props();
 
-  // The design's instance tints, one row (two near-duplicates left out).
-  const TINTS = ['#3ecf8e', '#e2a03f', '#6b8afd', '#b48cf2', '#c76bd8', '#9aa3ad', '#5bc0be', '#e86f6f', '#f2d45c', '#7cc7e8'];
   // svelte-ignore state_referenced_locally
   let color = $state(art.background);
   // svelte-ignore state_referenced_locally

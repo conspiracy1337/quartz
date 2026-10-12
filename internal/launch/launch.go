@@ -73,6 +73,14 @@ type Config struct {
 	BinDir    string
 	Log       *slog.Logger
 	Hooks     Hooks
+	// Mods checks an instance's mods before launch (content); nil skips it.
+	Mods ModChecker
+}
+
+// ModChecker summarises the mods a launch will load. It never blocks a
+// launch: warn marks a summary that names a problem.
+type ModChecker interface {
+	Quick(ctx context.Context, id string) (count int, detail string, warn bool, err error)
 }
 
 // Launcher is safe for concurrent use.
@@ -230,6 +238,8 @@ type pipeline struct {
 	account string
 	// signedIn is the account the sign-in step resolved, for failure events.
 	signedIn string
+	// mods is how many enabled mods the launch loads.
+	mods int
 
 	mu      sync.Mutex
 	details []string
@@ -290,7 +300,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 		p.set(StageSignIn, "offline")
 	}
 
-	p.set(StageMods, p.updateLoader(ctx))
+	p.set(StageMods, p.checkMods(ctx))
 	p.progress(StageJava, 10)
 
 	gameDir := l.cfg.Instances.GameDir(p.inst.ID)
@@ -343,7 +353,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	p.set(StageSandbox, "Off")
 	p.progress(StageStart, 90)
 
-	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir}
+	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir, mods: p.mods}
 	sp.vars = instVars(p.inst, l.cfg.Instances.Dir(p.inst.ID), gameDir, rt.Path)
 	if pre := p.eff.Commands.PreLaunch; pre != "" {
 		p.set(StageStart, "Before-launch command")
@@ -377,6 +387,22 @@ func subtitle(in instance.Instance) string {
 		return "Minecraft " + in.Minecraft
 	}
 	return loader.Label(loader.Kind(in.Loader), in.Minecraft, in.LoaderVersion) + " for Minecraft " + in.Minecraft
+}
+
+// checkMods is the "Checking mods" stage: the loader, kept up to date, and a
+// summary of the mods (or the first missing dependency).
+func (p *pipeline) checkMods(ctx context.Context) string {
+	label := p.updateLoader(ctx)
+	if p.inst.Loader == "" || p.l.cfg.Mods == nil {
+		return label
+	}
+	n, detail, _, err := p.l.cfg.Mods.Quick(ctx, p.inst.ID)
+	if err != nil {
+		p.l.cfg.Log.Info("checking mods failed", "instance", p.inst.ID, "err", err)
+		return label
+	}
+	p.mods = n
+	return detail + ", " + label
 }
 
 // updateLoader moves the instance to its loader's newest stable build when

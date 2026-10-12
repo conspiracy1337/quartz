@@ -30,6 +30,9 @@ const (
 // EnvMSAClientID overrides MSAClientID, for development builds.
 const EnvMSAClientID = "QUARTZ_MSA_CLIENT_ID"
 
+// EnvCurseForgeKey overrides CurseForgeAPIKey.
+const EnvCurseForgeKey = "QUARTZ_CF_API_KEY"
+
 // Version is set at build time with -ldflags "-X quartz/internal/brand.Version=…".
 var Version = "0.0.0-dev"
 
@@ -48,6 +51,25 @@ func ClientID() string {
 	for _, id := range []string{os.Getenv(EnvMSAClientID), MSAClientID} {
 		if guid.MatchString(id) {
 			return strings.ToLower(id)
+		}
+	}
+	return ""
+}
+
+// CurseForgeAPIKey is the key for CurseForge's API (console.curseforge.com),
+// set at build time with -ldflags "-X quartz/internal/brand.CurseForgeAPIKey=…".
+// It is never hard-coded, and it is only ever sent to CurseForge's API host.
+var CurseForgeAPIKey = ""
+
+var apiKey = regexp.MustCompile(`^[\x21-\x7e]{20,128}$`)
+
+// CurseForgeKey returns the CurseForge API key ($QUARTZ_CF_API_KEY first, then
+// the build value), or "" when neither is well-formed. Without a key,
+// CurseForge lookups are skipped.
+func CurseForgeKey() string {
+	for _, k := range []string{os.Getenv(EnvCurseForgeKey), CurseForgeAPIKey} {
+		if apiKey.MatchString(k) {
+			return k
 		}
 	}
 	return ""

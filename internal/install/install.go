@@ -24,6 +24,7 @@ import (
 	"quartz/internal/core/download"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/hashx"
+	"quartz/internal/core/linkx"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/tasks"
 	"quartz/internal/java"
@@ -423,26 +424,9 @@ func (in *Installer) legacyAssets(r *Resolved) error {
 		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
 			return err
 		}
-		_ = os.Remove(dst)
-		if err := os.Link(src, dst); err != nil {
-			if err := copyFile(src, dst); err != nil {
-				return err
-			}
+		if _, err := linkx.Place(src, dst, linkx.Options{Perm: fsx.FilePerm}); err != nil {
+			return err
 		}
 	}
 	return markComplete(r.GameAssets)
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src) //nolint:gosec // a verified store object
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fsx.FilePerm) //nolint:gosec // dst passed SafeJoin
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(out, in)
-	return errors.Join(err, out.Close())
 }

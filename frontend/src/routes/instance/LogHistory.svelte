@@ -21,7 +21,7 @@
   const gb = (mb: number) => Math.round((mb / 1024) * 10) / 10;
   // Runs recorded by Go carry what they used; the design's fixtures do not.
   const used = $derived(run?.java ? {
-    java: run.java, memory: run.memory ? `${gb(run.memory.min)} to ${gb(run.memory.max)} GB` : '', account: run.account ?? '', sandbox: 'Off', mods: 'None',
+    java: run.java, memory: run.memory ? `${gb(run.memory.min)} to ${gb(run.memory.max)} GB` : '', account: run.account ?? '', sandbox: 'Off', mods: run.mods ? `${run.mods} loaded` : 'None',
   } : { java: '21.0.5 (Temurin)', memory: '2 to 6 GB', account: accounts.data?.find((a) => a.isDefault)?.name ?? '', sandbox: 'On', mods: '48 loaded' });
 </script>
 

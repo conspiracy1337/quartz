@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,6 +65,25 @@ type Proxy struct {
 // per request hop, so a redirect to another host never carries them.
 type HeaderInjector interface {
 	Headers(host string) http.Header
+}
+
+// HostHeader sends one header to exactly one host. Value is read on every
+// request, so a key configured later is picked up; an empty value sends nothing.
+type HostHeader struct {
+	Host, Name string
+	Value      func() string
+}
+
+// Headers implements HeaderInjector.
+func (h HostHeader) Headers(host string) http.Header {
+	if !strings.EqualFold(host, h.Host) {
+		return nil
+	}
+	v := h.Value()
+	if v == "" {
+		return nil
+	}
+	return http.Header{http.CanonicalHeaderKey(h.Name): {v}}
 }
 
 // Options tune the client; the zero value is production-ready.
@@ -214,7 +234,12 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	if resp.StatusCode >= 300 && resp.StatusCode != http.StatusNotModified {
-		se := &StatusError{Code: resp.StatusCode, URL: redactURL(req.URL), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
+		after := parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
+		if after == 0 && resp.StatusCode == http.StatusTooManyRequests {
+			// Modrinth says when its window resets instead (seconds).
+			after = parseRetryAfter(resp.Header.Get("X-Ratelimit-Reset"), time.Now())
+		}
+		se := &StatusError{Code: resp.StatusCode, URL: redactURL(req.URL), RetryAfter: after}
 		se.Body, _ = io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		_ = resp.Body.Close()
 		cancel(nil)

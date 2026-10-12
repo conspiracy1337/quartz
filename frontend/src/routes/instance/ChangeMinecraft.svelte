@@ -2,10 +2,9 @@
   import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
   import VersionPicker from '$lib/components/VersionPicker.svelte';
+  import { switchVersion } from '$lib/instanceActions';
   import { query } from '$lib/query.svelte';
-  import { revs } from '$lib/revs.svelte';
-  import { go, href } from '$lib/router.svelte';
-  import { session } from '$lib/session.svelte';
+  import { href } from '$lib/router.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
   interface Props { instance: Instance }
@@ -16,18 +15,11 @@
   const check = query(() => (sel && sel !== i.minecraft ? api.instances.compatibility(i.id, sel) : Promise.resolve(null)));
   const compat = $derived(!sel || sel === i.minecraft ? 'This is the current version.' : check.data ? `${check.data.matching} of ${check.data.total} mods have a matching version` : 'Mods will be checked before switching');
 
-  // A loader stays and moves to its newest stable build for the new version.
+  // A loader stays and moves to its newest stable build for the new version; mods move with it.
   async function switchTo() {
     busy = true;
-    try {
-      await api.instances.setVersion(i.id, sel, i.loader?.kind ?? '', '');
-      revs.bump('instances');
-      go({ name: 'instance', id: i.id, tab: 'version' });
-    } catch (e) {
-      session.fail(`Minecraft ${sel}`, e);
-    } finally {
-      busy = false;
-    }
+    await switchVersion(i, sel, i.loader?.kind ?? '', '', `Minecraft ${sel}`);
+    busy = false;
   }
 </script>
 
