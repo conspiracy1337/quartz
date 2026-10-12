@@ -3,6 +3,7 @@
 package hashx
 
 import (
+	"crypto/md5"  //nolint:gosec // Technic Solder only
 	"crypto/sha1" //nolint:gosec // sha1 is what Mojang and Modrinth publish; used for integrity, not security
 	"crypto/sha256"
 	"crypto/sha512"
@@ -23,12 +24,15 @@ const (
 	SHA1   Algo = "sha1"
 	SHA256 Algo = "sha256"
 	SHA512 Algo = "sha512"
+	// MD5 is only for Technic Solder, which publishes nothing better; the
+	// launcher warns before installing such files.
+	MD5 Algo = "md5"
 )
 
 // ErrMismatch is returned when content does not match its expected digest.
 var ErrMismatch = errors.New("hashx: content does not match its checksum")
 
-var hexLen = map[Algo]int{SHA1: 40, SHA256: 64, SHA512: 128}
+var hexLen = map[Algo]int{SHA1: 40, SHA256: 64, SHA512: 128, MD5: 32}
 
 var hexRe = regexp.MustCompile(`^[0-9a-f]+$`)
 
@@ -57,6 +61,8 @@ func New(a Algo) hash.Hash {
 		return sha256.New()
 	case SHA512:
 		return sha512.New()
+	case MD5:
+		return md5.New() //nolint:gosec // Technic Solder publishes only md5 (see MD5)
 	default:
 		return sha1.New() //nolint:gosec // see import note
 	}
