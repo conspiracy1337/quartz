@@ -38,6 +38,7 @@ type Record struct {
 	Memory    MemoryRange `json:"memory"`
 	Account   string      `json:"account"`   // the player name, as it was at launch
 	AccountID string      `json:"accountId"` // the account it was
+	Mods      int         `json:"mods"`      // enabled mods loaded
 }
 
 const maxRecords = 200
