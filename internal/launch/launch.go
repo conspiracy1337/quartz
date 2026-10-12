@@ -160,6 +160,16 @@ func (l *Launcher) Running(id string) bool {
 	return ok
 }
 
+// Busy reports whether an instance is starting or running, when its files
+// must not move.
+func (l *Launcher) Busy(id string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, launching := l.launching[id]
+	_, running := l.running[id]
+	return launching || running
+}
+
 // Play starts the launch pipeline in the background with an account
 // (accountID "" means the default one; "Launch as" passes another, for this
 // launch only). Progress and the outcome arrive as events.

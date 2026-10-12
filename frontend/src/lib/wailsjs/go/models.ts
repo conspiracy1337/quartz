@@ -151,12 +151,32 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class LoaderRef {
+	    kind: string;
+	    version: string;
+	    id: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LoaderRef(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.version = source["version"];
+	        this.id = source["id"];
+	    }
+	}
 	export class InstanceSummary {
 	    id: string;
 	    name: string;
 	    art: instance.Art;
+	    icon?: string;
 	    minecraft: string;
+	    loader?: LoaderRef;
 	    kind: string;
+	    group?: string;
+	    tags: string[];
 	    hasServers: boolean;
 	    lastPlayed?: number;
 	    playtimeMin: number;
@@ -171,8 +191,12 @@ export namespace api {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.art = this.convertValues(source["art"], instance.Art);
+	        this.icon = source["icon"];
 	        this.minecraft = source["minecraft"];
+	        this.loader = this.convertValues(source["loader"], LoaderRef);
 	        this.kind = source["kind"];
+	        this.group = source["group"];
+	        this.tags = source["tags"];
 	        this.hasServers = source["hasServers"];
 	        this.lastPlayed = source["lastPlayed"];
 	        this.playtimeMin = source["playtimeMin"];
@@ -215,8 +239,12 @@ export namespace api {
 	    id: string;
 	    name: string;
 	    art: instance.Art;
+	    icon?: string;
 	    minecraft: string;
+	    loader?: LoaderRef;
 	    kind: string;
+	    group?: string;
+	    tags: string[];
 	    hasServers: boolean;
 	    lastPlayed?: number;
 	    playtimeMin: number;
@@ -224,12 +252,18 @@ export namespace api {
 	    sandboxed: boolean;
 	    counts: Record<string, number>;
 	    java: string;
+	    javaAuto: string;
 	    memoryMB: MemoryRange;
 	    created: number;
 	    folder: string;
+	    moved: boolean;
+	    notes: string;
+	    keepLoaderUpdated: boolean;
+	    followLatest: boolean;
 	    syncTargets: number;
 	    discordStatus: boolean;
 	    settings: instance.Settings;
+	    gpu: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new InstanceView(source);
@@ -240,8 +274,12 @@ export namespace api {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.art = this.convertValues(source["art"], instance.Art);
+	        this.icon = source["icon"];
 	        this.minecraft = source["minecraft"];
+	        this.loader = this.convertValues(source["loader"], LoaderRef);
 	        this.kind = source["kind"];
+	        this.group = source["group"];
+	        this.tags = source["tags"];
 	        this.hasServers = source["hasServers"];
 	        this.lastPlayed = source["lastPlayed"];
 	        this.playtimeMin = source["playtimeMin"];
@@ -249,12 +287,18 @@ export namespace api {
 	        this.sandboxed = source["sandboxed"];
 	        this.counts = source["counts"];
 	        this.java = source["java"];
+	        this.javaAuto = source["javaAuto"];
 	        this.memoryMB = this.convertValues(source["memoryMB"], MemoryRange);
 	        this.created = source["created"];
 	        this.folder = source["folder"];
+	        this.moved = source["moved"];
+	        this.notes = source["notes"];
+	        this.keepLoaderUpdated = source["keepLoaderUpdated"];
+	        this.followLatest = source["followLatest"];
 	        this.syncTargets = source["syncTargets"];
 	        this.discordStatus = source["discordStatus"];
 	        this.settings = this.convertValues(source["settings"], instance.Settings);
+	        this.gpu = source["gpu"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -295,6 +339,62 @@ export namespace api {
 	        this.usedBy = source["usedBy"];
 	    }
 	}
+	export class LoaderVersion {
+	    id: string;
+	    name: string;
+	    released: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LoaderVersion(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.released = source["released"];
+	    }
+	}
+	export class LoaderOption {
+	    kind: string;
+	    name: string;
+	    note: string;
+	    stable: LoaderVersion[];
+	    beta: LoaderVersion[];
+	
+	    static createFrom(source: any = {}) {
+	        return new LoaderOption(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.note = source["note"];
+	        this.stable = this.convertValues(source["stable"], LoaderVersion);
+	        this.beta = this.convertValues(source["beta"], LoaderVersion);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
 	
 	export class SkinView {
 	    hash: string;
@@ -360,11 +460,67 @@ export namespace instance {
 	        this.initial = source["initial"];
 	    }
 	}
+	export class EnvVar {
+	    name: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new EnvVar(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.value = source["value"];
+	    }
+	}
+	export class CommandSettings {
+	    preLaunch: string;
+	    wrapper: string;
+	    postExit: string;
+	    env: EnvVar[];
+	    systemGlfw: boolean;
+	    systemOpenal: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new CommandSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.preLaunch = source["preLaunch"];
+	        this.wrapper = source["wrapper"];
+	        this.postExit = source["postExit"];
+	        this.env = this.convertValues(source["env"], EnvVar);
+	        this.systemGlfw = source["systemGlfw"];
+	        this.systemOpenal = source["systemOpenal"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class CreateRequest {
 	    name: string;
 	    art: Art;
+	    icon: string;
 	    minecraft: string;
 	    loader: string;
+	    loaderVersion: string;
 	    group: string;
 	    sandbox: boolean;
 	    shares: string[];
@@ -377,8 +533,10 @@ export namespace instance {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.art = this.convertValues(source["art"], Art);
+	        this.icon = source["icon"];
 	        this.minecraft = source["minecraft"];
 	        this.loader = source["loader"];
+	        this.loaderVersion = source["loaderVersion"];
 	        this.group = source["group"];
 	        this.sandbox = source["sandbox"];
 	        this.shares = source["shares"];
@@ -402,6 +560,21 @@ export namespace instance {
 		    return a;
 		}
 	}
+	
+	export class Group {
+	    name: string;
+	    collapsed?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Group(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.collapsed = source["collapsed"];
+	    }
+	}
 	export class JavaSettings {
 	    override: boolean;
 	    javaPath: string;
@@ -420,6 +593,22 @@ export namespace instance {
 	        this.memoryMinMb = source["memoryMinMb"];
 	        this.memoryMaxMb = source["memoryMaxMb"];
 	        this.jvmArgs = source["jvmArgs"];
+	    }
+	}
+	export class PerformanceSettings {
+	    dedicatedGpu: boolean;
+	    gameMode: boolean;
+	    mangoHud: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PerformanceSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dedicatedGpu = source["dedicatedGpu"];
+	        this.gameMode = source["gameMode"];
+	        this.mangoHud = source["mangoHud"];
 	    }
 	}
 	export class WindowSettings {
@@ -443,6 +632,8 @@ export namespace instance {
 	export class Settings {
 	    java: JavaSettings;
 	    window: WindowSettings;
+	    commands: CommandSettings;
+	    performance: PerformanceSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -452,6 +643,56 @@ export namespace instance {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.java = this.convertValues(source["java"], JavaSettings);
 	        this.window = this.convertValues(source["window"], WindowSettings);
+	        this.commands = this.convertValues(source["commands"], CommandSettings);
+	        this.performance = this.convertValues(source["performance"], PerformanceSettings);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TrashEntry {
+	    key: string;
+	    id: string;
+	    name: string;
+	    art: Art;
+	    icon?: string;
+	    minecraft: string;
+	    loader?: string;
+	    group?: string;
+	    trashedAt: number;
+	    location?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrashEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.art = this.convertValues(source["art"], Art);
+	        this.icon = source["icon"];
+	        this.minecraft = source["minecraft"];
+	        this.loader = source["loader"];
+	        this.group = source["group"];
+	        this.trashedAt = source["trashedAt"];
+	        this.location = source["location"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
