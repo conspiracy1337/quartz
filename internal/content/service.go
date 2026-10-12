@@ -30,7 +30,10 @@ type Deps struct {
 	Platforms []modplatform.Provider
 	// Tasks runs update downloads as jobs on the Downloads page.
 	Tasks *tasks.Engine
-	Log       *slog.Logger
+	// Picture maps a platform picture URL to its same-origin address ("" to
+	// drop it); nil leaves pictures out.
+	Picture func(url string) string
+	Log     *slog.Logger
 }
 
 // Changed is the content:changed payload.

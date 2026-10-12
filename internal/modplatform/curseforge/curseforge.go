@@ -163,26 +163,14 @@ func (c *Client) Projects(ctx context.Context, projectIDs []string) (map[string]
 	out := map[string]modplatform.Project{}
 	for _, chunk := range modplatform.Chunk(ids(projectIDs), batch) {
 		var resp struct {
-			Data []struct {
-				ID      int64  `json:"id"`
-				Name    string `json:"name"`
-				Slug    string `json:"slug"`
-				Authors []struct {
-					Name string `json:"name"`
-				} `json:"authors"`
-				Categories []struct {
-					Slug string `json:"slug"`
-				} `json:"categories"`
-			} `json:"data"`
+			Data []mod `json:"data"`
 		}
 		if err := c.http.JSON(ctx, http.MethodPost, c.Base+"/v1/mods", nil, map[string]any{"modIds": chunk}, &resp); err != nil {
 			return out, err
 		}
 		for _, m := range resp.Data {
-			p := modplatform.Project{Source: modplatform.CurseForge, ID: id(m.ID), Slug: m.Slug, Title: m.Name}
-			if len(m.Authors) > 0 {
-				p.Author = m.Authors[0].Name
-			}
+			p := modplatform.Project{Source: modplatform.CurseForge, ID: id(m.ID), Slug: m.Slug, Title: m.Name, Author: m.author(),
+				Icon: m.icon(), Summary: m.Summary}
 			for _, cat := range m.Categories {
 				if strings.Contains(cat.Slug, "library") || strings.Contains(cat.Slug, "api") {
 					p.Library = true

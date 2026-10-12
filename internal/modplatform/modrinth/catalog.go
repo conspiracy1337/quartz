@@ -107,9 +107,7 @@ func (c *Client) Search(ctx context.Context, q modplatform.SearchQuery) (modplat
 type detail struct {
 	project
 	ProjectType string    `json:"project_type"`
-	Description string    `json:"description"`
 	Body        string    `json:"body"`
-	IconURL     string    `json:"icon_url"`
 	Downloads   int64     `json:"downloads"`
 	Updated     time.Time `json:"updated"`
 	ClientSide  string    `json:"client_side"`

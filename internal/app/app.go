@@ -305,6 +305,7 @@ func (a *app) buildContent() error {
 		Running:   func(id string) bool { return a.launcher.Running(id) },
 		ClientJar: func(mc string) string { return filepath.Join(a.paths.Versions(), mc, mc+".jar") },
 		Platforms: providers,
+		Picture:   a.pictures.Src,
 	}, a.paths.Content())
 	if err != nil {
 		return fmt.Errorf("loading content: %w", err)

@@ -240,6 +240,8 @@ type project struct {
 	Team         string   `json:"team"`
 	Organization string   `json:"organization"`
 	Categories   []string `json:"categories"`
+	IconURL      string   `json:"icon_url"`
+	Description  string   `json:"description"`
 }
 
 // Projects looks projects up, with their author: the organization when a
@@ -266,7 +268,7 @@ func (c *Client) Projects(ctx context.Context, ids []string) (map[string]modplat
 			continue
 		}
 		out[p.ID] = modplatform.Project{Source: modplatform.Modrinth, ID: p.ID, Slug: p.Slug, Title: p.Title,
-			Author: authors[p.ID], Library: slices.Contains(p.Categories, "library")}
+			Author: authors[p.ID], Library: slices.Contains(p.Categories, "library"), Icon: p.IconURL, Summary: p.Description}
 	}
 	return out, nil
 }

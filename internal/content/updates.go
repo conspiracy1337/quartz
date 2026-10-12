@@ -90,6 +90,8 @@ type planned struct {
 	v        modplatform.Version
 	p        modplatform.Project
 	provider modplatform.Provider
+	dir      string // where a new item goes ("" for the kind's folder)
+	optional bool   // installed only when picked
 }
 
 func randomID() string {
@@ -496,9 +498,12 @@ func (s *Service) install(inst string, k Kind, pi *planned) error {
 	if pi.item != "" && !had {
 		return nil // removed meanwhile
 	}
-	dir := sp.folders(nil)[0].Rel
-	if had {
+	dir := pi.dir
+	switch {
+	case had:
 		dir = path.Dir(old.Rel)
+	case dir == "":
+		dir = sp.folders(nil)[0].Rel
 	}
 	name := fileName(pi.v.File.Name, sp.ext)
 	disabled := had && strings.HasSuffix(old.Rel, Disabled)

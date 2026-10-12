@@ -112,6 +112,8 @@ type Project struct {
 	Title   string `json:"title"`
 	Author  string `json:"author"`
 	Library bool   `json:"library"`
+	Icon    string `json:"icon,omitempty"` // picture URL on the platform CDN
+	Summary string `json:"summary,omitempty"`
 }
 
 // Hashes identify one file.
