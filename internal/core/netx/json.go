@@ -15,8 +15,8 @@ import (
 const maxJSONBody = 4 << 20
 
 // DoJSON sends req and decodes a JSON response into out (skipped when out is
-// nil). Errors are the same as Do's, so callers inspect *StatusError and its
-// Body for API error codes.
+// nil, or on 204 No Content). Errors are the same as Do's, so callers inspect
+// *StatusError and its Body for API error codes.
 func (c *Client) DoJSON(req *http.Request, out any) error {
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "application/json")
@@ -25,8 +25,8 @@ func (c *Client) DoJSON(req *http.Request, out any) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	if out == nil {
+	defer func() { _ = resp.Body.Close() }()
+	if out == nil || resp.StatusCode == http.StatusNoContent {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxJSONBody))
 		return nil
 	}
