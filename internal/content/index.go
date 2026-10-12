@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"quartz/internal/content/meta"
-	"quartz/internal/core/jsonfile"
 	"quartz/internal/content/store"
+	"quartz/internal/core/jsonfile"
 )
 
 // Entry is one item an instance has, as last scanned.

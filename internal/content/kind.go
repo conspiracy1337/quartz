@@ -55,9 +55,9 @@ type folder struct {
 type toggleKind int
 
 const (
-	toggleSuffix  toggleKind = iota // .disabled (mods, data packs)
-	togglePackList                  // options.txt resourcePacks (resource packs)
-	toggleShader                    // iris/oculus properties (shaders)
+	toggleSuffix   toggleKind = iota // .disabled (mods, data packs)
+	togglePackList                   // options.txt resourcePacks (resource packs)
+	toggleShader                     // iris/oculus properties (shaders)
 )
 
 // spec is everything that differs between kinds.

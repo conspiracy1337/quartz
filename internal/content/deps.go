@@ -137,6 +137,9 @@ func (s *Service) facts(i Index) []modFacts {
 			continue
 		}
 		f := modFacts{item: item, enabled: !strings.HasSuffix(e.Rel, Disabled), name: displayName(e, k), info: *k.Info}
+		if id := k.Ident(); id != nil && id.Library {
+			f.info.Library = true
+		}
 		if k.Info.ID != "" {
 			f.provided = append(f.provided, k.Info.ID)
 		}

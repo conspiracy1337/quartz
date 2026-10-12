@@ -7,6 +7,7 @@ import (
 
 	"quartz/internal/content/meta"
 	"quartz/internal/core/jsonfile"
+	"quartz/internal/modplatform"
 )
 
 // Ident is a file found on a mod platform.
@@ -24,6 +25,14 @@ type Ident struct {
 	Loaders     []string `json:"loaders,omitempty"`
 	Game        []string `json:"game,omitempty"`
 	Library     bool     `json:"library,omitempty"`
+	Published   int64    `json:"published,omitempty"` // unix seconds
+}
+
+// identOf records a platform's version and project.
+func identOf(v modplatform.Version, p modplatform.Project) *Ident {
+	return &Ident{Source: string(v.Source), ProjectID: v.ProjectID, VersionID: v.ID, Slug: p.Slug, Title: p.Title, Author: p.Author,
+		Version: v.Number, ReleaseType: v.Type, FileName: v.File.Name, URL: v.File.URL, Loaders: v.Loaders, Game: v.Game,
+		Library: p.Library, Published: v.Published.Unix()}
 }
 
 // Known is what the launcher knows about one blob, shared by every

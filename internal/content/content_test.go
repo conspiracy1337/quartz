@@ -16,6 +16,7 @@ import (
 	"quartz/internal/core/events"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
+	"quartz/internal/modplatform"
 )
 
 type env struct {
@@ -328,18 +329,6 @@ func TestSymlinksAreNeverFollowed(t *testing.T) {
 	}
 }
 
-type fakeIdentifier struct{ found map[string]Found }
-
-func (f fakeIdentifier) Identify(_ context.Context, files []Lookup) (map[string]Found, error) {
-	out := map[string]Found{}
-	for _, l := range files {
-		if v, ok := f.found[l.SHA1]; ok {
-			out[l.SHA1] = v
-		}
-	}
-	return out, nil
-}
-
 func TestIdentifyLockAndMetadata(t *testing.T) {
 	e := newEnv(t)
 	e.mod("sodium.jar", "sodium", "Sodium", "")
@@ -347,8 +336,9 @@ func TestIdentifyLockAndMetadata(t *testing.T) {
 	rows := e.list(Mods)
 	ix, _ := e.svc.idx.get(e.id)
 	sodiumSHA := ix.Get().Entries[byName(rows, "Sodium").ID].SHA1
-	e.svc.d.Identify = fakeIdentifier{found: map[string]Found{sodiumSHA: {Modrinth: &Ident{Source: "modrinth", ProjectID: "AANobbMI",
-		VersionID: "v1", Slug: "sodium", Title: "Sodium", Author: "CaffeineMC", Version: "0.6.5"}}}}
+	e.svc.d.Platforms = []modplatform.Provider{&fakePlatform{src: modplatform.Modrinth,
+		byHash:   map[string]modplatform.Version{sodiumSHA: {Source: modplatform.Modrinth, ProjectID: "AANobbMI", ID: "v1", Number: "0.6.5", Type: "release"}},
+		projects: map[string]modplatform.Project{"AANobbMI": {Slug: "sodium", Title: "Sodium", Author: "CaffeineMC"}}}}
 	n, err := e.svc.Identify(context.Background(), e.id, Mods)
 	if err != nil || n != 1 {
 		t.Fatalf("n=%d err=%v", n, err)

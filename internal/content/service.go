@@ -1,7 +1,6 @@
 package content
 
 import (
-	"context"
 	"log/slog"
 	"sync"
 	"time"
@@ -13,24 +12,8 @@ import (
 	"quartz/internal/core/events"
 	"quartz/internal/core/jsonfile"
 	"quartz/internal/instance"
+	"quartz/internal/modplatform"
 )
-
-// Identifier finds files on the mod platforms by hash (modplatform).
-type Identifier interface {
-	Identify(ctx context.Context, files []Lookup) (map[string]Found, error)
-}
-
-// Lookup is one file to identify.
-type Lookup struct {
-	SHA1, SHA512 string
-	Murmur2      uint32
-	Kind         Kind
-}
-
-// Found is what each platform knows about a file.
-type Found struct {
-	Modrinth, CurseForge *Ident
-}
 
 // Deps are the service's collaborators.
 type Deps struct {
@@ -42,9 +25,9 @@ type Deps struct {
 	Running func(id string) bool
 	// ClientJar is the client jar of a Minecraft version (for pack formats).
 	ClientJar func(mc string) string
-	// Identify may be nil (tests); then nothing is identified.
-	Identify Identifier
-	Log      *slog.Logger
+	// Platforms identify files and find updates (Modrinth, then CurseForge).
+	Platforms []modplatform.Provider
+	Log       *slog.Logger
 }
 
 // Changed is the content:changed payload.
