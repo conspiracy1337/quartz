@@ -46,10 +46,12 @@
   $effect(() => prefs.listen());
   $effect(() => tasks.listen());
   $effect(() => revs.listen());
+  $effect(() => session.listen());
   $effect(() => applyAppearance());
   $effect(() => installShortcuts());
   void prefs.load();
   void tasks.load();
+  void session.load();
 
   const route = $derived(router.route);
   // Dialogs belong to the screen they were opened on; navigating closes them.
@@ -110,9 +112,9 @@
     </main>
   {/if}
 
-  {#if session.launch}<LaunchPanel instanceId={session.launch.instanceId} stage={session.launch.stage} />{/if}
+  {#if session.launch}<LaunchPanel instanceId={session.launch.instanceId} stage={session.launch.stage} details={session.launch.details} pct={session.launch.pct} />{/if}
   {#each Object.entries(session.hosting) as [id, state] (id)}<HostPanel instanceId={id} {state} />{/each}
-  {#if session.toast}<Toast subject={session.toast.subject} text={session.toast.text} undo={session.toast.undo} />{/if}
+  {#if session.toast}<Toast {...session.toast} />{/if}
 
   {#if overlay?.kind === 'add-account'}<AddAccount mode={overlay.mode} />
   {:else if overlay?.kind === 'install'}<Install projectId={overlay.projectId} />

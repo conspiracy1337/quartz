@@ -20,7 +20,7 @@
       has = draft !== '';
       draft = '';
     } catch (e) {
-      session.notify({ subject: label, text: e instanceof Error ? e.message : String(e) });
+      session.fail(label, e);
     } finally {
       busy = false;
     }

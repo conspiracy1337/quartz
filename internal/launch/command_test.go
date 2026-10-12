@@ -1,0 +1,88 @@
+package launch
+
+import (
+	"encoding/base64"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+
+	"quartz/internal/accounts"
+	"quartz/internal/core/events"
+	"quartz/internal/install"
+	"quartz/internal/instance"
+	"quartz/internal/java"
+	"quartz/internal/mojang"
+	"quartz/internal/settings"
+)
+
+func TestCommandKeepsTokenOffTheCommandLine(t *testing.T) {
+	dir := t.TempDir()
+	data, err := os.ReadFile("../mojang/testdata/1.21.4.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := mojang.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
+	inst, err := insts.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst, _ = insts.SetSettings(inst.ID, instance.Settings{
+		Java:   instance.JavaSettings{Override: true, JVMArgs: `-Dfoo="a b" -XX:+UseZGC`},
+		Window: instance.WindowSettings{Width: 1280, Height: 720, Fullscreen: true},
+	})
+	st, _ := settings.Open(filepath.Join(dir, "settings.json"), events.NewBus(), nil)
+	l := New(Config{Instances: insts, Settings: st, BinDir: filepath.Join(dir, "bin")})
+	res := &install.Resolved{
+		Version: v, ClientJar: "/store/versions/1.21.4/1.21.4.jar", Classpath: []string{"/store/libraries/a.jar", "/store/versions/1.21.4/1.21.4.jar"},
+		NativesDir: "/store/natives/x", AssetsRoot: "/store/assets", GameAssets: "/store/assets",
+		LogConfig: "/store/logconfigs/client-1.12.xml", LogArgument: "-Dlog4j.configurationFile=${path}",
+	}
+	env := mojang.Env{OS: "linux", Arch: "x86_64", Features: map[string]bool{"has_custom_resolution": true}}
+	sess := accounts.Session{Name: "Steve", UUID: "0123456789abcdef0123456789abcdef", AccessToken: "SECRET_TOKEN_eyJhbGciOi", UserType: "msa"}
+	cmd, script, err := l.command(inst, sess, res, java.Runtime{Path: "/jdk/bin/java"}, MemoryRange{Min: 1024, Max: 4096}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	argv := strings.Join(cmd.Args, " ")
+	if strings.Contains(argv, "SECRET_TOKEN") || strings.Contains(argv, "Steve") {
+		t.Fatalf("game arguments leaked onto the command line: %s", argv)
+	}
+	for _, want := range []string{"-Xms1024M", "-Xmx4096M", "-Dfoo=a b", "-XX:+UseZGC", "-Dlog4j2.formatMsgNoLookups=true", "-Dlog4j.configurationFile=/store/logconfigs/client-1.12.xml", "wrapper.Main"} {
+		if !slices.Contains(cmd.Args, want) {
+			t.Errorf("missing %q in %v", want, cmd.Args)
+		}
+	}
+	if cmd.Args[len(cmd.Args)-1] != "wrapper.Main" {
+		t.Fatal("wrapper must be the main class")
+	}
+	cp := cmd.Args[slices.Index(cmd.Args, "-cp")+1]
+	if !strings.HasSuffix(cp, ".jar") || !strings.Contains(cp, "wrapper-") {
+		t.Fatalf("classpath lacks the wrapper jar: %s", cp)
+	}
+	var game []string
+	for _, line := range strings.Split(strings.TrimSpace(string(script)), "\n") {
+		if cmd, val, _ := strings.Cut(line, " "); cmd == "arg" {
+			b, _ := base64.StdEncoding.DecodeString(val)
+			game = append(game, string(b))
+		}
+	}
+	for _, want := range []string{"SECRET_TOKEN_eyJhbGciOi", "Steve", "--width", "1280", "--fullscreen"} {
+		if !slices.Contains(game, want) {
+			t.Errorf("game args lack %q: %v", want, game)
+		}
+	}
+	if !strings.HasSuffix(strings.TrimSpace(string(script)), "launch "+base64.StdEncoding.EncodeToString([]byte(v.MainClass))) {
+		t.Fatal("script must end by launching the game's main class")
+	}
+	for _, e := range cmd.Env {
+		if strings.HasPrefix(e, "JAVA_TOOL_OPTIONS=") {
+			t.Fatal("JAVA_TOOL_OPTIONS reached the game")
+		}
+	}
+}

@@ -176,10 +176,11 @@ type Session struct {
 }
 
 // Session returns the launch session. Offline accounts get a placeholder
-// token with the "msa" user type (as Pandora and XMCL do), which every
-// supported version accepts; the game simply runs without online services.
+// token with the "legacy" user type: every supported version accepts it, and
+// modern versions then skip Microsoft's services instead of calling them with
+// a bogus token (with "msa" they log a 401 stack trace on every start).
 func (a Account) Session() Session {
-	return Session{Name: a.Name, UUID: a.ID, AccessToken: "0", UserType: "msa"}
+	return Session{Name: a.Name, UUID: a.ID, AccessToken: "0", UserType: "legacy"}
 }
 
 // SkinColors are the flat colours of the avatar the UI draws.

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { bytes } from '$lib/format';
+  import { query } from '$lib/query.svelte';
   import VersionPicker from '$lib/components/VersionPicker.svelte';
   import { revs } from '$lib/revs.svelte';
   import { session } from '$lib/session.svelte';
@@ -32,6 +34,8 @@
   let sandbox = $state(true);
   let shares = $state<Record<number, boolean>>({ 0: true, 2: true, 4: true, 5: true });
   const l = $derived(LOADERS[loader]!);
+  const estimate = query(() => (version ? api.versions.estimate(version) : Promise.resolve(0)));
+  const download = $derived(estimate.data === undefined ? '' : estimate.data > 0 ? `Downloads about ${bytes(estimate.data)} the first time you play.` : 'Everything it needs is already downloaded.');
 
   async function create() {
     creating = true;
@@ -44,7 +48,7 @@
       revs.bump('instances');
       go({ name: 'instance', id: made.id, tab: 'overview' });
     } catch (e) {
-      session.notify({ subject: 'New instance', text: e instanceof Error ? e.message : String(e) });
+      session.fail('New instance', e);
     } finally {
       creating = false;
     }
@@ -81,7 +85,7 @@
       </div>
     {/if}
     <button class="btn btn-accent btn-lg btn-block" disabled={creating || !name.trim() || !version} onclick={create}>Create</button>
-    <p class="small faint" style="margin: 0; text-align: center">Minecraft {version}, {l.short}. Downloads about 180 MB the first time you play.</p>
+    <p class="small faint" style="margin: 0; text-align: center">Minecraft {version}, {l.short}. {download}</p>
   </div>
 </div>
 

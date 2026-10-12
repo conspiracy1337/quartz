@@ -15,6 +15,8 @@ import { revs } from '../revs.svelte';
 import * as AccountsGo from '../wailsjs/go/api/Accounts';
 import * as InstancesGo from '../wailsjs/go/api/Instances';
 import * as JavaGo from '../wailsjs/go/api/Java';
+import * as LaunchGo from '../wailsjs/go/api/Launch';
+import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { downloadsApi } from './downloads';
 import { app, settingsApi } from './system';
@@ -59,14 +61,24 @@ export const api = {
     recentShots: () => serve(home.recentShots),
   },
   screenshots: { list: (_instanceId: string) => serve(home.instanceShots) },
+  launch: {
+    play: bridged(LaunchGo.Play, (_id: string) => undefined),
+    stop: bridged(LaunchGo.Stop, (_id: string) => undefined),
+    cancelLaunch: bridged(LaunchGo.CancelLaunch, (_id: string) => undefined),
+    status: bridged(LaunchGo.Status, () => ({ running: [] as string[], launching: [] as string[] })),
+    /** Re-verifies an instance's files; resolves with the job id ("" when all fine). */
+    repair: bridged(LaunchGo.Repair, (_id: string) => ''),
+  },
   logs: {
-    live: (_instanceId: string) => serve(logs.liveLog),
+    live: bridged(LogsGo.Live, (_instanceId: string) => logs.liveLog),
     files: (_instanceId: string) => serve(logs.logFiles),
     text: (_instanceId: string, _name: string) => serve(logs.latestLogText),
-    runs: (_instanceId: string) => serve(logs.runs),
+    runs: bridged(LogsGo.Runs, (_instanceId: string) => logs.runs),
   },
   versions: {
     minecraft: bridged(VersionsGo.Minecraft, () => versions.families),
+    /** Bytes the first launch of a version still downloads. */
+    estimate: bridged(VersionsGo.Estimate, (_id: string) => 180_000_000),
     loaders: (_minecraft: string) => serve(versions.loaders),
   },
   accounts: {

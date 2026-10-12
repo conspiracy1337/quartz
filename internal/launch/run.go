@@ -1,0 +1,324 @@
+package launch
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"io"
+	"math"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"quartz/internal/accounts"
+	"quartz/internal/brand"
+	"quartz/internal/core/events"
+	"quartz/internal/core/procx"
+	"quartz/internal/core/shlex"
+	"quartz/internal/gamelog"
+	"quartz/internal/install"
+	"quartz/internal/instance"
+	"quartz/internal/java"
+	"quartz/internal/mojang"
+	"quartz/internal/wrapperjar"
+)
+
+const (
+	consoleLines = 20_000
+	stopGrace    = 3 * time.Second
+	logBatch     = 100 * time.Millisecond
+)
+
+// run is one running game.
+type run struct {
+	id         string
+	instanceID string
+	cmd        *exec.Cmd
+	started    time.Time
+	buf        *gamelog.Buffer
+	logFile    *os.File
+	token      string
+
+	stopping atomic.Bool
+	killed   atomic.Bool
+
+	firstOnce   sync.Once
+	firstOutput chan struct{}
+	done        chan struct{}
+
+	pmu     sync.Mutex
+	pending []gamelog.Line
+
+	record Record
+}
+
+// command builds the java command line and the stdin script. Nothing secret
+// goes on the command line: the account's token is a game argument and game
+// arguments only travel through the script.
+func (l *Launcher) command(inst instance.Instance, sess accounts.Session, res *install.Resolved, rt java.Runtime, mem MemoryRange, env mojang.Env) (*exec.Cmd, []byte, error) {
+	jar, err := wrapperjar.Install(l.cfg.BinDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	gameDir := l.cfg.Instances.GameDir(inst.ID)
+	v := res.Version
+	win := inst.Settings.Window
+	vars := mojang.Vars{
+		"auth_player_name": sess.Name, "auth_uuid": sess.UUID, "auth_access_token": sess.AccessToken,
+		"auth_session": "-", "auth_xuid": sess.XUID, "clientid": sess.ClientID, "user_type": sess.UserType,
+		"user_properties": "{}", "version_name": v.ID, "version_type": v.Type,
+		"game_directory": gameDir, "assets_root": res.AssetsRoot, "assets_index_name": v.AssetsID(),
+		"game_assets": res.GameAssets, "natives_directory": res.NativesDir, "library_directory": filepath.Dir(res.ClientJar),
+		"classpath":           strings.Join(append(append([]string(nil), res.Classpath...), jar), string(os.PathListSeparator)),
+		"classpath_separator": string(os.PathListSeparator),
+		"launcher_name":       brand.Slug, "launcher_version": brand.Version,
+		"resolution_width": strconv.Itoa(win.Width), "resolution_height": strconv.Itoa(win.Height),
+		"quickPlayPath": filepath.Join(gameDir, "quickPlay", "log.json"),
+	}
+	unknown := func(name string) {
+		l.cfg.Log.Warn("unknown placeholder in version metadata", "version", v.ID, "name", name)
+	}
+
+	args := v.JVMArgs(env, vars, unknown)
+	args = append(args, fmt.Sprintf("-Xms%dM", mem.Min), fmt.Sprintf("-Xmx%dM", mem.Max))
+	jvmArgs := l.cfg.Settings.Get().Java.JVMArgs
+	if j := inst.Settings.Java; j.Override {
+		jvmArgs = j.JVMArgs
+	}
+	user, err := shlex.Split(jvmArgs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("JVM arguments: %w", err)
+	}
+	args = append(args, user...)
+	// Defence in depth against Log4Shell on old versions, whatever the config says.
+	args = append(args, "-Dlog4j2.formatMsgNoLookups=true")
+	if res.LogConfig != "" && res.LogArgument != "" {
+		args = append(args, mojang.Vars{"path": res.LogConfig}.Expand(res.LogArgument, unknown))
+	}
+	args = append(args, wrapperjar.MainClass)
+
+	script := new(wrapperjar.Script)
+	for _, a := range v.GameArgs(env, vars, unknown) {
+		script.Arg(a)
+	}
+	if win.Fullscreen {
+		script.Arg("--fullscreen")
+	}
+	script.Launch(v.MainClass)
+
+	cmd := exec.Command(java.LaunchBinary(rt.Path), args...) //nolint:gosec // argv slice built from validated metadata; no shell
+	cmd.Dir = gameDir
+	cmd.Env = java.CleanEnv(os.Environ())
+	procx.Detach(cmd)
+	return cmd, script.Bytes(), nil
+}
+
+// start spawns the game and wires its output, events and exit handling.
+func (l *Launcher) start(ctx context.Context, inst instance.Instance, acc accounts.Account, res *install.Resolved, rt java.Runtime, mem MemoryRange, env mojang.Env) (*run, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	sess := acc.Session()
+	token := sess.AccessToken
+	cmd, script, err := l.command(inst, sess, res, rt, mem, env)
+	if err != nil {
+		return nil, err
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	r := &run{
+		id: newRunID(now), instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), token: token,
+		firstOutput: make(chan struct{}), done: make(chan struct{}),
+		record: Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name},
+	}
+	r.record.ID = r.id
+	runsDir := l.cfg.Instances.RunsDir(inst.ID)
+	if err := os.MkdirAll(runsDir, 0o700); err != nil {
+		return nil, err
+	}
+	if r.logFile, err = os.OpenFile(filepath.Join(runsDir, r.id+".log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil { //nolint:gosec // our own runs folder
+		return nil, err
+	}
+	l.cfg.Redactor.AddSecret(token)
+	if err := cmd.Start(); err != nil {
+		_ = r.logFile.Close()
+		l.cfg.Redactor.RemoveSecret(token)
+		return nil, err
+	}
+	_, werr := stdin.Write(script)
+	_ = stdin.Close()
+	if werr != nil {
+		l.cfg.Log.Warn("writing launch arguments failed", "err", werr)
+	}
+
+	l.mu.Lock()
+	l.running[inst.ID] = r
+	l.mu.Unlock()
+	l.cfg.Bus.Emit(events.GameState, State{InstanceID: inst.ID, RunID: r.id, State: "running"})
+	onStart := l.cfg.Settings.Get().General.OnGameStart
+	if inst.Settings.Window.OnGameStart != "" {
+		onStart = inst.Settings.Window.OnGameStart
+	}
+	if l.cfg.Hooks.GameStarted != nil {
+		l.cfg.Hooks.GameStarted(onStart)
+	}
+
+	var readers sync.WaitGroup
+	readers.Add(2)
+	go l.read(r, stdout, false, &readers)
+	go l.read(r, stderr, true, &readers)
+	stopFlush := make(chan struct{})
+	go l.flushLoop(r, stopFlush)
+	go func() {
+		readers.Wait()
+		err := cmd.Wait()
+		close(stopFlush)
+		l.exited(r, err)
+	}()
+	return r, nil
+}
+
+// read parses one output stream line by line.
+func (l *Launcher) read(r *run, src io.Reader, stderr bool, wg *sync.WaitGroup) {
+	defer wg.Done()
+	p := gamelog.NewParser(func(line gamelog.Line) { r.add(line) }, l.cfg.Redactor, stderr)
+	sc := bufio.NewScanner(src)
+	sc.Buffer(make([]byte, 64<<10), 1<<20)
+	for sc.Scan() {
+		r.firstOnce.Do(func() { close(r.firstOutput) })
+		p.Feed(sc.Text())
+	}
+	p.Close()
+}
+
+func (r *run) add(line gamelog.Line) {
+	r.buf.Add(line)
+	thread := ""
+	if line.Thread != "" {
+		thread = line.Thread + "/"
+	}
+	_, _ = fmt.Fprintf(r.logFile, "[%s] [%s%s]: %s\n", line.Time, thread, line.Level, line.Message)
+	r.pmu.Lock()
+	r.pending = append(r.pending, line)
+	r.pmu.Unlock()
+}
+
+// flushLoop sends new console lines to the UI in batches.
+func (l *Launcher) flushLoop(r *run, stop <-chan struct{}) {
+	t := time.NewTicker(logBatch)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			l.flush(r)
+		case <-stop:
+			l.flush(r)
+			return
+		}
+	}
+}
+
+func (l *Launcher) flush(r *run) {
+	r.pmu.Lock()
+	lines := r.pending
+	r.pending = nil
+	r.pmu.Unlock()
+	if len(lines) > 0 {
+		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, Lines: lines})
+	}
+}
+
+// LogBatch is what game:log carries.
+type LogBatch struct {
+	InstanceID string         `json:"instanceId"`
+	Lines      []gamelog.Line `json:"lines"`
+}
+
+// Stop asks the game to quit; after 3 seconds, or on a second Stop, it is killed.
+func (l *Launcher) Stop(id string) error {
+	l.mu.Lock()
+	r, ok := l.running[id]
+	l.mu.Unlock()
+	if !ok {
+		return ErrNotRunning
+	}
+	if r.stopping.Swap(true) {
+		r.killed.Store(true)
+		return procx.Kill(r.cmd.Process)
+	}
+	if err := procx.Terminate(r.cmd.Process); err != nil {
+		r.killed.Store(true)
+		return procx.Kill(r.cmd.Process)
+	}
+	go func() {
+		select {
+		case <-r.done:
+		case <-time.After(stopGrace):
+			r.killed.Store(true)
+			_ = procx.Kill(r.cmd.Process)
+		}
+	}()
+	return nil
+}
+
+// exited records the run, updates playtime and tells the UI.
+func (l *Launcher) exited(r *run, waitErr error) {
+	close(r.done)
+	r.firstOnce.Do(func() { close(r.firstOutput) })
+	_ = r.logFile.Close()
+	l.cfg.Redactor.RemoveSecret(r.token)
+
+	code := 0
+	if r.cmd.ProcessState != nil {
+		code = r.cmd.ProcessState.ExitCode()
+	}
+	result := ResultOK
+	switch {
+	case r.killed.Load():
+		result = ResultKilled
+	case r.stopping.Load():
+	case code != 0 || (waitErr != nil && r.cmd.ProcessState == nil):
+		result = ResultCrash
+	}
+	length := time.Since(r.started)
+	r.record.LengthMin = int(math.Round(length.Minutes()))
+	r.record.ExitCode, r.record.Result = code, result
+	if err := saveRecord(l.cfg.Instances.RunsDir(r.instanceID), r.record); err != nil {
+		l.cfg.Log.Error("saving run record failed", "err", err)
+	}
+	started := r.started.UTC()
+	if _, err := l.cfg.Instances.Update(r.instanceID, func(in *instance.Instance) error {
+		in.LastPlayed = &started
+		in.PlaytimeMin += r.record.LengthMin
+		return nil
+	}); err != nil {
+		l.cfg.Log.Error("updating playtime failed", "err", err)
+	}
+
+	l.mu.Lock()
+	delete(l.running, r.instanceID)
+	l.last[r.instanceID] = r.buf
+	none := len(l.running) == 0
+	l.mu.Unlock()
+	l.cfg.Bus.Emit(events.InstancesChanged, nil)
+	l.cfg.Bus.Emit(events.GameState, State{InstanceID: r.instanceID, RunID: r.id, State: "exited", ExitCode: code, Result: result})
+	if none && l.cfg.Hooks.AllExited != nil {
+		l.cfg.Hooks.AllExited()
+	}
+}

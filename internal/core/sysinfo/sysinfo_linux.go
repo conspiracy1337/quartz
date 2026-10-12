@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 func readMemory() (Memory, error) {
@@ -41,4 +43,12 @@ func parseMeminfo(data []byte) Memory {
 		}
 	}
 	return m
+}
+
+func osVersion() string {
+	var u unix.Utsname
+	if err := unix.Uname(&u); err != nil {
+		return ""
+	}
+	return unix.ByteSliceToString(u.Release[:])
 }

@@ -7,6 +7,7 @@ package meta
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -125,12 +126,21 @@ func (s *Service) Families(ctx context.Context) ([]mojang.Family, error) {
 	}), nil
 }
 
-// AssetIndex returns the asset index a version uses.
-func (s *Service) AssetIndex(ctx context.Context, v *mojang.Version) (mojang.AssetIndex, error) {
+// AssetIndex returns the asset index a version uses, parsed and as raw bytes
+// (the game reads the file itself from assets/indexes).
+func (s *Service) AssetIndex(ctx context.Context, v *mojang.Version) (mojang.AssetIndex, []byte, error) {
 	if v.AssetIndex == nil {
-		return mojang.AssetIndex{}, fmt.Errorf("meta: %s names no asset index", v.ID)
+		return mojang.AssetIndex{}, nil, fmt.Errorf("meta: %s names no asset index", v.ID)
 	}
-	return fetch[mojang.AssetIndex](ctx, s, v.AssetIndex.URL, httpcache.Policy{SHA1: v.AssetIndex.SHA1, MaxSize: 32 << 20})
+	data, err := s.cache.Get(ctx, v.AssetIndex.URL, httpcache.Policy{SHA1: v.AssetIndex.SHA1, MaxSize: 32 << 20})
+	if err != nil {
+		return mojang.AssetIndex{}, nil, err
+	}
+	var ix mojang.AssetIndex
+	if err := json.Unmarshal(data, &ix); err != nil {
+		return ix, nil, fmt.Errorf("meta: asset index %s: %w", v.AssetIndex.ID, err)
+	}
+	return ix, data, nil
 }
 
 // RuntimeIndex returns Mojang's Java runtime index.

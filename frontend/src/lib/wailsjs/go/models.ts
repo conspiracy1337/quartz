@@ -244,6 +244,31 @@ export namespace api {
 
 }
 
+export namespace gamelog {
+	
+	export class Line {
+	    time: string;
+	    level: string;
+	    thread: string;
+	    message: string;
+	    redacted?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Line(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.time = source["time"];
+	        this.level = source["level"];
+	        this.thread = source["thread"];
+	        this.message = source["message"];
+	        this.redacted = source["redacted"];
+	    }
+	}
+
+}
+
 export namespace instance {
 	
 	export class Art {
@@ -371,6 +396,83 @@ export namespace instance {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace launch {
+	
+	export class MemoryRange {
+	    min: number;
+	    max: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MemoryRange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.min = source["min"];
+	        this.max = source["max"];
+	    }
+	}
+	export class Record {
+	    id: string;
+	    startedAt: number;
+	    lengthMin: number;
+	    exitCode: number;
+	    result: string;
+	    java: string;
+	    memory: MemoryRange;
+	    account: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Record(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.startedAt = source["startedAt"];
+	        this.lengthMin = source["lengthMin"];
+	        this.exitCode = source["exitCode"];
+	        this.result = source["result"];
+	        this.java = source["java"];
+	        this.memory = this.convertValues(source["memory"], MemoryRange);
+	        this.account = source["account"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Status {
+	    running: string[];
+	    launching: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.launching = source["launching"];
+	    }
 	}
 
 }

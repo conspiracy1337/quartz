@@ -1,6 +1,7 @@
 package sysinfo
 
 import (
+	"fmt"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -28,4 +29,9 @@ func readMemory() (Memory, error) {
 		return Memory{}, err
 	}
 	return Memory{Total: s.TotalPhys, Available: s.AvailPhys}, nil
+}
+
+func osVersion() string {
+	v := windows.RtlGetVersion()
+	return fmt.Sprintf("%d.%d.%d", v.MajorVersion, v.MinorVersion, v.BuildNumber)
 }

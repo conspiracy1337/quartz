@@ -2,6 +2,11 @@
 // local servers, the undo toast and the self-update banner. In M0 the long-running
 // parts (launch steps, server start) are simulated; M2 and M9 drive them from Go.
 
+import { api } from './api';
+import { hasBridge, onEvent } from './bridge';
+import { revs } from './revs.svelte';
+import { go } from './router.svelte';
+
 export type Overlay =
   | { kind: 'add-account'; mode?: AddAccountMode }
   | { kind: 'install'; projectId: string }
@@ -15,8 +20,19 @@ export type AddAccountMode = 'browser' | 'code' | 'offline';
 
 export const LAUNCH_STEPS = ['Signing in', 'Checking mods', 'Java', 'Assets and libraries', 'Sandbox', 'Starting the game'] as const;
 
-interface Launch { instanceId: string; stage: number }
-interface Toast { subject: string; text: string; undo?: () => void }
+interface Launch { instanceId: string; stage: number; details?: string[]; pct?: number }
+
+interface LaunchProgress { instanceId: string; stage: number; details: string[]; pct: number }
+interface LaunchFailure { instanceId: string; stage: number; message: string; code?: string }
+interface GameState { instanceId: string; runId: string; state: 'running' | 'exited'; exitCode: number; result?: string }
+export interface Toast {
+  subject: string;
+  text: string;
+  /** trash: "Moved <subject> <text>" with Undo; info and error: a short notice. */
+  tone?: 'trash' | 'info' | 'error';
+  undo?: (() => void) | undefined;
+  action?: { label: string; run: () => void };
+}
 
 const STEP_MS = 700;
 const TOAST_MS = 8000;
@@ -41,11 +57,19 @@ class Session {
     this.overlay = null;
   }
 
-  /** Starts a launch and walks through the launch steps. */
+  /** Starts a launch. Inside the app Go runs it and reports through events; the
+      browser preview walks through the steps on a timer. */
   play(instanceId: string) {
     clearInterval(this.#launchTimer);
     this.overlay = null;
     this.launch = { instanceId, stage: 0 };
+    if (hasBridge()) {
+      api.launch.play(instanceId).catch((e) => {
+        this.launch = null;
+        this.fail('Play', e);
+      });
+      return;
+    }
     this.#launchTimer = setInterval(() => {
       if (!this.launch) return clearInterval(this.#launchTimer);
       if (this.launch.stage < LAUNCH_STEPS.length - 1) {
@@ -60,11 +84,51 @@ class Session {
 
   cancelLaunch() {
     clearInterval(this.#launchTimer);
+    if (hasBridge() && this.launch) void api.launch.cancelLaunch(this.launch.instanceId);
     this.launch = null;
   }
 
+  /** Asks the game to quit; a second click forces it. */
   stop(instanceId: string) {
+    if (hasBridge()) {
+      api.launch.stop(instanceId).catch((e) => this.fail('Stop', e));
+      return;
+    }
     delete this.running[instanceId];
+  }
+
+  /** Reads which games are running (after the window reloads). */
+  async load() {
+    const s = await api.launch.status();
+    this.running = Object.fromEntries((s.running ?? []).map((id) => [id, true]));
+  }
+
+  /** Follows Go's launch and game events; returns the unsubscribe function. */
+  listen(): () => void {
+    const offs = [
+      onEvent<LaunchProgress>('launch:progress', (p) => (this.launch = { instanceId: p.instanceId, stage: p.stage, details: p.details, pct: p.pct })),
+      onEvent<LaunchFailure>('launch:failed', (f) => {
+        if (this.launch?.instanceId === f.instanceId) this.launch = null;
+        if (f.code === 'no-account') this.open({ kind: 'add-account', mode: 'offline' });
+        else if (f.code !== 'cancelled') this.notify({ tone: 'error', subject: "Couldn't start the game", text: f.message });
+      }),
+      onEvent<GameState>('game:state', (g) => {
+        if (g.state === 'running') {
+          this.running[g.instanceId] = true;
+          if (this.launch?.instanceId === g.instanceId) this.launch = null;
+          return;
+        }
+        delete this.running[g.instanceId];
+        revs.bump('instances');
+        if (g.result === 'crash') {
+          this.notify({
+            tone: 'error', subject: 'The game stopped', text: `with exit code ${g.exitCode}`,
+            action: { label: 'View log', run: () => go({ name: 'instance', id: g.instanceId, tab: 'logs' }) },
+          });
+        }
+      }),
+    ];
+    return () => offs.forEach((off) => off());
   }
 
   startHost(instanceId: string) {
@@ -83,6 +147,11 @@ class Session {
     clearTimeout(this.#toastTimer);
     this.toast = t;
     this.#toastTimer = setTimeout(() => (this.toast = null), TOAST_MS);
+  }
+
+  /** Shows an error from a failed action as a notice. */
+  fail(subject: string, err: unknown) {
+    this.notify({ tone: 'error', subject, text: err instanceof Error ? err.message : String(err) });
   }
 
   dismissToast() {

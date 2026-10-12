@@ -1,6 +1,5 @@
 <script lang="ts">
   import { api } from '$lib/api';
-  import { revs } from '$lib/revs.svelte';
   import type { RunResult } from '$lib/api/types';
   import LogsNav from '$lib/components/LogsNav.svelte';
   import { Day, clock, hm } from '$lib/format';
@@ -12,10 +11,15 @@
 
   const runs = query(() => api.logs.runs(instanceId));
   const accounts = query(() => api.accounts.list());
-  let cur = $state(2);
+  let cur = $state(0);
   const RESULT: Record<RunResult, [string, string]> = { ok: ['Closed', ''], crash: ['Crashed', 'badge-danger'], killed: ['Stopped', 'badge-warn'], failed: ['Failed to start', 'badge-danger'] };
   const run = $derived(runs.data?.[cur]);
   const when = (t: number) => `${Day(t)}, ${clock(t)}`;
+  const gb = (mb: number) => Math.round((mb / 1024) * 10) / 10;
+  // Runs recorded by Go carry what they used; the design's fixtures do not.
+  const used = $derived(run?.java ? {
+    java: run.java, memory: run.memory ? `${gb(run.memory.min)} to ${gb(run.memory.max)} GB` : '', account: run.account ?? '', sandbox: 'Off', mods: 'None',
+  } : { java: '21.0.5 (Temurin)', memory: '2 to 6 GB', account: accounts.data?.find((a) => a.isDefault)?.name ?? '', sandbox: 'On', mods: '48 loaded' });
 </script>
 
 <div class="scroll">
@@ -32,7 +36,7 @@
         <section class="card" aria-label="Launch details">
           <div class="card-head"><h2 class="h3">{when(run.startedAt)}</h2><span class="badge {RESULT[run.result][1]}">{RESULT[run.result][0]}</span></div>
           <div class="card-pad" style="display: flex; flex-direction: column; gap: 14px">
-            <div class="kv small" style="grid-template-columns: 92px minmax(0,1fr); row-gap: 8px"><span>Java</span><span class="mono">21.0.5 (Temurin)</span><span>Memory</span><span class="mono">2 to 6 GB</span><span>Account</span><span>{accounts.data?.find((a) => a.isDefault)?.name ?? ''}</span><span>Sandbox</span><span>On</span><span>Mods</span><span class="tnum">48 loaded</span></div>
+            <div class="kv small" style="grid-template-columns: 92px minmax(0,1fr); row-gap: 8px"><span>Java</span><span class="mono">{used.java}</span><span>Memory</span><span class="mono">{used.memory}</span><span>Account</span><span>{used.account}</span><span>Sandbox</span><span>{used.sandbox}</span><span>Mods</span><span class="tnum">{used.mods}</span></div>
             <div style="display: flex; flex-direction: column; gap: 6px">
               <h3 class="h3">Saved with this launch</h3>
               <div class="list">

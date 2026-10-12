@@ -9,3 +9,11 @@ func readMemory() (Memory, error) {
 	}
 	return Memory{Total: total}, nil
 }
+
+func osVersion() string {
+	v, err := unix.Sysctl("kern.osproductversion")
+	if err != nil {
+		return ""
+	}
+	return v
+}

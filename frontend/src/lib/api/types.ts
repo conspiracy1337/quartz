@@ -117,7 +117,11 @@ export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
 export interface LogLine { time: string; level: LogLevel; thread: string; message: string; redacted?: boolean }
 export interface LogFile { name: string; bytes: number; crash: boolean }
 export type RunResult = 'ok' | 'crash' | 'killed' | 'failed';
-export interface Run { id: string; startedAt: number; lengthMin: number; exitCode: number; result: RunResult }
+export interface Run {
+  id: string; startedAt: number; lengthMin: number; exitCode: number; result: RunResult;
+  /** What the run used (recorded by Go; absent in older fixtures). */
+  java?: string; memory?: { min: number; max: number }; account?: string;
+}
 
 // ---- versions ----
 export interface McVersion { id: string; java: number; released: number; snapshot?: boolean }

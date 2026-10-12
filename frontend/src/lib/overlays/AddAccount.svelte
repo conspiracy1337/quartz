@@ -22,7 +22,7 @@
       revs.bump('accounts');
       session.close();
     } catch (e) {
-      session.notify({ subject: 'Offline account', text: e instanceof Error ? e.message : String(e) });
+      session.fail('Offline account', e);
     } finally {
       saving = false;
     }

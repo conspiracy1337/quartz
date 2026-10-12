@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -29,8 +30,10 @@ import (
 	"quartz/internal/core/paths"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
+	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
+	"quartz/internal/launch"
 	"quartz/internal/meta"
 	"quartz/internal/network"
 	"quartz/internal/settings"
@@ -61,6 +64,9 @@ type app struct {
 	java      *java.Manager
 	accounts  *accounts.Store
 	instances *instance.Store
+	installer *install.Installer
+	launcher  *launch.Launcher
+	hidden    atomic.Bool // the window was hidden because a game started
 	ctx       *api.Ctx
 }
 
@@ -92,10 +98,12 @@ func Run(o Options) error {
 			api.NewApp(a.ctx, a.paths),
 			api.NewSettings(a.ctx, a.settings, a.css, a.network),
 			api.NewDownloads(a.tasks),
-			api.NewVersions(a.ctx, a.meta),
+			api.NewVersions(a.ctx, a.meta, a.installer),
 			api.NewJava(a.ctx, a.java, a.meta, a.tasks, a.settings),
 			api.NewAccounts(a.accounts, a.bus),
-			api.NewInstances(a.ctx, a.instances, a.meta, a.settings, a.bus, func(string) bool { return false }),
+			api.NewInstances(a.ctx, a.instances, a.meta, a.settings, a.bus, a.launcher.Running),
+			api.NewLaunch(a.ctx, a.launcher),
+			api.NewLogs(a.launcher),
 		},
 	})
 }
@@ -176,7 +184,37 @@ func (a *app) buildTasks() error {
 		return fmt.Errorf("starting downloads: %w", err)
 	}
 	a.verified, a.tasks = ver, eng
+	a.installer = install.New(a.meta, download.New(a.http, ver), a.java, install.Dirs{
+		Libraries: a.paths.Libraries(), Versions: a.paths.Versions(), Assets: a.paths.Assets(),
+		LogConfigs: a.paths.LogConfigs(), Natives: a.paths.Natives(),
+	})
+	a.launcher = launch.New(launch.Config{
+		Instances: a.instances, Accounts: a.accounts, Installer: a.installer, Java: a.java, Tasks: eng,
+		Settings: a.settings, Bus: a.bus, Redactor: a.redactor, BinDir: a.paths.Bin(), Log: a.log,
+		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited},
+	})
 	return nil
+}
+
+// gameStarted applies "when a game starts": keep the launcher open, hide it
+// until the game exits, or close it (the game keeps running).
+func (a *app) gameStarted(mode string) {
+	ctx := a.ctx.Get()
+	switch mode {
+	case "hide":
+		a.hidden.Store(true)
+		wruntime.WindowHide(ctx)
+	case "close":
+		wruntime.Quit(ctx)
+	}
+}
+
+func (a *app) gamesExited() {
+	if a.hidden.Swap(false) {
+		ctx := a.ctx.Get()
+		wruntime.WindowShow(ctx)
+		wruntime.WindowUnminimise(ctx)
+	}
 }
 
 // watchDownloads keeps the HTTP client's proxy and the worker pool in step
@@ -210,6 +248,7 @@ func (a *app) startup(ctx context.Context) {
 }
 
 func (a *app) shutdown(context.Context) {
+	a.launcher.Close()
 	a.bus.SetSink(nil)
 	a.css.Close()
 	if err := a.tasks.Close(); err != nil {

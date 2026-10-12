@@ -22,7 +22,7 @@
     try {
       changed = await fn();
     } catch (e) {
-      session.notify({ subject: 'Java', text: e instanceof Error ? e.message : String(e) });
+      session.fail('Java', e);
     } finally {
       busy = false;
     }
@@ -33,7 +33,7 @@
       await api.java.download();
       await tasks.load();
     } catch (e) {
-      session.notify({ subject: 'Java download', text: e instanceof Error ? e.message : String(e) });
+      session.fail('Java download', e);
     } finally {
       busy = false;
     }

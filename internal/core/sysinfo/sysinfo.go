@@ -11,3 +11,8 @@ type Memory struct {
 
 // ReadMemory returns the current memory figures.
 func ReadMemory() (Memory, error) { return readMemory() }
+
+// OSVersion is what Java reports as os.version: the kernel release on Linux,
+// the product version on macOS, major.minor.build on Windows. Mojang's rules
+// match against it. Empty when unknown.
+func OSVersion() string { return osVersion() }

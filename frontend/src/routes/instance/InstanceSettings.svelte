@@ -5,6 +5,7 @@
   import { go, href } from '$lib/router.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { revs } from '$lib/revs.svelte';
+  import { tasks } from '$lib/tasks.svelte';
   import { ON_GAME_START } from '$lib/settings/registry';
   import { session } from '$lib/session.svelte';
   import Seg from '$lib/ui/Seg.svelte';
@@ -36,7 +37,7 @@
       await api.instances.updateSettings(i.id, $state.snapshot(st));
       revs.bump('instances');
     } catch (e) {
-      session.notify({ subject: 'Instance settings', text: e instanceof Error ? e.message : String(e) });
+      session.fail('Instance settings', e);
     }
   }
   function change(fn: () => void) {
@@ -50,9 +51,19 @@
   let mangohud = $state(false);
   const sub = (s: string) => href({ name: 'instance', id: i.id, tab: 'settings', sub: s });
 
+  async function repair() {
+    try {
+      const job = await api.launch.repair(i.id);
+      if (job) await tasks.load();
+      else session.notify({ subject: i.name, text: 'All game files are intact.' });
+    } catch (e) {
+      session.fail('Repair', e);
+    }
+  }
+
   function trash() {
     go({ name: 'library' });
-    session.notify({ subject: i.name, text: 'to the trash', undo: () => go({ name: 'instance', id: i.id, tab: 'overview' }) });
+    session.notify({ tone: 'trash', subject: i.name, text: 'to the trash', undo: () => go({ name: 'instance', id: i.id, tab: 'overview' }) });
   }
 </script>
 
@@ -107,7 +118,7 @@
     <section class="sec" aria-label="Advanced">
       <div class="sec-h"><h2 class="h3">Advanced</h2><a href={sub('commands')} class="btn btn-sm btn-ghost">Commands and variables</a></div>
       <div class="card">
-        <Setting title="Repair game files" desc="Re-checks libraries, assets and the loader against their hashes."><button class="btn btn-sm">Repair</button></Setting>
+        <Setting title="Repair game files" desc="Re-checks libraries, assets and the loader against their hashes."><button class="btn btn-sm" onclick={repair}>Repair</button></Setting>
         <div class="divider"></div>
         <Setting title="Move to trash" desc="You can undo this for 30 days."><button class="btn btn-sm btn-danger" onclick={trash}>Move to trash</button></Setting>
       </div>
