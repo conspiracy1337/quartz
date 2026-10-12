@@ -8,10 +8,12 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/user"
 	"runtime"
 	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -31,6 +33,8 @@ import (
 	"quartz/internal/core/paths"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
+	"quartz/internal/icons"
+	"quartz/internal/imagesrv"
 	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
@@ -70,6 +74,8 @@ type app struct {
 	textures  *skins.Textures
 	instances *instance.Store
 	installer *install.Installer
+	icons     *icons.Library
+	stopPurge func()
 	loaders   *loader.Registry
 	launcher  *launch.Launcher
 	hidden    atomic.Bool // the window was hidden because a game started
@@ -92,7 +98,7 @@ func Run(o Options) error {
 		MinWidth:         960,
 		MinHeight:        600,
 		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0b, A: 0xff},
-		AssetServer:      &assetserver.Options{Assets: o.Assets, Handler: skins.Handler(a.skins, a.textures)},
+		AssetServer:      &assetserver.Options{Assets: o.Assets, Handler: a.images()},
 		OnStartup:        a.startup,
 		OnShutdown:       a.shutdown,
 		SingleInstanceLock: &options.SingleInstanceLock{
@@ -111,6 +117,15 @@ func Run(o Options) error {
 			api.NewLaunch(a.ctx, a.launcher),
 			api.NewLogs(a.launcher),
 		},
+	})
+}
+
+// images serves skins, capes and instance icons to the UI (see imagesrv).
+func (a *app) images() http.Handler {
+	return imagesrv.Handler(map[string]imagesrv.Resolver{
+		"skin": func(_ context.Context, h string) (string, error) { return a.skins.Path(h) },
+		"mc":   a.textures.Path,
+		"icon": func(_ context.Context, h string) (string, error) { return a.icons.Path(h) },
 	})
 }
 
@@ -164,6 +179,7 @@ func build(o Options) (*app, error) {
 		_ = logFile.Close()
 		return nil, err
 	}
+	a.icons = icons.Open(p.Icons())
 	if a.instances, err = instance.Open(p.Instances(), log); err != nil {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("loading instances: %w", err)
@@ -298,9 +314,34 @@ func (a *app) startup(ctx context.Context) {
 		wruntime.EventsEmit(ctx, string(t), payload)
 	})
 	a.accounts.Start()
+	a.stopPurge = a.purgeTrash()
+}
+
+// purgeTrash empties trash entries older than 30 days now and once a day
+// (a timer, not polling); it returns the stop function.
+func (a *app) purgeTrash() func() {
+	done := make(chan struct{})
+	go func() {
+		t := time.NewTicker(24 * time.Hour)
+		defer t.Stop()
+		for {
+			if n := a.instances.PurgeExpired(time.Now()); n > 0 {
+				a.log.Info("emptied old trash", "instances", n)
+			}
+			select {
+			case <-t.C:
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() { close(done) }
 }
 
 func (a *app) shutdown(context.Context) {
+	if a.stopPurge != nil {
+		a.stopPurge()
+	}
 	a.accounts.Close()
 	a.launcher.Close()
 	a.bus.SetSink(nil)

@@ -1,13 +1,11 @@
 package skins
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"image"
 	"image/color"
-	"image/png"
+
+	"quartz/internal/core/pngx"
 )
 
 // MaxSize caps a skin file before it is decoded. Real skins are a few KB.
@@ -29,19 +27,13 @@ type Canonical struct {
 // skins are converted to the 64×64 layout, and fully transparent pixels are
 // zeroed, so the same picture always gets the same hash.
 func Canonicalize(data []byte) (Canonical, error) {
-	if len(data) > MaxSize {
+	src, err := pngx.Decode(data, pngx.Limits{MaxBytes: MaxSize, MaxSide: 64, PNGOnly: true})
+	if err != nil || src.Bounds().Dx() != 64 || (src.Bounds().Dy() != 64 && src.Bounds().Dy() != 32) {
 		return Canonical{}, ErrNotSkin
 	}
-	cfg, err := png.DecodeConfig(bytes.NewReader(data))
-	if err != nil || cfg.Width != 64 || (cfg.Height != 64 && cfg.Height != 32) {
-		return Canonical{}, ErrNotSkin
-	}
-	src, err := png.Decode(bytes.NewReader(data))
-	if err != nil {
-		return Canonical{}, ErrNotSkin
-	}
+	height := src.Bounds().Dy()
 	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
-	for y := range cfg.Height {
+	for y := range height {
 		for x := range 64 {
 			c := color.NRGBAModel.Convert(src.At(src.Bounds().Min.X+x, src.Bounds().Min.Y+y)).(color.NRGBA)
 			if c.A == 0 {
@@ -50,16 +42,14 @@ func Canonicalize(data []byte) (Canonical, error) {
 			img.SetNRGBA(x, y, c)
 		}
 	}
-	if cfg.Height == 32 {
+	if height == 32 {
 		upgradeLegacy(img)
 	}
-	var buf bytes.Buffer
-	enc := png.Encoder{CompressionLevel: png.BestCompression}
-	if err := enc.Encode(&buf, img); err != nil {
+	data, hash, err := pngx.Encode(img)
+	if err != nil {
 		return Canonical{}, err
 	}
-	sum := sha256.Sum256(buf.Bytes())
-	return Canonical{PNG: buf.Bytes(), Hash: hex.EncodeToString(sum[:]), Slim: isSlim(img)}, nil
+	return Canonical{PNG: data, Hash: hash, Slim: isSlim(img)}, nil
 }
 
 // isSlim checks the column only classic arms use: with slim (3 px) arms the

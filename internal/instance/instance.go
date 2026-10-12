@@ -19,7 +19,6 @@ import (
 	"time"
 	"unicode"
 
-	"quartz/internal/core/fsx"
 	"quartz/internal/core/jsonfile"
 	"quartz/internal/loader"
 )
@@ -116,11 +115,11 @@ const schema = 2
 
 // Errors returned to the UI.
 var (
-	ErrUnknown           = errors.New("instance: no such instance")
-	ErrBadName           = errors.New("instance: names need 1 to 64 characters")
-	ErrBadLoader         = errors.New("instance: unknown mod loader")
-	ErrInvalidSettings   = errors.New("instance: invalid settings")
-	ErrBadGroup          = errors.New("instance: group names need at most 32 characters")
+	ErrUnknown         = errors.New("instance: no such instance")
+	ErrBadName         = errors.New("instance: names need 1 to 64 characters")
+	ErrBadLoader       = errors.New("instance: unknown mod loader")
+	ErrInvalidSettings = errors.New("instance: invalid settings")
+	ErrBadGroup        = errors.New("instance: group names need at most 32 characters")
 )
 
 var (
@@ -262,8 +261,10 @@ func validEnv(e EnvVar) error {
 
 // Store holds every instance.
 type Store struct {
-	dir string
-	log *slog.Logger
+	dir    string
+	trash  string // trash/, next to the instances folder
+	log    *slog.Logger
+	groups *jsonfile.Store[groupsDoc]
 
 	mu    sync.Mutex
 	files map[string]*jsonfile.Store[Instance]
@@ -275,7 +276,11 @@ func Open(dir string, log *slog.Logger) (*Store, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	s := &Store{dir: dir, log: log, files: map[string]*jsonfile.Store[Instance]{}}
+	s := &Store{dir: dir, trash: filepath.Join(filepath.Dir(dir), "trash"), log: log, files: map[string]*jsonfile.Store[Instance]{}}
+	var err error
+	if s.groups, err = openGroups(dir, s); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -304,8 +309,16 @@ func (s *Store) open(id string) (*jsonfile.Store[Instance], error) {
 // Dir is the instance's folder.
 func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
 
-// GameDir is the folder the game runs in (.minecraft).
-func (s *Store) GameDir(id string) string { return filepath.Join(s.dir, id, "game") }
+// GameDir is the folder the game runs in (.minecraft): instances/<id>/game,
+// or wherever the player moved it.
+func (s *Store) GameDir(id string) string {
+	if in, err := s.Get(id); err == nil && in.Location != "" {
+		return in.Location
+	}
+	return s.defaultGameDir(id)
+}
+
+func (s *Store) defaultGameDir(id string) string { return filepath.Join(s.dir, id, "game") }
 
 // RunsDir holds the instance's launch history.
 func (s *Store) RunsDir(id string) string { return filepath.Join(s.dir, id, "runs") }
@@ -514,7 +527,7 @@ func (s *Store) SetVersion(id, minecraft, kind, ver string) (Instance, error) {
 func (s *Store) Flush() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var errs []error
+	errs := []error{s.groups.Flush()}
 	for _, f := range s.files {
 		errs = append(errs, f.Flush())
 	}
@@ -526,5 +539,8 @@ func (s *Store) GameDirSafe(id string) (string, error) {
 	if !ValidID(id) {
 		return "", ErrUnknown
 	}
-	return fsx.SafeJoin(s.dir, filepath.Join(id, "game"))
+	if _, err := s.Get(id); err != nil {
+		return "", err
+	}
+	return s.GameDir(id), nil
 }

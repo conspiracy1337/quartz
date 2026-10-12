@@ -69,16 +69,16 @@ type Resolved struct {
 	Minecraft    string
 	Env          mojang.Env
 	LibrariesDir string
-	Index       mojang.AssetIndex
-	indexData   []byte
-	Libraries   []mojang.ResolvedLibrary
-	ClientJar   string
-	Classpath   []string // libraries and the client jar, absolute
-	NativesDir  string
-	AssetsRoot  string
-	GameAssets  string // the folder legacy versions read assets from by name
-	LogConfig   string // absolute path, "" when the version has none
-	LogArgument string // e.g. -Dlog4j.configurationFile=${path}
+	Index        mojang.AssetIndex
+	indexData    []byte
+	Libraries    []mojang.ResolvedLibrary
+	ClientJar    string
+	Classpath    []string // libraries and the client jar, absolute
+	NativesDir   string
+	AssetsRoot   string
+	GameAssets   string // the folder legacy versions read assets from by name
+	LogConfig    string // absolute path, "" when the version has none
+	LogArgument  string // e.g. -Dlog4j.configurationFile=${path}
 
 	// From the loader, if any: files only the install needs, library paths
 	// its processors create, and the processing itself.

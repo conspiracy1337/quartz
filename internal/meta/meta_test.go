@@ -62,7 +62,7 @@ func (d *bodyDoer) Do(r *http.Request) (*http.Response, error) {
 
 func TestSidecarSHA1(t *testing.T) {
 	for body, want := range map[string]string{
-		"0123456789abcdef0123456789abcdef01234567":                       "0123456789abcdef0123456789abcdef01234567",
+		"0123456789abcdef0123456789abcdef01234567":                        "0123456789abcdef0123456789abcdef01234567",
 		"0123456789ABCDEF0123456789ABCDEF01234567  forge-installer.jar\n": "0123456789abcdef0123456789abcdef01234567",
 		"<html>not found</html>":                                          "",
 	} {

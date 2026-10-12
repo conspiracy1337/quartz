@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"quartz/internal/imagesrv"
 	"strings"
 	"testing"
 
@@ -168,7 +169,10 @@ func TestHandlerServesOnlyHexNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := Handler(lib, lib.tex)
+	h := imagesrv.Handler(map[string]imagesrv.Resolver{
+		"skin": func(_ context.Context, n string) (string, error) { return lib.Path(n) },
+		"mc":   lib.tex.Path,
+	})
 	get := func(path string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
