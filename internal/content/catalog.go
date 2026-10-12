@@ -118,3 +118,6 @@ func (c *catalog) update(sha1 string, fn func(*Known)) {
 		d.Blobs[sha1] = k
 	})
 }
+
+// Known returns what the catalog knows about blobs, by sha1.
+func (s *Service) Known(sha1s []string) map[string]Known { return s.cat.many(sha1s) }

@@ -35,6 +35,10 @@ type File struct {
 	Size   int64    `json:"size,omitempty"`
 	URLs   []string `json:"urls,omitempty"`
 	Name   string   `json:"name,omitempty"` // the project, when known
+	// Project ("curseforge:238222") and Version ("15.2.0.27") identify the
+	// file when the pack says (CurseForge and FTB list projects).
+	Project string `json:"project,omitempty"`
+	Version string `json:"version,omitempty"`
 	Page   string   `json:"page,omitempty"` // blocked on CurseForge: where to get it by hand
 	// Extract unpacks the download into the game folder (Technic Solder mods).
 	Extract bool `json:"extract,omitempty"`

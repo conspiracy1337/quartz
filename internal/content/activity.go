@@ -51,3 +51,7 @@ func (s *Service) Activity(id string) []Activity {
 	}
 	return st.Get()
 }
+
+// Record adds an entry to an instance's activity feed (for other services,
+// such as modpack updates).
+func (s *Service) Record(id string, a Activity) { s.record(id, a) }

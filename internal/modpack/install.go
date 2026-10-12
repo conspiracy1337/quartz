@@ -62,9 +62,12 @@ type InstallDeps struct {
 // Service installs and updates packs. It is safe for concurrent use.
 type Service struct {
 	d InstallDeps
+	u UpdateDeps
 
-	mu     sync.Mutex
-	staged map[string]staged
+	mu        sync.Mutex
+	staged    map[string]staged
+	available map[string]Available // newer versions, by instance
+	pending   map[string]pending   // newer versions read for review, by instance
 }
 
 type staged struct {
@@ -73,11 +76,11 @@ type staged struct {
 }
 
 // NewService returns a pack service.
-func NewService(d InstallDeps) *Service {
+func NewService(d InstallDeps, u UpdateDeps) *Service {
 	if d.Log == nil {
 		d.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{d: d, staged: map[string]staged{}}
+	return &Service{d: d, u: u, staged: map[string]staged{}, available: map[string]Available{}, pending: map[string]pending{}}
 }
 
 var tokenRe = regexp.MustCompile(`^[0-9a-f]{32}$`)

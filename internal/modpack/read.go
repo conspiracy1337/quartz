@@ -284,7 +284,8 @@ func (r *Reader) resolveCurse(ctx context.Context, p *Pack, refs []cfRef) error 
 		if ref.optional {
 			rel += ".disabled"
 		}
-		f := File{Path: rel, SHA1: v.File.SHA1, Size: v.File.Size, Name: v.Number, Page: v.File.Page}
+		f := File{Path: rel, SHA1: v.File.SHA1, Size: v.File.Size, Name: v.Number, Page: v.File.Page,
+			Project: modplatform.Key(modplatform.CurseForge, v.ProjectID), Version: v.Number}
 		if v.File.URL != "" {
 			if !modplatform.ValidURL(v.File.URL) {
 				return fmt.Errorf("modpack: CurseForge gave an unexpected address for %s", name)

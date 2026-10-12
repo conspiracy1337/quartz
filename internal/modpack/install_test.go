@@ -61,7 +61,7 @@ func newInstallEnv(t *testing.T, files cdn) *installEnv {
 	}
 	t.Cleanup(func() { _ = eng.Close() })
 	svc := NewService(InstallDeps{Reader: NewReader(Deps{}), Instances: insts, Store: st, Tasks: eng,
-		Manual: manual.New(manual.Deps{Store: st, Tasks: eng}), Staging: filepath.Join(root, "instances", ".staging"), Log: log})
+		Manual: manual.New(manual.Deps{Store: st, Tasks: eng}), Staging: filepath.Join(root, "instances", ".staging"), Log: log}, UpdateDeps{})
 	return &installEnv{svc: svc, insts: insts, eng: eng, root: root}
 }
 
