@@ -58,3 +58,13 @@ export function figure(s: Pick<Skin, 'hash' | 'slim' | 'colors'>): Figure {
     arm,
   };
 }
+
+/** The design's instance tints (two near-duplicates left out); content without an icon reuses them. */
+export const TINTS = ['#3ecf8e', '#e2a03f', '#6b8afd', '#b48cf2', '#c76bd8', '#9aa3ad', '#5bc0be', '#e86f6f', '#f2d45c', '#7cc7e8'];
+
+/** A stable tint for a name, so an item keeps its colour between visits. */
+export function tintOf(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return TINTS[h % TINTS.length]!;
+}

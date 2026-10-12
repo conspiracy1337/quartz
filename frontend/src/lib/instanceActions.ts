@@ -50,3 +50,25 @@ export async function move(i: Instance, back = false) {
     session.fail('Move', e);
   }
 }
+
+/**
+ * Moves an instance to another Minecraft version or loader. With mods, Go first
+ * moves them in a job (the instance changes when it finishes); the toast says what
+ * happened to mods that couldn't come along.
+ */
+export async function switchVersion(i: Instance, minecraft: string, kind: string, build: string, label: string) {
+  try {
+    const v = await api.instances.setVersion(i.id, minecraft, kind, build);
+    revs.bump('instances');
+    const s = v.switch;
+    if (s?.job) await tasks.load();
+    const off = s?.disabled.length ?? 0;
+    if (off > 0) session.notify({ subject: `${off} ${off === 1 ? 'mod was' : 'mods were'} turned off`, text: `no build for ${label}` });
+    else if (s?.unknown.length) session.notify({ subject: label, text: `${s.unknown.length} unidentified ${s.unknown.length === 1 ? 'mod' : 'mods'} kept as they are` });
+    go({ name: 'instance', id: i.id, tab: 'version' });
+    return true;
+  } catch (e) {
+    session.fail(label, e);
+    return false;
+  }
+}

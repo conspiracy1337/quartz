@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
+  import { hasBridge } from '$lib/bridge';
+  import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import type { IconName } from '$lib/ui/icons';
@@ -27,6 +30,14 @@
   let on = $state(true);
   let preset = $state<string>('standard');
   let checkJars = $state(true);
+  // How many mods were found on Modrinth or CurseForge (the sandbox's jar check itself is M10).
+  const mods = query(() => (hasBridge() ? api.content.list(i.id, 'mods') : Promise.resolve(null)));
+  const jarLine = $derived.by(() => {
+    if (!mods.data) return '47 of 48 mods match a known Modrinth or CurseForge file. 1 is unknown.';
+    const known = mods.data.filter((m) => m.source && m.source !== 'file').length;
+    const unknown = mods.data.length - known;
+    return `${known} of ${mods.data.length} mods match a known Modrinth or CurseForge file.${unknown ? ` ${unknown} ${unknown === 1 ? 'is' : 'are'} unknown.` : ''}`;
+  });
   let scan = $state(true);
 </script>
 
@@ -52,7 +63,7 @@
       <button class="btn" style="align-self: flex-start">Allow another folder</button>
     </section>
     <section class="card" aria-label="Mod check">
-      <Setting title="Check jars before launch" desc="47 of 48 mods match a known Modrinth or CurseForge file. 1 is unknown."><Toggle bind:on={checkJars} label="Check jars before launch" /></Setting>
+      <Setting title="Check jars before launch" desc={jarLine}><Toggle bind:on={checkJars} label="Check jars before launch" /></Setting>
       <div class="divider"></div>
       <Setting title="Scan for known malware" desc="Looks for signatures like fractureiser. Signatures updated 2 days ago."><Toggle bind:on={scan} label="Scan for known malware" /></Setting>
     </section>

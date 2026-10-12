@@ -2,13 +2,13 @@
 // mock fixtures; each later milestone replaces one domain with its Go service without
 // touching the screens.
 import * as browse from './mock/browse';
-import { content } from './mock/content';
 import * as home from './mock/home';
 import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
-import type { ContentKind, Instance, InstanceSummary, ProjectHit, ProjectType } from './types';
+import type { Alert, Instance, InstanceSummary, ProjectHit, ProjectType } from './types';
+import { activityFeed } from '../activity';
 import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
 import * as InstancesGo from '../wailsjs/go/api/Instances';
@@ -17,6 +17,7 @@ import * as LaunchGo from '../wailsjs/go/api/Launch';
 import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { accountsApi, signInAlerts } from './accounts';
+import { contentApi } from './content';
 import { downloadsApi } from './downloads';
 import { app, settingsApi } from './system';
 
@@ -35,6 +36,8 @@ const summary = ({ id, name, art, icon, minecraft, loader, kind, group, tags, ha
   ({ id, name, art, minecraft, kind, tags, hasServers, playtimeMin, running, ...(icon ? { icon } : {}), ...(group ? { group } : {}), ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
 
 const byId = (id: string) => inst.instances.find((i) => i.id === id) ?? inst.instances[0]!;
+
+const runs = bridged(LogsGo.Runs, (_instanceId: string) => logs.runs);
 
 export const api = {
   app,
@@ -75,22 +78,18 @@ export const api = {
     /** Picks a folder in a native dialog and moves the game folder there as a job; resolves with its id ("" if cancelled). */
     move: bridged(InstancesGo.Move, (_id: string) => ''),
     moveDefault: bridged(InstancesGo.MoveDefault, (_id: string) => ''),
-    /** How many mods have a build for another Minecraft version, or null when unknown (real with mods, M5). */
-    compatibility: unbuilt((_id: string, target: string): { matching: number; total: number } | null => (target.startsWith('1.21') ? { matching: 41, total: 48 } : null), null),
-    activity: unbuilt((_id: string) => inst.activity, []),
-    pendingUpdates: unbuilt((_id: string) => inst.pendingUpdates, []),
+    /** How many enabled mods have a build for another Minecraft version (and loader), or null without mods. */
+    compatibility: (id: string, target: string, loader = '') => contentApi.compatibility(id, target, loader),
+    /** Play sessions and content changes, newest first. */
+    activity: (id: string) => (hasBridge()
+      ? revs.load('content', () => Promise.all([runs(id), contentApi.changes(id)]).then(([r, changes]) => activityFeed(r, changes)))
+      : serve(inst.activity)),
+    pendingUpdates: (id: string) => contentApi.pending(id),
   },
-  content: {
-    list: unbuilt((_instanceId: string, kind: ContentKind) => content[kind], []),
-    setEnabled: (_instanceId: string, kind: ContentKind, itemId: string, enabled: boolean) => {
-      const item = content[kind].find((c) => c.id === itemId);
-      if (item) item.enabled = enabled;
-      return serve(undefined);
-    },
-  },
+  content: contentApi,
   home: {
-    /** Only sign-in alerts are real so far; the others arrive with their milestones. */
-    alerts: () => (hasBridge() ? accountsApi.list().then(signInAlerts) : serve(home.alerts)),
+    /** Sign-in alerts and missing mod dependencies; disk space arrives with M7. */
+    alerts: () => (hasBridge() ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts()]).then(([a, b]) => [...a, ...b]) : serve(home.alerts)),
     news: unbuilt((): typeof home.news | null => home.news, null),
     week: unbuilt(() => home.week, home.week.map((d) => ({ ...d, minutes: 0 }))),
     servers: unbuilt(() => home.servers, []),
@@ -110,7 +109,7 @@ export const api = {
     live: bridged(LogsGo.Live, (_instanceId: string) => logs.liveLog),
     files: unbuilt((_instanceId: string) => logs.logFiles, []),
     text: unbuilt((_instanceId: string, _name: string) => logs.latestLogText, ''),
-    runs: bridged(LogsGo.Runs, (_instanceId: string) => logs.runs),
+    runs,
   },
   versions: {
     minecraft: bridged(VersionsGo.Minecraft, () => versions.families),
@@ -136,10 +135,20 @@ export const api = {
     download: bridged(JavaGo.Download, () => ''),
   },
   review: {
-    modUpdates: unbuilt((_instanceId: string) => misc.modUpdates, []),
     modpackDiff: unbuilt((_instanceId: string) => misc.modpackDiff, { ...misc.modpackDiff, summary: '', keptEdits: [], rows: [] }),
   },
   imports: { launchers: unbuilt(() => misc.otherLaunchers, []) },
 };
 
 export type Api = typeof api;
+
+/** "Prominence II is missing Sodium": one alert per instance whose mods lack a dependency. */
+async function missingAlerts(): Promise<Alert[]> {
+  const [missing, list] = await Promise.all([contentApi.missing(), InstancesGo.List()]);
+  return missing.flatMap((m): Alert[] => {
+    const name = list.find((i) => i.id === m.instanceId)?.name;
+    if (!name) return [];
+    const more = m.more ? ` and ${m.more} more` : '';
+    return [{ tone: 'warn', subject: name, text: `is missing ${m.dep}${more}`, action: 'Fix', target: { kind: 'instance', id: m.instanceId, tab: 'mods' } }];
+  });
+}

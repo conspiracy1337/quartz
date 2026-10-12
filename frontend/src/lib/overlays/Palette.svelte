@@ -18,17 +18,32 @@
   const SHOWN = 5; // instance rows, as the design's switcher shows
   interface Item { key: string; group: string; label: string; icon: IconName; hint?: string; run: () => void }
   const nav = (r: Route) => () => go(r);
-  const COMMANDS: Item[] = [
-    // Mod update actions point at the design's sample instance until mod updates exist (M5).
-    ...(hasBridge() ? [] : ([
-      { key: 'check', group: 'Actions', label: 'Check for updates in all instances', icon: 'refresh', run: nav({ name: 'instance', id: 'fo', tab: 'mods', sub: 'updates' }) },
-      { key: 'update', group: 'Actions', label: 'Update 2 mods in Fabulously Optimized', icon: 'arrow-up', run: nav({ name: 'instance', id: 'fo', tab: 'mods', sub: 'updates' }) },
-    ] as Item[])),
+  // Mod update actions: the design's sample instance in the preview, the most recent instance in the app.
+  const recent = query(() => (hasBridge() ? api.instances.first() : Promise.resolve(undefined)));
+  const pending = query(() => (recent.data ? api.instances.pendingUpdates(recent.data.id) : Promise.resolve([])));
+  const updateItems = $derived.by((): Item[] => {
+    if (!hasBridge()) {
+      return [
+        { key: 'check', group: 'Actions', label: 'Check for updates in all instances', icon: 'refresh', run: nav({ name: 'instance', id: 'fo', tab: 'mods', sub: 'updates' }) },
+        { key: 'update', group: 'Actions', label: 'Update 2 mods in Fabulously Optimized', icon: 'arrow-up', run: nav({ name: 'instance', id: 'fo', tab: 'mods', sub: 'updates' }) },
+      ];
+    }
+    const r = recent.data;
+    if (!r) return [];
+    const to = nav({ name: 'instance', id: r.id, tab: 'mods', sub: 'updates' });
+    const n = pending.data?.length ?? 0;
+    return [
+      { key: 'check', group: 'Actions', label: `Check for mod updates in ${r.name}`, icon: 'refresh', run: to },
+      ...(n ? [{ key: 'update', group: 'Actions', label: `Update ${n} ${n === 1 ? 'mod' : 'mods'} in ${r.name}`, icon: 'arrow-up' as const, run: to }] : []),
+    ];
+  });
+  const COMMANDS = $derived<Item[]>([
+    ...updateItems,
     { key: 'self', group: 'Actions', label: 'Install launcher update 1.4.0', icon: 'shield', run: () => {} },
     { key: 'new', group: 'Actions', label: 'Create a new instance', icon: 'plus', run: nav({ name: 'new-instance' }) },
     { key: 'shortcuts', group: 'Actions', label: 'Show keyboard shortcuts', icon: 'settings-simple', run: () => session.open({ kind: 'shortcuts' }) },
     ...registry.map((d) => ({ key: d.id, group: 'Settings', label: d.title, icon: 'settings-simple' as const, hint: `Settings, ${SETTINGS_TAB_LABELS[d.tab]}`, run: nav({ name: 'settings', tab: d.tab }) })),
-  ];
+  ]);
 
   const instances = query(() => api.instances.list());
   let q = $state('');

@@ -53,6 +53,8 @@ type ReviewItem struct {
 	Size       int64  `json:"size"`
 	Blocked    bool   `json:"blocked,omitempty"` // CurseForge forbids third-party downloads
 	Dependency bool   `json:"dependency,omitempty"`
+	// Versions is the project's version list on its platform's site.
+	Versions string `json:"versions,omitempty"`
 }
 
 // LockedItem is an item a check skipped because its version is locked.
@@ -233,7 +235,7 @@ func (s *Service) CheckUpdates(ctx context.Context, id string, k Kind, ch modpla
 	}
 	for _, key := range pl.order {
 		pi := pl.items[key]
-		rev.Updates = append(rev.Updates, pi.review(v.known))
+		rev.Updates = append(rev.Updates, pi.review(k, v.known))
 	}
 	if ix, err := s.idx.get(id); err == nil {
 		_, _ = ix.Update(func(i *Index) error {
@@ -303,7 +305,7 @@ func platformName(src string) string {
 	return "Modrinth"
 }
 
-func (pi *planned) review(known map[string]Known) ReviewItem {
+func (pi *planned) review(k Kind, known map[string]Known) ReviewItem {
 	r := ReviewItem{ID: pi.id, Name: pi.name, To: pi.v.Number, Size: pi.v.File.Size, Blocked: pi.v.File.URL == "",
 		Note: platformName(string(pi.v.Source)) + ", " + orElse(pi.v.Type, "release")}
 	if pi.cur != nil {
@@ -315,6 +317,9 @@ func (pi *planned) review(known map[string]Known) ReviewItem {
 	if pi.item == "" {
 		r.Dependency = true
 		r.Note += ", a dependency"
+	}
+	if page := projectURL(k, identOf(pi.v, pi.p)); page != "" {
+		r.Versions = page + map[modplatform.Source]string{modplatform.Modrinth: "/versions", modplatform.CurseForge: "/files"}[pi.v.Source]
 	}
 	return r
 }

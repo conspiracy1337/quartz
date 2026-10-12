@@ -586,6 +586,7 @@ export namespace content {
 	    size: number;
 	    blocked?: boolean;
 	    dependency?: boolean;
+	    versions?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ReviewItem(source);
@@ -602,6 +603,7 @@ export namespace content {
 	        this.size = source["size"];
 	        this.blocked = source["blocked"];
 	        this.dependency = source["dependency"];
+	        this.versions = source["versions"];
 	    }
 	}
 	export class Review {
