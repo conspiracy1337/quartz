@@ -51,6 +51,19 @@ func TestPlaceFallbacks(t *testing.T) {
 		"copy when both fail":         {clone: noClone, link: noLink, want: Copy},
 		"copy when a private file is asked for": {clone: noClone, opts: Options{NoHardlink: true}, want: Copy},
 	}
+	t.Run("no copy refuses", func(t *testing.T) {
+		stub(t, noClone, noLink)
+		dir := t.TempDir()
+		src, dst := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+		write(t, src, "x")
+		write(t, dst, "keep")
+		if _, err := Place(src, dst, Options{NoCopy: true}); !errors.Is(err, ErrUnsupported) {
+			t.Fatalf("err = %v", err)
+		}
+		if read(t, dst) != "keep" {
+			t.Fatal("dst changed")
+		}
+	})
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			stub(t, c.clone, c.link)

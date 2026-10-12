@@ -40,6 +40,9 @@ type Options struct {
 	// NoHardlink asks for a private file: a hardlink shares edits and the
 	// read-only state with its source, a clone or copy doesn't.
 	NoHardlink bool
+	// NoCopy fails with ErrUnsupported instead of making a full copy, for
+	// callers that only want to share storage (another volume can't).
+	NoCopy bool
 	// Perm is the mode of a clone or copy; zero keeps the source's owner bits
 	// plus read-write for the owner.
 	Perm os.FileMode
@@ -69,7 +72,7 @@ func Place(src, dst string, o Options) (Method, error) {
 	if err != nil {
 		return Copy, err
 	}
-	m, err := place(src, tmp, perm, o.NoHardlink)
+	m, err := place(src, tmp, perm, o)
 	if err != nil {
 		_ = os.Remove(tmp)
 		return m, err
@@ -81,15 +84,18 @@ func Place(src, dst string, o Options) (Method, error) {
 	return m, nil
 }
 
-func place(src, tmp string, perm os.FileMode, noHardlink bool) (Method, error) {
+func place(src, tmp string, perm os.FileMode, o Options) (Method, error) {
 	if err := cloneFn(src, tmp, perm); err == nil {
 		return Reflink, nil
 	}
 	_ = os.Remove(tmp)
-	if !noHardlink {
+	if !o.NoHardlink {
 		if err := linkFn(src, tmp); err == nil {
 			return Hardlink, nil
 		}
+	}
+	if o.NoCopy {
+		return Copy, ErrUnsupported
 	}
 	return Copy, copyPath(src, tmp, perm)
 }
