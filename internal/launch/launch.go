@@ -268,10 +268,13 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	if err != nil {
 		return StageSignIn, err
 	}
-	if sess.Fallback {
-		p.set(StageSignIn, acc.Name+", offline: Microsoft is unreachable")
-	} else {
-		p.set(StageSignIn, acc.Name)
+	switch {
+	case sess.Fallback:
+		p.set(StageSignIn, "offline, Microsoft unreachable")
+	case sess.UserType == "msa":
+		p.set(StageSignIn, "online")
+	default:
+		p.set(StageSignIn, "offline")
 	}
 
 	p.set(StageMods, "No mods")

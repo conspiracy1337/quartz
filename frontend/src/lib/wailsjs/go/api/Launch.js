@@ -6,8 +6,8 @@ export function CancelLaunch(arg1) {
   return window['go']['api']['Launch']['CancelLaunch'](arg1);
 }
 
-export function Play(arg1) {
-  return window['go']['api']['Launch']['Play'](arg1);
+export function Play(arg1, arg2) {
+  return window['go']['api']['Launch']['Play'](arg1, arg2);
 }
 
 export function Repair(arg1) {

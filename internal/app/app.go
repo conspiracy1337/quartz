@@ -176,6 +176,10 @@ func build(o Options) (*app, error) {
 	return a, nil
 }
 
+// newAuth builds the sign-in service; the fakeauth development build swaps it
+// for a local fake (see fakeauth.go).
+var newAuth = auth.New
+
 // buildAccounts wires Microsoft sign-in, the account list and the skin
 // library. The launcher is built later, so InUse looks it up when called.
 func (a *app) buildAccounts() error {
@@ -183,7 +187,7 @@ func (a *app) buildAccounts() error {
 	if err != nil {
 		return fmt.Errorf("loading accounts: %w", err)
 	}
-	svc := auth.New(a.http, brand.ClientID())
+	svc := newAuth(a.http, brand.ClientID())
 	a.textures = skins.NewTextures(a.paths.Textures(), a.http)
 	if a.skins, err = skins.Open(a.paths.Skins(), a.http, svc.MC, a.textures, a.log); err != nil {
 		return fmt.Errorf("loading skins: %w", err)

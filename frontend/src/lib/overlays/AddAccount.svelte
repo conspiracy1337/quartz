@@ -1,19 +1,33 @@
 <script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
   import { api } from '../api';
+  import type { SignInEvent } from '../api/types';
+  import { hasBridge, onEvent } from '../bridge';
+  import { previewSignIn } from '../api/mock/accounts';
+  import { query } from '../query.svelte';
   import { revs } from '../revs.svelte';
   import { session, type AddAccountMode } from '../session.svelte';
+  import { countdown, idle, reduce } from '../signin';
   import Dialog from '../ui/Dialog.svelte';
   import Seg from '../ui/Seg.svelte';
 
-  interface Props { mode?: AddAccountMode | undefined }
-  let { mode: initial }: Props = $props();
+  /** accountId asks to sign that account in again. */
+  interface Props { mode?: AddAccountMode | undefined; accountId?: string | undefined }
+  let { mode: initial, accountId }: Props = $props();
   // The dialog opens on the requested method; later changes are the user's own.
   // svelte-ignore state_referenced_locally
   let mode = $state<AddAccountMode>(initial ?? 'code');
   let name = $state('');
   let saving = $state(false);
+  let st = $state(idle());
+  let started = $state(false);
+  let now = $state(Date.now());
   const MODES = [{ value: 'browser', label: 'Browser' }, { value: 'code', label: 'Code' }, { value: 'offline', label: 'Offline' }] as const;
   const NAME = /^[A-Za-z0-9_]{3,16}$/;
+
+  const ready = query(() => api.accounts.microsoftReady());
+  const accounts = query(() => api.accounts.list());
+  const again = $derived(accountId ? accounts.data?.find((a) => a.id === accountId) : undefined);
 
   async function addOffline() {
     saving = true;
@@ -28,47 +42,94 @@
     }
   }
 
-  // Placeholder QR pattern until M3 renders the real device-code QR: three finder squares plus noise.
-  const cells = (() => {
-    const finder = (x: number, y: number) => {
-      for (const [a, b] of [[0, 0], [14, 0], [0, 14]] as const) {
-        const dx = x - a, dy = y - b;
-        if (dx >= 0 && dy >= 0 && dx <= 6 && dy <= 6) return dx === 0 || dy === 0 || dx === 6 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4);
-      }
-      return null;
-    };
-    const out: boolean[] = [];
-    let seed = 7;
-    for (let y = 0; y < 21; y++) for (let x = 0; x < 21; x++) {
-      seed = (seed * 1103515245 + 12345) % 2147483648;
-      out.push(finder(x, y) ?? ((seed >> 16) & 1) === 1);
+  /** Starts the Microsoft sign-in of the current tab (a new one replaces the old). */
+  async function start() {
+    st = idle(st.flow);
+    started = true;
+    try {
+      await (mode === 'browser' ? api.accounts.signInBrowser() : api.accounts.signInCode());
+      if (!hasBridge()) st = reduce(st, previewSignIn(mode));
+    } catch (e) {
+      started = false;
+      session.fail('Microsoft sign-in', e);
     }
-    return out;
-  })();
+  }
+
+  async function finished(id: string) {
+    revs.bump('accounts');
+    const list = await api.accounts.list();
+    session.close();
+    session.notify({ tone: 'info', subject: list.find((a) => a.id === id)?.name ?? 'Account', text: 'is signed in' });
+  }
+
+  const off = onEvent<SignInEvent>('accounts:signin', (e) => {
+    st = reduce(st, e);
+    if (e.done && e.accountId && e.flow === st.flow) void finished(e.accountId);
+  });
+
+  // The Code tab gets its code as soon as it opens; leaving a tab ends its sign-in.
+  $effect(() => {
+    const m = mode;
+    if (!ready.data) return;
+    if (m === 'code') untrack(() => void start());
+    return () => {
+      started = false;
+      void api.accounts.cancelSignIn();
+    };
+  });
+
+  $effect(() => {
+    if (mode !== 'code' || !st.expiresAt) return;
+    const t = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(t);
+  });
+
+  onDestroy(() => {
+    off();
+    void api.accounts.cancelSignIn();
+  });
+
+  const copy = () => void navigator.clipboard?.writeText(st.code);
+  const waiting = $derived(started && !st.error && !st.accountId);
 </script>
 
-<Dialog title="Add an account" width={480} onclose={() => session.close()}>
+<Dialog title="Add an account" sub={again ? `Sign in again as ${again.name}` : undefined} width={480} onclose={() => session.close()}>
   <Seg options={MODES} bind:value={mode} label="Sign-in method" fill />
-  {#if mode === 'browser'}
+  {#if mode !== 'offline' && ready.data === false}
+    <div class="card" style="padding: 10px 12px"><span class="small muted">Microsoft sign-in isn't set up in this build. You can still add an offline account.</span></div>
+  {:else if mode === 'browser'}
     <div style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start">
       <p class="muted" style="margin: 0">Sign in with Microsoft in your browser. You will come back here automatically.</p>
-      <button class="btn btn-accent">Open Microsoft sign-in</button>
-      <span class="small faint">Waiting for the browser…</span>
+      <button class="btn btn-accent" onclick={start}>Open Microsoft sign-in</button>
+      {#if waiting}<span class="small faint">{st.step ? `${st.step}…` : 'Waiting for the browser…'}</span>{/if}
     </div>
   {:else if mode === 'code'}
     <div style="display: grid; grid-template-columns: 147px minmax(0,1fr); gap: 18px; align-items: center">
-      <div class="qr" role="img" aria-label="QR code for microsoft.com/link">{#each cells as on, k (k)}<i class:on></i>{/each}</div>
+      {#if st.qr.length}
+        <div class="qr" role="img" aria-label="QR code for microsoft.com/link" style="grid-template-columns: repeat({st.qr.length}, 1fr)">{#each st.qr.flat() as on, k (k)}<i class:on></i>{/each}</div>
+      {:else}
+        <div class="qr sk" aria-hidden="true"></div>
+      {/if}
       <div style="display: flex; flex-direction: column; gap: 10px; min-width: 0">
         <span class="small muted">Scan the code, or go to <a href="https://www.microsoft.com/link">microsoft.com/link</a> and enter:</span>
-        <span class="code">K7QX-2M9P</span>
-        <button class="btn btn-sm" style="align-self: flex-start">Copy code</button>
-        <span class="small faint tnum">Expires in 14:32</span>
+        {#if st.code}<span class="code">{st.code}</span>{:else}<span class="code sk" aria-hidden="true">&nbsp;</span>{/if}
+        <button class="btn btn-sm" style="align-self: flex-start" disabled={!st.code} onclick={copy}>Copy code</button>
+        <span class="small faint tnum">{st.step ? `${st.step}…` : st.expiresAt ? `Expires in ${countdown(st.expiresAt, now)}` : '\u00a0'}</span>
       </div>
     </div>
   {:else}
     <div style="display: flex; flex-direction: column; gap: 12px">
       <label class="field"><span class="field-label">Player name</span><span class="input"><input bind:value={name} maxlength="16" placeholder="TestDummy" /></span><span class="field-help">3 to 16 letters, numbers or underscores.</span></label>
       <div class="card" style="padding: 10px 12px"><span class="small muted">Offline accounts can play singleplayer and LAN, and servers that allow it. Skins only show locally.</span></div>
+    </div>
+  {/if}
+  {#if mode !== 'offline' && st.error && st.error.reason !== 'cancelled'}
+    <div class="card sg-err" role="alert">
+      <span class="small">{st.error.message}</span>
+      <span style="display: flex; gap: 6px">
+        {#if st.error.fixUrl}<button class="btn btn-sm" onclick={() => api.app.openUrl(st.error?.fixUrl ?? '')}>Open help page</button>{/if}
+        <button class="btn btn-sm" onclick={start}>Try again</button>
+      </span>
     </div>
   {/if}
   {#snippet foot()}
@@ -79,7 +140,11 @@
 
 <style>
   .qr{display:grid;grid-template-columns:repeat(21,1fr);width:147px;height:147px;padding:10px;background:#f4f4f5;border-radius:8px}
+  .qr.sk{background:var(--line)}
   .qr i{display:block}
   .qr i.on{background:#0a0a0b}
   .code{font-family:var(--mono);font-size:26px;letter-spacing:.18em;font-weight:500}
+  .code.sk{width:12ch;border-radius:4px}
+  /* A failed sign-in: the offline note's card with the alert bar's warn border. */
+  .sg-err{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 12px;border-color:color-mix(in srgb,var(--warn) 30%,var(--line))}
 </style>

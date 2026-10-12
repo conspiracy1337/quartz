@@ -6,14 +6,74 @@ export function AddOffline(arg1) {
   return window['go']['api']['Accounts']['AddOffline'](arg1);
 }
 
+export function CancelSignIn() {
+  return window['go']['api']['Accounts']['CancelSignIn']();
+}
+
+export function Capes(arg1) {
+  return window['go']['api']['Accounts']['Capes'](arg1);
+}
+
+export function ImportSkinFile() {
+  return window['go']['api']['Accounts']['ImportSkinFile']();
+}
+
+export function ImportSkinPlayer(arg1) {
+  return window['go']['api']['Accounts']['ImportSkinPlayer'](arg1);
+}
+
+export function ImportSkinURL(arg1) {
+  return window['go']['api']['Accounts']['ImportSkinURL'](arg1);
+}
+
 export function List() {
   return window['go']['api']['Accounts']['List']();
+}
+
+export function MicrosoftReady() {
+  return window['go']['api']['Accounts']['MicrosoftReady']();
 }
 
 export function Remove(arg1) {
   return window['go']['api']['Accounts']['Remove'](arg1);
 }
 
+export function RemoveSkin(arg1) {
+  return window['go']['api']['Accounts']['RemoveSkin'](arg1);
+}
+
+export function RenameSkin(arg1, arg2) {
+  return window['go']['api']['Accounts']['RenameSkin'](arg1, arg2);
+}
+
+export function ResetSkin(arg1) {
+  return window['go']['api']['Accounts']['ResetSkin'](arg1);
+}
+
+export function RestoreSkin(arg1) {
+  return window['go']['api']['Accounts']['RestoreSkin'](arg1);
+}
+
 export function SetDefault(arg1) {
   return window['go']['api']['Accounts']['SetDefault'](arg1);
+}
+
+export function SetSkinSlim(arg1, arg2) {
+  return window['go']['api']['Accounts']['SetSkinSlim'](arg1, arg2);
+}
+
+export function SignInBrowser() {
+  return window['go']['api']['Accounts']['SignInBrowser']();
+}
+
+export function SignInCode() {
+  return window['go']['api']['Accounts']['SignInCode']();
+}
+
+export function Skins() {
+  return window['go']['api']['Accounts']['Skins']();
+}
+
+export function Wear(arg1, arg2, arg3) {
+  return window['go']['api']['Accounts']['Wear'](arg1, arg2, arg3);
 }

@@ -4,6 +4,7 @@
   import StatusBar from '$lib/components/StatusBar.svelte';
   import { installShortcuts } from '$lib/keys';
   import AddAccount from '$lib/overlays/AddAccount.svelte';
+  import LaunchAs from '$lib/overlays/LaunchAs.svelte';
   import Blocked from '$lib/overlays/Blocked.svelte';
   import Crash from '$lib/overlays/Crash.svelte';
   import Host from '$lib/overlays/Host.svelte';
@@ -112,11 +113,12 @@
     </main>
   {/if}
 
-  {#if session.launch}<LaunchPanel instanceId={session.launch.instanceId} stage={session.launch.stage} details={session.launch.details} pct={session.launch.pct} />{/if}
+  {#if session.launch}<LaunchPanel instanceId={session.launch.instanceId} accountId={session.launch.accountId} stage={session.launch.stage} details={session.launch.details} pct={session.launch.pct} />{/if}
   {#each Object.entries(session.hosting) as [id, state] (id)}<HostPanel instanceId={id} {state} />{/each}
   {#if session.toast}<Toast {...session.toast} />{/if}
+  {#if session.launchAs}{#key session.launchAs}<LaunchAs {...session.launchAs} />{/key}{/if}
 
-  {#if overlay?.kind === 'add-account'}<AddAccount mode={overlay.mode} />
+  {#if overlay?.kind === 'add-account'}<AddAccount mode={overlay.mode} accountId={overlay.accountId} />
   {:else if overlay?.kind === 'install'}<Install projectId={overlay.projectId} />
   {:else if overlay?.kind === 'crash'}<Crash instanceId={overlay.instanceId} />
   {:else if overlay?.kind === 'blocked'}<Blocked />

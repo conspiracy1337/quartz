@@ -4,8 +4,38 @@ import {api} from '../models';
 
 export function AddOffline(arg1:string):Promise<api.AccountView>;
 
+export function CancelSignIn():Promise<void>;
+
+export function Capes(arg1:string):Promise<api.CapesView>;
+
+export function ImportSkinFile():Promise<api.SkinView>;
+
+export function ImportSkinPlayer(arg1:string):Promise<api.SkinView>;
+
+export function ImportSkinURL(arg1:string):Promise<api.SkinView>;
+
 export function List():Promise<Array<api.AccountView>>;
+
+export function MicrosoftReady():Promise<boolean>;
 
 export function Remove(arg1:string):Promise<void>;
 
+export function RemoveSkin(arg1:string):Promise<api.SkinView>;
+
+export function RenameSkin(arg1:string,arg2:string):Promise<void>;
+
+export function ResetSkin(arg1:string):Promise<api.AccountView>;
+
+export function RestoreSkin(arg1:api.SkinView):Promise<void>;
+
 export function SetDefault(arg1:string):Promise<void>;
+
+export function SetSkinSlim(arg1:string,arg2:boolean):Promise<void>;
+
+export function SignInBrowser():Promise<number>;
+
+export function SignInCode():Promise<number>;
+
+export function Skins():Promise<Array<api.SkinView>>;
+
+export function Wear(arg1:string,arg2:string,arg3:string):Promise<api.AccountView>;

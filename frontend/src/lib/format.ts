@@ -121,3 +121,9 @@ export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Search placeholder: "Search 48 mods", or "Search mods" while the count is unknown. */
 export const searchIn = (noun: string, n?: number) => (n === undefined ? `Search ${noun}` : `Search ${n} ${noun}`);
+
+/** A failed call's message for the UI: Go's "package: " prefixes dropped, first letter capitalised. */
+export function errorText(err: unknown): string {
+  const msg = (err instanceof Error ? err.message : String(err)).replace(/^([a-z]+: )+/, '');
+  return msg.charAt(0).toUpperCase() + msg.slice(1);
+}

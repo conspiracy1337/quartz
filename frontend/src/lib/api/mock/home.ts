@@ -2,7 +2,7 @@ import type { Alert, DayPlay, MergedServer, NewsItem, Screenshot } from '../type
 import { daysAgo } from './time';
 
 export const alerts: Alert[] = [
-  { tone: 'warn', subject: 'BuilderBea', text: 'needs to sign in again', action: 'Sign in', target: { kind: 'sign-in' } },
+  { tone: 'warn', subject: 'BuilderBea', text: 'needs to sign in again', action: 'Sign in', target: { kind: 'sign-in', accountId: 'a3' } },
   { tone: 'warn', subject: 'Prominence II', text: 'is missing Sodium 0.6', action: 'Fix', target: { kind: 'instance', id: 'prom', tab: 'mods' } },
   { tone: 'info', subject: 'Create: Above and Beyond', text: '1.4.1 is out', action: 'Review', target: { kind: 'modpack-update', id: 'cab' } },
 ];

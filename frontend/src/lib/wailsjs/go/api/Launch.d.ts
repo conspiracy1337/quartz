@@ -4,7 +4,7 @@ import {launch} from '../models';
 
 export function CancelLaunch(arg1:string):Promise<void>;
 
-export function Play(arg1:string):Promise<void>;
+export function Play(arg1:string,arg2:string):Promise<void>;
 
 export function Repair(arg1:string):Promise<string>;
 

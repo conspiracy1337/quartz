@@ -1,10 +1,25 @@
 <script lang="ts">
   import type { SkinColors } from '../api/types';
   import Icon from '../ui/Icon.svelte';
+  import { STEVE, uvBox, type Size, type UV } from './skinUV';
 
-  /** CSS-3D player built from boxes. `cape` is the cape's background, or undefined for none. */
-  interface Props { colors: SkinColors; cape?: string | undefined; slim?: boolean; walk?: boolean; scale?: number; controls?: boolean; fill?: boolean }
-  let { colors: k, cape, slim = false, walk = false, scale: s = 9, controls = true, fill = false }: Props = $props();
+  /**
+   * CSS-3D player built from boxes. With `texture` (a skin PNG URL) every face is cut from the
+   * skin, overlays included; without it the flat `colors` drawing is used. `cape` is a cape
+   * background for the colour drawing, `capeTexture` a cape PNG URL; leave both out for none.
+   */
+  interface Props {
+    colors?: SkinColors | undefined;
+    texture?: string | undefined;
+    cape?: string | undefined;
+    capeTexture?: string | undefined;
+    slim?: boolean;
+    walk?: boolean;
+    scale?: number;
+    controls?: boolean;
+    fill?: boolean;
+  }
+  let { colors: k = STEVE, texture, cape, capeTexture, slim = false, walk = false, scale: s = 9, controls = true, fill = false }: Props = $props();
 
   const FRONT = { ry: -28, rx: -10 };
   let ry = $state(FRONT.ry);
@@ -30,9 +45,44 @@
     ];
   }
 
-  const parts = $derived.by(() => {
+  const part = (x: number, yTop: number, z: number, rot: string, faces: Face[]) => ({ x: x * s, y: yTop * s, z: z * s, rot, faces });
+
+  /** Skin-textured faces of a w×h×d box at texture offset uv, grown by `inflate` texels. */
+  function tex(url: string, w: number, h: number, d: number, uv: UV, inflate = 0, size: Size = [64, 64]): Face[] {
+    const geo = box(w + inflate, h + inflate, d + inflate, { front: '', side: '', top: '' });
+    return uvBox(url, [w, h, d], uv, size, s, inflate).map((bg, i) => ({ ...geo[i]!, bg }));
+  }
+
+  const textured = $derived.by(() => {
+    if (!texture) return null;
+    const t = texture;
     const aw = slim ? 3 : 4;
-    const part = (x: number, yTop: number, z: number, rot: string, faces: Face[]) => ({ x: x * s, y: yTop * s, z: z * s, rot, faces });
+    // Each part is the base layer plus the overlay layer, grown by `grow` texels and centred on it.
+    const layer = (x: number, y: number, rot: string, w: number, h: number, d: number, base: UV, over: UV, grow: number) => [
+      part(x, y, 0, rot, tex(t, w, h, d, base)),
+      part(x, y - grow / 2, 0, rot, tex(t, w, h, d, over, grow)),
+    ];
+    const list = [
+      ...layer(0, -14, '', 8, 8, 8, [0, 0], [32, 0], 1),
+      ...layer(0, -6, '', 8, 12, 4, [16, 16], [16, 32], 0.5),
+      ...layer(-(4 + aw / 2), -6, 'swing-a', aw, 12, 4, [40, 16], [40, 32], 0.5),
+      ...layer(4 + aw / 2, -6, 'swing-b', aw, 12, 4, [32, 48], [48, 48], 0.5),
+      ...layer(-2, 6, 'swing-b', 4, 12, 4, [0, 16], [0, 32], 0.5),
+      ...layer(2, 6, 'swing-a', 4, 12, 4, [16, 48], [0, 48], 0.5),
+    ];
+    if (capeTexture) {
+      // Minecraft's cape box faces backwards: its "front" texture is the outer side.
+      const faces = tex(capeTexture, 10, 16, 1, [0, 0], 0, [64, 32]);
+      [faces[0], faces[1]] = [{ ...faces[0]!, bg: faces[1]!.bg }, { ...faces[1]!, bg: faces[0]!.bg }];
+      [faces[2], faces[3]] = [{ ...faces[2]!, bg: faces[3]!.bg }, { ...faces[3]!, bg: faces[2]!.bg }];
+      list.push(part(0, -6, -2.5, 'cape-tilt', faces));
+    }
+    return list;
+  });
+
+  const parts = $derived.by(() => {
+    if (textured) return textured;
+    const aw = slim ? 3 : 4;
     const sleeve = split(k.top, k.skin, 33);
     const leg = split(k.pants, k.shoes, 75);
     const list = [

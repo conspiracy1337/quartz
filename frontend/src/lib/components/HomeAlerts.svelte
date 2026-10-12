@@ -10,7 +10,7 @@
 
   function act(a: Alert) {
     const t = a.target;
-    if (t.kind === 'sign-in') session.open({ kind: 'add-account' });
+    if (t.kind === 'sign-in') session.open({ kind: 'add-account', mode: 'browser', accountId: t.accountId });
     else if (t.kind === 'instance') go({ name: 'instance', id: t.id, tab: t.tab });
     else go({ name: 'instance', id: t.id, tab: 'overview', sub: 'update' });
   }

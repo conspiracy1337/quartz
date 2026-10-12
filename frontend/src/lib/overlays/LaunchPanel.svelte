@@ -9,11 +9,11 @@
 
   /** Bottom-right launch progress with each step. Inside the app Go sends each step's
       detail and the overall percent; the preview shows the design's sample values. */
-  interface Props { instanceId: string; stage: number; details?: string[] | undefined; pct?: number | undefined }
-  let { instanceId, stage, details, pct: realPct }: Props = $props();
+  interface Props { instanceId: string; accountId?: string; stage: number; details?: string[] | undefined; pct?: number | undefined }
+  let { instanceId, accountId = '', stage, details, pct: realPct }: Props = $props();
   const inst = query(() => api.instances.get(instanceId));
   const accounts = query(() => api.accounts.list());
-  const me = $derived(accounts.data?.find((a) => a.isDefault)?.name ?? '');
+  const me = $derived(accounts.data?.find((a) => (accountId ? a.id === accountId : a.isDefault))?.name ?? '');
   const META = $derived(details ?? [`0.3 s`, '0.4 s', 'ready', '2,318 / 3,604', 'bubblewrap', '']);
   const names = $derived(LAUNCH_STEPS.map((s, i) => (i === 0 ? `Signing in as ${me}` : i === 1 && !details ? `Checking ${inst.data?.counts.mods ?? ''} mods` : i === 2 && !details ? 'Java 21.0.5' : s)));
   const pct = $derived(realPct ?? Math.round((stage / LAUNCH_STEPS.length) * 100));

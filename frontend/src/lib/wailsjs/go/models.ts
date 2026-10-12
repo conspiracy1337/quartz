@@ -39,6 +39,9 @@ export namespace api {
 	    detail: string;
 	    isDefault: boolean;
 	    skin: accounts.SkinColors;
+	    skinHash: string;
+	    slim: boolean;
+	    refreshedAt: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new AccountView(source);
@@ -53,6 +56,9 @@ export namespace api {
 	        this.detail = source["detail"];
 	        this.isDefault = source["isDefault"];
 	        this.skin = this.convertValues(source["skin"], accounts.SkinColors);
+	        this.skinHash = source["skinHash"];
+	        this.slim = source["slim"];
+	        this.refreshedAt = source["refreshedAt"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -96,6 +102,54 @@ export namespace api {
 	        this.os = source["os"];
 	        this.memoryMb = source["memoryMb"];
 	    }
+	}
+	export class CapeView {
+	    id: string;
+	    name: string;
+	    texture: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CapeView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.texture = source["texture"];
+	    }
+	}
+	export class CapesView {
+	    capes: CapeView[];
+	    worn: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CapesView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.capes = this.convertValues(source["capes"], CapeView);
+	        this.worn = source["worn"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class InstanceSummary {
 	    id: string;
@@ -239,6 +293,27 @@ export namespace api {
 	        this.source = source["source"];
 	        this.path = source["path"];
 	        this.usedBy = source["usedBy"];
+	    }
+	}
+	
+	export class SkinView {
+	    hash: string;
+	    name: string;
+	    slim: boolean;
+	    added: number;
+	    source: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SkinView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.name = source["name"];
+	        this.slim = source["slim"];
+	        this.added = source["added"];
+	        this.source = source["source"];
 	    }
 	}
 
@@ -425,6 +500,7 @@ export namespace launch {
 	    java: string;
 	    memory: MemoryRange;
 	    account: string;
+	    accountId: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Record(source);
@@ -440,6 +516,7 @@ export namespace launch {
 	        this.java = source["java"];
 	        this.memory = this.convertValues(source["memory"], MemoryRange);
 	        this.account = source["account"];
+	        this.accountId = source["accountId"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -538,6 +615,20 @@ export namespace mojang {
 
 export namespace settings {
 	
+	export class Accounts {
+	    autoRefresh: boolean;
+	    offlineFallback: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Accounts(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.autoRefresh = source["autoRefresh"];
+	        this.offlineFallback = source["offlineFallback"];
+	    }
+	}
 	export class CustomCSS {
 	    enabled: boolean;
 	    path: string;
@@ -722,6 +813,7 @@ export namespace settings {
 	    version: number;
 	    general: General;
 	    downloads: Downloads;
+	    accounts: Accounts;
 	    integrations: Integrations;
 	    appearance: Appearance;
 	    java: Java;
@@ -736,6 +828,7 @@ export namespace settings {
 	        this.version = source["version"];
 	        this.general = this.convertValues(source["general"], General);
 	        this.downloads = this.convertValues(source["downloads"], Downloads);
+	        this.accounts = this.convertValues(source["accounts"], Accounts);
 	        this.integrations = this.convertValues(source["integrations"], Integrations);
 	        this.appearance = this.convertValues(source["appearance"], Appearance);
 	        this.java = this.convertValues(source["java"], Java);
