@@ -289,33 +289,12 @@ func (e *extractor) zipEntry(f *zip.File) error {
 // ReadFile returns one entry of the zip at src, refusing entries larger than
 // limit bytes (counted after decompression, whatever the header claims).
 func ReadFile(src, name string, limit int64) ([]byte, error) {
-	zr, err := zip.OpenReader(src)
+	r, err := Open(src)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = zr.Close() }()
-	for _, f := range zr.File {
-		if f.Name != name {
-			continue
-		}
-		if f.UncompressedSize64 > uint64(limit) { //nolint:gosec // limit is a positive constant
-			return nil, fmt.Errorf("%w: %s", ErrTooLarge, name)
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = rc.Close() }()
-		data, err := io.ReadAll(io.LimitReader(rc, limit+1))
-		if err != nil {
-			return nil, err
-		}
-		if int64(len(data)) > limit {
-			return nil, fmt.Errorf("%w: %s", ErrTooLarge, name)
-		}
-		return data, nil
-	}
-	return nil, fmt.Errorf("archive: %s has no %s: %w", filepath.Base(src), name, fs.ErrNotExist)
+	defer func() { _ = r.Close() }()
+	return r.Read(name, limit)
 }
 
 // ExtractTarGz extracts the gzip-compressed tar at src into dest.

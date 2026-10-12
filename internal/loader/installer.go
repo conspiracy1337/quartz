@@ -112,7 +112,12 @@ func (in *installer) unpack(ctx context.Context, req Request, url, jar, dir stri
 	if err := in.dl.Fetch(ctx, download.Item{URLs: []string{url}, Dest: jar, Sum: hashx.Of(hashx.SHA1, sum)}, nil); err != nil {
 		return nil, fmt.Errorf("loader: %s installer: %w", in.kind.Name(), err)
 	}
-	raw, err := archive.ReadFile(jar, "install_profile.json", maxProfileJSON)
+	zr, err := archive.Open(jar)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = zr.Close() }()
+	raw, err := zr.Read("install_profile.json", maxProfileJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -127,9 +132,9 @@ func (in *installer) unpack(ctx context.Context, req Request, url, jar, dir stri
 		return nil, err
 	}
 	if p.Install != nil {
-		err = in.unpackLegacy(jar, p.Install)
+		err = in.unpackLegacy(zr, p.Install)
 	} else {
-		err = in.unpackModern(jar, dir, p)
+		err = in.unpackModern(zr, jar, dir, p)
 	}
 	if err != nil {
 		return nil, err
@@ -137,12 +142,12 @@ func (in *installer) unpack(ctx context.Context, req Request, url, jar, dir stri
 	return []byte(sum), fsx.AtomicWrite(filepath.Join(dir, preparedName), []byte(sum), fsx.FilePerm)
 }
 
-func (in *installer) unpackModern(jar, dir string, p installProfile) error {
+func (in *installer) unpackModern(zr *archive.Reader, jar, dir string, p installProfile) error {
 	name := strings.TrimPrefix(p.JSON, "/")
 	if name == "" {
 		name = "version.json"
 	}
-	v, err := archive.ReadFile(jar, name, maxProfileJSON)
+	v, err := zr.Read(name, maxProfileJSON)
 	if err != nil {
 		return err
 	}
@@ -163,7 +168,7 @@ func (in *installer) unpackModern(jar, dir string, p installProfile) error {
 		if err != nil {
 			return err
 		}
-		body, err := archive.ReadFile(jar, name, maxEmbedded)
+		body, err := zr.Read(name, maxEmbedded)
 		if err != nil {
 			return err
 		}
@@ -177,7 +182,7 @@ func (in *installer) unpackModern(jar, dir string, p installProfile) error {
 	return nil
 }
 
-func (in *installer) unpackLegacy(jar string, inst *legacyInstall) error {
+func (in *installer) unpackLegacy(zr *archive.Reader, inst *legacyInstall) error {
 	rel, err := mojang.MavenPath(inst.Path)
 	if err != nil {
 		return err
@@ -186,7 +191,7 @@ func (in *installer) unpackLegacy(jar string, inst *legacyInstall) error {
 	if err != nil {
 		return err
 	}
-	body, err := archive.ReadFile(jar, inst.FilePath, maxEmbedded)
+	body, err := zr.Read(inst.FilePath, maxEmbedded)
 	if err != nil {
 		return err
 	}
