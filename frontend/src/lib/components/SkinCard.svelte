@@ -2,6 +2,7 @@
   import { api } from '../api';
   import { hmLoose } from '../format';
   import { query } from '../query.svelte';
+  import { accountLook, capeLook } from '../look';
   import PlayerModel from './PlayerModel.svelte';
 
   /** The current skin in 3D next to this week's play activity. */
@@ -12,12 +13,11 @@
 
   const week = query(() => api.home.week());
   const skins = query(() => api.accounts.skins());
-  const capes = query(() => api.accounts.capes());
-  // Until the skin library exists (M3), the default account's own colours are drawn.
   const accounts = query(() => api.accounts.list());
   const me = $derived(accounts.data?.find((a) => a.isDefault));
-  const worn = $derived(skins.data?.find((x) => x.worn) ?? (me ? { colors: me.skin, slim: false } : undefined));
-  const cape = $derived(capes.data?.capes.find((c) => c.id === capes.data?.worn && c.id !== 'none')?.art);
+  const capes = query(() => (me ? api.accounts.capes(me.id) : Promise.resolve({ capes: [], worn: '' })));
+  const look = $derived(me && skins.data ? accountLook(me, skins.data) : undefined);
+  const cape = $derived(capeLook(capes.data?.capes.find((c) => c.id === capes.data?.worn)));
 
   const total = $derived((week.data ?? []).reduce((n, d) => n + d.minutes, 0));
   const max = $derived(Math.max(1, ...(week.data ?? []).map((d) => d.minutes)));
@@ -30,7 +30,7 @@
 <section class="card skc" aria-label="Your skin and play activity" style="font-family: var(--font); color: var(--text)">
   <div class="skc-in">
     <div class="skc-mdl">
-      {#if worn}<PlayerModel colors={worn.colors} {cape} slim={worn.slim} controls={false} fill {scale} />{/if}
+      {#if look}<PlayerModel {...look} {...cape} controls={false} fill {scale} />{/if}
     </div>
     <div class="skc-pt">
       <div class="skc-head"><span class="small faint">Played this week</span><span class="mono small tnum">{week.data ? hmLoose(total) : ''}</span></div>

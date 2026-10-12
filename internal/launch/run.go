@@ -42,7 +42,7 @@ type run struct {
 	started    time.Time
 	buf        *gamelog.Buffer
 	logFile    *os.File
-	token      string
+	accountID  string
 
 	stopping atomic.Bool
 	killed   atomic.Bool
@@ -70,7 +70,7 @@ func (l *Launcher) command(inst instance.Instance, sess accounts.Session, res *i
 	win := inst.Settings.Window
 	vars := mojang.Vars{
 		"auth_player_name": sess.Name, "auth_uuid": sess.UUID, "auth_access_token": sess.AccessToken,
-		"auth_session": "-", "auth_xuid": sess.XUID, "clientid": sess.ClientID, "user_type": sess.UserType,
+		"auth_session": sess.LegacySession(), "auth_xuid": sess.XUID, "clientid": sess.ClientID, "user_type": sess.UserType,
 		"user_properties": "{}", "version_name": v.ID, "version_type": v.Type,
 		"game_directory": gameDir, "assets_root": res.AssetsRoot, "assets_index_name": v.AssetsID(),
 		"game_assets": res.GameAssets, "natives_directory": res.NativesDir, "library_directory": filepath.Dir(res.ClientJar),
@@ -119,12 +119,10 @@ func (l *Launcher) command(inst instance.Instance, sess accounts.Session, res *i
 }
 
 // start spawns the game and wires its output, events and exit handling.
-func (l *Launcher) start(ctx context.Context, inst instance.Instance, acc accounts.Account, res *install.Resolved, rt java.Runtime, mem MemoryRange, env mojang.Env) (*run, error) {
+func (l *Launcher) start(ctx context.Context, inst instance.Instance, acc accounts.Account, sess accounts.Session, res *install.Resolved, rt java.Runtime, mem MemoryRange, env mojang.Env) (*run, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	sess := acc.Session()
-	token := sess.AccessToken
 	cmd, script, err := l.command(inst, sess, res, rt, mem, env)
 	if err != nil {
 		return nil, err
@@ -143,9 +141,9 @@ func (l *Launcher) start(ctx context.Context, inst instance.Instance, acc accoun
 	}
 	now := time.Now()
 	r := &run{
-		id: newRunID(now), instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), token: token,
+		id: newRunID(now), instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), accountID: acc.ID,
 		firstOutput: make(chan struct{}), done: make(chan struct{}),
-		record: Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name},
+		record: Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID},
 	}
 	r.record.ID = r.id
 	runsDir := l.cfg.Instances.RunsDir(inst.ID)
@@ -155,10 +153,11 @@ func (l *Launcher) start(ctx context.Context, inst instance.Instance, acc accoun
 	if r.logFile, err = os.OpenFile(filepath.Join(runsDir, r.id+".log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil { //nolint:gosec // our own runs folder
 		return nil, err
 	}
-	l.cfg.Redactor.AddSecret(token)
+	// The token stays a secret for the launcher's lifetime: another run may
+	// share it, and the account manager holds it too.
+	l.cfg.Redactor.AddSecret(sess.AccessToken)
 	if err := cmd.Start(); err != nil {
 		_ = r.logFile.Close()
-		l.cfg.Redactor.RemoveSecret(token)
 		return nil, err
 	}
 	_, werr := stdin.Write(script)
@@ -282,7 +281,6 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	close(r.done)
 	r.firstOnce.Do(func() { close(r.firstOutput) })
 	_ = r.logFile.Close()
-	l.cfg.Redactor.RemoveSecret(r.token)
 
 	code := 0
 	if r.cmd.ProcessState != nil {

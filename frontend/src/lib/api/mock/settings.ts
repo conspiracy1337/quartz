@@ -5,6 +5,7 @@ export const defaultSettings = (): settings.Settings => ({
   version: 1,
   general: { language: 'system', onGameStart: 'hide', startPage: 'home', startWithComputer: false },
   downloads: { parallel: 8, watchDownloads: true, proxy: 'system', proxyCustom: { type: 'http', host: '', port: 8080, user: '' } },
+  accounts: { autoRefresh: true, offlineFallback: true },
   integrations: { discordStatus: true, handleLinks: true },
   appearance: {
     theme: 'monolith', accent: '#3ecf8e', density: 'comfortable', textSize: 'default', reduceMotion: 'system',

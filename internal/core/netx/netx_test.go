@@ -3,6 +3,7 @@ package netx
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -230,4 +231,36 @@ func getErr(c *Client, url string) error {
 		_ = resp.Body.Close()
 	}
 	return err
+}
+
+func TestJSONHelpersKeepErrorBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/form":
+			_ = r.ParseForm()
+			if r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" || r.PostForm.Get("grant_type") != "x" {
+				t.Errorf("form request: %v %v", r.Header, r.PostForm)
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"error":"authorization_pending"}`)
+		case "/json":
+			var in map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			_ = json.NewEncoder(w).Encode(map[string]string{"echo": in["v"]})
+		}
+	}))
+	defer srv.Close()
+	c := newClient(t, Options{})
+	err := c.PostForm(context.Background(), srv.URL+"/form?secret=1", url.Values{"grant_type": {"x"}}, nil)
+	var se *StatusError
+	if !errors.As(err, &se) || se.Code != 400 || !strings.Contains(string(se.Body), "authorization_pending") {
+		t.Fatalf("err = %v", err)
+	}
+	if strings.Contains(err.Error(), "authorization_pending") || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("error text leaks body or query: %q", err.Error())
+	}
+	var out struct{ Echo string }
+	if err := c.JSON(context.Background(), http.MethodPost, srv.URL+"/json", nil, map[string]string{"v": "hi"}, &out); err != nil || out.Echo != "hi" {
+		t.Fatalf("json: %+v %v", out, err)
+	}
 }

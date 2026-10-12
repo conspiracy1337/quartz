@@ -82,7 +82,7 @@ export interface ContentItem {
 
 // ---- home ----
 export interface Alert { tone: 'warn' | 'info'; subject: string; text: string; action: string; target: AlertTarget }
-export type AlertTarget = { kind: 'sign-in' } | { kind: 'instance'; id: string; tab: 'mods' } | { kind: 'modpack-update'; id: string };
+export type AlertTarget = { kind: 'sign-in'; accountId: string } | { kind: 'instance'; id: string; tab: 'mods' } | { kind: 'modpack-update'; id: string };
 export interface NewsItem { title: string; source: string; published: number; url: string }
 export interface DayPlay { day: number; minutes: number }
 
@@ -138,10 +138,34 @@ export interface Account {
   status: 'ok' | 'expired' | 'offline';
   detail: string;
   isDefault: boolean;
+  /** The flat drawing, used while there is no skin texture. */
   skin: SkinColors;
+  /** The library skin worn ("" for the default Steve or Alex). */
+  skinHash: string;
+  slim: boolean;
+  /** Last automatic sign-in refresh (unix ms), Microsoft accounts only. */
+  refreshedAt: number;
 }
-export interface Skin { id: string; name: string; colors: SkinColors; slim: boolean; worn: boolean }
-export interface Cape { id: string; name: string; art: string }
+/** A library skin. Its PNG is skinURL(hash); preview fixtures carry flat colours instead. */
+export interface Skin { hash: string; name: string; slim: boolean; added: number; source: string; colors?: SkinColors }
+/** An owned cape. Its PNG is textureURL(texture); preview fixtures carry a CSS `art` instead. */
+export interface Cape { id: string; name: string; texture: string; art?: string }
+export interface Capes { capes: Cape[]; worn: string }
+/** Why a sign-in failed, with a page that fixes it when there is one. */
+export interface SignInProblem { reason: string; message: string; fixUrl: string }
+/** Progress of the interactive Microsoft sign-in (Go's accounts.SignInEvent). */
+export interface SignInEvent {
+  flow: number;
+  mode: 'browser' | 'code';
+  step?: string;
+  code?: string;
+  url?: string;
+  qr?: boolean[][];
+  expiresAt?: number;
+  done: boolean;
+  accountId?: string;
+  error?: SignInProblem;
+}
 
 // ---- browse ----
 export type ProjectType = 'Mods' | 'Modpacks' | 'Resource packs' | 'Shaders' | 'Data packs';

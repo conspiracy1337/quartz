@@ -2,6 +2,12 @@
 // codebase may hard-code the launcher's name, folder, scheme or IDs.
 package brand
 
+import (
+	"os"
+	"regexp"
+	"strings"
+)
+
 const (
 	// Name is the full product name shown in the UI and window title.
 	Name = "Quartz Client"
@@ -21,5 +27,28 @@ const (
 	AppID = "dev.quartzclient.launcher"
 )
 
+// EnvMSAClientID overrides MSAClientID, for development builds.
+const EnvMSAClientID = "QUARTZ_MSA_CLIENT_ID"
+
 // Version is set at build time with -ldflags "-X quartz/internal/brand.Version=…".
 var Version = "0.0.0-dev"
+
+// MSAClientID is the Azure application (client) ID used for Microsoft sign-in,
+// set at build time with -ldflags "-X quartz/internal/brand.MSAClientID=…".
+// It is public, not a secret, but it must be approved by Mojang for the
+// Minecraft services API, so it is never hard-coded here.
+var MSAClientID = ""
+
+var guid = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// ClientID returns the Microsoft client ID ($QUARTZ_MSA_CLIENT_ID first, then
+// the build value), or "" when neither is a well-formed GUID. An empty result
+// means Microsoft sign-in is not set up in this build.
+func ClientID() string {
+	for _, id := range []string{os.Getenv(EnvMSAClientID), MSAClientID} {
+		if guid.MatchString(id) {
+			return strings.ToLower(id)
+		}
+	}
+	return ""
+}

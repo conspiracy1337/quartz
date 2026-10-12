@@ -80,7 +80,7 @@
   </div>
   {#if menuFor}
     <div class="menu jm" role="menu" aria-label="Join with" style="top: {HEAD_H + (openIndex + 1) * ROW_H - 4}px">
-      <div class="small faint" style="padding: 6px 8px 4px">Join {menuFor.name} with</div>
+      <div class="small faint menu-title">Join {menuFor.name} with</div>
       {#each menuFor.instances as id, j (id)}
         {@const i = inst(id)}
         {#if i}
@@ -113,6 +113,4 @@
   .split .btn:first-child{border-radius:6px 0 0 6px}
   .split .btn:last-child{border-radius:0 6px 6px 0;border-left:0;width:24px;padding:0}
   .jm{position:absolute;right:var(--inset);z-index:5;min-width:240px}
-  .mi{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:10px;align-items:center;height:34px;padding:0 8px;border-radius:4px;color:var(--text);text-decoration:none;border:0;background:transparent;width:100%;text-align:left}
-  .mi:hover{background:var(--hover)}
 </style>

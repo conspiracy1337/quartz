@@ -18,6 +18,7 @@ type Settings struct {
 	Version      int          `json:"version"`
 	General      General      `json:"general"`
 	Downloads    Downloads    `json:"downloads"`
+	Accounts     Accounts     `json:"accounts"`
 	Integrations Integrations `json:"integrations"`
 	Appearance   Appearance   `json:"appearance"`
 	Java         Java         `json:"java"`
@@ -49,6 +50,11 @@ type ProxyCustom struct {
 
 // Usable reports whether the custom proxy is complete enough to use.
 func (p ProxyCustom) Usable() bool { return p.Host != "" }
+
+type Accounts struct {
+	AutoRefresh     bool `json:"autoRefresh"`     // renew Microsoft sign-ins in the background
+	OfflineFallback bool `json:"offlineFallback"` // play offline when Microsoft is unreachable
+}
 
 type Integrations struct {
 	DiscordStatus bool `json:"discordStatus"`
@@ -93,6 +99,7 @@ func Defaults() Settings {
 			Parallel: 8, WatchDownloads: true, Proxy: "system",
 			ProxyCustom: ProxyCustom{Type: "http", Port: 8080},
 		},
+		Accounts:     Accounts{AutoRefresh: true, OfflineFallback: true},
 		Integrations: Integrations{DiscordStatus: true, HandleLinks: true},
 		Appearance: Appearance{
 			Theme: "monolith", Accent: "#3ecf8e", Density: "comfortable",

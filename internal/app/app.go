@@ -21,6 +21,7 @@ import (
 
 	"quartz/internal/accounts"
 	"quartz/internal/api"
+	"quartz/internal/auth"
 	"quartz/internal/brand"
 	"quartz/internal/core/download"
 	"quartz/internal/core/events"
@@ -37,6 +38,7 @@ import (
 	"quartz/internal/meta"
 	"quartz/internal/network"
 	"quartz/internal/settings"
+	"quartz/internal/skins"
 	"quartz/internal/theme"
 )
 
@@ -62,7 +64,9 @@ type app struct {
 	cache     *httpcache.Cache
 	meta      *meta.Service
 	java      *java.Manager
-	accounts  *accounts.Store
+	accounts  *accounts.Manager
+	skins     *skins.Library
+	textures  *skins.Textures
 	instances *instance.Store
 	installer *install.Installer
 	launcher  *launch.Launcher
@@ -86,7 +90,7 @@ func Run(o Options) error {
 		MinWidth:         960,
 		MinHeight:        600,
 		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0b, A: 0xff},
-		AssetServer:      &assetserver.Options{Assets: o.Assets},
+		AssetServer:      &assetserver.Options{Assets: o.Assets, Handler: skins.Handler(a.skins, a.textures)},
 		OnStartup:        a.startup,
 		OnShutdown:       a.shutdown,
 		SingleInstanceLock: &options.SingleInstanceLock{
@@ -100,7 +104,7 @@ func Run(o Options) error {
 			api.NewDownloads(a.tasks),
 			api.NewVersions(a.ctx, a.meta, a.installer),
 			api.NewJava(a.ctx, a.java, a.meta, a.tasks, a.settings),
-			api.NewAccounts(a.accounts, a.bus),
+			api.NewAccounts(a.ctx, a.accounts, a.skins, a.bus),
 			api.NewInstances(a.ctx, a.instances, a.meta, a.settings, a.bus, a.launcher.Running),
 			api.NewLaunch(a.ctx, a.launcher),
 			api.NewLogs(a.launcher),
@@ -154,9 +158,9 @@ func build(o Options) (*app, error) {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("loading Java runtimes: %w", err)
 	}
-	if a.accounts, err = accounts.Open(p.Accounts(), log); err != nil {
+	if err := a.buildAccounts(); err != nil {
 		_ = logFile.Close()
-		return nil, fmt.Errorf("loading accounts: %w", err)
+		return nil, err
 	}
 	if a.instances, err = instance.Open(p.Instances(), log); err != nil {
 		_ = logFile.Close()
@@ -168,7 +172,37 @@ func build(o Options) (*app, error) {
 	}
 	a.watchCustomCSS()
 	a.watchDownloads()
+	a.watchAccounts()
 	return a, nil
+}
+
+// newAuth builds the sign-in service; the fakeauth development build swaps it
+// for a local fake (see fakeauth.go).
+var newAuth = auth.New
+
+// buildAccounts wires Microsoft sign-in, the account list and the skin
+// library. The launcher is built later, so InUse looks it up when called.
+func (a *app) buildAccounts() error {
+	store, err := accounts.Open(a.paths.Accounts(), a.log)
+	if err != nil {
+		return fmt.Errorf("loading accounts: %w", err)
+	}
+	svc := newAuth(a.http, brand.ClientID())
+	a.textures = skins.NewTextures(a.paths.Textures(), a.http)
+	if a.skins, err = skins.Open(a.paths.Skins(), a.http, svc.MC, a.textures, a.log); err != nil {
+		return fmt.Errorf("loading skins: %w", err)
+	}
+	a.accounts = accounts.NewManager(accounts.Config{
+		Store: store, Secrets: a.secrets, Auth: svc, Skins: a.skins, Redactor: a.redactor, Bus: a.bus,
+		Settings: func() settings.Accounts { return a.settings.Get().Accounts },
+		InUse:    func(id string) bool { return a.launcher.AccountInUse(id) },
+		Focus:    a.focus,
+		Log:      a.log,
+	})
+	if !svc.Configured() {
+		a.log.Info("Microsoft sign-in is not set up in this build", "env", brand.EnvMSAClientID)
+	}
+	return nil
 }
 
 func (a *app) buildTasks() error {
@@ -227,6 +261,17 @@ func (a *app) watchDownloads() {
 	})
 }
 
+// watchAccounts wakes the background refresher when its settings change.
+func (a *app) watchAccounts() {
+	cur := a.settings.Get().Accounts
+	a.bus.Subscribe(events.SettingsChanged, func(p any) {
+		if next := p.(settings.Settings).Accounts; next != cur {
+			cur = next
+			a.accounts.Wake()
+		}
+	})
+}
+
 // watchCustomCSS keeps the CSS watcher in step with the custom CSS settings.
 func (a *app) watchCustomCSS() {
 	cur := a.settings.Get().Appearance.CustomCSS
@@ -245,9 +290,11 @@ func (a *app) startup(ctx context.Context) {
 	a.bus.SetSink(func(t events.Topic, payload any) {
 		wruntime.EventsEmit(ctx, string(t), payload)
 	})
+	a.accounts.Start()
 }
 
 func (a *app) shutdown(context.Context) {
+	a.accounts.Close()
 	a.launcher.Close()
 	a.bus.SetSink(nil)
 	a.css.Close()
@@ -260,8 +307,11 @@ func (a *app) shutdown(context.Context) {
 	if err := a.instances.Flush(); err != nil {
 		a.log.Error("saving instances on exit failed", "err", err)
 	}
-	if err := a.accounts.Flush(); err != nil {
+	if err := a.accounts.Store().Flush(); err != nil {
 		a.log.Error("saving accounts on exit failed", "err", err)
+	}
+	if err := a.skins.Flush(); err != nil {
+		a.log.Error("saving the skin library on exit failed", "err", err)
 	}
 	if err := a.java.Flush(); err != nil {
 		a.log.Error("saving Java probes on exit failed", "err", err)
@@ -279,10 +329,15 @@ func (a *app) shutdown(context.Context) {
 // only logged here; M11 parses them with a strict flag set.
 func (a *app) secondInstance(data options.SecondInstanceData) {
 	a.log.Info("second instance", "args", len(data.Args))
+	a.focus()
+	a.bus.Emit(events.SecondInstance, nil)
+}
+
+// focus brings the launcher window forward.
+func (a *app) focus() {
 	ctx := a.ctx.Get()
 	wruntime.WindowUnminimise(ctx)
 	wruntime.Show(ctx)
-	a.bus.Emit(events.SecondInstance, nil)
 }
 
 // ExitOnError is used by main for fatal startup failures before a window exists.

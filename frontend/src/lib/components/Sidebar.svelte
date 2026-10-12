@@ -4,6 +4,7 @@
 
 <script lang="ts">
   import { api } from '../api';
+  import { avatar } from '../look';
   import { revs } from '../revs.svelte';
   import { query } from '../query.svelte';
   import { href, type Route } from '../router.svelte';
@@ -54,7 +55,7 @@
       {/each}
     {/if}
     {#each recent.data ?? [] as i (i.id)}
-      <a href={href({ name: 'instance', id: i.id, tab: 'overview' })} class="side-inst" class:on={active === 'instance' && instanceId === i.id}>
+      <a href={href({ name: 'instance', id: i.id, tab: 'overview' })} class="side-inst" class:on={active === 'instance' && instanceId === i.id} oncontextmenu={(e) => session.openLaunchAs(i.id, e)}>
         <Tile art={i.art} size="sm" />
         <span class="trunc">{i.name}</span>
         {#if session.running[i.id]}<span class="dot live" aria-label="Running"></span>{:else}<span></span>{/if}
@@ -72,7 +73,7 @@
     <div class="divider" style="margin: 6px 0"></div>
     <a href={href({ name: 'accounts' })} class="side-acct" style="text-decoration: none; color: var(--text)">
       {#if me}
-        <span class="avatar" aria-hidden="true" style="background: linear-gradient({me.skin.hair} 0 38%, {me.skin.skin} 38% 100%)"></span>
+        <span class="avatar" aria-hidden="true" style="background: {avatar(me, 28)}; image-rendering: pixelated"></span>
         <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{me.name}</span><span class="trunc small faint" style="display: block">{me.kind === 'microsoft' ? 'Microsoft account' : 'Offline account'}</span></span>
       {:else if accounts.data}
         <span class="avatar" aria-hidden="true" style="background: var(--raise)"></span>

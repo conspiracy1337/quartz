@@ -36,7 +36,8 @@ type Record struct {
 	Result    Result      `json:"result"`
 	Java      string      `json:"java"`
 	Memory    MemoryRange `json:"memory"`
-	Account   string      `json:"account"`
+	Account   string      `json:"account"`   // the player name, as it was at launch
+	AccountID string      `json:"accountId"` // the account it was
 }
 
 const maxRecords = 200

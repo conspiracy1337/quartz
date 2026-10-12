@@ -59,7 +59,7 @@
     <div class="lgrid">
       {#if list.data}
         {#each rows as r (r.id)}
-          <div class="icard">
+          <div class="icard" role="group" aria-label={r.name} oncontextmenu={(e) => session.openLaunchAs(r.id, e)}>
             <div class="icard-cover" style="background: radial-gradient(120% 140% at 0% 0%, {r.art.background} 0%, #141417 85%); opacity: .9"></div>
             <div style="padding: 0 14px 12px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0">
               <span class="ico ico-lg" style="background: {r.art.background}; margin-top: -24px; box-shadow: 0 0 0 3px var(--panel); position: relative; z-index: 1">{r.art.initial}</span>

@@ -1,7 +1,6 @@
 // The one API the UI talks to. In M0 every domain except app and settings is served from
 // mock fixtures; each later milestone replaces one domain with its Go service without
 // touching the screens.
-import * as accounts from './mock/accounts';
 import * as browse from './mock/browse';
 import { content } from './mock/content';
 import * as home from './mock/home';
@@ -12,12 +11,12 @@ import * as versions from './mock/versions';
 import type { ContentKind, Instance, InstanceSummary, ProjectHit, ProjectType } from './types';
 import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
-import * as AccountsGo from '../wailsjs/go/api/Accounts';
 import * as InstancesGo from '../wailsjs/go/api/Instances';
 import * as JavaGo from '../wailsjs/go/api/Java';
 import * as LaunchGo from '../wailsjs/go/api/Launch';
 import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
+import { accountsApi, signInAlerts } from './accounts';
 import { downloadsApi } from './downloads';
 import { app, settingsApi } from './system';
 
@@ -65,7 +64,8 @@ export const api = {
     },
   },
   home: {
-    alerts: unbuilt(() => home.alerts, []),
+    /** Only sign-in alerts are real so far; the others arrive with their milestones. */
+    alerts: () => (hasBridge() ? accountsApi.list().then(signInAlerts) : serve(home.alerts)),
     news: unbuilt((): typeof home.news | null => home.news, null),
     week: unbuilt(() => home.week, home.week.map((d) => ({ ...d, minutes: 0 }))),
     servers: unbuilt(() => home.servers, []),
@@ -73,7 +73,8 @@ export const api = {
   },
   screenshots: { list: unbuilt((_instanceId: string) => home.instanceShots, []) },
   launch: {
-    play: bridged(LaunchGo.Play, (_id: string) => undefined),
+    /** accountId "" plays with the default account; "Launch as" passes another one. */
+    play: bridged(LaunchGo.Play, (_id: string, _accountId: string) => undefined),
     stop: bridged(LaunchGo.Stop, (_id: string) => undefined),
     cancelLaunch: bridged(LaunchGo.CancelLaunch, (_id: string) => undefined),
     status: bridged(LaunchGo.Status, () => ({ running: [] as string[], launching: [] as string[] })),
@@ -92,14 +93,7 @@ export const api = {
     estimate: bridged(VersionsGo.Estimate, (_id: string) => 180_000_000),
     loaders: unbuilt((_minecraft: string) => versions.loaders, versions.loaders.filter((l) => l.kind === 'none')),
   },
-  accounts: {
-    list: () => revs.load('accounts', bridged(AccountsGo.List, accounts.mockAccounts.list)),
-    addOffline: bridged(AccountsGo.AddOffline, accounts.mockAccounts.addOffline),
-    setDefault: bridged(AccountsGo.SetDefault, accounts.mockAccounts.setDefault),
-    remove: bridged(AccountsGo.Remove, accounts.mockAccounts.remove),
-    skins: unbuilt(() => accounts.skins, []),
-    capes: unbuilt(() => ({ capes: accounts.capes, worn: accounts.wornCape }), { capes: [], worn: '' }),
-  },
+  accounts: accountsApi,
   browse: {
     catalog: unbuilt((type: ProjectType) => browse.catalog[type], { categories: [] as string[], hits: [] as ProjectHit[] }),
     project: (_id: string) => serve(browse.iris),

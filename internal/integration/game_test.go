@@ -106,8 +106,9 @@ func TestLaunchOffline(t *testing.T) {
 		t.Fatal(err)
 	}
 	red := logging.NewRedactor("")
+	mgr := accounts.NewManager(accounts.Config{Store: accs, Bus: bus, Redactor: red, Settings: func() settings.Accounts { return st.Get().Accounts }})
 	l := launch.New(launch.Config{
-		Instances: insts, Accounts: accs, Installer: h.installer(), Java: h.java, Tasks: h.tasks,
+		Instances: insts, Accounts: mgr, Installer: h.installer(), Java: h.java, Tasks: h.tasks,
 		Settings: st, Bus: bus, Redactor: red, BinDir: filepath.Join(h.root, "store", "bin"), Log: h.log,
 	})
 
@@ -127,7 +128,7 @@ func TestLaunchOffline(t *testing.T) {
 	bus.Subscribe(events.GameState, func(p any) { states <- p.(launch.State) })
 	bus.Subscribe(events.LaunchFailed, func(p any) { failed <- p.(launch.Failure) })
 
-	if err := l.Play(inst.ID); err != nil {
+	if err := l.Play(inst.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 	select {

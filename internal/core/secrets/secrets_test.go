@@ -2,9 +2,12 @@ package secrets
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/zalando/go-keyring"
+
+	"quartz/internal/brand"
 )
 
 func TestKeychainRoundTrip(t *testing.T) {
@@ -31,5 +34,38 @@ func TestUnavailableKeychain(t *testing.T) {
 	keyring.MockInitWithError(errors.New("no dbus"))
 	if err := NewKeychain().Set("k", "v"); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestLongValuesAreChunked(t *testing.T) {
+	keyring.MockInit()
+	k := NewKeychain()
+	long := strings.Repeat("abcdefghij", 500) // 5000 bytes: three chunks
+	if err := k.Set("msa-refresh:x", long); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := k.Get("msa-refresh:x"); err != nil || v != long {
+		t.Fatalf("round trip: len %d, %v", len(v), err)
+	}
+	if v, _ := keyring.Get(brand.AppID, "msa-refresh:x#2"); len(v) != 5000-2*chunkSize {
+		t.Fatalf("last chunk len %d", len(v))
+	}
+	// Overwriting with a short value drops the old chunks.
+	if err := k.Set("msa-refresh:x", "short-value"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keyring.Get(brand.AppID, "msa-refresh:x#0"); !errors.Is(err, keyring.ErrNotFound) {
+		t.Fatalf("stale chunk survived: %v", err)
+	}
+	if err := k.Set("msa-refresh:x", long); err != nil {
+		t.Fatal(err)
+	}
+	if err := k.Delete("msa-refresh:x"); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"msa-refresh:x", "msa-refresh:x#0", "msa-refresh:x#1", "msa-refresh:x#2"} {
+		if _, err := keyring.Get(brand.AppID, key); !errors.Is(err, keyring.ErrNotFound) {
+			t.Fatalf("%s survived delete: %v", key, err)
+		}
 	}
 }

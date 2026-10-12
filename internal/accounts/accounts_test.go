@@ -69,7 +69,7 @@ func TestStore(t *testing.T) {
 	if err := s.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	if sess := a.Session(); sess.UUID != a.ID || sess.Name != "Steve" || len(sess.UUID) != 32 {
+	if sess := a.offlineSession(); sess.UUID != a.ID || sess.Name != "Steve" || len(sess.UUID) != 32 {
 		t.Fatalf("session %+v", sess)
 	}
 }
