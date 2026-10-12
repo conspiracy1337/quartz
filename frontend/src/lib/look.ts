@@ -25,9 +25,12 @@ export const capeLook = (c: Cape | undefined): CapeLook => (!c ? {} : c.texture 
 /** A cape tile's picture: the outer side, 10×16 texels at (1, 1). */
 export const capeTile = (c: Cape, w: number, h: number) => (c.texture ? crop(textureURL(c.texture), 1, 1, 10, 16, w, h, 64, 32) : (c.art ?? ''));
 
+/** Library skins are named by SHA-256; preview fixtures use plain ids and draw colours. */
+export const hasTexture = (hash: string) => /^[0-9a-f]{64}$/.test(hash);
+
 /** A head avatar of `px` pixels: the face with the hat layer on top. */
 export function avatar(a: Account, px: number): string {
-  if (!a.skinHash) return `linear-gradient(${a.skin.hair} 0 38%, ${a.skin.skin} 38% 100%)`;
+  if (!hasTexture(a.skinHash)) return `linear-gradient(${a.skin.hair} 0 38%, ${a.skin.skin} 38% 100%)`;
   const url = skinURL(a.skinHash);
   return `${crop(url, 40, 8, 8, 8, px, px)}, ${crop(url, 8, 8, 8, 8, px, px)}`;
 }

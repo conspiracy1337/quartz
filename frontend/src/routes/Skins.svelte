@@ -23,8 +23,9 @@
   let capeSel = $state<string | null>(null);
   let busy = $state(false);
   let prompt = $state<'player' | 'link' | 'rename' | null>(null);
-  // The model grows with the window height.
+  // The model grows and shrinks with the window height.
   const tall = new MediaQuery('min-height: 940px');
+  const short = new MediaQuery('max-height: 680px');
   const NO_CAPE = 'repeating-linear-gradient(45deg,var(--line-2) 0 4px,transparent 4px 8px)';
   const ARMS = [{ value: 'classic', label: 'Classic arms' }, { value: 'slim', label: 'Slim arms' }] as const;
 
@@ -116,7 +117,7 @@
   </section>
   <aside class="wd-prev" aria-label="Selected skin">
     <div class="wd-model">
-      {#if cur}<PlayerModel {...skinLook(cur)} {...capeLook(cape)} fill scale={tall.current ? 11 : 8} />{/if}
+      {#if cur}<PlayerModel {...skinLook(cur)} {...capeLook(cape)} fill scale={tall.current ? 11 : short.current ? 6 : 8} />{/if}
     </div>
     <div class="wd-info">
       <div style="min-width: 0"><div class="h2 trunc">{cur?.name ?? ''}</div><div class="small faint">{cape ? `${cape.name} cape` : 'No cape'}, {cur?.slim ? 'slim' : 'classic'} arms</div></div>
@@ -155,7 +156,9 @@
   .wc{height:180px;border-radius:var(--radius-lg);border:1px solid var(--line);background:var(--panel);display:grid;grid-template-rows:1fr 36px;padding:0;color:var(--text);overflow:hidden}
   .wc:hover{border-color:var(--line-2)}
   .wc.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
-  .wc .nm{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 12px;border-top:1px solid var(--line);font-size:12px}
+  .wc .nm{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 12px;border-top:1px solid var(--line);font-size:12px;min-width:0}
+  .wc .nm .trunc{min-width:0}
+  .wc .nm .badge{flex:0 0 auto}
   .fig{display:grid;grid-template-columns:4px 8px 4px;grid-template-rows:8px 12px 12px;width:16px;transform:scale(3.4);image-rendering:pixelated;margin:auto}
   .fig .h{grid-column:2;grid-row:1}.fig .b{grid-column:2;grid-row:2}.fig .al{grid-column:1;grid-row:2}.fig .ar{grid-column:3;grid-row:2}.fig .l{grid-column:2;grid-row:3;display:grid;grid-template-columns:1fr 1fr}
   .cp{height:96px;border-radius:var(--radius-lg);border:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:0 12px;color:var(--text)}

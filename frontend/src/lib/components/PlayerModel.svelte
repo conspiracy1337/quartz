@@ -162,8 +162,8 @@
   }
   @keyframes swa{from{transform:rotateX(28deg)}to{transform:rotateX(-28deg)}}
   @keyframes swb{from{transform:rotateX(-28deg)}to{transform:rotateX(28deg)}}
-  .pm :global(.cape-tilt){transform:rotateX(10deg)}
-  .walk :global(.cape-tilt){transform:rotateX(22deg)}
+  .pm :global(.cape-tilt){transform:rotateX(-10deg)}
+  .walk :global(.cape-tilt){transform:rotateX(-22deg)}
   .pm-eye,.pm-iris,.pm-mouth,.pm-fringe{position:absolute}
   .pm-ctrl{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:6px;padding:4px;border-radius:8px;background:color-mix(in srgb,var(--panel) 80%,transparent);border:1px solid var(--line)}
 </style>

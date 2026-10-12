@@ -10,7 +10,7 @@
   import Empty from '$lib/ui/Empty.svelte';
   import Menu from '$lib/ui/Menu.svelte';
   import { since } from '$lib/format';
-  import { avatar } from '$lib/look';
+  import { avatar, hasTexture } from '$lib/look';
   import { prefs } from '$lib/prefs.svelte';
 
   const accounts = query(() => api.accounts.list());
@@ -53,7 +53,7 @@
       {#each accounts.data ?? [] as a (a.id)}
         {@const st = STATUS[a.status]}
         <div class="row ar">
-          {#if a.skinHash}<span class="head" aria-hidden="true" style="background: {avatar(a, 40)}"></span>{:else}<span class="head" aria-hidden="true"><span style="background: {a.skin.hair}"></span><span style="background: {a.skin.skin}"></span></span>{/if}
+          {#if hasTexture(a.skinHash)}<span class="head" aria-hidden="true" style="background: {avatar(a, 40)}"></span>{:else}<span class="head" aria-hidden="true"><span style="background: {a.skin.hair}"></span><span style="background: {a.skin.skin}"></span></span>{/if}
           <span style="min-width: 0"><span style="display: flex; gap: 8px; align-items: center"><span class="trunc" style="font-weight: 500">{a.name}</span>{#if a.isDefault}<span class="badge badge-accent">Default</span>{/if}</span><span class="trunc small faint" style="display: block">{detail(a)}</span></span>
           <span class="small opt" style="display: flex; gap: 6px; align-items: center; color: {st.color}"><span class="dot" style="background: {st.color}" aria-hidden="true"></span>{st.label}</span>
           <span style="display: flex; gap: 6px">

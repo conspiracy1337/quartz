@@ -47,7 +47,7 @@ type Server struct {
 func DefaultProfile() mcapi.Profile {
 	return mcapi.Profile{
 		ID: "069a79f444e94726a5befca90e38aaf5", Name: "Notch",
-		Capes: []mcapi.Cape{{ID: "cape-1", State: "INACTIVE", Alias: "Migrator", URL: "http://textures.minecraft.net/texture/2340c0e03dd24a11b15a8b33c2a7e9e32abb2051b2481d0ba7defd635ca7a933"}},
+		Capes: []mcapi.Cape{{ID: "cape-1", State: "INACTIVE", Alias: "Test cape", URL: "http://textures.minecraft.net/texture/2340c0e03dd24a11b15a8b33c2a7e9e32abb2051b2481d0ba7defd635ca7a933"}},
 	}
 }
 
@@ -58,12 +58,13 @@ func New() *Server {
 	return s
 }
 
-// Service returns an auth service pointed at the fake.
+// Service returns an auth service pointed at the fake. Public player lookups
+// (api.mojang.com, the session server) stay live: they need no sign-in.
 func (s *Server) Service(h *netx.Client, clientID string) *auth.Service {
 	svc := auth.New(h, clientID)
 	svc.MSA.Endpoints = msa.Endpoints{Authorize: s.URL + "/oauth/authorize", Token: s.URL + "/oauth/token", DeviceCode: s.URL + "/oauth/devicecode"}
 	svc.Xbox.Endpoints = xbox.Endpoints{User: s.URL + "/xbox/user", XSTS: s.URL + "/xbox/xsts"}
-	svc.MC.Endpoints = mcapi.Endpoints{Services: s.URL + "/mc", Mojang: s.URL + "/mojang", Session: s.URL + "/session"}
+	svc.MC.Endpoints.Services = s.URL + "/mc"
 	return svc
 }
 
