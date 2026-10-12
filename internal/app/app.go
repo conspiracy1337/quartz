@@ -155,7 +155,13 @@ func build(o Options) (*app, error) {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("loading settings: %w", err)
 	}
-	httpClient, err := netx.New(netx.Proxy{Mode: netx.ProxySystem}, netx.Options{})
+	cfKey := brand.CurseForgeKey()
+	if cfKey != "" {
+		redactor.AddSecret(cfKey)
+	}
+	httpClient, err := netx.New(netx.Proxy{Mode: netx.ProxySystem}, netx.Options{Injectors: []netx.HeaderInjector{
+		netx.HostHeader{Host: "api.curseforge.com", Name: "x-api-key", Value: func() string { return cfKey }},
+	}})
 	if err != nil {
 		_ = logFile.Close()
 		return nil, err

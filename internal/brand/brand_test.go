@@ -22,3 +22,26 @@ func TestClientID(t *testing.T) {
 	}
 	MSAClientID = ""
 }
+
+func TestCurseForgeKey(t *testing.T) {
+	CurseForgeAPIKey = ""
+	t.Setenv(EnvCurseForgeKey, "")
+	if got := CurseForgeKey(); got != "" {
+		t.Fatalf("unset: %q", got)
+	}
+	CurseForgeAPIKey = "$2a$10$abcdefghijklmnopqrstuv"
+	if got := CurseForgeKey(); got != CurseForgeAPIKey {
+		t.Fatalf("build value: %q", got)
+	}
+	t.Setenv(EnvCurseForgeKey, "$2a$10$fromtheenvironmentvalue")
+	if got := CurseForgeKey(); got != "$2a$10$fromtheenvironmentvalue" {
+		t.Fatalf("env override: %q", got)
+	}
+	for _, bad := range []string{"short", "has a space in the middle of it", "line\nbreak-injected-header-value"} {
+		t.Setenv(EnvCurseForgeKey, bad)
+		if got := CurseForgeKey(); got != CurseForgeAPIKey {
+			t.Fatalf("malformed %q must be ignored: %q", bad, got)
+		}
+	}
+	CurseForgeAPIKey = ""
+}
