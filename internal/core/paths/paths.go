@@ -127,6 +127,12 @@ func (p Paths) DownloadHistory() string { return filepath.Join(p.Root, "download
 // Accounts lists the player's accounts (never their tokens).
 func (p Paths) Accounts() string { return filepath.Join(p.Root, "accounts.json") }
 
+// Skins is the local skin library: content-addressed PNGs plus an index.
+func (p Paths) Skins() string { return filepath.Join(p.Root, "skins") }
+
+// Textures caches skin and cape textures from textures.minecraft.net.
+func (p Paths) Textures() string { return filepath.Join(p.Cache(), "textures") }
+
 // Libraries is the shared Maven-layout library folder.
 func (p Paths) Libraries() string { return filepath.Join(p.Store(), "libraries") }
 
