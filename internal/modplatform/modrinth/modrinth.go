@@ -175,6 +175,12 @@ func jsonList(v []string) string {
 	return url.QueryEscape(string(b))
 }
 
+// jsonOf encodes v for a query value (url.Values escapes it).
+func jsonOf(v any) (string, error) {
+	b, err := json.Marshal(v)
+	return string(b), err
+}
+
 // Versions lists a project's versions, newest first, without changelogs.
 func (c *Client) Versions(ctx context.Context, project string, q modplatform.Query) ([]modplatform.Version, error) {
 	if !modplatform.ValidID(project) {
@@ -188,7 +194,7 @@ func (c *Client) Versions(ctx context.Context, project string, q modplatform.Que
 		u += "&game_versions=" + jsonList(q.Game)
 	}
 	var resp []version
-	if err := c.http.JSON(ctx, http.MethodGet, u, nil, nil, &resp); err != nil {
+	if err := c.http.JSON(versionsCtx(ctx), http.MethodGet, u, nil, nil, &resp); err != nil {
 		return nil, err
 	}
 	out := make([]modplatform.Version, 0, len(resp))

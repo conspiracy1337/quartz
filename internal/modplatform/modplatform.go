@@ -82,6 +82,8 @@ type File struct {
 	Size   int64  `json:"size"`
 	SHA1   string `json:"sha1"`
 	SHA512 string `json:"sha512,omitempty"`
+	// Page is where a person can download a blocked file by hand.
+	Page string `json:"page,omitempty"`
 }
 
 // Version is one release of a project.
@@ -96,6 +98,8 @@ type Version struct {
 	Game      []string  `json:"game"`
 	File      File      `json:"file"`
 	Deps      []Dep     `json:"deps,omitempty"`
+	// Class is the project's type, when the answer says (CurseForge Files).
+	Class ProjectType `json:"class,omitempty"`
 	// Changelog is filled only by Changelogs (Markdown, or HTML on CurseForge).
 	Changelog string `json:"-"`
 }

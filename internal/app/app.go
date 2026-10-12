@@ -85,6 +85,7 @@ type app struct {
 	loaders   *loader.Registry
 	launcher  *launch.Launcher
 	content   *content.Service
+	platforms []modplatform.Platform // Modrinth first, then CurseForge
 	store     *store.Store
 	modIcons  *icons.Library
 	drops     *api.Drops
@@ -289,11 +290,16 @@ func (a *app) buildContent() error {
 	}
 	a.modIcons = icons.OpenSized(a.paths.ContentIcons(), 64)
 	cfReady := brand.CurseForgeKey() != ""
+	a.platforms = []modplatform.Platform{modrinth.New(a.http), curseforge.New(a.http, func() bool { return cfReady })}
+	providers := make([]modplatform.Provider, len(a.platforms))
+	for i, p := range a.platforms {
+		providers[i] = p
+	}
 	a.content, err = content.New(content.Deps{
 		Instances: a.instances, Store: a.store, Icons: a.modIcons, Bus: a.bus, Tasks: a.tasks, Log: a.log,
 		Running:   func(id string) bool { return a.launcher.Running(id) },
 		ClientJar: func(mc string) string { return filepath.Join(a.paths.Versions(), mc, mc+".jar") },
-		Platforms: []modplatform.Provider{modrinth.New(a.http), curseforge.New(a.http, func() bool { return cfReady })},
+		Platforms: providers,
 	}, a.paths.Content())
 	if err != nil {
 		return fmt.Errorf("loading content: %w", err)

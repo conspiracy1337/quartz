@@ -23,7 +23,9 @@ const Host = "api.curseforge.com"
 const API = "https://" + Host
 
 const (
-	batch = 100
+	batch    = 100
+	pageSize = 50   // CurseForge's largest page
+	maxFiles = 2000 // a project's file list is read up to this many
 	// Requests per check that may run at once (one per project).
 	parallel = 6
 )
@@ -192,28 +194,37 @@ func (c *Client) Projects(ctx context.Context, projectIDs []string) (map[string]
 	return out, nil
 }
 
-// files lists a project's files for a game version and loader, newest first
-// (GET /v1/mods/{id}/files; CurseForge serves at most 50 per page).
-func (c *Client) files(ctx context.Context, project, game, loader string) ([]modplatform.Version, error) {
+// files lists a project's files for a game version and loader, newest
+// first (GET /v1/mods/{id}/files, 50 per page), reading up to limit files.
+func (c *Client) files(ctx context.Context, project, game, loader string, limit int) ([]modplatform.Version, error) {
 	if _, err := strconv.ParseInt(project, 10, 64); err != nil {
 		return nil, fmt.Errorf("curseforge: %q is no project id", project)
 	}
-	q := url.Values{"pageSize": {"50"}}
+	q := url.Values{"pageSize": {strconv.Itoa(pageSize)}}
 	if game != "" {
 		q.Set("gameVersion", game)
 	}
 	if t, ok := loaderType[loader]; ok {
 		q.Set("modLoaderType", strconv.Itoa(t))
 	}
-	var resp struct {
-		Data []cfFile `json:"data"`
-	}
-	if err := c.http.JSON(ctx, http.MethodGet, c.Base+"/v1/mods/"+project+"/files?"+q.Encode(), nil, nil, &resp); err != nil {
-		return nil, err
-	}
-	out := make([]modplatform.Version, 0, len(resp.Data))
-	for _, f := range resp.Data {
-		out = append(out, f.to())
+	var out []modplatform.Version
+	for index := 0; index < limit; index += pageSize {
+		q.Set("index", strconv.Itoa(index))
+		var resp struct {
+			Data       []cfFile `json:"data"`
+			Pagination struct {
+				TotalCount int `json:"totalCount"`
+			} `json:"pagination"`
+		}
+		if err := c.http.JSON(ctx, http.MethodGet, c.Base+"/v1/mods/"+project+"/files?"+q.Encode(), nil, nil, &resp); err != nil {
+			return nil, err
+		}
+		for _, f := range resp.Data {
+			out = append(out, f.to())
+		}
+		if len(resp.Data) < pageSize || index+pageSize >= resp.Pagination.TotalCount {
+			break
+		}
 	}
 	sort.SliceStable(out, func(a, b int) bool { return out[a].Published.After(out[b].Published) })
 	return out, nil
@@ -239,7 +250,7 @@ func (c *Client) Latest(ctx context.Context, items []modplatform.Installed, load
 		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			vs, err := c.files(ctx, project, game, loader)
+			vs, err := c.files(ctx, project, game, loader, pageSize)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -281,7 +292,7 @@ func (c *Client) Versions(ctx context.Context, project string, q modplatform.Que
 	if len(q.Loaders) > 0 {
 		loader = q.Loaders[0]
 	}
-	return c.files(ctx, project, game, loader)
+	return c.files(ctx, project, game, loader, maxFiles)
 }
 
 // Changelogs fetches each file's changelog (HTML), a few at a time.

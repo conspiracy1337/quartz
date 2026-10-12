@@ -11,8 +11,25 @@ import (
 	"strings"
 )
 
-// maxJSONBody caps every JSON response the launcher decodes from an API.
+// maxJSONBody caps every JSON response the launcher decodes from an API,
+// unless the request's context raises it (WithBodyCap).
 const maxJSONBody = 4 << 20
+
+type bodyCapKey struct{}
+
+// WithBodyCap raises (or lowers) the JSON size cap for requests made with
+// the returned context, for the few known-large answers such as a project's
+// full version list.
+func WithBodyCap(ctx context.Context, n int64) context.Context {
+	return context.WithValue(ctx, bodyCapKey{}, n)
+}
+
+func bodyCap(ctx context.Context) int64 {
+	if n, ok := ctx.Value(bodyCapKey{}).(int64); ok && n > 0 {
+		return n
+	}
+	return maxJSONBody
+}
 
 // DoJSON sends req and decodes a JSON response into out (skipped when out is
 // nil, or on 204 No Content). Errors are the same as Do's, so callers inspect
@@ -26,16 +43,17 @@ func (c *Client) DoJSON(req *http.Request, out any) error {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	limit := bodyCap(req.Context())
 	if out == nil || resp.StatusCode == http.StatusNoContent {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxJSONBody))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, limit))
 		return nil
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxJSONBody+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return err
 	}
-	if len(body) > maxJSONBody {
-		return fmt.Errorf("netx: %s: response larger than %d bytes", redactURL(req.URL), maxJSONBody)
+	if int64(len(body)) > limit {
+		return fmt.Errorf("netx: %s: response larger than %d bytes", redactURL(req.URL), limit)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("netx: %s: decode: %w", redactURL(req.URL), err)
