@@ -124,5 +124,14 @@ func (p Paths) Themes() string    { return filepath.Join(p.Root, "themes") }
 // DownloadHistory holds the last 24 hours of ended download jobs.
 func (p Paths) DownloadHistory() string { return filepath.Join(p.Root, "downloads.json") }
 
+// Java holds the Java runtimes the launcher installs.
+func (p Paths) Java() string { return filepath.Join(p.Store(), "java") }
+
+// Bin holds launcher helper files such as the wrapper jar.
+func (p Paths) Bin() string { return filepath.Join(p.Store(), "bin") }
+
+// JavaState caches Java probe results and user-added runtimes.
+func (p Paths) JavaState() string { return filepath.Join(p.Root, "java.json") }
+
 // VerifiedIndex remembers which store files passed their checksum.
 func (p Paths) VerifiedIndex() string { return filepath.Join(p.Root, "verified.json") }

@@ -11,6 +11,7 @@ import * as misc from './mock/misc';
 import * as versions from './mock/versions';
 import type { ContentKind, Instance, InstanceSummary, ProjectType } from './types';
 import { bridged, preview } from '../bridge';
+import * as JavaGo from '../wailsjs/go/api/Java';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { downloadsApi } from './downloads';
 import { app, settingsApi } from './system';
@@ -75,7 +76,13 @@ export const api = {
     groups: () => serve({ ...misc.sync, total: misc.totalInstances }),
     keybinds: () => serve(misc.keybinds),
   },
-  java: { runtimes: () => serve(misc.runtimes) },
+  java: {
+    runtimes: bridged(JavaGo.Runtimes, () => misc.runtimes),
+    scan: bridged(JavaGo.Scan, () => misc.runtimes),
+    addFromFolder: bridged(JavaGo.AddFromFolder, () => misc.runtimes),
+    /** Starts a download job for the Java the newest release needs; resolves with its id. */
+    download: bridged(JavaGo.Download, () => ''),
+  },
   review: {
     modUpdates: (_instanceId: string) => serve(misc.modUpdates),
     modpackDiff: (_instanceId: string) => serve(misc.modpackDiff),

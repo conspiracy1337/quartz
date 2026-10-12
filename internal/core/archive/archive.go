@@ -178,11 +178,8 @@ func (e *extractor) finishLinks() error {
 	if err != nil {
 		return err
 	}
-	inside := func(p string) bool {
-		return p == root || strings.HasPrefix(p, root+string(filepath.Separator))
-	}
 	for _, l := range e.links {
-		if l.hard || e.symlinkInside(l.path, inside) {
+		if l.hard || fsx.SymlinkInside(root, l.path) {
 			continue
 		}
 		for _, rm := range e.links {
@@ -191,25 +188,6 @@ func (e *extractor) finishLinks() error {
 		return fmt.Errorf("%w: %s", ErrBadLink, l.path)
 	}
 	return nil
-}
-
-// symlinkInside checks where a created symlink really points: its parent folder
-// is resolved physically (it may itself sit behind a link) and the link text is
-// joined to it, so dangling links are checked too. A link that resolves fully
-// is checked again at its final destination.
-func (e *extractor) symlinkInside(p string, inside func(string) bool) bool {
-	text, err := os.Readlink(p)
-	if err != nil {
-		return true // the copy fallback produced a regular file
-	}
-	dir, err := filepath.EvalSymlinks(filepath.Dir(p))
-	if err != nil || filepath.IsAbs(text) || !inside(filepath.Join(dir, text)) {
-		return false
-	}
-	if real, err := filepath.EvalSymlinks(p); err == nil && !inside(real) {
-		return false
-	}
-	return true
 }
 
 func (e *extractor) makeLink(l link) error {

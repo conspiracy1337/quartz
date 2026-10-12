@@ -28,6 +28,7 @@ import (
 	"quartz/internal/core/paths"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
+	"quartz/internal/java"
 	"quartz/internal/meta"
 	"quartz/internal/network"
 	"quartz/internal/settings"
@@ -55,6 +56,7 @@ type app struct {
 	tasks    *tasks.Engine
 	cache    *httpcache.Cache
 	meta     *meta.Service
+	java     *java.Manager
 	ctx      *api.Ctx
 }
 
@@ -87,6 +89,7 @@ func Run(o Options) error {
 			api.NewSettings(a.ctx, a.settings, a.css, a.network),
 			api.NewDownloads(a.tasks),
 			api.NewVersions(a.ctx, a.meta),
+			api.NewJava(a.ctx, a.java, a.meta, a.tasks, a.settings),
 		},
 	})
 }
@@ -129,6 +132,14 @@ func build(o Options) (*app, error) {
 		return nil, fmt.Errorf("opening cache: %w", err)
 	}
 	a.meta = meta.New(a.cache)
+	a.java, err = java.New(java.Config{
+		Dir: p.Java(), StatePath: p.JavaState(), BinDir: p.Bin(), Meta: a.meta, Cache: a.cache,
+		Vendor: func() string { return store.Get().Java.DownloadVendor }, Log: log,
+	})
+	if err != nil {
+		_ = logFile.Close()
+		return nil, fmt.Errorf("loading Java runtimes: %w", err)
+	}
 	if err := a.buildTasks(); err != nil {
 		_ = logFile.Close()
 		return nil, err
@@ -192,6 +203,9 @@ func (a *app) shutdown(context.Context) {
 	}
 	if err := a.verified.Flush(); err != nil {
 		a.log.Error("saving verified index on exit failed", "err", err)
+	}
+	if err := a.java.Flush(); err != nil {
+		a.log.Error("saving Java probes on exit failed", "err", err)
 	}
 	if err := a.cache.Flush(); err != nil {
 		a.log.Error("saving cache index on exit failed", "err", err)

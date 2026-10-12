@@ -68,7 +68,7 @@ func (d *Downloader) Fetch(ctx context.Context, it Item, progress Progress) erro
 		progress = func(int64) {}
 	}
 	if d.Ready(it) {
-		progress(it.Size)
+		progress(it.Total())
 		return nil
 	}
 	_, err, _ := d.group.Do(it.Dest, func() (any, error) { return nil, d.fetch(ctx, it, progress) })
@@ -79,7 +79,7 @@ func (d *Downloader) fetch(ctx context.Context, it Item, progress Progress) erro
 	size, sum := it.final()
 	if ok, err := d.adoptExisting(it, size, sum); ok || err != nil {
 		if ok {
-			progress(it.Size)
+			progress(it.Total())
 		}
 		return err
 	}

@@ -249,10 +249,10 @@ func (j *job) view(now time.Time) JobView {
 			if w.item != nil {
 				b := w.done.Load()
 				v.DoneBytes += b
-				v.TotalBytes += w.item.Size
+				v.TotalBytes += w.item.Total()
 				if st.unit == Bytes {
 					sv.Done += b
-					sv.Total += w.item.Size
+					sv.Total += w.item.Total()
 				}
 			}
 			switch w.state {

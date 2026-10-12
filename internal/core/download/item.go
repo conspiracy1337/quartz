@@ -24,13 +24,16 @@ const (
 // Item describes one file to fetch. Size and Sum describe the bytes on the wire;
 // with a Decode, Raw describes the decoded file written to Dest.
 type Item struct {
-	URLs   []string  `json:"urls"` // mirrors, tried in order
-	Dest   string    `json:"dest"` // absolute path inside the launcher's data root
-	Size   int64     `json:"size,omitempty"`
-	Sum    hashx.Sum `json:"sum,omitzero"`
-	Exec   bool      `json:"exec,omitempty"`
-	Decode Decode    `json:"decode,omitempty"`
-	Raw    *Check    `json:"raw,omitempty"`
+	URLs []string  `json:"urls"`           // mirrors, tried in order
+	Dest string    `json:"dest"`           // absolute path inside the launcher's data root
+	Size int64     `json:"size,omitempty"` // exact size; checked when set
+	Sum  hashx.Sum `json:"sum,omitzero"`
+	// Estimate is a size used only for progress when the exact one is unknown
+	// (some vendor APIs report sizes that are slightly off).
+	Estimate int64  `json:"estimate,omitempty"`
+	Exec     bool   `json:"exec,omitempty"`
+	Decode   Decode `json:"decode,omitempty"`
+	Raw      *Check `json:"raw,omitempty"`
 }
 
 // Check is the expected size and digest of a decoded file.
@@ -68,7 +71,7 @@ func (it Item) Validate(root string) error {
 	if _, err := fsx.SafeJoin(root, rel); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidItem, err)
 	}
-	if it.Size < 0 || it.Size > maxUnknownSize {
+	if it.Size < 0 || it.Size > maxUnknownSize || it.Estimate < 0 || it.Estimate > maxUnknownSize {
 		return fmt.Errorf("%w: size %d", ErrInvalidItem, it.Size)
 	}
 	if !it.Sum.IsZero() && !it.Sum.Valid() {
@@ -84,6 +87,14 @@ func (it Item) Validate(root string) error {
 		return fmt.Errorf("%w: unknown decode %q", ErrInvalidItem, it.Decode)
 	}
 	return nil
+}
+
+// Total is the size progress is measured against.
+func (it Item) Total() int64 {
+	if it.Size > 0 {
+		return it.Size
+	}
+	return it.Estimate
 }
 
 // final is the size and digest the file at Dest must have.

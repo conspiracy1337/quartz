@@ -377,7 +377,7 @@ func (e *Engine) finish(w *work, err error, interrupted bool) {
 	case err == nil:
 		w.state = wDone
 		if w.item != nil {
-			w.done.Store(w.item.Size)
+			w.done.Store(w.item.Total())
 		}
 	case interrupted:
 		w.state = wQueued // paused, cancelled or shutting down; settle decides

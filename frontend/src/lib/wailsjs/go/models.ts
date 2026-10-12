@@ -22,6 +22,26 @@ export namespace api {
 	        this.os = source["os"];
 	    }
 	}
+	export class JavaRuntime {
+	    major: number;
+	    name: string;
+	    source: string;
+	    path: string;
+	    usedBy: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new JavaRuntime(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.major = source["major"];
+	        this.name = source["name"];
+	        this.source = source["source"];
+	        this.path = source["path"];
+	        this.usedBy = source["usedBy"];
+	    }
+	}
 
 }
 
