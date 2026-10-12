@@ -24,7 +24,9 @@ type verifiedDoc struct {
 
 // Verified remembers files that passed verification, so an unchanged file is
 // trusted after a stat instead of a re-hash (XMCL's trick). Thousands of game
-// files are then checked in milliseconds.
+// files are then checked in milliseconds. A file whose metadata names no
+// checksum at all (some loader libraries) is recorded "unhashed": trusted by
+// size and modification time only, and never offered to FindBySum.
 type Verified struct {
 	root  string
 	store *jsonfile.Store[verifiedDoc]
@@ -52,7 +54,9 @@ func OpenVerified(path, root string, log *slog.Logger) (*Verified, error) {
 	v := &Verified{root: root, store: s, bySum: map[hashx.Sum]map[string]struct{}{}}
 	s.View(func(d verifiedDoc) {
 		for k, rec := range d.Files {
-			v.link(rec.Sum, k)
+			if !rec.Sum.IsZero() {
+				v.link(rec.Sum, k)
+			}
 		}
 	})
 	return v, nil
@@ -87,26 +91,27 @@ func (v *Verified) key(path string) (string, bool) {
 	return filepath.ToSlash(rel), true
 }
 
-// Has reports whether path is on disk and unchanged since it was verified with sum.
+// Has reports whether path is on disk and unchanged since it was verified with
+// sum. A zero sum accepts any record, hashed or not.
 func (v *Verified) Has(path string, size int64, sum hashx.Sum) bool {
 	k, ok := v.key(path)
-	if !ok || sum.IsZero() {
+	if !ok {
 		return false
 	}
 	var rec record
 	var found bool
 	v.store.View(func(d verifiedDoc) { rec, found = d.Files[k] })
-	if !found || rec.Sum != sum || (size > 0 && rec.Size != size) {
+	if !found || (!sum.IsZero() && rec.Sum != sum) || (size > 0 && rec.Size != size) {
 		return false
 	}
 	info, err := os.Stat(path)
 	return err == nil && info.Size() == rec.Size && info.ModTime().UnixNano() == rec.ModTime
 }
 
-// Add records path as verified against sum.
+// Add records path as verified against sum (zero: unhashed, see Verified).
 func (v *Verified) Add(path string, sum hashx.Sum) {
 	k, ok := v.key(path)
-	if !ok || sum.IsZero() {
+	if !ok {
 		return
 	}
 	info, err := os.Stat(path)
@@ -120,7 +125,9 @@ func (v *Verified) Add(path string, sum hashx.Sum) {
 	if had {
 		v.unlink(old.Sum, k)
 	}
-	v.link(sum, k)
+	if !sum.IsZero() {
+		v.link(sum, k)
+	}
 }
 
 // Forget drops path, for example before a forced repair.

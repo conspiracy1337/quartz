@@ -1,6 +1,7 @@
-// Package meta fetches Mojang metadata through the HTTP cache: the version
+// Package meta fetches metadata through the HTTP cache: Mojang's version
 // manifest (short TTL), version JSONs, asset indexes and runtime manifests
-// (pinned by sha1, so cached forever and verified), and the runtime index.
+// (pinned by sha1, so cached forever and verified), the runtime index, and,
+// through Fetch and Bytes, any other upstream such as loader version lists.
 // Repeated failures back off (1 s, 3 s, 9 s, 27 s) instead of hammering a
 // host that is down; the cache still serves the last good copy meanwhile.
 package meta
@@ -10,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,7 +50,18 @@ func New(cache *httpcache.Cache) *Service {
 	return &Service{cache: cache, now: time.Now, failures: map[string]failure{}}
 }
 
-func fetch[T any](ctx context.Context, s *Service, url string, p httpcache.Policy) (T, error) {
+// Fetch decodes the JSON at url through the cache, backing off after failures.
+func Fetch[T any](ctx context.Context, s *Service, url string, p httpcache.Policy) (T, error) {
+	return guarded(ctx, s, url, func() (T, error) { return httpcache.GetJSON[T](ctx, s.cache, url, p) })
+}
+
+// Bytes returns the body at url through the cache, backing off after failures.
+func (s *Service) Bytes(ctx context.Context, url string, p httpcache.Policy) ([]byte, error) {
+	return guarded(ctx, s, url, func() ([]byte, error) { return s.cache.Get(ctx, url, p) })
+}
+
+// guarded runs get unless url failed recently, and records the outcome.
+func guarded[T any](ctx context.Context, s *Service, url string, get func() (T, error)) (T, error) {
 	var zero T
 	s.mu.Lock()
 	f, failing := s.failures[url]
@@ -55,7 +69,7 @@ func fetch[T any](ctx context.Context, s *Service, url string, p httpcache.Polic
 	if failing && s.now().Before(f.until) {
 		return zero, f.err
 	}
-	v, err := httpcache.GetJSON[T](ctx, s.cache, url, p)
+	v, err := get()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
@@ -70,9 +84,29 @@ func fetch[T any](ctx context.Context, s *Service, url string, p httpcache.Polic
 	return v, err
 }
 
+// sidecarTTL keeps a maven checksum for a long time: a published artifact never changes.
+const sidecarTTL = 365 * 24 * time.Hour
+
+var sha1Hex = regexp.MustCompile(`^[0-9a-f]{40}`)
+
+// SidecarSHA1 returns the sha1 a maven repository publishes next to an
+// artifact (url + ".sha1"). Some repositories append the file name after the
+// hash; only the leading 40 hex digits count.
+func (s *Service) SidecarSHA1(ctx context.Context, url string) (string, error) {
+	data, err := s.Bytes(ctx, url+".sha1", httpcache.Policy{TTL: sidecarTTL, MaxSize: 1 << 10})
+	if err != nil {
+		return "", err
+	}
+	sum := sha1Hex.FindString(strings.ToLower(strings.TrimSpace(string(data))))
+	if sum == "" {
+		return "", fmt.Errorf("meta: %s.sha1 is not a checksum", url)
+	}
+	return sum, nil
+}
+
 // Manifest returns the version manifest.
 func (s *Service) Manifest(ctx context.Context) (mojang.Manifest, error) {
-	return fetch[mojang.Manifest](ctx, s, mojang.ManifestURL, httpcache.Policy{TTL: manifestTTL})
+	return Fetch[mojang.Manifest](ctx, s, mojang.ManifestURL, httpcache.Policy{TTL: manifestTTL})
 }
 
 // Entry returns the manifest entry for id.
@@ -94,7 +128,7 @@ func (s *Service) Version(ctx context.Context, id string) (*mojang.Version, erro
 	if err != nil {
 		return nil, err
 	}
-	v, err := fetch[mojang.Version](ctx, s, e.URL, httpcache.Policy{SHA1: e.SHA1})
+	v, err := Fetch[mojang.Version](ctx, s, e.URL, httpcache.Policy{SHA1: e.SHA1})
 	if err != nil {
 		return nil, err
 	}
@@ -145,10 +179,10 @@ func (s *Service) AssetIndex(ctx context.Context, v *mojang.Version) (mojang.Ass
 
 // RuntimeIndex returns Mojang's Java runtime index.
 func (s *Service) RuntimeIndex(ctx context.Context) (mojang.RuntimeIndex, error) {
-	return fetch[mojang.RuntimeIndex](ctx, s, mojang.RuntimeIndexURL, httpcache.Policy{TTL: runtimeIndexTTL})
+	return Fetch[mojang.RuntimeIndex](ctx, s, mojang.RuntimeIndexURL, httpcache.Policy{TTL: runtimeIndexTTL})
 }
 
 // RuntimeManifest returns the file list of one runtime build.
 func (s *Service) RuntimeManifest(ctx context.Context, b mojang.RuntimeBuild) (mojang.RuntimeManifest, error) {
-	return fetch[mojang.RuntimeManifest](ctx, s, b.Manifest.URL, httpcache.Policy{SHA1: b.Manifest.SHA1})
+	return Fetch[mojang.RuntimeManifest](ctx, s, b.Manifest.URL, httpcache.Policy{SHA1: b.Manifest.SHA1})
 }

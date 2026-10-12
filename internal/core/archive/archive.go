@@ -33,6 +33,9 @@ type Options struct {
 	MaxFiles     int   // default 100 000
 	MaxFileSize  int64 // per entry, default 1 GiB
 	MaxTotalSize int64 // all entries, default 4 GiB
+	// Prefix, if set, keeps only entries under this slash-separated folder
+	// (for example "maven/") and removes it from their names, before Strip.
+	Prefix string
 	// Strip removes this many leading path components (like tar --strip-components);
 	// entries with fewer components are skipped.
 	Strip int
@@ -77,6 +80,17 @@ type link struct {
 // name maps an archive entry name to its destination, or "" to skip it.
 func (e *extractor) name(raw string) (string, string, error) {
 	clean := path.Clean(strings.ReplaceAll(raw, `\`, "/"))
+	if e.o.Prefix != "" {
+		// A name that climbs out is hostile whatever folder is wanted; report it, don't skip it.
+		if clean == ".." || strings.HasPrefix(clean, "../") {
+			return "", "", fmt.Errorf("%w: %q", fsx.ErrUnsafePath, raw)
+		}
+		rest, ok := strings.CutPrefix(clean, strings.TrimSuffix(e.o.Prefix, "/")+"/")
+		if !ok {
+			return "", "", nil
+		}
+		clean = rest
+	}
 	parts := strings.Split(strings.TrimPrefix(clean, "/"), "/")
 	if len(parts) <= e.o.Strip {
 		return "", "", nil
@@ -290,6 +304,38 @@ func (e *extractor) zipEntry(f *zip.File) error {
 	default:
 		return fmt.Errorf("%w: %s", ErrBadEntry, f.Name)
 	}
+}
+
+// ReadFile returns one entry of the zip at src, refusing entries larger than
+// limit bytes (counted after decompression, whatever the header claims).
+func ReadFile(src, name string, limit int64) ([]byte, error) {
+	zr, err := zip.OpenReader(src)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = zr.Close() }()
+	for _, f := range zr.File {
+		if f.Name != name {
+			continue
+		}
+		if f.UncompressedSize64 > uint64(limit) { //nolint:gosec // limit is a positive constant
+			return nil, fmt.Errorf("%w: %s", ErrTooLarge, name)
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = rc.Close() }()
+		data, err := io.ReadAll(io.LimitReader(rc, limit+1))
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(data)) > limit {
+			return nil, fmt.Errorf("%w: %s", ErrTooLarge, name)
+		}
+		return data, nil
+	}
+	return nil, fmt.Errorf("archive: %s has no %s: %w", filepath.Base(src), name, fs.ErrNotExist)
 }
 
 // ExtractTarGz extracts the gzip-compressed tar at src into dest.

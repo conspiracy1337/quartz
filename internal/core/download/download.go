@@ -104,6 +104,7 @@ func (d *Downloader) fetch(ctx context.Context, it Item, progress Progress) erro
 func (d *Downloader) adoptExisting(it Item, size int64, sum hashx.Sum) (bool, error) {
 	if info, err := os.Stat(it.Dest); err == nil && info.Mode().IsRegular() && (size == 0 || info.Size() == size) {
 		if sum.IsZero() {
+			d.ver.Add(it.Dest, sum)
 			return true, nil
 		}
 		if got, err := hashx.File(it.Dest, sum.Algo); err == nil && got == sum.Hex {

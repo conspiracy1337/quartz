@@ -118,9 +118,13 @@ func TestPlaceLinkStaysInside(t *testing.T) {
 	if err := placeLink(root, filepath.Join(root, "bin", "evil"), "../../../etc/passwd"); err == nil {
 		t.Fatal("escaping link accepted")
 	}
-	links := map[string]string{filepath.Join(root, "d"): ".", filepath.Join(root, "d", "l"): "../x"}
-	for l, tgt := range links {
-		_ = placeLink(root, l, tgt)
+	// Placed in this order (a map's order is random, and the other order
+	// makes "d" a plain folder, so nothing would escape and the test flaked).
+	order := [][2]string{{filepath.Join(root, "d"), "."}, {filepath.Join(root, "d", "l"), "../x"}}
+	links := map[string]string{}
+	for _, l := range order {
+		_ = placeLink(root, l[0], l[1])
+		links[l[0]] = l[1]
 	}
 	if err := checkLinks(root, links); err == nil {
 		t.Fatal("link chain escaping the runtime accepted")

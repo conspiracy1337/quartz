@@ -14,12 +14,15 @@ const DefaultLibraryRepo = "https://libraries.minecraft.net/"
 type Library struct {
 	Name      string            `json:"name"`
 	Downloads *LibraryDownloads `json:"downloads,omitempty"`
-	URL       string            `json:"url,omitempty"`  // maven repository base (loader profiles)
-	SHA1      string            `json:"sha1,omitempty"` // some loader profiles put it here
-	Size      int64             `json:"size,omitempty"`
-	Natives   map[string]string `json:"natives,omitempty"` // os → classifier (legacy natives)
-	Extract   *Extract          `json:"extract,omitempty"`
-	Rules     []Rule            `json:"rules,omitempty"`
+	URL       string            `json:"url,omitempty"` // maven repository base (loader profiles)
+	// Mirrors are more repository bases tried in order after URL (legacy Forge
+	// libraries, see the loader package). Not part of Mojang's format.
+	Mirrors []string          `json:"mirrors,omitempty"`
+	SHA1    string            `json:"sha1,omitempty"` // some loader profiles put it here
+	Size    int64             `json:"size,omitempty"`
+	Natives map[string]string `json:"natives,omitempty"` // os → classifier (legacy natives)
+	Extract *Extract          `json:"extract,omitempty"`
+	Rules   []Rule            `json:"rules,omitempty"`
 }
 
 // LibraryDownloads holds the main jar and native classifier jars.
@@ -35,10 +38,11 @@ type Extract struct {
 
 // ResolvedLibrary is a library file the launch needs on this platform.
 type ResolvedLibrary struct {
-	Name    string // maven coordinate, for logs
-	Path    string // slash-separated path inside the libraries folder
-	URL     string // empty when the file must already exist locally
-	SHA1    string // may be empty for loader libraries without one
+	Name    string   // maven coordinate, for logs
+	Path    string   // slash-separated path inside the libraries folder
+	URL     string   // empty when the file must already exist locally
+	Mirrors []string // more full URLs for the same file, tried in order
+	SHA1    string   // may be empty for loader libraries without one
 	Size    int64
 	Native  bool     // a legacy natives jar to extract, not a classpath entry
 	Exclude []string // for natives
@@ -115,6 +119,17 @@ func dedupKey(coord string, native bool) string {
 // ResolveLibraries returns the files needed on env, first entry winning for
 // duplicates (so a merged loader profile's own versions take precedence).
 func (v *Version) ResolveLibraries(env Env) ([]ResolvedLibrary, error) {
+	return v.resolve(env, func(r ResolvedLibrary) string { return dedupKey(r.Name, r.Native) })
+}
+
+// ResolveFiles is ResolveLibraries without version de-duplication: every
+// listed file, once per path. A loader installer's tools need exactly the
+// versions they list, even when the game uses another.
+func (v *Version) ResolveFiles(env Env) ([]ResolvedLibrary, error) {
+	return v.resolve(env, func(r ResolvedLibrary) string { return r.Path })
+}
+
+func (v *Version) resolve(env Env, keyOf func(ResolvedLibrary) string) ([]ResolvedLibrary, error) {
 	var out []ResolvedLibrary
 	seen := map[string]bool{}
 	add := func(r ResolvedLibrary) error {
@@ -124,7 +139,7 @@ func (v *Version) ResolveLibraries(env Env) ([]ResolvedLibrary, error) {
 		if r.SHA1 != "" && !sha1Hex.MatchString(r.SHA1) {
 			return fmt.Errorf("%w: checksum for %s", ErrBadLibrary, r.Name)
 		}
-		key := dedupKey(r.Name, r.Native)
+		key := keyOf(r)
 		if seen[key] {
 			return nil
 		}
@@ -213,6 +228,9 @@ func (lib Library) artifact() (ResolvedLibrary, bool, error) {
 		return r, false, err
 	}
 	r.Path, r.URL, r.SHA1, r.Size = p, repo(lib.URL)+p, lib.SHA1, lib.Size
+	for _, m := range lib.Mirrors {
+		r.Mirrors = append(r.Mirrors, repo(m)+p)
+	}
 	return r, true, nil
 }
 
