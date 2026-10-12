@@ -274,7 +274,7 @@ func TestClientPack(t *testing.T) {
 		want ClientFormats
 	}{
 		"1.16.5": {`{"pack_version":6}`, ClientFormats{Resource: Format{6}, Data: Format{6}}},
-		"1.21.1": {`{"pack_version":{"resource":34,"data":48}}`, ClientFormats{Resource: Format{34}, Data: Format{48}, HasData: true}},
+		"1.21.1": {`{"world_version":3955,"pack_version":{"resource":34,"data":48}}`, ClientFormats{Resource: Format{34}, Data: Format{48}, HasData: true, WorldVersion: 3955}},
 		"26.3":   {`{"pack_version":{"resource_major":97,"resource_minor":1,"data_major":121,"data_minor":0}}`, ClientFormats{Resource: Format{97, 1}, Data: Format{121}, HasData: true}},
 	} {
 		p := filepath.Join(t.TempDir(), "client.jar")

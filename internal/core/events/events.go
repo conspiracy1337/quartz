@@ -19,6 +19,8 @@ const (
 	LaunchFailed     Topic = "launch:failed"
 	GameState        Topic = "game:state"
 	GameLog          Topic = "game:log"
+	ContentChanged   Topic = "content:changed"
+	ContentDropped   Topic = "content:dropped"
 )
 
 // Sink receives every emitted event, used to bridge events to the UI.

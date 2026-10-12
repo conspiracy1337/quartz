@@ -153,6 +153,8 @@ type ClientFormats struct {
 	// HasData is false when the version only published one number (before
 	// 1.19.3), which can't be trusted for data packs.
 	HasData bool `json:"hasData"`
+	// WorldVersion is the data version options.txt is written with.
+	WorldVersion int `json:"worldVersion"`
 }
 
 // ClientPack reads the formats from a client jar's version.json. Versions
@@ -168,13 +170,20 @@ func ClientPack(clientJar string) (ClientFormats, bool) {
 		return ClientFormats{}, false
 	}
 	var v struct {
-		PackVersion json.RawMessage `json:"pack_version"`
+		PackVersion  json.RawMessage `json:"pack_version"`
+		WorldVersion int             `json:"world_version"`
 	}
 	if json.Unmarshal(data, &v) != nil {
 		return ClientFormats{}, false
 	}
+	cf, ok := clientFormats(v.PackVersion)
+	cf.WorldVersion = v.WorldVersion
+	return cf, ok
+}
+
+func clientFormats(raw json.RawMessage) (ClientFormats, bool) {
 	var n int
-	if json.Unmarshal(v.PackVersion, &n) == nil && n > 0 {
+	if json.Unmarshal(raw, &n) == nil && n > 0 {
 		return ClientFormats{Resource: Format{n}, Data: Format{n}}, true
 	}
 	var pv struct {
@@ -185,7 +194,7 @@ func ClientPack(clientJar string) (ClientFormats, bool) {
 		DataMajor     int `json:"data_major"`
 		DataMinor     int `json:"data_minor"`
 	}
-	if json.Unmarshal(v.PackVersion, &pv) != nil {
+	if json.Unmarshal(raw, &pv) != nil {
 		return ClientFormats{}, false
 	}
 	if pv.ResourceMajor > 0 {

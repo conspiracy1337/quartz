@@ -80,6 +80,19 @@ func entryOf(key string, in Instance, at int64) TrashEntry {
 		Loader: in.Loader, Group: in.Group, TrashedAt: at, Location: in.Location}
 }
 
+// TrashDirs lists the folders of trashed instances (each still holds its
+// files until purged, so content they use must stay stored).
+func (s *Store) TrashDirs() []string {
+	dirs, _ := os.ReadDir(s.trash)
+	var out []string
+	for _, d := range dirs {
+		if d.IsDir() && trashKeyRe.MatchString(d.Name()) {
+			out = append(out, filepath.Join(s.trash, d.Name()))
+		}
+	}
+	return out
+}
+
 // TrashList lists the trash, most recently trashed first.
 func (s *Store) TrashList() []TrashEntry {
 	dirs, _ := os.ReadDir(s.trash)
