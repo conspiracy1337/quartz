@@ -95,7 +95,7 @@
   {#if !wrap}<div style="height: {first * ROW}px" aria-hidden="true"></div>{/if}
   {#each visible as l, i (first + i)}
     {@const [pre, mark, post] = parts(l.message)}
-    <div class="ln {l.level}"><span class="t">{l.time}</span><span class="lv-{l.level}">{l.level}</span><span>{#if l.thread}<span class="faint">[{l.thread}] </span>{/if}{pre}{#if mark}<mark>{mark}</mark>{/if}{post}{#if l.redacted}<span class="red">redacted</span>{/if}</span></div>
+    <div class="ln {l.level}"><span class="t">{l.time}</span><span class="lv-{l.level}">{l.level}</span><span>{#if l.thread}<span class="faint">[{l.thread}]</span>{' '}{/if}{pre}{#if mark}<mark>{mark}</mark>{/if}{post}{#if l.redacted}<span class="red">redacted</span>{/if}</span></div>
   {/each}
   {#if !wrap}<div style="height: {(shown.length - last) * ROW}px" aria-hidden="true"></div>{/if}
 </div>

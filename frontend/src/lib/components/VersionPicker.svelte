@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { api } from '../api';
-  import { shortMonthDay } from '../format';
+  import { shortDate } from '../format';
   import { query } from '../query.svelte';
   import Toggle from '../ui/Toggle.svelte';
 
@@ -15,13 +15,13 @@
   let v = $state(0);
   let snapshots = $state(false);
 
-  // Once the list arrives, start on the family that holds `current` (or the newest one)
-  // and report that selection, so the form never shows one version and submits another.
+  // Once the list arrives, start on the newest release of the family that holds `current`
+  // (or of the newest family) and report it, so the form never shows one version and submits another.
   $effect.pre(() => {
     const d = families.data;
     if (!d?.length || m >= 0) return;
     const fi = Math.max(0, d.findIndex((f) => f.releases.some((r) => r.id === current)));
-    untrack(() => choose(fi, Math.max(0, d[fi]!.releases.findIndex((r) => r.id === current)), false));
+    untrack(() => choose(fi, 0, false));
   });
 
   const fam = $derived(families.data?.[m]);
@@ -38,7 +38,6 @@
     const sel = l[Math.min(nv, l.length - 1)];
     if (sel) onpick?.(sel.id);
   }
-  const date = (t: number) => `${shortMonthDay(t)}, ${new Date(t).getFullYear()}`;
 </script>
 
 <div class="vp picker">
@@ -61,7 +60,7 @@
           <span class="radio" class:on={vi === i} aria-hidden="true"></span>
           <span style="display: flex; gap: 8px; align-items: center; min-width: 0"><span class="mono">{r.id}</span>{#if current !== '' && r.id === current}<span class="badge">Current</span>{/if}{#if r.snapshot}<span class="badge badge-warn">Snapshot</span>{/if}</span>
           <span class="small faint">Java {r.java}</span>
-          <span class="small faint tnum vp-date">{date(r.released)}</span>
+          <span class="small faint tnum vp-date">{shortDate(r.released)}</span>
         </button>
       {/each}
     </div>

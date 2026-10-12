@@ -6,10 +6,10 @@
 
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
-  let sel = $state('1.21.5');
+  let sel = $state('');
   const back = $derived(href({ name: 'instance', id: i.id, tab: 'version' }));
   const family = (v: string) => v.split('.').slice(0, 2).join('.');
-  const compat = $derived(sel === i.minecraft ? 'This is the current version.' : family(sel) === family(i.minecraft) ? '41 of 48 mods have a matching version' : 'Mods will be checked before switching');
+  const compat = $derived(!sel || sel === i.minecraft ? 'This is the current version.' : family(sel) === family(i.minecraft) ? '41 of 48 mods have a matching version' : 'Mods will be checked before switching');
 </script>
 
 <div class="scroll">

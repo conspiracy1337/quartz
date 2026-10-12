@@ -109,7 +109,8 @@
     <main class="main">
       {#if session.updateReady && route.name !== 'home'}<UpdateBanner />{/if}
       {@render page(route)}
-      <StatusBar />
+      <!-- The Downloads page shows the same queue in full, so its bar would only repeat it. -->
+      {#if route.name !== 'downloads'}<StatusBar />{/if}
     </main>
   {/if}
 

@@ -12,7 +12,9 @@
 
   const runs = query(() => api.logs.runs(instanceId));
   const accounts = query(() => api.accounts.list());
-  let cur = $state(0);
+  // Opens on the latest crash, the run people come here to look at, else on the newest run.
+  let picked = $state<number | null>(null);
+  const cur = $derived(picked ?? Math.max(0, runs.data?.findIndex((r) => r.result === 'crash') ?? 0));
   const RESULT: Record<RunResult, [string, string]> = { ok: ['Closed', ''], crash: ['Crashed', 'badge-danger'], killed: ['Stopped', 'badge-warn'], failed: ['Failed to start', 'badge-danger'] };
   const run = $derived(runs.data?.[cur]);
   const when = (t: number) => `${Day(t)}, ${clock(t)}`;
@@ -30,7 +32,7 @@
       <div class="list">
         <div class="row row-head hrow"><span>Started</span><span class="opt">Length</span><span>Exit</span><span>Result</span></div>
         {#each runs.data ?? [] as r, i (r.id)}
-          <button class="row hrow" class:sel={cur === i} onclick={() => (cur = i)} aria-pressed={cur === i}><span class="trunc">{when(r.startedAt)}</span><span class="mono muted opt">{hm(r.lengthMin).replace(/^(\d+) m$/, '0 h $1 m')}</span><span class="mono muted">{r.exitCode}</span><span><span class="badge {RESULT[r.result][1]}">{RESULT[r.result][0]}</span></span></button>
+          <button class="row hrow" class:sel={cur === i} onclick={() => (picked = i)} aria-pressed={cur === i}><span class="trunc">{when(r.startedAt)}</span><span class="mono muted opt">{hm(r.lengthMin, true)}</span><span class="mono muted">{r.exitCode}</span><span><span class="badge {RESULT[r.result][1]}">{RESULT[r.result][0]}</span></span></button>
         {:else}
           {#if runs.data}<Empty text="No launches yet. Each launch is kept here with its log." />{/if}
         {/each}

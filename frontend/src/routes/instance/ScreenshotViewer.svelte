@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
-  import { bytes, monthDay, clock } from '$lib/format';
+  import { bytes, shortMonthDay, clock } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
@@ -15,7 +15,7 @@
   const list = $derived(shots.data ?? []);
   const n = $derived(list.length);
   const cur = $derived(list[i]);
-  const when = (t: number) => `${monthDay(t)}, ${clock(t)}`;
+  const when = (t: number) => `${shortMonthDay(t)}, ${clock(t)}`;
 
   function keys(e: KeyboardEvent) {
     if (!n) return;

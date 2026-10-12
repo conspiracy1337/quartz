@@ -90,6 +90,8 @@
   });
 
   const copy = () => void navigator.clipboard?.writeText(st.code);
+  // Shown in two halves for reading aloud and typing ("K7QX-2M9P"); Copy keeps the raw code.
+  const shown = $derived(st.code && !st.code.includes('-') ? `${st.code.slice(0, Math.ceil(st.code.length / 2))}-${st.code.slice(Math.ceil(st.code.length / 2))}` : st.code);
   const waiting = $derived(started && !st.error && !st.accountId);
 </script>
 
@@ -112,7 +114,7 @@
       {/if}
       <div style="display: flex; flex-direction: column; gap: 10px; min-width: 0">
         <span class="small muted">Scan the code, or go to <a href="https://www.microsoft.com/link">microsoft.com/link</a> and enter:</span>
-        {#if st.code}<span class="code">{st.code}</span>{:else}<span class="code sk" aria-hidden="true">&nbsp;</span>{/if}
+        {#if st.code}<span class="code">{shown}</span>{:else}<span class="code sk" aria-hidden="true">&nbsp;</span>{/if}
         <button class="btn btn-sm" style="align-self: flex-start" disabled={!st.code} onclick={copy}>Copy code</button>
         <span class="small faint tnum">{st.step ? `${st.step}…` : st.expiresAt ? `Expires in ${countdown(st.expiresAt, now)}` : '\u00a0'}</span>
       </div>

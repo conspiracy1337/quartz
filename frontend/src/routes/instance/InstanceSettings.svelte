@@ -97,7 +97,7 @@
         <Setting title="Shared keybinds" desc="Writes your 7 chosen keys into this instance on every launch. Other options stay untouched."><Toggle bind:on={sharedKeys} label="Shared keybinds" /></Setting>
         <div class="divider"></div>
         <div class="tgl-grid">
-          {#each syncable as e (e.id)}<ToggleRow name={e.name || e.path} hint={e.name ? e.path : undefined} on={!!joined[e.id]} onchange={(v) => (joined[e.id] = v)} />{/each}
+          {#each syncable as e (e.id)}<ToggleRow name={e.name || 'Custom'} hint={e.path} on={!!joined[e.id]} onchange={(v) => (joined[e.id] = v)} />{/each}
         </div>
       </div>
     </section>

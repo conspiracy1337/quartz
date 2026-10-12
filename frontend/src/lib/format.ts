@@ -35,6 +35,9 @@ export const shortMonthDay = (t: number) => {
 
 export const fullDate = (t: number) => `${monthDay(t)}, ${new Date(t).getFullYear()}`;
 
+/** Release and changelog dates: "Feb 28, 2025". */
+export const shortDate = (t: number) => `${shortMonthDay(t)}, ${new Date(t).getFullYear()}`;
+
 export const clock = (t: number) => {
   const d = new Date(t);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -71,7 +74,7 @@ export function since(t: number, now = Date.now()): string {
 }
 
 /** Transfer rate: "12.4 MB/s". */
-export const rate = (bytesPerSec: number) => `${bytes(bytesPerSec)}/s`;
+export const rate = (bytesPerSec: number) => `${bytes(bytesPerSec, 100)}/s`;
 
 /** Time left: "40 s left", "3 min left"; empty while unknown. */
 export const left = (sec: number) => (sec <= 0 ? '' : sec < 60 ? `${sec} s left` : `${Math.round(sec / 60)} min left`);
@@ -81,11 +84,11 @@ export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' :
 /** Playtime in whole hours: "41 h". */
 export const hours = (min: number) => `${Math.floor(min / 60)} h`;
 
-/** Duration: "2 h 08 m", "40 m". */
-export function hm(min: number): string {
+/** Duration: "2 h 08 m", "40 m". `full` keeps the hours in table columns: "0 h 03 m". */
+export function hm(min: number, full = false): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
-  return h > 0 ? `${h} h ${String(m).padStart(2, '0')} m` : `${m} m`;
+  return h > 0 || full ? `${h} h ${String(m).padStart(2, '0')} m` : `${m} m`;
 }
 
 /** Duration without zero padding, for sentences: "11 h 40 m". */
@@ -95,14 +98,14 @@ export function hmLoose(min: number): string {
 }
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
-/** File size with one decimal below 10: "2.4 MB", "240 MB", "1.8 GB". */
-export function bytes(n: number): string {
+/** File size with one decimal below `decimalsBelow` (10): "2.4 MB", "240 MB", "1.8 GB". */
+export function bytes(n: number, decimalsBelow = 10): string {
   let i = 0;
   while (n >= 1000 && i < UNITS.length - 1) {
     n /= 1000;
     i++;
   }
-  const v = n < 10 && i > 0 ? Math.round(n * 10) / 10 : Math.round(n);
+  const v = n < decimalsBelow && i > 0 ? Math.round(n * 10) / 10 : Math.round(n);
   return `${v} ${UNITS[i]}`;
 }
 

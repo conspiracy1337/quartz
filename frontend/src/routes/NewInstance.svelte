@@ -27,7 +27,7 @@
   let typed = $state<string | null>(null);
   let version = $state('');
   const name = $derived(typed ?? version);
-  let loader = $state(0);
+  let loader = $state(1); // Fabric, as the design starts
   let creating = $state(false);
   let more = $state(false);
   let group = $state('none');
@@ -64,7 +64,7 @@
     </div>
     <div class="field"><span class="field-label">Minecraft version</span><VersionPicker onpick={(v) => (version = v)} /></div>
     <div class="field"><span class="field-label">Mod loader</span>
-      <Seg options={LOADERS} bind:value={loader} label="Mod loader" fill />
+      <Seg options={LOADERS} bind:value={loader} label="Mod loader" fill center />
       <span class="small faint">{l.line} You can change it later under Version and loader.</span>
     </div>
     <section class="field" aria-label="Share with other instances">

@@ -1,7 +1,7 @@
 // Every global setting is defined once here. The settings tabs render their groups from
 // this list and the settings search filters it, so a setting can never appear in two
 // places with two different labels or behaviours.
-import { settingsApi, type Settings } from '../api/system';
+import { settingsApi, type AppInfo, type Settings } from '../api/system';
 import type { Route, SettingsTab } from '../router.svelte';
 
 type Opt = { value: string; label: string };
@@ -32,7 +32,8 @@ export interface SettingDef {
   /** Section heading on its page; also the small label in search results. */
   group: string;
   title: string;
-  desc?: string;
+  /** Static text, or text built from facts about this PC (installed memory). */
+  desc?: string | ((info: AppInfo | undefined) => string);
   control: Control;
   /** Shown only while this holds (e.g. custom proxy rows). */
   when?: (s: Settings) => boolean;
@@ -75,13 +76,13 @@ export const registry: SettingDef[] = [
 
   { id: 'autoJava', tab: 'java', group: 'Java', title: 'Pick Java automatically', desc: 'Uses the version each Minecraft release needs.', control: { kind: 'toggle', get: (s) => s.java.autoPick, set: (s, v) => (s.java.autoPick = v) } },
   { id: 'javaVendor', tab: 'java', group: 'Java', title: 'Download missing versions', desc: 'From', control: { kind: 'select', options: [{ value: 'temurin', label: 'Eclipse Temurin' }, { value: 'zulu', label: 'Azul Zulu' }, { value: 'mojang', label: 'Mojang' }], get: (s) => s.java.downloadVendor, set: (s, v) => (s.java.downloadVendor = v) } },
-  { id: 'memory', tab: 'java', group: 'Java', title: 'Default memory', desc: 'Instances can override.', control: { kind: 'inputs', fields: [
+  { id: 'memory', tab: 'java', group: 'Java', title: 'Default memory', desc: (info) => (info?.memoryMb ? `${Math.round(info.memoryMb / 1024)} GB installed. ` : '') + 'Instances can override.', control: { kind: 'inputs', fields: [
     { label: 'Minimum', numeric: true, suffix: 'MB min', get: (s) => s.java.memoryMinMb, set: (s, v) => (s.java.memoryMinMb = num(v)) },
     { label: 'Maximum', numeric: true, suffix: 'MB max', get: (s) => s.java.memoryMaxMb, set: (s, v) => (s.java.memoryMaxMb = num(v)) },
   ] } },
+  { id: 'jvmArgs', tab: 'java', group: 'Java', title: 'Default JVM arguments', control: { kind: 'textarea', rows: 2, get: (s) => s.java.jvmArgs, set: (s, v) => (s.java.jvmArgs = v) } },
   { id: 'warnLowMemory', tab: 'java', group: 'Java', title: 'Warn when free memory is low', desc: 'Checks before each launch.', control: { kind: 'toggle', get: (s) => s.java.warnLowMemory, set: (s, v) => (s.java.warnLowMemory = v) } },
   { id: 'suggestMemory', tab: 'java', group: 'Instances', title: 'Suggest memory from mod count', desc: 'Shown in each instance’s settings.', control: { kind: 'toggle', get: (s) => s.java.suggestMemory, set: (s, v) => (s.java.suggestMemory = v) } },
-  { id: 'jvmArgs', tab: 'java', group: 'Java', title: 'Default JVM arguments', control: { kind: 'textarea', rows: 2, get: (s) => s.java.jvmArgs, set: (s, v) => (s.java.jvmArgs = v) } },
 
   { id: 'autoUpdate', tab: 'updates', group: 'Updates', title: 'Automatic launcher updates', desc: 'Downloads signed updates in the background and installs them on restart.', control: { kind: 'toggle', get: (s) => s.updates.autoCheck, set: (s, v) => (s.updates.autoCheck = v) } },
 ];
@@ -99,9 +100,12 @@ export function groupsFor(tab: SettingsTab): { group: string; defs: SettingDef[]
   return out;
 }
 
+/** A setting's description text; built ones are searched by their fixed wording. */
+export const descText = (d: SettingDef, info?: AppInfo) => (typeof d.desc === 'function' ? d.desc(info) : (d.desc ?? ''));
+
 /** Case-insensitive search over titles and descriptions. */
 export function search(q: string): SettingDef[] {
   const n = q.trim().toLowerCase();
   if (!n) return [];
-  return registry.filter((d) => d.title.toLowerCase().includes(n) || (d.desc ?? '').toLowerCase().includes(n) || d.group.toLowerCase().includes(n));
+  return registry.filter((d) => d.title.toLowerCase().includes(n) || descText(d).toLowerCase().includes(n) || d.group.toLowerCase().includes(n));
 }

@@ -30,7 +30,7 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   running: false,
   ...(id === 'fo' ? { icon: 'bolt' as const } : {}),
   sandboxed: true,
-  counts: { mods: 8, resourcepacks: 6, shaders: 4, datapacks: 4, worlds: 6, servers: 4 },
+  counts: { mods: 48, resourcepacks: 6, shaders: 4, datapacks: 4, worlds: 6, servers: 4 },
   java: '21.0.5, automatic',
   memoryMB: { min: 2048, max: 6144 },
   created: date(2025, 3, 2),
