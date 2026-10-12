@@ -21,10 +21,12 @@ import (
 	"quartz/internal/api"
 	"quartz/internal/brand"
 	"quartz/internal/core/events"
+	"quartz/internal/core/download"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/paths"
 	"quartz/internal/core/secrets"
+	"quartz/internal/core/tasks"
 	"quartz/internal/network"
 	"quartz/internal/settings"
 	"quartz/internal/theme"
@@ -47,6 +49,8 @@ type app struct {
 	secrets  secrets.Store
 	http     *netx.Client
 	network  *network.Service
+	verified *download.Verified
+	tasks    *tasks.Engine
 	ctx      *api.Ctx
 }
 
@@ -77,6 +81,7 @@ func Run(o Options) error {
 		Bind: []any{
 			api.NewApp(a.ctx, a.paths),
 			api.NewSettings(a.ctx, a.settings, a.css, a.network),
+			api.NewDownloads(a.tasks),
 		},
 	})
 }
@@ -114,15 +119,38 @@ func build(o Options) (*app, error) {
 		css: theme.NewCustomCSS(bus, log), secrets: secrets.NewKeychain(), http: httpClient, ctx: &api.Ctx{},
 	}
 	a.network = network.New(httpClient, store.Get().Downloads, a.secrets, redactor, log)
+	if err := a.buildTasks(); err != nil {
+		_ = logFile.Close()
+		return nil, err
+	}
 	a.watchCustomCSS()
 	a.watchDownloads()
 	return a, nil
 }
 
-// watchDownloads keeps the HTTP client's proxy in step with the settings.
+func (a *app) buildTasks() error {
+	ver, err := download.OpenVerified(a.paths.VerifiedIndex(), a.paths.Root, a.log)
+	if err != nil {
+		return fmt.Errorf("opening verified index: %w", err)
+	}
+	eng, err := tasks.New(tasks.Config{
+		Downloader: download.New(a.http, ver), Root: a.paths.Root, HistoryPath: a.paths.DownloadHistory(),
+		Parallel: a.settings.Get().Downloads.Parallel, Bus: a.bus, Log: a.log,
+	})
+	if err != nil {
+		return fmt.Errorf("starting downloads: %w", err)
+	}
+	a.verified, a.tasks = ver, eng
+	return nil
+}
+
+// watchDownloads keeps the HTTP client's proxy and the worker pool in step
+// with the settings.
 func (a *app) watchDownloads() {
 	a.bus.Subscribe(events.SettingsChanged, func(p any) {
-		a.network.Apply(p.(settings.Settings).Downloads)
+		d := p.(settings.Settings).Downloads
+		a.network.Apply(d)
+		a.tasks.SetParallel(d.Parallel)
 	})
 }
 
@@ -149,6 +177,12 @@ func (a *app) startup(ctx context.Context) {
 func (a *app) shutdown(context.Context) {
 	a.bus.SetSink(nil)
 	a.css.Close()
+	if err := a.tasks.Close(); err != nil {
+		a.log.Error("saving download history on exit failed", "err", err)
+	}
+	if err := a.verified.Flush(); err != nil {
+		a.log.Error("saving verified index on exit failed", "err", err)
+	}
 	if err := a.settings.Flush(); err != nil {
 		a.log.Error("saving settings on exit failed", "err", err)
 	}

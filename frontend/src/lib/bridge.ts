@@ -16,3 +16,11 @@ export function onEvent<T>(topic: string, cb: (payload: T) => void): () => void 
   if (!hasBridge()) return () => {};
   return EventsOn(topic, (payload: T) => cb(payload));
 }
+
+/**
+ * Picks the Go binding inside the desktop window and the preview fallback elsewhere.
+ * The preview result is cloned so screens can never mutate fixture state.
+ */
+export function bridged<A extends unknown[], R>(go: (...a: A) => Promise<unknown>, preview: (...a: A) => R): (...a: A) => Promise<R> {
+  return (...a: A) => (hasBridge() ? (go(...a) as Promise<R>) : Promise.resolve(structuredClone(preview(...a))));
+}

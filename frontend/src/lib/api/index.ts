@@ -4,13 +4,13 @@
 import * as accounts from './mock/accounts';
 import * as browse from './mock/browse';
 import { content } from './mock/content';
-import * as downloads from './mock/downloads';
 import * as home from './mock/home';
 import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
 import type { ContentKind, Instance, InstanceSummary, ProjectType } from './types';
+import { downloadsApi } from './downloads';
 import { app, settingsApi } from './system';
 
 export type { ProjectPage } from './mock/browse';
@@ -75,11 +75,7 @@ export const api = {
     catalog: (type: ProjectType) => serve(browse.catalog[type]),
     project: (_id: string) => serve(browse.iris),
   },
-  downloads: {
-    active: () => serve(downloads.active),
-    finished: () => serve(downloads.finished),
-    tray: () => serve(downloads.tray),
-  },
+  downloads: downloadsApi,
   sync: {
     groups: () => serve({ ...misc.sync, total: misc.totalInstances }),
     keybinds: () => serve(misc.keybinds),

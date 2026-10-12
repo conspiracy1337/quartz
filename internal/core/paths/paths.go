@@ -120,3 +120,9 @@ func (p Paths) Instances() string { return filepath.Join(p.Root, "instances") }
 func (p Paths) Store() string     { return filepath.Join(p.Root, "store") }
 func (p Paths) Cache() string     { return filepath.Join(p.Root, "cache") }
 func (p Paths) Themes() string    { return filepath.Join(p.Root, "themes") }
+
+// DownloadHistory holds the last 24 hours of ended download jobs.
+func (p Paths) DownloadHistory() string { return filepath.Join(p.Root, "downloads.json") }
+
+// VerifiedIndex remembers which store files passed their checksum.
+func (p Paths) VerifiedIndex() string { return filepath.Join(p.Root, "verified.json") }

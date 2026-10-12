@@ -39,12 +39,15 @@
   import Welcome from './routes/setup/Welcome.svelte';
   import Skins from './routes/Skins.svelte';
   import Syncing from './routes/Syncing.svelte';
+  import { tasks } from '$lib/tasks.svelte';
 
   $effect(() => router.start());
   $effect(() => prefs.listen());
+  $effect(() => tasks.listen());
   $effect(() => applyAppearance());
   $effect(() => installShortcuts());
   void prefs.load();
+  void tasks.load();
 
   const route = $derived(router.route);
   // Dialogs belong to the screen they were opened on; navigating closes them.
@@ -97,11 +100,11 @@
   {#if route.name === 'setup'}
     {#if route.step === 1}<Welcome />{:else if route.step === 2}<SignIn />{:else}<ImportLaunchers />{/if}
   {:else}
-    <div class="app-side"><Sidebar active={sideKey(route)} instanceId={route.name === 'instance' ? route.id : undefined} downloads={session.tasksRunning ? 2 : 0} /></div>
+    <div class="app-side"><Sidebar active={sideKey(route)} instanceId={route.name === 'instance' ? route.id : undefined} downloads={tasks.active.length} /></div>
     <main class="main">
       {#if session.updateReady && route.name !== 'home'}<UpdateBanner />{/if}
       {@render page(route)}
-      {#if session.tasksRunning}<StatusBar />{/if}
+      <StatusBar />
     </main>
   {/if}
 

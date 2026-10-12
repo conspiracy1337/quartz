@@ -1,24 +1,21 @@
 <script lang="ts">
-  import { api } from '$lib/api';
-  import { bytes, percent, plural } from '$lib/format';
-  import { query } from '$lib/query.svelte';
+  import type { Job, JobStep } from '$lib/api/types';
+  import { bytes, count, left, percent, plural, rate, since } from '$lib/format';
   import { session } from '$lib/session.svelte';
+  import { tasks } from '$lib/tasks.svelte';
   import Bar from '$lib/ui/Bar.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import PageHeader from '$lib/ui/PageHeader.svelte';
   import Tabs from '$lib/ui/Tabs.svelte';
   import Tile from '$lib/ui/Tile.svelte';
 
-  const active = query(() => api.downloads.active());
-  const done = query(() => api.downloads.finished());
   let tab = $state<0 | 1 | 2>(0);
-  let open = $state<Record<string, boolean>>({ d1: true });
-  let paused = $state<Record<string, boolean>>({});
+  let open = $state<Record<string, boolean>>({});
 
-  const list = $derived(active.data ?? []);
-  const finished = $derived((done.data ?? []).filter((d) => d.ok));
-  const failed = $derived((done.data ?? []).filter((d) => !d.ok));
-  const allPaused = $derived(list.length > 0 && list.every((d) => paused[d.id]));
+  const list = $derived(tasks.active);
+  const finished = $derived(tasks.history.filter((d) => d.state === 'done'));
+  const failed = $derived(tasks.history.filter((d) => d.state === 'failed'));
+  const allPaused = $derived(list.length > 0 && list.every((d) => d.state === 'paused'));
   const sumDone = $derived(list.reduce((n, d) => n + d.doneBytes, 0));
   const sumTotal = $derived(list.reduce((n, d) => n + d.totalBytes, 0));
   const sumPct = $derived(percent(sumDone, sumTotal));
@@ -32,10 +29,20 @@
     { key: 1 as const, label: 'Finished', count: finished.length },
     { key: 2 as const, label: 'Failed', count: failed.length },
   ]);
-  const eta = (s?: number) => (s === undefined ? '' : s < 60 ? `${s} s left` : `${Math.round(s / 60)} min left`);
+  // The first job starts expanded until the user toggles it.
+  const isOpen = (d: Job, i: number) => open[d.id] ?? i === 0;
+  const jobEta = (d: Job) => (d.state === 'paused' ? 'Paused' : d.state === 'queued' ? 'Queued' : left(d.etaSec));
+  const stepPct = (s: JobStep) => percent(s.done, s.total);
+  function stepDetail(s: JobStep): string {
+    if (s.state === 'done') return 'Done';
+    if (s.state === 'queued') return 'Queued';
+    if (s.state === 'failed') return 'Failed';
+    return s.unit === 'bytes' ? `${mb(s.done)} of ${bytes(s.total)}` : `${count(s.done)} of ${count(s.total)}`;
+  }
+  const historySub = (d: Job) => `${d.state === 'failed' ? d.error || 'Failed' : d.meta.subtitle}, ${since(d.finishedAt)}`;
 
   function toggleAll() {
-    paused = allPaused ? {} : Object.fromEntries(list.map((d) => [d.id, true]));
+    void tasks.all(allPaused ? 'resumeAll' : 'pauseAll');
   }
 </script>
 
@@ -47,44 +54,46 @@
     {#if tab === 0}
       <div class="list" role="list" aria-label="Active downloads">
         <div class="dl-row dl-sum" role="listitem" aria-label="All downloads">
-          <span style="min-width: 0; grid-column: 1 / span 3"><span class="trunc" style="display: block; font-weight: 600">All downloads</span><span class="trunc small faint tnum" style="display: block">{plural(list.length, 'download')}, {allPaused ? 'paused' : '12.4 MB/s'}</span></span>
-          <span class="dl-eta" style="color: {allPaused ? 'var(--warn)' : 'var(--faint)'}">{allPaused ? 'Paused' : '1 min left'}</span>
+          <span style="min-width: 0; grid-column: 1 / span 3"><span class="trunc" style="display: block; font-weight: 600">All downloads</span><span class="trunc small faint tnum" style="display: block">{plural(list.length, 'download')}, {allPaused ? 'paused' : rate(tasks.speed)}</span></span>
+          <span class="dl-eta" style="color: {allPaused ? 'var(--warn)' : 'var(--faint)'}">{allPaused ? 'Paused' : left(tasks.etaSec)}</span>
           <span class="dl-detail muted">{mb(sumDone)} of {mb(sumTotal)} MB</span>
           <span class="dl-pct">{sumPct}%</span>
           <Bar pct={sumPct} live={!allPaused} label="All downloads" />
           <span class="dl-acts">
             <button class="btn btn-icon btn-sm btn-ghost" onclick={toggleAll} aria-label={allPaused ? 'Resume all downloads' : 'Pause all downloads'}><Icon name={allPaused ? 'play' : 'pause'} size={12} /></button>
-            <button class="btn btn-icon btn-sm btn-ghost" aria-label="Cancel all downloads"><Icon name="x" size={12} sw={2} /></button>
+            <button class="btn btn-icon btn-sm btn-ghost" onclick={() => tasks.all('cancelAll')} aria-label="Cancel all downloads"><Icon name="x" size={12} sw={2} /></button>
           </span>
         </div>
-        {#each list as d (d.id)}
-          {@const isPaused = !!paused[d.id]}
+        {#each list as d, i (d.id)}
+          {@const isPaused = d.state === 'paused'}
+          {@const queued = d.state === 'queued'}
+          {@const name = d.meta.title}
           {@const pct = percent(d.doneBytes, d.totalBytes)}
           <div role="listitem">
             <div class="dl-row">
-              <button class="dl-chev" class:open={open[d.id]} onclick={() => (open[d.id] = !open[d.id])} aria-expanded={!!open[d.id]} aria-label="Show steps for {d.name}"><Icon name="chevron-right" size={12} sw={2.2} /></button>
-              <Tile art={d.art} />
-              <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{d.name}</span><span class="trunc small faint" style="display: block">{d.sub}</span></span>
-              <span class="dl-eta" style="color: {isPaused ? 'var(--warn)' : 'var(--faint)'}">{isPaused ? 'Paused' : d.queued ? 'Queued' : eta(d.etaSec)}</span>
+              <button class="dl-chev" class:open={isOpen(d, i)} onclick={() => (open[d.id] = !isOpen(d, i))} aria-expanded={isOpen(d, i)} aria-label="Show steps for {name}"><Icon name="chevron-right" size={12} sw={2.2} /></button>
+              <Tile art={d.meta.art} />
+              <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{name}</span><span class="trunc small faint" style="display: block">{d.meta.subtitle}</span></span>
+              <span class="dl-eta" style="color: {isPaused ? 'var(--warn)' : 'var(--faint)'}">{jobEta(d)}</span>
               <span class="dl-detail muted">{mb(d.doneBytes)} of {bytes(d.totalBytes)}</span>
               <span class="dl-pct">{pct}%</span>
-              <Bar {pct} live={!isPaused && !d.queued} label={d.name} />
+              <Bar {pct} live={!isPaused && !queued} label={name} />
               <span class="dl-acts">
-                <button class="btn btn-icon btn-sm btn-ghost" onclick={() => (paused[d.id] = !isPaused)} aria-label="{isPaused ? 'Resume' : 'Pause'} {d.name}"><Icon name={isPaused ? 'play' : 'pause'} size={12} /></button>
-                <button class="btn btn-icon btn-sm btn-ghost" aria-label="Cancel {d.name}"><Icon name="x" size={12} sw={2} /></button>
+                <button class="btn btn-icon btn-sm btn-ghost" onclick={() => tasks.run(isPaused ? 'resume' : 'pause', d.id)} aria-label="{isPaused ? 'Resume' : 'Pause'} {name}"><Icon name={isPaused ? 'play' : 'pause'} size={12} /></button>
+                <button class="btn btn-icon btn-sm btn-ghost" onclick={() => tasks.run('cancel', d.id)} aria-label="Cancel {name}"><Icon name="x" size={12} sw={2} /></button>
               </span>
             </div>
-            {#if open[d.id]}
+            {#if isOpen(d, i)}
               {#each d.steps as s (s.name)}
-                {@const color = s.state === 'done' ? 'var(--faint)' : s.state === 'warn' ? 'var(--warn)' : 'var(--text)'}
+                {@const color = s.state === 'done' ? 'var(--faint)' : s.state === 'warn' ? 'var(--warn)' : s.state === 'failed' ? 'var(--danger)' : 'var(--text)'}
                 <div class="dl-step">
                   <span></span>
                   <span class="dl-dot" class:done={s.state === 'done'} class:warn={s.state === 'warn'} aria-hidden="true"></span>
                   <span class="trunc small" style="color: {color}">{s.name}</span>
                   <span class="dl-eta" style="color: {color}">{s.state === 'warn' ? 'Waiting' : ''}</span>
-                  <span class="dl-acts">{#if s.state === 'warn'}<button class="dl-link" aria-label="Download the missing mod from CurseForge" onclick={() => session.open({ kind: 'blocked' })}>Download</button>{:else}<span class="dl-detail faint">{s.detail}</span>{/if}</span>
-                  <span class="dl-pct">{s.pct}%</span>
-                  <Bar pct={s.pct} color={s.state === 'warn' ? 'var(--warn)' : undefined} />
+                  <span class="dl-acts">{#if s.state === 'warn'}<button class="dl-link" aria-label="Download the missing mod from CurseForge" onclick={() => session.open({ kind: 'blocked' })}>Download</button>{:else}<span class="dl-detail faint">{stepDetail(s)}</span>{/if}</span>
+                  <span class="dl-pct">{stepPct(s)}%</span>
+                  <Bar pct={stepPct(s)} color={s.state === 'warn' ? 'var(--warn)' : s.state === 'failed' ? 'var(--danger)' : undefined} />
                   <span></span>
                 </div>
               {/each}
@@ -102,18 +111,19 @@
           <span class="dl-detail muted">{isFinished ? `${mb(shownDone)} MB` : `${mb(shownDone)} of ${mb(shownTotal)} MB`}</span>
           <span class="dl-pct">{pct}%</span>
           <Bar {pct} color={isFinished ? 'var(--accent)' : 'var(--danger)'} />
-          <span class="dl-acts"><button class="btn btn-sm btn-fix" aria-label={isFinished ? 'Clear finished downloads' : 'Retry all failed downloads'}>{isFinished ? 'Clear' : 'Retry'}</button></span>
+          <span class="dl-acts"><button class="btn btn-sm btn-fix" onclick={() => tasks.all(isFinished ? 'clearFinished' : 'retryAllFailed')} aria-label={isFinished ? 'Clear finished downloads' : 'Retry all failed downloads'}>{isFinished ? 'Clear' : 'Retry'}</button></span>
         </div>
         {#each shown as d (d.id)}
+          {@const ok = d.state === 'done'}
           <div class="dl-row" role="listitem">
             <span></span>
-            <Tile art={d.art} />
-            <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{d.name}</span><span class="trunc small faint" style="display: block">{d.sub}</span></span>
-            <span class="dl-eta" style="color: {d.ok ? 'var(--faint)' : 'var(--danger)'}">{d.ok ? 'Done' : 'Failed'}</span>
-            <span class="dl-detail muted">{d.ok ? bytes(d.totalBytes) : `${mb(d.doneBytes)} of ${bytes(d.totalBytes)}`}</span>
+            <Tile art={d.meta.art} />
+            <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{d.meta.title}</span><span class="trunc small faint" style="display: block">{historySub(d)}</span></span>
+            <span class="dl-eta" style="color: {ok ? 'var(--faint)' : 'var(--danger)'}">{ok ? 'Done' : 'Failed'}</span>
+            <span class="dl-detail muted">{ok ? bytes(d.totalBytes) : `${mb(d.doneBytes)} of ${bytes(d.totalBytes)}`}</span>
             <span class="dl-pct">{percent(d.doneBytes, d.totalBytes)}%</span>
-            <Bar pct={percent(d.doneBytes, d.totalBytes)} color={d.ok ? 'var(--accent)' : 'var(--danger)'} />
-            <span class="dl-acts">{#if !d.ok}<button class="btn btn-sm btn-fix">Retry</button>{/if}</span>
+            <Bar pct={percent(d.doneBytes, d.totalBytes)} color={ok ? 'var(--accent)' : 'var(--danger)'} />
+            <span class="dl-acts">{#if !ok && d.retryable}<button class="btn btn-sm btn-fix" onclick={() => tasks.run('retry', d.id)} aria-label="Retry {d.meta.title}">Retry</button>{/if}</span>
           </div>
         {/each}
       </div>

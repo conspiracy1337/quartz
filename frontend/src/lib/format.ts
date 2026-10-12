@@ -61,6 +61,21 @@ export function ago(t: number, now = Date.now()): string {
   return plural(Math.round(d / 30), 'month') + ' ago';
 }
 
+/** Recent age with minute precision, for the last day: "just now", "5 minutes ago", "3 hours ago". */
+export function since(t: number, now = Date.now()): string {
+  const min = Math.floor((now - t) / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return plural(min, 'minute') + ' ago';
+  if (min < 24 * 60) return plural(Math.floor(min / 60), 'hour') + ' ago';
+  return ago(t, now);
+}
+
+/** Transfer rate: "12.4 MB/s". */
+export const rate = (bytesPerSec: number) => `${bytes(bytesPerSec)}/s`;
+
+/** Time left: "40 s left", "3 min left"; empty while unknown. */
+export const left = (sec: number) => (sec <= 0 ? '' : sec < 60 ? `${sec} s left` : `${Math.round(sec / 60)} min left`);
+
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** Playtime in whole hours: "41 h". */

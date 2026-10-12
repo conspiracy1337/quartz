@@ -147,21 +147,30 @@ export interface ProjectHit {
 export type DocBlock = { type: 'p' | 'h2'; text: string } | { type: 'ul'; items: string[] };
 export interface ProjectVersion { id: string; channel: 'Release' | 'Beta' | 'Alpha'; minecraft: string; published: number; bytes: number; notes: string[] }
 
-// ---- downloads ----
-export type StepState = 'done' | 'run' | 'warn';
-export interface DownloadStep { name: string; pct: number; detail: string; state: StepState }
-export interface Download {
+// ---- downloads (mirrors Go's tasks.JobView and tasks.Snapshot) ----
+export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled';
+/** Drives the dot colour of a step row. */
+export type StepState = 'queued' | 'run' | 'done' | 'warn' | 'failed';
+export interface JobStep { name: string; unit: 'bytes' | 'count'; done: number; total: number; state: StepState }
+export interface JobMeta { title: string; subtitle: string; art: Art; kind: string }
+export interface Job {
   id: string;
-  name: string;
-  sub: string;
-  art: Art;
+  meta: JobMeta;
+  state: JobState;
   doneBytes: number;
   totalBytes: number;
-  etaSec?: number;
-  queued: boolean;
-  steps: DownloadStep[];
+  /** Bytes per second. */
+  speed: number;
+  /** 0 while unknown. */
+  etaSec: number;
+  steps: JobStep[];
+  error?: string;
+  retryable: boolean;
+  createdAt: number;
+  /** 0 while active. */
+  finishedAt: number;
 }
-export interface FinishedDownload { id: string; name: string; sub: string; art: Art; doneBytes: number; totalBytes: number; ok: boolean }
+export interface TaskSnapshot { active: Job[]; speed: number; etaSec: number; historyRev: number }
 
 // ---- syncing ----
 export interface SyncEntry { id: string; name: string; path: string; users: number; enabled: boolean; available: boolean }

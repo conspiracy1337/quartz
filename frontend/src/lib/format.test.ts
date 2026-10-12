@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ago, agoShort, bytes, day, hm, hmLoose, hours } from './format';
+import { ago, agoShort, bytes, day, hm, hmLoose, hours, left, rate, since } from './format';
 
 const now = new Date('2026-10-11T12:00:00').getTime(); // a Sunday
 const daysBack = (d: number) => now - d * 86_400_000;
@@ -30,5 +30,21 @@ describe('format', () => {
     expect(bytes(240_000_000)).toBe('240 MB');
     expect(bytes(1_800_000_000)).toBe('1.8 GB');
     expect(bytes(412_000)).toBe('412 KB');
+  });
+});
+
+describe('recent times', () => {
+  const now = Date.UTC(2026, 9, 12, 12);
+  it('since', () => {
+    expect(since(now - 20_000, now)).toBe('just now');
+    expect(since(now - 5 * 60_000, now)).toBe('5 minutes ago');
+    expect(since(now - 60_000, now)).toBe('1 minute ago');
+    expect(since(now - 3 * 3_600_000, now)).toBe('3 hours ago');
+  });
+  it('left and rate', () => {
+    expect(left(0)).toBe('');
+    expect(left(40)).toBe('40 s left');
+    expect(left(150)).toBe('3 min left');
+    expect(rate(12_400_000)).toBe('12 MB/s');
   });
 });

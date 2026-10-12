@@ -16,7 +16,6 @@
 
   function install() {
     session.close();
-    session.tasksRunning = true;
     go({ name: 'downloads' });
   }
 </script>

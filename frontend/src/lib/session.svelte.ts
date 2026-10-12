@@ -29,8 +29,6 @@ class Session {
   hosting = $state<Record<string, 'starting' | 'running'>>({});
   toast = $state<Toast | null>(null);
   updateReady = $state(true);
-  /** Background downloads are running; shows the status bar on every screen. */
-  tasksRunning = $state(false);
 
   #launchTimer: ReturnType<typeof setInterval> | undefined;
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
