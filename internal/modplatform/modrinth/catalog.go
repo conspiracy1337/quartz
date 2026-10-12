@@ -55,8 +55,14 @@ func facets(q modplatform.SearchQuery) [][]string {
 	if q.Game != "" {
 		f = append(f, []string{"versions:" + q.Game})
 	}
-	for _, c := range q.Categories {
-		f = append(f, []string{"categories:" + c})
+	for _, group := range q.Categories {
+		var g []string
+		for _, c := range group {
+			g = append(g, "categories:"+c)
+		}
+		if len(g) > 0 {
+			f = append(f, g)
+		}
 	}
 	for _, d := range q.Exclude {
 		f = append(f, []string{"disclosure_types!=" + d})

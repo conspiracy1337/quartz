@@ -29,7 +29,7 @@ func TestSearchFacets(t *testing.T) {
 			"date_modified":"2025-02-03T00:00:00Z"},{"project_id":"../x"}],"total_hits":2}`)
 	})
 	page, err := c.Search(context.Background(), modplatform.SearchQuery{Type: modplatform.TypeMod, Text: "sodium", Sort: modplatform.SortUpdated,
-		Game: "1.21.1", Loaders: []string{"quilt", "fabric"}, Categories: []string{"optimization"}, Exclude: []string{"ai_content"}, Offset: 20, Limit: 20})
+		Game: "1.21.1", Loaders: []string{"quilt", "fabric"}, Categories: [][]string{{"optimization"}}, Exclude: []string{"ai_content"}, Offset: 20, Limit: 20})
 	if err != nil {
 		t.Fatal(err)
 	}

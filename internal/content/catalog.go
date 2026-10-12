@@ -45,6 +45,18 @@ type Known struct {
 	IdentAt    int64      `json:"identAt,omitempty"` // when platforms were last asked
 }
 
+// Ref names the blob's project on every platform that knows it.
+func (k Known) Ref() modplatform.Ref {
+	var r modplatform.Ref
+	if k.Modrinth != nil {
+		r.Modrinth = k.Modrinth.ProjectID
+	}
+	if k.CurseForge != nil {
+		r.CurseForge = k.CurseForge.ProjectID
+	}
+	return r
+}
+
 // Ident returns the preferred identification: Modrinth, else CurseForge.
 func (k Known) Ident() *Ident {
 	if k.Modrinth != nil {

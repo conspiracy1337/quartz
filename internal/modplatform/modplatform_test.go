@@ -144,3 +144,21 @@ func TestValidURLAndID(t *testing.T) {
 		t.Fatal("ids")
 	}
 }
+
+func TestRef(t *testing.T) {
+	for s, want := range map[string]Ref{
+		"mr:AANobbMI":           {Modrinth: "AANobbMI"},
+		"cf:394468":             {CurseForge: "394468"},
+		"mr:AANobbMI+cf:394468": {Modrinth: "AANobbMI", CurseForge: "394468"},
+	} {
+		r, err := ParseRef(s)
+		if err != nil || r != want || r.String() != s {
+			t.Errorf("%q: %+v %v", s, r, err)
+		}
+	}
+	for _, bad := range []string{"", "mr:", "cf:abc", "xx:1", "mr:a+mr:b", "mr:../x", "mr:a+cf:1+cf:2", "AANobbMI"} {
+		if _, err := ParseRef(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

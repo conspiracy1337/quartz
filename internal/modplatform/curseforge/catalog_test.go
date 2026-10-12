@@ -26,7 +26,7 @@ func TestSearchQuery(t *testing.T) {
 			"authors":[{"name":"jellysquid3_"}]},{"id":0}],"pagination":{"totalCount":31}}`)
 	})
 	page, err := c.Search(context.Background(), modplatform.SearchQuery{Type: modplatform.TypeMod, Text: "sodium", Sort: modplatform.SortDownloads,
-		Game: "1.21.1", Loaders: []string{"quilt", "fabric", "datapack"}, Categories: []string{"423"}, Offset: 20, Limit: 20})
+		Game: "1.21.1", Loaders: []string{"quilt", "fabric", "datapack"}, Categories: [][]string{{"423"}}, Offset: 20, Limit: 20})
 	if err != nil {
 		t.Fatal(err)
 	}

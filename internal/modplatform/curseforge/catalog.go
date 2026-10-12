@@ -153,8 +153,12 @@ func (c *Client) Search(ctx context.Context, q modplatform.SearchQuery) (modplat
 	if len(loaders) > 0 {
 		v.Set("modLoaderTypes", jsonInts(loaders))
 	}
-	if len(q.Categories) > 0 {
-		v.Set("categoryIds", jsonInts(q.Categories))
+	var cats []string
+	for _, group := range q.Categories {
+		cats = append(cats, group...)
+	}
+	if len(cats) > 0 {
+		v.Set("categoryIds", jsonInts(cats))
 	}
 	var resp struct {
 		Data       []mod `json:"data"`

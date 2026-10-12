@@ -47,7 +47,7 @@ func (s *Service) compatibility(ctx context.Context, id, mc, loader string, ch m
 	}
 	s.plansMu.Unlock()
 	cands, locked, total, unknown := s.candidates(&v, Mods, true)
-	q := modplatform.Query{Game: []string{mc}, Loaders: loaderChain(Mods, loader, mc), Channel: ch}
+	q := modplatform.Query{Game: []string{mc}, Loaders: LoaderChain(Mods, loader, mc), Channel: ch}
 	found := map[string]modplatform.Version{}
 	var firstErr error
 	for src, list := range cands {

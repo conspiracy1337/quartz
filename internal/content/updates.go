@@ -98,9 +98,9 @@ func randomID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// loaderChain is the order loaders are asked in (Prism's: Quilt runs Fabric
+// LoaderChain is the order loaders are asked in (Prism's: Quilt runs Fabric
 // mods, NeoForge 1.20.1 runs Forge mods; data packs have their own loader).
-func loaderChain(k Kind, loader, mc string) []string {
+func LoaderChain(k Kind, loader, mc string) []string {
 	switch k {
 	case DataPacks:
 		return []string{"datapack"}
@@ -196,7 +196,7 @@ func (s *Service) CheckUpdates(ctx context.Context, id string, k Kind, ch modpla
 	if err != nil {
 		return nil, err
 	}
-	q := modplatform.Query{Game: []string{v.in.Minecraft}, Loaders: loaderChain(k, v.in.Loader, v.in.Minecraft), Channel: ch}
+	q := modplatform.Query{Game: []string{v.in.Minecraft}, Loaders: LoaderChain(k, v.in.Loader, v.in.Minecraft), Channel: ch}
 	cands, locked, _, _ := s.candidates(&v, k, false)
 	pl := &plan{inst: id, kind: k, at: s.now(), query: q, items: map[string]*planned{}}
 	rev := &Review{CheckID: randomID(), Locked: locked}

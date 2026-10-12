@@ -45,9 +45,10 @@ type SearchQuery struct {
 	Sort    Sort
 	Game    string   // one Minecraft version, or "" for any
 	Loaders []string // any of these; empty for any
-	// Categories are the platform's own ids (Modrinth slugs, CurseForge
-	// numeric ids); a project must have all of them.
-	Categories []string
+	// Categories are groups of the platform's own ids (Modrinth slugs,
+	// CurseForge numeric ids): a project must match one id of every group on
+	// Modrinth; CurseForge takes them all as one "any of" list.
+	Categories [][]string
 	// Exclude lists Modrinth content disclosures to hide (ignored by
 	// CurseForge, which publishes none).
 	Exclude []string
