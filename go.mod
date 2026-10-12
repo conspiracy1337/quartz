@@ -6,6 +6,7 @@ toolchain go1.26.9
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/ulikunitz/xz v0.5.17
 	github.com/wailsapp/wails/v2 v2.16.0
 	golang.org/x/net v0.56.0
 	golang.org/x/sync v0.21.0

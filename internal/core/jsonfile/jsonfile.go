@@ -127,6 +127,25 @@ func (s *Store[T]) Update(fn func(*T) error) (T, error) {
 	return s.cur, nil
 }
 
+// Mutate changes the document in place under the store's lock, skipping the
+// deep copy Update makes and the Normalize hook. It is meant for large,
+// machine-managed documents (indexes with thousands of entries) whose readers
+// all go through View; never mix it with Get on the same store.
+func (s *Store[T]) Mutate(fn func(*T)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn(&s.cur)
+	s.schedule()
+}
+
+// View runs fn with the document under the store's lock. fn must not retain
+// references into the document after it returns.
+func (s *Store[T]) View(fn func(T)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn(s.cur)
+}
+
 // schedule (re)arms the debounced save; s.mu must be held.
 func (s *Store[T]) schedule() {
 	if s.timer == nil {

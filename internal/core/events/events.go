@@ -11,6 +11,7 @@ const (
 	SettingsChanged Topic = "settings:changed"
 	CustomCSS       Topic = "theme:custom-css"
 	SecondInstance  Topic = "app:second-instance"
+	TasksChanged    Topic = "tasks:changed"
 )
 
 // Sink receives every emitted event, used to bridge events to the UI.
