@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/linkx"
 )
 
 // Errors returned for hostile or oversized archives.
@@ -222,34 +223,13 @@ func (e *extractor) makeLink(l link) error {
 	if err == nil {
 		return nil
 	}
-	if cerr := copyFile(l.target, l.path); cerr != nil {
+	if info, serr := os.Stat(l.target); serr == nil && info.IsDir() {
+		return nil // a link to a directory that could not be created is dropped
+	}
+	if _, cerr := linkx.Place(l.target, l.path, linkx.Options{NoHardlink: !l.hard}); cerr != nil {
 		return fmt.Errorf("creating link %s: %w", l.path, errors.Join(err, cerr))
 	}
 	return nil
-}
-
-func copyFile(src, dst string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if info.IsDir() {
-		return nil // a link to a directory that could not be created is dropped
-	}
-	in, err := os.Open(src) //nolint:gosec // src was validated to lie inside dest
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm()) //nolint:gosec // dst passed SafeJoin
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(out, in)
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
-	return err
 }
 
 // ExtractZip extracts the zip at src into dest.

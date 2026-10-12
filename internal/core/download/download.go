@@ -19,6 +19,7 @@ import (
 
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/hashx"
+	"quartz/internal/core/linkx"
 	"quartz/internal/core/netx"
 )
 
@@ -119,11 +120,12 @@ func (d *Downloader) adoptExisting(it Item, size int64, sum hashx.Sum) (bool, er
 	if err := os.MkdirAll(filepath.Dir(it.Dest), 0o700); err != nil {
 		return false, err
 	}
-	_ = os.Remove(it.Dest)
-	if err := os.Link(src, it.Dest); err != nil {
-		if err := copyFile(src, it.Dest, it.Exec); err != nil {
-			return false, nil //nolint:nilerr // falling back to a real download is the right recovery
-		}
+	perm := os.FileMode(fsx.FilePerm)
+	if it.Exec {
+		perm = 0o700
+	}
+	if _, err := linkx.Place(src, it.Dest, linkx.Options{Perm: perm}); err != nil {
+		return false, nil //nolint:nilerr // falling back to a real download is the right recovery
 	}
 	d.ver.Add(it.Dest, sum)
 	return true, nil
@@ -329,32 +331,6 @@ func (c *counter) Write(p []byte) (int, error) {
 	c.n += int64(len(p))
 	c.report(c.base + c.n)
 	return len(p), nil
-}
-
-func copyFile(src, dst string, exec bool) error {
-	in, err := os.Open(src) //nolint:gosec // a verified store file
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	perm := os.FileMode(fsx.FilePerm)
-	if exec {
-		perm = 0o700
-	}
-	tmp := dst + ".copy"
-	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm) //nolint:gosec // derived from a validated Dest
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(out, in)
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return os.Rename(tmp, dst)
 }
 
 // IsHashMismatch reports whether err came from a failed checksum.
