@@ -1,0 +1,42 @@
+<script lang="ts">
+  import { api } from '$lib/api';
+  import { prefs } from '$lib/prefs.svelte';
+  import { query } from '$lib/query.svelte';
+  import { href } from '$lib/router.svelte';
+  import { registry } from '$lib/settings/registry';
+  import SettingControl from '$lib/settings/SettingControl.svelte';
+  import Icon from '$lib/ui/Icon.svelte';
+  import SetupLayout from './SetupLayout.svelte';
+
+  const info = query(() => api.app.info());
+  const LOOKS = [
+    { theme: 'monolith', name: 'Dark', bg: 'linear-gradient(90deg,#0c0c0e 0 28%,#0a0a0b 28%)' },
+    { theme: 'light', name: 'Light', bg: 'linear-gradient(90deg,#ededef 0 28%,#f6f6f7 28%)' },
+    { theme: 'system', name: 'System', bg: 'linear-gradient(90deg,#0c0c0e 0 50%,#f6f6f7 50%)' },
+  ];
+  const language = registry.find((d) => d.id === 'language')!;
+  const theme = $derived(prefs.value?.appearance.theme);
+</script>
+
+<SetupLayout step={1}>
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <Icon name="brand" size={28} sw={1.5} />
+    <h1 class="h1" style="font-size: 26px; line-height: 32px">Set up the launcher</h1>
+    <p class="muted" style="margin: 0">Four quick steps. You can change all of this later in Settings.</p>
+  </div>
+  <div class="field"><span class="field-label">Language</span><span class="tall"><SettingControl control={language.control} label="Language" /></span></div>
+  <label class="field"><span class="field-label">Where to keep instances</span><span style="display: flex; gap: 6px"><span class="input" style="flex: 1 1 auto; height: 36px"><input class="mono" value={info.data?.dataDir ?? ''} readonly /></span><button class="btn" style="height: 36px">Change</button></span><span class="field-help">About 200 MB per vanilla instance. Modpacks can need several GB.</span></label>
+  <div class="field"><span class="field-label">Look</span>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px" role="radiogroup" aria-label="Look">
+      {#each LOOKS as l (l.theme)}<button class="tp" class:on={theme === l.theme} onclick={() => prefs.update((s) => (s.appearance.theme = l.theme))} role="radio" aria-checked={theme === l.theme}><span style="background: {l.bg}; display: block"></span><span class="lb">{l.name}</span></button>{/each}
+    </div>
+  </div>
+  <div style="display: flex; justify-content: space-between; align-items: center"><span class="small faint">Step 1 of 4</span><a href={href({ name: 'setup', step: 2 })} class="btn btn-accent btn-lg">Continue</a></div>
+</SetupLayout>
+
+<style>
+  .tall :global(.sel){width:100%;height:36px}
+  .tp{height:64px;border:1px solid var(--line-2);border-radius:10px;padding:0;overflow:hidden;display:grid;grid-template-rows:1fr 24px;background:transparent;color:var(--text)}
+  .tp.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .tp .lb{font-size:12px;display:flex;align-items:center;justify-content:center;border-top:1px solid var(--line)}
+</style>

@@ -1,0 +1,16 @@
+/* Classes that several ported screens defined identically. They live here once instead of
+   in each screen. Everything else shared is in monolith.css. */
+
+/* A section: heading row over its card. */
+.grp,.sec{display:flex;flex-direction:column;gap:8px}
+.sec-h{display:flex;align-items:center;justify-content:space-between;height:28px}
+
+/* Pages that dim everything behind a modal (.ghost in the designs). */
+.ghost{opacity:.35;pointer-events:none}
+
+/* A spinning progress glyph. */
+@media (prefers-reduced-motion:no-preference){.spin{animation:spin 700ms linear infinite}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Sticky action bar at the bottom of a picker page (Version, Loader). */
+.pfoot{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:12px 28px;border-top:1px solid var(--line);background:var(--bg)}

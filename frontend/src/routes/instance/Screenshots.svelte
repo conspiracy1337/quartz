@@ -1,0 +1,56 @@
+<script lang="ts">
+  import { api } from '$lib/api';
+  import { Day, clock, searchIn } from '$lib/format';
+  import { query } from '$lib/query.svelte';
+  import { href } from '$lib/router.svelte';
+  import SearchField from '$lib/ui/SearchField.svelte';
+
+  interface Props { instanceId: string }
+  let { instanceId }: Props = $props();
+
+  const WEEK = 7 * 86_400_000;
+  const shots = query(() => api.screenshots.list(instanceId));
+  let search = $state('');
+  let filter = $state<string>('all');
+
+  const list = $derived(shots.data ?? []);
+  const worlds = $derived([...new Set(list.map((s) => s.world))]);
+  const chips = $derived([
+    { key: 'all', label: 'All' },
+    { key: 'week', label: 'This week' },
+    ...worlds.slice(0, 1).map((w) => ({ key: w, label: w })),
+  ]);
+  const match = (s: (typeof list)[number], key: string) => key === 'all' || (key === 'week' ? Date.now() - s.takenAt < WEEK : s.world === key);
+  const shown = $derived(list.filter((s) => match(s, filter) && (!search.trim() || Day(s.takenAt).toLowerCase().includes(search.trim().toLowerCase()))));
+  const when = (t: number) => `${Day(t)} ${clock(t)}`;
+</script>
+
+<div class="scroll">
+  <div class="page" style="gap: 12px; padding-top: 16px">
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+      <SearchField bind:value={search} label="Search screenshots" placeholder={searchIn('screenshots', shots.data?.length)} style="flex: 0 1 280px" />
+      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+        {#each chips as c (c.key)}<button class="chip" class:on={filter === c.key} onclick={() => (filter = c.key)}>{c.label}<span class="count">{list.filter((s) => match(s, c.key)).length}</span></button>{/each}
+      </div>
+      <div style="flex: 1 1 0"></div>
+      <button class="btn">Select</button>
+      <button class="btn">Open folder</button>
+    </div>
+    <div class="sg">
+      {#if shots.data}
+        {#each shown as s (s.id)}
+          <a href={href({ name: 'instance', id: instanceId, tab: 'screenshots', sub: s.id })} class="sh" style="background: {s.art.background}" aria-label="Open {when(s.takenAt)}"><span class="cap tnum">{when(s.takenAt)}</span></a>
+        {/each}
+      {:else}
+        {#each { length: 12 } as _, k (k)}<div class="sk" style="aspect-ratio: 16/9; border-radius: 8px" aria-hidden="true"></div>{/each}
+      {/if}
+    </div>
+  </div>
+</div>
+
+<style>
+  .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  .sh{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:0;padding:0;display:block;width:100%}
+  .sh .cap{position:absolute;inset:auto 0 0 0;padding:20px 10px 8px;background:linear-gradient(transparent,rgba(0,0,0,.7));color:#fff;font-size:12px;text-align:left;opacity:0;transition:opacity 140ms ease}
+  .sh:hover .cap,.sh:focus-visible .cap{opacity:1}
+</style>
