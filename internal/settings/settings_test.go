@@ -40,10 +40,15 @@ func TestNormalizeFixesFieldByField(t *testing.T) {
 }
 
 func TestDecodeTolerant(t *testing.T) {
-	got, err := decode([]byte(`{"appearance":{"accent":"#60a5fa"},"unknown":{"x":1}}`))
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"appearance":{"accent":"#60a5fa"},"unknown":{"x":1}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path, events.NewBus(), discard)
 	if err != nil {
 		t.Fatal(err)
 	}
+	got := s.Get()
 	if got.Appearance.Accent != "#60a5fa" || got.Appearance.Theme != "monolith" || got.Downloads.Parallel != 8 {
 		t.Fatalf("got %+v", got)
 	}

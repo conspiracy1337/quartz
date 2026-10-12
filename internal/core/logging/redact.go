@@ -3,6 +3,7 @@ package logging
 import (
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // Redacted replaces every secret the Redactor removes.
@@ -14,6 +15,34 @@ const Redacted = "[redacted]"
 type Redactor struct {
 	rules    []*regexp.Regexp
 	userName string
+
+	mu      sync.RWMutex
+	secrets map[string]struct{} // literal runtime secrets (proxy password, session tokens)
+}
+
+// minSecretLen keeps placeholder values such as the offline token "0" from
+// turning every matching character in a log into "[redacted]".
+const minSecretLen = 6
+
+// AddSecret makes r hide s verbatim from now on. Values too short to be real
+// secrets are ignored. It is safe to call concurrently with Redact.
+func (r *Redactor) AddSecret(s string) {
+	if len(s) < minSecretLen {
+		return
+	}
+	r.mu.Lock()
+	if r.secrets == nil {
+		r.secrets = map[string]struct{}{}
+	}
+	r.secrets[s] = struct{}{}
+	r.mu.Unlock()
+}
+
+// RemoveSecret stops hiding s, for example after a session ends.
+func (r *Redactor) RemoveSecret(s string) {
+	r.mu.Lock()
+	delete(r.secrets, s)
+	r.mu.Unlock()
 }
 
 var defaultRules = []*regexp.Regexp{
@@ -37,6 +66,11 @@ func NewRedactor(userName string) *Redactor {
 
 // Redact returns s with every secret replaced.
 func (r *Redactor) Redact(s string) string {
+	r.mu.RLock()
+	for secret := range r.secrets {
+		s = strings.ReplaceAll(s, secret, Redacted)
+	}
+	r.mu.RUnlock()
 	for _, re := range r.rules {
 		if re.NumSubexp() > 0 {
 			s = re.ReplaceAllString(s, "${1}"+Redacted)

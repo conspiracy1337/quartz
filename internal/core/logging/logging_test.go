@@ -63,3 +63,17 @@ func TestRotation(t *testing.T) {
 		t.Fatalf("no rotated file: %v", err)
 	}
 }
+
+func TestAddSecret(t *testing.T) {
+	r := NewRedactor("")
+	r.AddSecret("0")
+	r.AddSecret("hunter2-proxy")
+	got := r.Redact("pw=hunter2-proxy count=0")
+	if got != "pw=[redacted] count=0" {
+		t.Fatalf("got %q", got)
+	}
+	r.RemoveSecret("hunter2-proxy")
+	if r.Redact("hunter2-proxy") != "hunter2-proxy" {
+		t.Fatal("secret not removed")
+	}
+}
