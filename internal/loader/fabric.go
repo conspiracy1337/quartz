@@ -38,11 +38,12 @@ func newQuilt(d Deps) *fabricLike {
 
 func (f *fabricLike) Kind() Kind { return f.kind }
 
-// fabricEntry is one element of /versions/loader/{mc}.
+// fabricEntry is one element of /versions/loader/{mc}. Fabric's own "stable"
+// flag marks only its single newest stable build, so stability is read from
+// the version itself, as Quilt writes it ("0.17.0-beta.1").
 type fabricEntry struct {
 	Loader struct {
 		Version string `json:"version"`
-		Stable  *bool  `json:"stable"` // Fabric only; Quilt marks betas in the version itself
 	} `json:"loader"`
 }
 
@@ -57,11 +58,7 @@ func (f *fabricLike) Versions(ctx context.Context, mc string) ([]Version, error)
 		if !ValidVersionID(v) {
 			continue
 		}
-		stable := !prerelease(v)
-		if e.Loader.Stable != nil {
-			stable = *e.Loader.Stable
-		}
-		out = append(out, Version{ID: v, Name: v, Stable: stable})
+		out = append(out, Version{ID: v, Name: v, Stable: !prerelease(v)})
 	}
 	sortNewest(out)
 	return out, nil

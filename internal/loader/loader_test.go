@@ -118,9 +118,10 @@ func TestNeoForgeMapping(t *testing.T) {
 
 func TestFabricAndQuiltVersions(t *testing.T) {
 	f := newFixture(t)
+	// Fabric flags only its newest stable build; the older ones are stable too.
 	f.web.put("https://meta.fabricmc.net/v2/versions/loader/1.21.1", []byte(`[
-		{"loader":{"version":"0.16.9","stable":true}},{"loader":{"version":"0.16.10","stable":true}},
-		{"loader":{"version":"0.17.0+build.1","stable":false}},{"loader":{"version":"../evil","stable":true}}]`))
+		{"loader":{"version":"0.16.9","stable":false}},{"loader":{"version":"0.16.10","stable":true}},
+		{"loader":{"version":"0.17.0-beta.1","stable":false}},{"loader":{"version":"../evil","stable":true}}]`))
 	f.web.put("https://meta.quiltmc.org/v3/versions/loader/1.21.1", []byte(`[{"loader":{"version":"0.27.0"}},{"loader":{"version":"0.28.0-beta.2"}}]`))
 	r := New(f.deps)
 	ctx := context.Background()
@@ -128,7 +129,7 @@ func TestFabricAndQuiltVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(vs) != 3 || vs[0].ID != "0.17.0+build.1" || vs[0].Stable {
+	if len(vs) != 3 || vs[0].ID != "0.17.0-beta.1" || vs[0].Stable || !vs[2].Stable {
 		t.Fatalf("fabric versions = %+v", vs)
 	}
 	if v, _ := r.Latest(ctx, Fabric, "1.21.1"); v.ID != "0.16.10" {
