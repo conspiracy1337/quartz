@@ -9,6 +9,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/ulikunitz/xz v0.5.17
 	github.com/wailsapp/wails/v2 v2.16.0
+	github.com/yuin/goldmark v1.8.6
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.60.0
