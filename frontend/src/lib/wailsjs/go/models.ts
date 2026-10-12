@@ -264,6 +264,7 @@ export namespace api {
 	    discordStatus: boolean;
 	    settings: instance.Settings;
 	    gpu: string;
+	    switch?: content.SwitchResult;
 	
 	    static createFrom(source: any = {}) {
 	        return new InstanceView(source);
@@ -299,6 +300,7 @@ export namespace api {
 	        this.discordStatus = source["discordStatus"];
 	        this.settings = this.convertValues(source["settings"], instance.Settings);
 	        this.gpu = source["gpu"];
+	        this.switch = this.convertValues(source["switch"], content.SwitchResult);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -414,6 +416,334 @@ export namespace api {
 	        this.slim = source["slim"];
 	        this.added = source["added"];
 	        this.source = source["source"];
+	    }
+	}
+
+}
+
+export namespace content {
+	
+	export class Activity {
+	    at: number;
+	    kind: string;
+	    title: string;
+	    detail?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Activity(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.at = source["at"];
+	        this.kind = source["kind"];
+	        this.title = source["title"];
+	        this.detail = source["detail"];
+	    }
+	}
+	export class Rejected {
+	    name: string;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Rejected(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.reason = source["reason"];
+	    }
+	}
+	export class AddResult {
+	    added: string[];
+	    rejected: Rejected[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AddResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.added = source["added"];
+	        this.rejected = this.convertValues(source["rejected"], Rejected);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Compat {
+	    matching: number;
+	    total: number;
+	    unknown: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Compat(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.matching = source["matching"];
+	        this.total = source["total"];
+	        this.unknown = source["unknown"];
+	    }
+	}
+	export class InstanceMissing {
+	    instanceId: string;
+	    mod: string;
+	    dep: string;
+	    more?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new InstanceMissing(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.instanceId = source["instanceId"];
+	        this.mod = source["mod"];
+	        this.dep = source["dep"];
+	        this.more = source["more"];
+	    }
+	}
+	export class LockedItem {
+	    id: string;
+	    name: string;
+	    version: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LockedItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.version = source["version"];
+	    }
+	}
+	export class Notes {
+	    id: string;
+	    date: number;
+	    items: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Notes(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.date = source["date"];
+	        this.items = source["items"];
+	    }
+	}
+	export class PendingUpdate {
+	    item: string;
+	    kind: string;
+	    name: string;
+	    icon?: string;
+	    from: string;
+	    to: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PendingUpdate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.item = source["item"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.icon = source["icon"];
+	        this.from = source["from"];
+	        this.to = source["to"];
+	    }
+	}
+	
+	export class ReviewItem {
+	    id: string;
+	    name: string;
+	    note: string;
+	    from: string;
+	    to: string;
+	    icon?: string;
+	    size: number;
+	    blocked?: boolean;
+	    dependency?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReviewItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.note = source["note"];
+	        this.from = source["from"];
+	        this.to = source["to"];
+	        this.icon = source["icon"];
+	        this.size = source["size"];
+	        this.blocked = source["blocked"];
+	        this.dependency = source["dependency"];
+	    }
+	}
+	export class Review {
+	    checkId: string;
+	    updates: ReviewItem[];
+	    locked: LockedItem[];
+	    failed: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Review(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.checkId = source["checkId"];
+	        this.updates = this.convertValues(source["updates"], ReviewItem);
+	        this.locked = this.convertValues(source["locked"], LockedItem);
+	        this.failed = source["failed"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class Status {
+	    kind: string;
+	    version?: string;
+	    label?: string;
+	    tone?: string;
+	    world?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.version = source["version"];
+	        this.label = source["label"];
+	        this.tone = source["tone"];
+	        this.world = source["world"];
+	    }
+	}
+	export class Row {
+	    id: string;
+	    kind: string;
+	    name: string;
+	    sub: string;
+	    version: string;
+	    icon?: string;
+	    source: string;
+	    enabled: boolean;
+	    locked: boolean;
+	    group?: string;
+	    status?: Status;
+	    project?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Row(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.sub = source["sub"];
+	        this.version = source["version"];
+	        this.icon = source["icon"];
+	        this.source = source["source"];
+	        this.enabled = source["enabled"];
+	        this.locked = source["locked"];
+	        this.group = source["group"];
+	        this.status = this.convertValues(source["status"], Status);
+	        this.project = source["project"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class SwitchResult {
+	    job: string;
+	    updated: number;
+	    disabled: string[];
+	    unknown: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SwitchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.job = source["job"];
+	        this.updated = source["updated"];
+	        this.disabled = source["disabled"];
+	        this.unknown = source["unknown"];
+	    }
+	}
+	export class TabInfo {
+	    shaderMod: string;
+	    worlds: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TabInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.shaderMod = source["shaderMod"];
+	        this.worlds = source["worlds"];
 	    }
 	}
 
@@ -742,6 +1072,7 @@ export namespace launch {
 	    memory: MemoryRange;
 	    account: string;
 	    accountId: string;
+	    mods: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Record(source);
@@ -758,6 +1089,7 @@ export namespace launch {
 	        this.memory = this.convertValues(source["memory"], MemoryRange);
 	        this.account = source["account"];
 	        this.accountId = source["accountId"];
+	        this.mods = source["mods"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1093,6 +1425,29 @@ export namespace settings {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace store {
+	
+	export class Usage {
+	    blobs: number;
+	    bytes: number;
+	    unused: number;
+	    unusedBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Usage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.blobs = source["blobs"];
+	        this.bytes = source["bytes"];
+	        this.unused = source["unused"];
+	        this.unusedBytes = source["unusedBytes"];
+	    }
 	}
 
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -99,8 +101,11 @@ func (s *Service) Info(id string) TabInfo {
 	if m := s.shaderMod(v); m.id != "" {
 		t.ShaderMod = strings.TrimSpace(m.name + " " + m.version)
 	}
-	for _, f := range worldsAt(v.game) {
-		t.Worlds = append(t.Worlds, filepath.Base(filepath.Dir(filepath.FromSlash(f))))
+	if root, err := os.OpenRoot(v.game); err == nil {
+		for _, f := range worlds(root) {
+			t.Worlds = append(t.Worlds, f.Group)
+		}
+		_ = root.Close()
 	}
 	sort.Strings(t.Worlds)
 	return t
@@ -165,3 +170,12 @@ func (s *Service) Refs(yield func(sha1 string)) error {
 // Forget flushes and drops an instance's cached index before its folder
 // moves (to the trash, or elsewhere).
 func (s *Service) Forget(id string) { s.idx.forget(id) }
+
+// Folder is the folder an item lives in, for "Show in folder".
+func (s *Service) Folder(id, item string) (string, error) {
+	e, err := s.entry(id, item)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(s.d.Instances.GameDir(id), filepath.FromSlash(path.Dir(e.Rel))), nil
+}

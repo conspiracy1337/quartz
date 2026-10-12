@@ -226,3 +226,25 @@ func TestGC(t *testing.T) {
 		t.Fatal("held blob deleted on its first unheld pass")
 	}
 }
+
+func TestCleanDeletesUnusedNow(t *testing.T) {
+	s, game := open(t)
+	now := time.Unix(1_000_000, 0)
+	s.now = func() time.Time { return now }
+	old := file(t, filepath.Join(game, "old.jar"), "old")
+	if _, err := s.Adopt(filepath.Join(game, "old.jar"), old); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Hour)
+	fresh := file(t, filepath.Join(game, "fresh.jar"), "fresh")
+	if _, err := s.Adopt(filepath.Join(game, "fresh.jar"), fresh); err != nil {
+		t.Fatal(err)
+	}
+	none := func(func(string)) error { return nil }
+	if _, n, err := s.Clean(none, 10*time.Minute); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	if _, ok := s.Blob(fresh.SHA1); !ok {
+		t.Fatal("a blob added moments ago was cleaned")
+	}
+}

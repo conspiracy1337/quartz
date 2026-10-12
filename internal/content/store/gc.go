@@ -53,9 +53,21 @@ func (s *Store) Usage(refs Refs) (Usage, error) {
 }
 
 // GC deletes blobs nothing has referenced for longer than grace, and stale
-// temp files. A blob first seen unused is only marked, so a removal that
-// is undone, or a job between download and placement, never loses it.
+// temp files. A blob first seen unused is only marked, so a job between
+// download and placement never loses it.
 func (s *Store) GC(refs Refs, grace time.Duration) (freed int64, n int, err error) {
+	return s.collect(refs, func(b Blob, now time.Time) bool {
+		return b.Released != 0 && now.Sub(time.Unix(b.Released, 0)) >= grace
+	})
+}
+
+// Clean deletes every blob nothing references now, except blobs added in the
+// last minAge (a job may be about to place them). It is the Clean up button.
+func (s *Store) Clean(refs Refs, minAge time.Duration) (freed int64, n int, err error) {
+	return s.collect(refs, func(b Blob, now time.Time) bool { return now.Sub(time.Unix(b.Added, 0)) >= minAge })
+}
+
+func (s *Store) collect(refs Refs, deletable func(Blob, time.Time) bool) (freed int64, n int, err error) {
 	used, err := s.referenced(refs)
 	if err != nil {
 		return 0, 0, err
@@ -67,11 +79,11 @@ func (s *Store) GC(refs Refs, grace time.Duration) (freed int64, n int, err erro
 			switch {
 			case used[h]:
 				b.Released = 0
-			case b.Released == 0:
-				b.Released = now.Unix()
-			case now.Sub(time.Unix(b.Released, 0)) >= grace:
+			case deletable(b, now):
 				doomed = append(doomed, h)
 				continue
+			case b.Released == 0:
+				b.Released = now.Unix()
 			}
 			i.Blobs[h] = b
 		}

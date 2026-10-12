@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -398,5 +399,61 @@ func TestConfigEditsKeepOtherBytes(t *testing.T) {
 	}
 	if l.text[0] != "# comment" || l.text[1] != "a=1" || l.text[2] != "shaderPack=\\u00dcn\\u00ef code.zip" {
 		t.Fatalf("%q", l.text)
+	}
+}
+
+func TestAddDropped(t *testing.T) {
+	e := newEnv(t)
+	src := t.TempDir()
+	mod := filepath.Join(src, "sodium.jar")
+	writeZip(t, mod, map[string]string{"fabric.mod.json": `{"id":"sodium","name":"Sodium"}`})
+	notMod := filepath.Join(src, "random.jar")
+	writeZip(t, notMod, map[string]string{"a.class": "x"})
+	pack := filepath.Join(src, "pack.mrpack")
+	_ = os.WriteFile(pack, []byte("PK\x03\x04"), 0o600)
+	txt := filepath.Join(src, "notes.txt")
+	_ = os.WriteFile(txt, []byte("x"), 0o600)
+	link := filepath.Join(src, "link.jar")
+	_ = os.Symlink(mod, link)
+	res, err := e.svc.Add(context.Background(), e.id, Mods, "", []string{mod, notMod, pack, txt, link, "relative.jar"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Added) != 1 || res.Added[0] != "sodium.jar" || len(res.Rejected) != 5 {
+		t.Fatalf("%+v", res)
+	}
+	if res.Rejected[1].Reason != "It's a modpack: import it from the Library" {
+		t.Fatalf("%+v", res.Rejected)
+	}
+	if rows := e.list(Mods); len(rows) != 1 || rows[0].Name != "Sodium" {
+		t.Fatalf("%+v", rows)
+	}
+	again, _ := e.svc.Add(context.Background(), e.id, Mods, "", []string{mod})
+	if len(again.Rejected) != 1 || again.Rejected[0].Reason != "A file with that name is already there" {
+		t.Fatalf("%+v", again)
+	}
+	// The dropped file itself was never linked into the store.
+	a, _ := os.Stat(mod)
+	b, _ := os.Stat(filepath.Join(e.game, "mods", "sodium.jar"))
+	if os.SameFile(a, b) {
+		t.Fatal("the user's own file was linked")
+	}
+}
+
+func TestAddDataPackFolderToAWorld(t *testing.T) {
+	e := newEnv(t)
+	_ = os.MkdirAll(filepath.Join(e.game, "saves", "North"), 0o700)
+	src := filepath.Join(t.TempDir(), "graves")
+	_ = os.MkdirAll(filepath.Join(src, "data"), 0o700)
+	_ = os.WriteFile(filepath.Join(src, "pack.mcmeta"), []byte(`{"pack":{"pack_format":48}}`), 0o600)
+	if _, err := e.svc.Add(context.Background(), e.id, DataPacks, "", []string{src}); !errors.Is(err, ErrNoWorld) {
+		t.Fatalf("err = %v", err)
+	}
+	res, err := e.svc.Add(context.Background(), e.id, DataPacks, "North", []string{src})
+	if err != nil || len(res.Added) != 1 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if _, err := os.Stat(filepath.Join(e.game, "saves", "North", "datapacks", "graves", "pack.mcmeta")); err != nil {
+		t.Fatal(err)
 	}
 }
