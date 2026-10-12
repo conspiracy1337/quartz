@@ -21,7 +21,7 @@ func NewVersions(ctx *Ctx, m *meta.Service, in *install.Installer) *Versions {
 // Estimate is how many bytes the first launch of a version still downloads
 // (files other instances already share are not counted).
 func (v *Versions) Estimate(id string) (int64, error) {
-	res, err := v.installer.Resolve(v.ctx.Get(), id, "", mojang.CurrentEnv(sysinfo.OSVersion()))
+	res, err := v.installer.Resolve(v.ctx.Get(), install.Target{Minecraft: id}, "", mojang.CurrentEnv(sysinfo.OSVersion()))
 	if err != nil {
 		return 0, err
 	}

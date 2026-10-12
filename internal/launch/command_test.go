@@ -33,19 +33,24 @@ func TestCommandKeepsTokenOffTheCommandLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	inst, _ = insts.SetSettings(inst.ID, instance.Settings{
-		Java:   instance.JavaSettings{Override: true, JVMArgs: `-Dfoo="a b" -XX:+UseZGC`},
-		Window: instance.WindowSettings{Width: 1280, Height: 720, Fullscreen: true},
+		Java:     instance.JavaSettings{Override: true, JVMArgs: `-Dfoo="a b" -XX:+UseZGC`},
+		Window:   instance.WindowSettings{Width: 1280, Height: 720, Fullscreen: true},
+		Commands: instance.CommandSettings{Wrapper: `nice -n "$NICE_LEVEL"`, Env: []instance.EnvVar{{Name: "MESA_GL_VERSION_OVERRIDE", Value: "4.6"}}},
 	})
+	t.Setenv("JAVA_TOOL_OPTIONS", "-javaagent:evil.jar")
+	t.Setenv("NICE_LEVEL", "5")
 	st, _ := settings.Open(filepath.Join(dir, "settings.json"), events.NewBus(), nil)
 	l := New(Config{Instances: insts, Settings: st, BinDir: filepath.Join(dir, "bin")})
 	res := &install.Resolved{
 		Version: v, ClientJar: "/store/versions/1.21.4/1.21.4.jar", Classpath: []string{"/store/libraries/a.jar", "/store/versions/1.21.4/1.21.4.jar"},
-		NativesDir: "/store/natives/x", AssetsRoot: "/store/assets", GameAssets: "/store/assets",
+		NativesDir: "/store/natives/x", AssetsRoot: "/store/assets", GameAssets: "/store/assets", LibrariesDir: "/store/libraries",
 		LogConfig: "/store/logconfigs/client-1.12.xml", LogArgument: "-Dlog4j.configurationFile=${path}",
 	}
 	env := mojang.Env{OS: "linux", Arch: "x86_64", Features: map[string]bool{"has_custom_resolution": true}}
 	sess := accounts.Session{Name: "Steve", UUID: "0123456789abcdef0123456789abcdef", AccessToken: "SECRET_TOKEN_eyJhbGciOi", UserType: "msa"}
-	cmd, script, err := l.command(inst, sess, res, java.Runtime{Path: "/jdk/bin/java"}, MemoryRange{Min: 1024, Max: 4096}, env)
+	sp := spec{inst: inst, eff: inst.Resolve(st.Get()), sess: sess, res: res, rt: java.Runtime{Path: "/jdk/bin/java"}, mem: MemoryRange{Min: 1024, Max: 4096}, env: env, gameDir: insts.GameDir(inst.ID)}
+	sp.vars = instVars(inst, insts.Dir(inst.ID), sp.gameDir, sp.rt.Path)
+	cmd, script, err := l.command(sp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,5 +89,35 @@ func TestCommandKeepsTokenOffTheCommandLine(t *testing.T) {
 		if strings.HasPrefix(e, "JAVA_TOOL_OPTIONS=") {
 			t.Fatal("JAVA_TOOL_OPTIONS reached the game")
 		}
+	}
+	if !slices.Contains(cmd.Env, "MESA_GL_VERSION_OVERRIDE=4.6") || !slices.Contains(cmd.Env, "INST_NAME=T") {
+		t.Fatal("instance environment missing")
+	}
+	if !slices.Equal(cmd.Args[:4], []string{"nice", "-n", "5", "/jdk/bin/java"}) {
+		t.Fatalf("wrapper must come first, expanded per word: %v", cmd.Args[:4])
+	}
+}
+
+func TestCommandArgvNeverNeedsAShell(t *testing.T) {
+	t.Setenv("EVIL", "; rm -rf ~")
+	argv, err := commandArgv(`backup.sh "$INST_DIR" $EVIL`, map[string]string{"INST_DIR": "/data/My Pack"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(argv, []string{"backup.sh", "/data/My Pack", "; rm -rf ~"}) {
+		t.Fatalf("argv = %q", argv)
+	}
+}
+
+func TestBeforeLaunchCommandFailureStopsTheLaunch(t *testing.T) {
+	if _, err := os.Stat("/bin/sh"); err != nil {
+		t.Skip("needs /bin/sh")
+	}
+	err := runCommand(t.Context(), `/bin/sh -c "echo backup failed >&2; exit 3"`, t.TempDir(), nil, os.Environ())
+	if err == nil || !strings.Contains(err.Error(), "backup failed") || !strings.Contains(err.Error(), "code 3") {
+		t.Fatalf("err = %v", err)
+	}
+	if err := runCommand(t.Context(), `/bin/sh -c "exit 0"`, t.TempDir(), nil, os.Environ()); err != nil {
+		t.Fatal(err)
 	}
 }

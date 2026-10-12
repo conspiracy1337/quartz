@@ -19,13 +19,20 @@ import (
 	"quartz/internal/instance"
 	"quartz/internal/java"
 	"quartz/internal/launch"
+	"quartz/internal/loader"
 	"quartz/internal/mojang"
 	"quartz/internal/settings"
 )
 
+func (h *harness) loaders() *loader.Registry {
+	s := filepath.Join(h.root, "store")
+	return loader.New(loader.Deps{Meta: h.meta, Downloader: h.dl, Verified: h.ver, Log: h.log,
+		Dirs: loader.Dirs{Libraries: filepath.Join(s, "libraries"), Versions: filepath.Join(s, "versions")}})
+}
+
 func (h *harness) installer() *install.Installer {
 	s := filepath.Join(h.root, "store")
-	return install.New(h.meta, h.dl, h.java, install.Dirs{
+	return install.New(h.meta, h.dl, h.java, h.loaders(), install.Dirs{
 		Libraries: filepath.Join(s, "libraries"), Versions: filepath.Join(s, "versions"), Assets: filepath.Join(s, "assets"),
 		LogConfigs: filepath.Join(s, "logconfigs"), Natives: filepath.Join(s, "natives"),
 	})
@@ -41,7 +48,7 @@ func TestInstallVanilla(t *testing.T) {
 	for _, id := range []string{"1.21.4", "1.12.2"} {
 		t.Run(id, func(t *testing.T) {
 			gameDir := filepath.Join(h.root, "instances", id, "game")
-			res, err := in.Resolve(h.ctx(), id, gameDir, env)
+			res, err := in.Resolve(h.ctx(), install.Target{Minecraft: id}, gameDir, env)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -59,7 +66,7 @@ func TestInstallVanilla(t *testing.T) {
 				t.Logf("%s installed in %s", id, time.Since(start).Round(time.Millisecond))
 			}
 			start := time.Now()
-			res, err = in.Resolve(h.ctx(), id, gameDir, env)
+			res, err = in.Resolve(h.ctx(), install.Target{Minecraft: id}, gameDir, env)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -101,14 +108,22 @@ func TestLaunchOffline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inst, err := insts.Create(instance.CreateRequest{Name: "Launch test " + version, Minecraft: version}, instance.JavaSettings{})
+	req := instance.CreateRequest{Name: "Launch test " + version, Minecraft: version}
+	if k := os.Getenv("QUARTZ_IT_LOADER"); k != "" {
+		v, err := h.loaders().Latest(h.ctx(), loader.Kind(k), version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Loader, req.LoaderVersion, req.Name = k, v.ID, req.Name+" "+k
+	}
+	inst, err := insts.Create(req, instance.JavaSettings{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	red := logging.NewRedactor("")
 	mgr := accounts.NewManager(accounts.Config{Store: accs, Bus: bus, Redactor: red, Settings: func() settings.Accounts { return st.Get().Accounts }})
 	l := launch.New(launch.Config{
-		Instances: insts, Accounts: mgr, Installer: h.installer(), Java: h.java, Tasks: h.tasks,
+		Instances: insts, Accounts: mgr, Installer: h.installer(), Loaders: h.loaders(), Java: h.java, Tasks: h.tasks,
 		Settings: st, Bus: bus, Redactor: red, BinDir: filepath.Join(h.root, "store", "bin"), Log: h.log,
 	})
 

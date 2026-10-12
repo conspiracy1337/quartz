@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"quartz/internal/settings"
 )
 
 func TestCreateListUpdateReload(t *testing.T) {
@@ -53,7 +55,11 @@ func TestCreateRejects(t *testing.T) {
 		"empty name":  {Name: "   ", Minecraft: "1.21.4"},
 		"long name":   {Name: strings.Repeat("x", 65), Minecraft: "1.21.4"},
 		"control":     {Name: "a\x00b", Minecraft: "1.21.4"},
-		"loader":      {Name: "Modded", Minecraft: "1.21.4", Loader: "fabric"},
+		"loader":      {Name: "Modded", Minecraft: "1.21.4", Loader: "liteloader", LoaderVersion: "1"},
+		"no build":    {Name: "Modded", Minecraft: "1.21.4", Loader: "fabric"},
+		"bad build":   {Name: "Modded", Minecraft: "1.21.4", Loader: "fabric", LoaderVersion: "../x"},
+		"long group":  {Name: "X", Minecraft: "1.21.4", Group: strings.Repeat("g", 33)},
+		"bad icon":    {Name: "X", Minecraft: "1.21.4", Icon: "../icon.png"},
 		"bad version": {Name: "X", Minecraft: "../../x"},
 	}
 	for name, req := range cases {
@@ -61,8 +67,73 @@ func TestCreateRejects(t *testing.T) {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	if _, err := s.Create(cases["loader"], JavaSettings{}); !errors.Is(err, ErrLoaderUnsupported) {
+	if _, err := s.Create(cases["loader"], JavaSettings{}); !errors.Is(err, ErrBadLoader) {
 		t.Fatal("loader error not specific")
+	}
+	in, err := s.Create(CreateRequest{Name: "Modded", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.10", Group: " Mods "}, JavaSettings{})
+	if err != nil || in.Loader != "fabric" || in.LoaderVersion != "0.16.10" || in.Group != "Mods" || !in.KeepLoaderUpdated || in.Version != schema {
+		t.Fatalf("modded instance = %+v, %v", in, err)
+	}
+	if in, _ := s.Create(CreateRequest{Name: "Plain", Minecraft: "1.21.1", Loader: "none"}, JavaSettings{}); in.Loader != "" {
+		t.Fatal(`"none" must mean vanilla`)
+	}
+}
+
+func TestVersionOneFilesMigrate(t *testing.T) {
+	dir := t.TempDir()
+	id := "old-1a2b"
+	if err := os.MkdirAll(filepath.Join(dir, id, "game"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	v1 := `{"version":1,"id":"old-1a2b","name":"Old","art":{"background":"#3ecf8e"},"minecraft":"1.21.1","loader":"quilt-ish",
+		"settings":{"java":{"override":true,"memoryMinMb":2048,"memoryMaxMb":6144,"jvmArgs":"-XX:+UseZGC"},"window":{}}}`
+	if err := os.WriteFile(filepath.Join(dir, id, "instance.json"), []byte(v1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := s.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.Version != schema || !in.KeepLoaderUpdated || in.Loader != "" || in.Settings.Java.MemoryMaxMB != 6144 {
+		t.Fatalf("migrated = %+v", in)
+	}
+}
+
+func TestResolveLayersOverGlobals(t *testing.T) {
+	g := settings.Defaults()
+	in := Instance{Settings: Settings{Java: JavaSettings{JavaPath: "/opt/jdk/bin/java", MemoryMinMB: 100, MemoryMaxMB: 8192, JVMArgs: "-Dx"}}}
+	e := in.Resolve(g)
+	if e.JavaPath != "" || e.MemoryMaxMB != g.Java.MemoryMaxMB || e.JVMArgs != g.Java.JVMArgs || e.OnGameStart != g.General.OnGameStart {
+		t.Fatalf("without override the globals apply: %+v", e)
+	}
+	in.Settings.Java.Override, in.Settings.Window.OnGameStart = true, "close"
+	e = in.Resolve(g)
+	if e.JavaPath != "/opt/jdk/bin/java" || e.MemoryMinMB != 256 || e.MemoryMaxMB != 8192 || e.JVMArgs != "-Dx" || e.OnGameStart != "close" {
+		t.Fatalf("override = %+v", e)
+	}
+}
+
+func TestCommandValidation(t *testing.T) {
+	s, _ := Open(t.TempDir(), nil)
+	in, _ := s.Create(CreateRequest{Name: "C", Minecraft: "1.21.1"}, JavaSettings{})
+	bad := []CommandSettings{
+		{PreLaunch: "backup\nrm -rf /"},
+		{Env: []EnvVar{{Name: "1BAD", Value: "x"}}},
+		{Env: []EnvVar{{Name: "JAVA_TOOL_OPTIONS", Value: "-javaagent:evil.jar"}}},
+		{Env: []EnvVar{{Name: "_java_options", Value: "x"}}},
+	}
+	for _, c := range bad {
+		if _, err := s.SetSettings(in.ID, Settings{Commands: c}); err == nil {
+			t.Errorf("accepted %+v", c)
+		}
+	}
+	ok := CommandSettings{PreLaunch: `$HOME/scripts/backup.sh "$INST_DIR"`, Env: []EnvVar{{Name: "MESA_GL_VERSION_OVERRIDE", Value: "4.6"}}}
+	if _, err := s.SetSettings(in.ID, Settings{Commands: ok}); err != nil {
+		t.Fatal(err)
 	}
 }
 

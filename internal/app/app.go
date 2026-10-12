@@ -35,6 +35,7 @@ import (
 	"quartz/internal/instance"
 	"quartz/internal/java"
 	"quartz/internal/launch"
+	"quartz/internal/loader"
 	"quartz/internal/meta"
 	"quartz/internal/network"
 	"quartz/internal/settings"
@@ -69,6 +70,7 @@ type app struct {
 	textures  *skins.Textures
 	instances *instance.Store
 	installer *install.Installer
+	loaders   *loader.Registry
 	launcher  *launch.Launcher
 	hidden    atomic.Bool // the window was hidden because a game started
 	ctx       *api.Ctx
@@ -218,12 +220,17 @@ func (a *app) buildTasks() error {
 		return fmt.Errorf("starting downloads: %w", err)
 	}
 	a.verified, a.tasks = ver, eng
-	a.installer = install.New(a.meta, download.New(a.http, ver), a.java, install.Dirs{
+	dl := download.New(a.http, ver)
+	a.loaders = loader.New(loader.Deps{
+		Meta: a.meta, Downloader: dl, Verified: ver, Log: a.log,
+		Dirs: loader.Dirs{Libraries: a.paths.Libraries(), Versions: a.paths.Versions()},
+	})
+	a.installer = install.New(a.meta, dl, a.java, a.loaders, install.Dirs{
 		Libraries: a.paths.Libraries(), Versions: a.paths.Versions(), Assets: a.paths.Assets(),
 		LogConfigs: a.paths.LogConfigs(), Natives: a.paths.Natives(),
 	})
 	a.launcher = launch.New(launch.Config{
-		Instances: a.instances, Accounts: a.accounts, Installer: a.installer, Java: a.java, Tasks: eng,
+		Instances: a.instances, Accounts: a.accounts, Installer: a.installer, Loaders: a.loaders, Java: a.java, Tasks: eng,
 		Settings: a.settings, Bus: a.bus, Redactor: a.redactor, BinDir: a.paths.Bin(), Log: a.log,
 		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited},
 	})
