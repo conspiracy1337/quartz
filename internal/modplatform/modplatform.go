@@ -154,12 +154,33 @@ type Installed struct {
 	Loaders   []string // loaders the file itself declares
 }
 
-// Check finds the newest allowed version for every installed item on one
-// platform. It asks one loader at a time in the order given, then once more
-// for loaders the files declare that the instance doesn't (Prism's forced
-// pass); items answered drop out of later requests. Only versions newer
-// than the installed one, with another file, count as updates.
+// Check finds updates for every installed item on one platform: the newest
+// allowed version, when it is newer than the installed one and another file.
 func Check(ctx context.Context, p Provider, items []Installed, q Query) (map[string]Version, error) {
+	found, err := Find(ctx, p, items, q)
+	for key, v := range found {
+		if it := itemByKey(items, key); !newer(v, it.Current) {
+			delete(found, key)
+		}
+	}
+	return found, err
+}
+
+func itemByKey(items []Installed, key string) Installed {
+	for _, it := range items {
+		if it.Key == key {
+			return it
+		}
+	}
+	return Installed{}
+}
+
+// Find finds the newest allowed version of every installed item on one
+// platform, even when that is the installed one (to see what supports a
+// game version). It asks one loader at a time in the order given, then once
+// more for loaders the files declare that the instance doesn't (Prism's
+// forced pass); items answered drop out of later requests.
+func Find(ctx context.Context, p Provider, items []Installed, q Query) (map[string]Version, error) {
 	chain := append([]string{}, q.Loaders...)
 	if len(chain) == 0 {
 		chain = []string{""}
@@ -200,9 +221,7 @@ func Check(ctx context.Context, p Provider, items []Installed, q Query) (map[str
 				continue
 			}
 			answered[it.Key] = true
-			if newer(v, it.Current) {
-				out[it.Key] = v
-			}
+			out[it.Key] = v
 		}
 	}
 	for _, l := range chain {
