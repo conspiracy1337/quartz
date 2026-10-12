@@ -279,7 +279,10 @@ func TestRateLimitResetHeader(t *testing.T) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer srv.Close()
-	_, err := newClient(t, Options{}).Get(context.Background(), srv.URL, nil)
+	resp, err := newClient(t, Options{}).Get(context.Background(), srv.URL, nil)
+	if err == nil {
+		_ = resp.Body.Close()
+	}
 	var se *StatusError
 	if !errors.As(err, &se) || se.RetryAfter != 7*time.Second {
 		t.Fatalf("err = %v", err)
