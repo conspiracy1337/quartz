@@ -9,6 +9,7 @@
   import Icon from '../ui/Icon.svelte';
   import type { IconName } from '../ui/icons';
   import Tile from '../ui/Tile.svelte';
+  import { hasBridge } from '../bridge';
 
   /** Ctrl+K commands and Ctrl+P instance switcher; Tab flips between them. */
   interface Props { mode: 'commands' | 'instances' }
@@ -17,8 +18,11 @@
   interface Item { key: string; group: string; label: string; icon: IconName; hint?: string; run: () => void }
   const nav = (r: Route) => () => go(r);
   const COMMANDS: Item[] = [
-    { key: 'check', group: 'Actions', label: 'Check for updates in all instances', icon: 'refresh', run: nav({ name: 'instance', id: 'fo', tab: 'mods', sub: 'updates' }) },
-    { key: 'update', group: 'Actions', label: 'Update 2 mods in Fabulously Optimized', icon: 'arrow-up', run: nav({ name: 'instance', id: 'fo', tab: 'mods', sub: 'updates' }) },
+    // Mod update actions point at the design's sample instance until mod updates exist (M5).
+    ...(hasBridge() ? [] : ([
+      { key: 'check', group: 'Actions', label: 'Check for updates in all instances', icon: 'refresh', run: nav({ name: 'instance', id: 'fo', tab: 'mods', sub: 'updates' }) },
+      { key: 'update', group: 'Actions', label: 'Update 2 mods in Fabulously Optimized', icon: 'arrow-up', run: nav({ name: 'instance', id: 'fo', tab: 'mods', sub: 'updates' }) },
+    ] as Item[])),
     { key: 'self', group: 'Actions', label: 'Install launcher update 1.4.0', icon: 'shield', run: () => {} },
     { key: 'new', group: 'Actions', label: 'Create a new instance', icon: 'plus', run: nav({ name: 'new-instance' }) },
     { key: 'shortcuts', group: 'Actions', label: 'Show keyboard shortcuts', icon: 'settings-simple', run: () => session.open({ kind: 'shortcuts' }) },

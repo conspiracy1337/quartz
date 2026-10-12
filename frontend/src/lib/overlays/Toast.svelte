@@ -2,15 +2,23 @@
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
 
-  /** "Moved X to the trash" with Undo; the bar drains while it waits. */
-  interface Props { subject: string; text: string; undo?: (() => void) | undefined }
-  let { subject, text, undo }: Props = $props();
+  import type { Toast } from '../session.svelte';
+
+  /** "Moved X to the trash" with Undo, or a short notice with an optional action;
+      the bar drains while it waits. */
+  let { subject, text, undo, tone = 'info', action }: Toast = $props();
+  const icon = $derived(tone === 'trash' ? 'trash' : tone === 'error' ? 'warn' : 'info');
 </script>
 
-<div class="toast tst" role="status">
-  <Icon name="trash" style="color: var(--muted)" />
-  <span>Moved <span style="font-weight: 500">{subject}</span> {text}</span>
+<div class="toast tst" role={tone === 'error' ? 'alert' : 'status'}>
+  <Icon name={icon} style="color: {tone === 'error' ? 'var(--warn)' : 'var(--muted)'}" />
+  {#if tone === 'trash'}
+    <span>Moved <span style="font-weight: 500">{subject}</span> {text}</span>
+  {:else}
+    <span><span style="font-weight: 500">{subject}</span> <span class="muted">{text}</span></span>
+  {/if}
   {#if undo}<button class="btn btn-sm" style="margin-left: 8px" onclick={() => { undo?.(); session.dismissToast(); }}>Undo</button>{/if}
+  {#if action}<button class="btn btn-sm" style="margin-left: 8px" onclick={() => { action?.run(); session.dismissToast(); }}>{action.label}</button>{/if}
   <button class="btn btn-icon btn-sm btn-ghost" aria-label="Dismiss" onclick={() => session.dismissToast()}><Icon name="x" size={10} sw={2.2} /></button>
   <span class="tbar" aria-hidden="true"><span></span></span>
 </div>

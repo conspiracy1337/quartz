@@ -24,7 +24,6 @@
   const colorOf = (t: (typeof TABS)[number]) => (t === 'All changes' ? 'var(--text)' : MARK[t].color);
 
   function update() {
-    session.tasksRunning = true;
     go({ name: 'downloads' });
   }
 </script>

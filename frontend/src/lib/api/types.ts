@@ -22,6 +22,13 @@ export interface InstanceSummary {
   running: boolean;
 }
 
+/** Per-instance settings (mirrors Go's instance.Settings). */
+export interface InstanceSettings {
+  java: { override: boolean; javaPath: string; memoryMinMb: number; memoryMaxMb: number; jvmArgs: string };
+  window: { width: number; height: number; fullscreen: boolean; onGameStart: string };
+}
+/** What the New instance screen sends. */
+export interface CreateInstance { name: string; art: Art; minecraft: string; loader: string; group: string; sandbox: boolean; shares: string[] }
 export interface Instance extends InstanceSummary {
   icon?: 'bolt';
   sandboxed: boolean;
@@ -32,6 +39,7 @@ export interface Instance extends InstanceSummary {
   folder: string;
   syncTargets: number;
   discordStatus: boolean;
+  settings: InstanceSettings;
 }
 
 export type ActivityKind = 'session' | 'change';
@@ -109,7 +117,11 @@ export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
 export interface LogLine { time: string; level: LogLevel; thread: string; message: string; redacted?: boolean }
 export interface LogFile { name: string; bytes: number; crash: boolean }
 export type RunResult = 'ok' | 'crash' | 'killed' | 'failed';
-export interface Run { id: string; startedAt: number; lengthMin: number; exitCode: number; result: RunResult }
+export interface Run {
+  id: string; startedAt: number; lengthMin: number; exitCode: number; result: RunResult;
+  /** What the run used (recorded by Go; absent in older fixtures). */
+  java?: string; memory?: { min: number; max: number }; account?: string;
+}
 
 // ---- versions ----
 export interface McVersion { id: string; java: number; released: number; snapshot?: boolean }
@@ -147,21 +159,30 @@ export interface ProjectHit {
 export type DocBlock = { type: 'p' | 'h2'; text: string } | { type: 'ul'; items: string[] };
 export interface ProjectVersion { id: string; channel: 'Release' | 'Beta' | 'Alpha'; minecraft: string; published: number; bytes: number; notes: string[] }
 
-// ---- downloads ----
-export type StepState = 'done' | 'run' | 'warn';
-export interface DownloadStep { name: string; pct: number; detail: string; state: StepState }
-export interface Download {
+// ---- downloads (mirrors Go's tasks.JobView and tasks.Snapshot) ----
+export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled';
+/** Drives the dot colour of a step row. */
+export type StepState = 'queued' | 'run' | 'done' | 'warn' | 'failed';
+export interface JobStep { name: string; unit: 'bytes' | 'count'; done: number; total: number; state: StepState }
+export interface JobMeta { title: string; subtitle: string; art: Art; kind: string }
+export interface Job {
   id: string;
-  name: string;
-  sub: string;
-  art: Art;
+  meta: JobMeta;
+  state: JobState;
   doneBytes: number;
   totalBytes: number;
-  etaSec?: number;
-  queued: boolean;
-  steps: DownloadStep[];
+  /** Bytes per second. */
+  speed: number;
+  /** 0 while unknown. */
+  etaSec: number;
+  steps: JobStep[];
+  error?: string;
+  retryable: boolean;
+  createdAt: number;
+  /** 0 while active. */
+  finishedAt: number;
 }
-export interface FinishedDownload { id: string; name: string; sub: string; art: Art; doneBytes: number; totalBytes: number; ok: boolean }
+export interface TaskSnapshot { active: Job[]; speed: number; etaSec: number; historyRev: number }
 
 // ---- syncing ----
 export interface SyncEntry { id: string; name: string; path: string; users: number; enabled: boolean; available: boolean }

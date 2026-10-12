@@ -3,23 +3,27 @@ package api
 import (
 	"errors"
 	"path/filepath"
+	"strings"
+	"unicode"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"quartz/internal/core/fsx"
+	"quartz/internal/network"
 	"quartz/internal/settings"
 	"quartz/internal/theme"
 )
 
 // Settings exposes the global settings document and the custom CSS file.
 type Settings struct {
-	ctx   *Ctx
-	store *settings.Store
-	css   *theme.CustomCSS
+	ctx     *Ctx
+	store   *settings.Store
+	css     *theme.CustomCSS
+	network *network.Service
 }
 
-func NewSettings(ctx *Ctx, store *settings.Store, css *theme.CustomCSS) *Settings {
-	return &Settings{ctx: ctx, store: store, css: css}
+func NewSettings(ctx *Ctx, store *settings.Store, css *theme.CustomCSS, n *network.Service) *Settings {
+	return &Settings{ctx: ctx, store: store, css: css, network: n}
 }
 
 func (s *Settings) Get() settings.Settings { return s.store.Get() }
@@ -50,6 +54,25 @@ func (s *Settings) PickCustomCSS() (settings.Settings, error) {
 	next.Appearance.CustomCSS = settings.CustomCSS{Enabled: true, Path: filepath.Clean(path)}
 	return s.store.Replace(next), nil
 }
+
+// maxProxyPassword bounds what the UI may send into the keychain.
+const maxProxyPassword = 1024
+
+// ErrBadProxyPassword is returned for passwords that cannot be valid.
+var ErrBadProxyPassword = errors.New("api: the proxy password is too long or contains control characters")
+
+// SetProxyPassword stores the custom proxy's password in the OS keychain; an
+// empty string removes it. The password is never written to the settings file
+// and is never sent back to the UI.
+func (s *Settings) SetProxyPassword(pw string) error {
+	if len(pw) > maxProxyPassword || strings.ContainsFunc(pw, unicode.IsControl) {
+		return ErrBadProxyPassword
+	}
+	return s.network.SetPassword(pw)
+}
+
+// HasProxyPassword reports whether a proxy password is stored.
+func (s *Settings) HasProxyPassword() bool { return s.network.HasPassword() }
 
 // ErrThemeTooLarge is returned when an exported theme exceeds the CSS size cap.
 var ErrThemeTooLarge = errors.New("api: theme is too large")

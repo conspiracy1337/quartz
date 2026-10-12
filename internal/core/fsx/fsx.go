@@ -90,3 +90,28 @@ func ReadCapped(path string, limit int64) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// Inside reports whether p is root or lies below it (both already resolved).
+func Inside(root, p string) bool {
+	return p == root || strings.HasPrefix(p, root+string(filepath.Separator))
+}
+
+// SymlinkInside reports whether the symlink at p really points inside root
+// (a resolved directory). Its parent folder is resolved physically, because it
+// may itself sit behind a link, and the link text is joined to it, so chains
+// of individually harmless links (d -> ".", then d/l -> "../x") and dangling
+// links are caught. A path that is not a symlink is accepted.
+func SymlinkInside(root, p string) bool {
+	text, err := os.Readlink(p)
+	if err != nil {
+		return true
+	}
+	dir, err := filepath.EvalSymlinks(filepath.Dir(p))
+	if err != nil || filepath.IsAbs(text) || !Inside(root, filepath.Join(dir, text)) {
+		return false
+	}
+	if real, err := filepath.EvalSymlinks(p); err == nil && !Inside(root, real) {
+		return false
+	}
+	return true
+}

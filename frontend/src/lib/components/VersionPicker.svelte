@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { api } from '../api';
   import { shortMonthDay } from '../format';
   import { query } from '../query.svelte';
@@ -10,9 +11,18 @@
   let { current = '', onpick }: Props = $props();
 
   const families = query(() => api.versions.minecraft());
-  let m = $state(1);
+  let m = $state(-1);
   let v = $state(0);
   let snapshots = $state(false);
+
+  // Once the list arrives, start on the family that holds `current` (or the newest one)
+  // and report that selection, so the form never shows one version and submits another.
+  $effect.pre(() => {
+    const d = families.data;
+    if (!d?.length || m >= 0) return;
+    const fi = Math.max(0, d.findIndex((f) => f.releases.some((r) => r.id === current)));
+    untrack(() => choose(fi, Math.max(0, d[fi]!.releases.findIndex((r) => r.id === current)), false));
+  });
 
   const fam = $derived(families.data?.[m]);
   const list = $derived(fam ? [...fam.releases, ...(snapshots ? fam.snapshots : [])] : []);

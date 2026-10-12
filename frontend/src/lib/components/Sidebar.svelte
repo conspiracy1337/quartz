@@ -4,6 +4,7 @@
 
 <script lang="ts">
   import { api } from '../api';
+  import { revs } from '../revs.svelte';
   import { query } from '../query.svelte';
   import { href, type Route } from '../router.svelte';
   import { session } from '../session.svelte';
@@ -73,6 +74,9 @@
       {#if me}
         <span class="avatar" aria-hidden="true" style="background: linear-gradient({me.skin.hair} 0 38%, {me.skin.skin} 38% 100%)"></span>
         <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{me.name}</span><span class="trunc small faint" style="display: block">{me.kind === 'microsoft' ? 'Microsoft account' : 'Offline account'}</span></span>
+      {:else if accounts.data}
+        <span class="avatar" aria-hidden="true" style="background: var(--raise)"></span>
+        <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">Add account</span><span class="trunc small faint" style="display: block">No account yet</span></span>
       {:else}
         <span class="avatar sk" aria-hidden="true"></span>
         <span style="min-width: 0; display: flex; flex-direction: column; gap: 6px" aria-hidden="true"><span class="sk" style="display: block; height: 11px; width: 70%"></span><span class="sk" style="display: block; height: 9px; width: 85%"></span></span>

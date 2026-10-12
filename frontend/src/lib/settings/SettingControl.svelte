@@ -4,6 +4,7 @@
   import Select from '../ui/Select.svelte';
   import Seg from '../ui/Seg.svelte';
   import Toggle from '../ui/Toggle.svelte';
+  import SecretControl from './SecretControl.svelte';
   import type { Control } from './registry';
 
   /** The control for one registry setting, bound to the live settings. */
@@ -23,11 +24,14 @@
   {:else if c.kind === 'range'}
     {@const v = c.get(s)}
     <span style="display: flex; gap: 12px; align-items: center"><input type="range" class="range" min={c.min} max={c.max} value={v} aria-label={label} oninput={(e) => set(c.set)(Number(e.currentTarget.value))} /><span class="mono" style="width: 20px">{v}</span></span>
-  {:else if c.kind === 'memory'}
-    <span style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
-      <label class="input"><span class="sr">Minimum</span><input class="tnum" inputmode="numeric" value={s.java.memoryMinMb} onchange={(e) => prefs.update((st) => (st.java.memoryMinMb = Number(e.currentTarget.value) || 0))} /><span class="suffix">MB min</span></label>
-      <label class="input"><span class="sr">Maximum</span><input class="tnum" inputmode="numeric" value={s.java.memoryMaxMb} onchange={(e) => prefs.update((st) => (st.java.memoryMaxMb = Number(e.currentTarget.value) || 0))} /><span class="suffix">MB max</span></label>
+  {:else if c.kind === 'inputs'}
+    <span style="display: grid; grid-template-columns: {c.fields.map((f) => `${f.grow ?? 1}fr`).join(' ')}; gap: 8px">
+      {#each c.fields as f (f.label)}
+        <label class="input"><span class="sr">{f.label}</span><input class:tnum={f.numeric} inputmode={f.numeric ? 'numeric' : 'text'} placeholder={f.placeholder} value={f.get(s)} onchange={(e) => set(f.set)(e.currentTarget.value)} />{#if f.suffix}<span class="suffix">{f.suffix}</span>{/if}</label>
+      {/each}
     </span>
+  {:else if c.kind === 'secret'}
+    <SecretControl control={c} {label} />
   {:else if c.kind === 'link'}
     <a href={href(c.route)} class="btn btn-sm">{c.label}</a>
   {/if}

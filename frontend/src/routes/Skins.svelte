@@ -5,6 +5,7 @@
   import { searchIn } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import SearchField from '$lib/ui/SearchField.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   const skins = query(() => api.accounts.skins());
   const capes = query(() => api.accounts.capes());
@@ -41,6 +42,7 @@
               <span class="nm"><span class="trunc">{s.name}</span>{#if s.worn}<span class="badge badge-accent">Wearing</span>{/if}</span>
             </button>
           {/each}
+          {#if skins.data && !list.length}<Empty text="Your skin library arrives with Microsoft sign-in." style="grid-column: 1 / -1" />{/if}
           {#if !skins.data}{#each { length: 8 } as _, k (k)}<div class="sk" style="height: 180px; border-radius: var(--radius-lg)" aria-hidden="true"></div>{/each}{/if}
         </div>
       </section>

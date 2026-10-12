@@ -4,6 +4,7 @@
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import SearchField from '$lib/ui/SearchField.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
@@ -40,6 +41,8 @@
       {#if shots.data}
         {#each shown as s (s.id)}
           <a href={href({ name: 'instance', id: instanceId, tab: 'screenshots', sub: s.id })} class="sh" style="background: {s.art.background}" aria-label="Open {when(s.takenAt)}"><span class="cap tnum">{when(s.takenAt)}</span></a>
+        {:else}
+          <Empty text={shots.data.length ? 'No screenshots from this world.' : 'No screenshots yet. Press F2 in the game to take one.'} style="grid-column: 1 / -1" />
         {/each}
       {:else}
         {#each { length: 12 } as _, k (k)}<div class="sk" style="aspect-ratio: 16/9; border-radius: 8px" aria-hidden="true"></div>{/each}

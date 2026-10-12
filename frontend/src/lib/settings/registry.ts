@@ -1,16 +1,28 @@
 // Every global setting is defined once here. The settings tabs render their groups from
 // this list and the settings search filters it, so a setting can never appear in two
 // places with two different labels or behaviours.
-import type { Settings } from '../api';
+import { settingsApi, type Settings } from '../api/system';
 import type { Route, SettingsTab } from '../router.svelte';
 
 type Opt = { value: string; label: string };
+/** One text input inside an `inputs` control; `grow` is its share of the control column. */
+export type Field = {
+  label: string;
+  get: (s: Settings) => string | number;
+  set: (s: Settings, v: string) => void;
+  numeric?: boolean;
+  suffix?: string;
+  placeholder?: string;
+  grow?: number;
+};
 export type Control =
   | { kind: 'toggle'; get: (s: Settings) => boolean; set: (s: Settings, v: boolean) => void }
   | { kind: 'seg'; options: readonly Opt[]; get: (s: Settings) => string; set: (s: Settings, v: string) => void }
   | { kind: 'select'; options: readonly Opt[]; get: (s: Settings) => string; set: (s: Settings, v: string) => void }
   | { kind: 'range'; min: number; max: number; get: (s: Settings) => number; set: (s: Settings, v: number) => void }
-  | { kind: 'memory' }
+  | { kind: 'inputs'; fields: readonly Field[] }
+  /** A write-only value kept outside the settings file (OS keychain). */
+  | { kind: 'secret'; has: () => Promise<boolean>; save: (v: string) => Promise<void> }
   | { kind: 'textarea'; rows: number; get: (s: Settings) => string; set: (s: Settings, v: string) => void }
   | { kind: 'link'; label: string; route: Route };
 
@@ -22,10 +34,15 @@ export interface SettingDef {
   title: string;
   desc?: string;
   control: Control;
+  /** Shown only while this holds (e.g. custom proxy rows). */
+  when?: (s: Settings) => boolean;
 }
 
 // Equivalent options use the same labels everywhere (global and instance settings).
 export const ON_GAME_START = [{ value: 'keep-open', label: 'Keep open' }, { value: 'hide', label: 'Hide' }, { value: 'close', label: 'Close' }] as const;
+const num = (v: string) => Number(v) || 0;
+const customProxy = (s: Settings) => s.downloads.proxy === 'custom';
+
 export const CHANNELS = [{ value: 'release', label: 'Release' }, { value: 'beta', label: 'Beta' }, { value: 'alpha', label: 'Alpha' }] as const;
 
 export const registry: SettingDef[] = [
@@ -38,6 +55,15 @@ export const registry: SettingDef[] = [
   { id: 'parallel', tab: 'downloads', group: 'Downloads', title: 'Parallel downloads', control: { kind: 'range', min: 1, max: 16, get: (s) => s.downloads.parallel, set: (s, v) => (s.downloads.parallel = v) } },
   { id: 'watchDownloads', tab: 'downloads', group: 'Downloads', title: 'Watch the Downloads folder', desc: 'Picks up CurseForge files that must be downloaded by hand.', control: { kind: 'toggle', get: (s) => s.downloads.watchDownloads, set: (s, v) => (s.downloads.watchDownloads = v) } },
   { id: 'proxy', tab: 'downloads', group: 'Downloads', title: 'Proxy', control: { kind: 'select', options: [{ value: 'system', label: 'Use system settings' }, { value: 'none', label: 'No proxy' }, { value: 'custom', label: 'Custom proxy' }], get: (s) => s.downloads.proxy, set: (s, v) => (s.downloads.proxy = v) } },
+  { id: 'proxyType', tab: 'downloads', group: 'Downloads', title: 'Proxy type', when: customProxy, control: { kind: 'select', options: [{ value: 'http', label: 'HTTP' }, { value: 'https', label: 'HTTPS' }, { value: 'socks5', label: 'SOCKS5' }], get: (s) => s.downloads.proxyCustom.type, set: (s, v) => (s.downloads.proxyCustom.type = v) } },
+  { id: 'proxyAddress', tab: 'downloads', group: 'Downloads', title: 'Proxy address', when: customProxy, control: { kind: 'inputs', fields: [
+    { label: 'Host', placeholder: 'proxy.example.com', grow: 2, get: (s) => s.downloads.proxyCustom.host, set: (s, v) => (s.downloads.proxyCustom.host = v.trim()) },
+    { label: 'Port', numeric: true, suffix: 'port', get: (s) => s.downloads.proxyCustom.port, set: (s, v) => (s.downloads.proxyCustom.port = num(v)) },
+  ] } },
+  { id: 'proxyUser', tab: 'downloads', group: 'Downloads', title: 'Proxy user name', desc: 'Leave empty if the proxy needs no sign-in.', when: customProxy, control: { kind: 'inputs', fields: [
+    { label: 'User name', placeholder: 'Optional', get: (s) => s.downloads.proxyCustom.user, set: (s, v) => (s.downloads.proxyCustom.user = v) },
+  ] } },
+  { id: 'proxyPassword', tab: 'downloads', group: 'Downloads', title: 'Proxy password', desc: 'Kept in your system keychain, never in a file.', when: customProxy, control: { kind: 'secret', has: () => settingsApi.hasProxyPassword(), save: (v) => settingsApi.setProxyPassword(v) } },
   { id: 'modChannel', tab: 'downloads', group: 'Mod updates', title: 'Mod update channel', desc: 'The least stable versions to offer when checking for mod updates.', control: { kind: 'seg', options: CHANNELS, get: (s) => s.updates.modChannel, set: (s, v) => (s.updates.modChannel = v) } },
 
   { id: 'discord', tab: 'integrations', group: 'Integrations', title: 'Discord status', desc: 'Shows the instance and Minecraft version you are playing.', control: { kind: 'toggle', get: (s) => s.integrations.discordStatus, set: (s, v) => (s.integrations.discordStatus = v) } },
@@ -49,13 +75,19 @@ export const registry: SettingDef[] = [
 
   { id: 'autoJava', tab: 'java', group: 'Java', title: 'Pick Java automatically', desc: 'Uses the version each Minecraft release needs.', control: { kind: 'toggle', get: (s) => s.java.autoPick, set: (s, v) => (s.java.autoPick = v) } },
   { id: 'javaVendor', tab: 'java', group: 'Java', title: 'Download missing versions', desc: 'From', control: { kind: 'select', options: [{ value: 'temurin', label: 'Eclipse Temurin' }, { value: 'zulu', label: 'Azul Zulu' }, { value: 'mojang', label: 'Mojang' }], get: (s) => s.java.downloadVendor, set: (s, v) => (s.java.downloadVendor = v) } },
-  { id: 'memory', tab: 'java', group: 'Java', title: 'Default memory', desc: 'Instances can override.', control: { kind: 'memory' } },
+  { id: 'memory', tab: 'java', group: 'Java', title: 'Default memory', desc: 'Instances can override.', control: { kind: 'inputs', fields: [
+    { label: 'Minimum', numeric: true, suffix: 'MB min', get: (s) => s.java.memoryMinMb, set: (s, v) => (s.java.memoryMinMb = num(v)) },
+    { label: 'Maximum', numeric: true, suffix: 'MB max', get: (s) => s.java.memoryMaxMb, set: (s, v) => (s.java.memoryMaxMb = num(v)) },
+  ] } },
   { id: 'warnLowMemory', tab: 'java', group: 'Java', title: 'Warn when free memory is low', desc: 'Checks before each launch.', control: { kind: 'toggle', get: (s) => s.java.warnLowMemory, set: (s, v) => (s.java.warnLowMemory = v) } },
   { id: 'suggestMemory', tab: 'java', group: 'Instances', title: 'Suggest memory from mod count', desc: 'Shown in each instance’s settings.', control: { kind: 'toggle', get: (s) => s.java.suggestMemory, set: (s, v) => (s.java.suggestMemory = v) } },
   { id: 'jvmArgs', tab: 'java', group: 'Java', title: 'Default JVM arguments', control: { kind: 'textarea', rows: 2, get: (s) => s.java.jvmArgs, set: (s, v) => (s.java.jvmArgs = v) } },
 
   { id: 'autoUpdate', tab: 'updates', group: 'Updates', title: 'Automatic launcher updates', desc: 'Downloads signed updates in the background and installs them on restart.', control: { kind: 'toggle', get: (s) => s.updates.autoCheck, set: (s, v) => (s.updates.autoCheck = v) } },
 ];
+
+/** Whether a setting is currently shown (rows with `when` hide until it holds). */
+export const visible = (d: SettingDef, s: Settings | null) => !d.when || (!!s && d.when(s));
 
 /** The settings of one tab, grouped by section heading in registry order. */
 export function groupsFor(tab: SettingsTab): { group: string; defs: SettingDef[] }[] {

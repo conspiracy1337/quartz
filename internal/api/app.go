@@ -9,6 +9,7 @@ import (
 
 	"quartz/internal/brand"
 	"quartz/internal/core/paths"
+	"quartz/internal/core/sysinfo"
 )
 
 // App exposes product and environment information.
@@ -26,12 +27,14 @@ type AppInfo struct {
 	DataDir   string `json:"dataDir"`
 	Portable  bool   `json:"portable"`
 	OS        string `json:"os"`
+	MemoryMB  int    `json:"memoryMb"` // installed RAM, 0 if unknown
 }
 
 func (a *App) Info() AppInfo {
+	mem, _ := sysinfo.ReadMemory()
 	return AppInfo{
 		Name: brand.Name, ShortName: brand.ShortName, Version: brand.Version,
-		DataDir: a.paths.Root, Portable: a.paths.Portable, OS: runtime.GOOS,
+		DataDir: a.paths.Root, Portable: a.paths.Portable, OS: runtime.GOOS, MemoryMB: int(mem.Total >> 20), //nolint:gosec // RAM in MB fits an int
 	}
 }
 

@@ -8,9 +8,16 @@ import "sync"
 type Topic string
 
 const (
-	SettingsChanged Topic = "settings:changed"
-	CustomCSS       Topic = "theme:custom-css"
-	SecondInstance  Topic = "app:second-instance"
+	SettingsChanged  Topic = "settings:changed"
+	CustomCSS        Topic = "theme:custom-css"
+	SecondInstance   Topic = "app:second-instance"
+	TasksChanged     Topic = "tasks:changed"
+	AccountsChanged  Topic = "accounts:changed"
+	InstancesChanged Topic = "instances:changed"
+	LaunchProgress   Topic = "launch:progress"
+	LaunchFailed     Topic = "launch:failed"
+	GameState        Topic = "game:state"
+	GameLog          Topic = "game:log"
 )
 
 // Sink receives every emitted event, used to bridge events to the UI.

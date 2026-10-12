@@ -40,10 +40,15 @@ func TestNormalizeFixesFieldByField(t *testing.T) {
 }
 
 func TestDecodeTolerant(t *testing.T) {
-	got, err := decode([]byte(`{"appearance":{"accent":"#60a5fa"},"unknown":{"x":1}}`))
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"appearance":{"accent":"#60a5fa"},"unknown":{"x":1}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path, events.NewBus(), discard)
 	if err != nil {
 		t.Fatal(err)
 	}
+	got := s.Get()
 	if got.Appearance.Accent != "#60a5fa" || got.Appearance.Theme != "monolith" || got.Downloads.Parallel != 8 {
 		t.Fatalf("got %+v", got)
 	}
@@ -94,5 +99,24 @@ func TestResolve(t *testing.T) {
 	v := 2
 	if Resolve(&v, 1) != 2 || Resolve[int](nil, 1) != 1 {
 		t.Fatal("Resolve wrong")
+	}
+}
+
+func TestProxyCustomValidation(t *testing.T) {
+	cases := []struct {
+		in   ProxyCustom
+		want ProxyCustom
+	}{
+		{ProxyCustom{Type: "socks5", Host: "proxy.lan", Port: 1080, User: "me"}, ProxyCustom{Type: "socks5", Host: "proxy.lan", Port: 1080, User: "me"}},
+		{ProxyCustom{Type: "ftp", Host: "http://evil/path", Port: 70000, User: "a\nb"}, ProxyCustom{Type: "http", Host: "", Port: 65535, User: ""}},
+		{ProxyCustom{Type: "https", Host: "[::1]", Port: 0}, ProxyCustom{Type: "https", Host: "[::1]", Port: 8080}},
+		{ProxyCustom{Host: "has space"}, ProxyCustom{Type: "http", Port: 8080}},
+	}
+	for _, c := range cases {
+		s := Defaults()
+		s.Downloads.ProxyCustom = c.in
+		if got := s.Normalize().Downloads.ProxyCustom; got != c.want {
+			t.Errorf("normalize(%+v) = %+v, want %+v", c.in, got, c.want)
+		}
 	}
 }

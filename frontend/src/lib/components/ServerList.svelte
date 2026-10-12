@@ -6,6 +6,7 @@
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
   import Tile from '../ui/Tile.svelte';
+  import Empty from '../ui/Empty.svelte';
 
   /** Servers from every instance, de-duplicated. Join uses the instance last used on it. */
   const ROW_H = 52;
@@ -61,6 +62,8 @@
             <button class="btn btn-sm" onclick={() => (open = open === s.id ? null : s.id)} aria-expanded={open === s.id} aria-label="Join {s.name} with another instance"><Icon name="chevron-down" size={10} sw={2.4} /></button>
           </span>
         </div>
+      {:else}
+        <Empty text={servers.data.length ? 'No servers are online right now.' : 'Servers from all your instances show up here.'} />
       {/each}
     {:else}
       {#each { length: 6 } as _, k (k)}

@@ -25,7 +25,6 @@
   const back = $derived(href({ name: 'instance', id: i.id, tab: 'mods' }));
 
   function apply() {
-    session.tasksRunning = true;
     go({ name: 'instance', id: i.id, tab: 'mods' });
   }
 </script>

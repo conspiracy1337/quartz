@@ -14,10 +14,18 @@ export function Get() {
   return window['go']['api']['Settings']['Get']();
 }
 
+export function HasProxyPassword() {
+  return window['go']['api']['Settings']['HasProxyPassword']();
+}
+
 export function PickCustomCSS() {
   return window['go']['api']['Settings']['PickCustomCSS']();
 }
 
 export function Save(arg1) {
   return window['go']['api']['Settings']['Save'](arg1);
+}
+
+export function SetProxyPassword(arg1) {
+  return window['go']['api']['Settings']['SetProxyPassword'](arg1);
 }

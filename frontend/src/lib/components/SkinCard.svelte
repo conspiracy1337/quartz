@@ -13,7 +13,10 @@
   const week = query(() => api.home.week());
   const skins = query(() => api.accounts.skins());
   const capes = query(() => api.accounts.capes());
-  const worn = $derived(skins.data?.find((x) => x.worn));
+  // Until the skin library exists (M3), the default account's own colours are drawn.
+  const accounts = query(() => api.accounts.list());
+  const me = $derived(accounts.data?.find((a) => a.isDefault));
+  const worn = $derived(skins.data?.find((x) => x.worn) ?? (me ? { colors: me.skin, slim: false } : undefined));
   const cape = $derived(capes.data?.capes.find((c) => c.id === capes.data?.worn && c.id !== 'none')?.art);
 
   const total = $derived((week.data ?? []).reduce((n, d) => n + d.minutes, 0));

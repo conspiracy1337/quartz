@@ -7,7 +7,6 @@
   let name = $state('Cobblemon Official Modpack');
 
   function install() {
-    session.tasksRunning = true;
     go({ name: 'downloads' });
   }
 </script>

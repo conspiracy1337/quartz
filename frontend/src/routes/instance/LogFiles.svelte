@@ -5,6 +5,7 @@
   import { query } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
@@ -25,10 +26,14 @@
     <div class="side-label">Logs</div>
     {#each logs as f (f.name)}
       <button class="fl" class:on={selected === f.name} onclick={() => (selected = f.name)}><Icon name="file" size={14} /><span class="trunc mono">{f.name}</span><span class="small faint">{bytes(f.bytes)}</span></button>
+    {:else}
+      {#if files.data}<span class="small faint" style="padding: 6px 8px">None yet</span>{/if}
     {/each}
     <div class="side-label" style="margin-top: 10px">Crash reports</div>
     {#each crashes as f (f.name)}
       <button class="fl" onclick={() => session.open({ kind: 'crash', instanceId })}><Icon name="warn" size={14} color="var(--danger)" /><span class="trunc mono">{f.name}</span><span class="small faint">{bytes(f.bytes)}</span></button>
+    {:else}
+      {#if files.data}<span class="small faint" style="padding: 6px 8px">None</span>{/if}
     {/each}
     <div style="margin-top: auto; padding-top: 12px"><button class="btn btn-sm btn-block">Delete old logs, 1.4 MB</button></div>
   </nav>
@@ -40,7 +45,7 @@
       <button class="btn btn-sm">Upload</button>
     </div>
     <div class="scroll" style="padding: 12px 20px">
-      <pre class="code">{#each lines as l, i (i)}{#if tone(l)}<span style="color: {tone(l)}">{l}</span>{:else}{l}{/if}{'\n'}{/each}</pre>
+      {#if text.data === ''}<Empty text="Log files appear here after you play." />{:else}<pre class="code">{#each lines as l, i (i)}{#if tone(l)}<span style="color: {tone(l)}">{l}</span>{:else}{l}{/if}{'\n'}{/each}</pre>{/if}
     </div>
   </section>
 </div>

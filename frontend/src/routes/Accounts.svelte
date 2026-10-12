@@ -1,13 +1,20 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import { revs } from '$lib/revs.svelte';
   import type { Account } from '$lib/api/types';
   import { query } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
 
   const accounts = query(() => api.accounts.list());
+
+  async function makeDefault(id: string) {
+    await api.accounts.setDefault(id);
+    revs.bump('accounts');
+  }
   let refresh = $state(true);
   let askAtLaunch = $state(false);
   let offlineFallback = $state(true);
@@ -30,15 +37,19 @@
           <span style="min-width: 0"><span style="display: flex; gap: 8px; align-items: center"><span class="trunc" style="font-weight: 500">{a.name}</span>{#if a.isDefault}<span class="badge badge-accent">Default</span>{/if}</span><span class="trunc small faint" style="display: block">{a.detail}</span></span>
           <span class="small opt" style="display: flex; gap: 6px; align-items: center; color: {st.color}"><span class="dot" style="background: {st.color}" aria-hidden="true"></span>{st.label}</span>
           <span style="display: flex; gap: 6px">
-            {#if !a.isDefault}<button class="btn btn-sm">Make default</button>{/if}
+            {#if !a.isDefault}<button class="btn btn-sm" onclick={() => makeDefault(a.id)}>Make default</button>{/if}
             {#if a.status === 'expired'}<button class="btn btn-sm btn-accent" onclick={() => session.open({ kind: 'add-account', mode: 'browser' })}>Sign in again</button>{/if}
             <button class="btn btn-sm btn-icon btn-ghost" aria-label="More for {a.name}"><Icon name="more" size={14} /></button>
           </span>
         </div>
       {:else}
+        {#if accounts.data}
+          <Empty text="No accounts yet. Add an offline account to play now; Microsoft sign-in arrives soon." action="Add account" onclick={() => session.open({ kind: 'add-account', mode: 'offline' })} />
+        {:else}
         {#each { length: 3 } as _, k (k)}
           <div class="row ar" aria-hidden="true"><div class="sk" style="width: 40px; height: 40px; border-radius: 8px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 30%"></div><div class="sk" style="height: 10px; width: 55%"></div></div><div class="sk opt" style="height: 10px; width: 80px"></div><div class="sk" style="height: 28px; width: 100px"></div></div>
         {/each}
+        {/if}
       {/each}
     </div>
     <section class="card" aria-label="Account behaviour">

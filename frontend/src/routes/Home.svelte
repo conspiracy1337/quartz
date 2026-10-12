@@ -16,7 +16,7 @@
 
   // Rows that have nothing to show leave the grid, so no empty gap is left behind.
   const showAlerts = $derived((alerts.data?.length ?? 0) > 0);
-  const showNews = $derived(!newsHidden && news.data !== undefined);
+  const showNews = $derived(!newsHidden && !!news.data);
   const rows = $derived([showAlerts && 'var(--alert-h)', 'var(--duo-h)', showNews && 'var(--strip-h)', 'minmax(0,1fr)'].filter(Boolean).join(' '));
   const areas = $derived([showAlerts && '"alerts"', '"duo"', showNews && '"news"', '"servers"'].filter(Boolean).join(' '));
 </script>

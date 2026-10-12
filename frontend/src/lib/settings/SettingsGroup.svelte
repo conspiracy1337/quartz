@@ -2,11 +2,12 @@
   import { prefs } from '../prefs.svelte';
   import Setting from '../ui/Setting.svelte';
   import SettingControl from './SettingControl.svelte';
-  import type { SettingDef } from './registry';
+  import { visible, type SettingDef } from './registry';
 
   /** A heading over a card of setting rows. A textarea setting renders as a full-width block. */
   interface Props { title?: string; defs: SettingDef[]; mark?: string }
-  let { title, defs, mark }: Props = $props();
+  let { title, defs: all, mark }: Props = $props();
+  const defs = $derived(all.filter((d) => visible(d, prefs.value)));
 </script>
 
 {#snippet rows()}

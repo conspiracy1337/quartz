@@ -1,5 +1,10 @@
 <script lang="ts">
+  import { api } from '$lib/api';
+  import { bytes } from '$lib/format';
+  import { query } from '$lib/query.svelte';
   import VersionPicker from '$lib/components/VersionPicker.svelte';
+  import { revs } from '$lib/revs.svelte';
+  import { session } from '$lib/session.svelte';
   import { go, href } from '$lib/router.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Seg from '$lib/ui/Seg.svelte';
@@ -15,16 +20,39 @@
     { value: 3, label: 'NeoForge', line: 'Latest stable NeoForge for this version.', short: 'NeoForge' },
     { value: 4, label: 'Forge', line: 'Latest recommended Forge for this version.', short: 'Forge' },
   ];
+  const LOADER_KINDS = ['', 'fabric', 'quilt', 'neoforge', 'forge'];
   const SHARES = ['Keybinds', 'Game options', 'Servers', 'Worlds', 'Resource packs', 'Shaders', 'Screenshots', 'Hotbars'];
 
-  let name = $state('Survival 1.21.5');
-  let version = $state('1.21.5');
-  let loader = $state(1);
+  // The name follows the picked version until the user types their own.
+  let typed = $state<string | null>(null);
+  let version = $state('');
+  const name = $derived(typed ?? version);
+  let loader = $state(0);
+  let creating = $state(false);
   let more = $state(false);
   let group = $state('none');
   let sandbox = $state(true);
   let shares = $state<Record<number, boolean>>({ 0: true, 2: true, 4: true, 5: true });
   const l = $derived(LOADERS[loader]!);
+  const estimate = query(() => (version ? api.versions.estimate(version) : Promise.resolve(0)));
+  const download = $derived(estimate.data === undefined ? '' : estimate.data > 0 ? `Downloads about ${bytes(estimate.data)} the first time you play.` : 'Everything it needs is already downloaded.');
+
+  async function create() {
+    creating = true;
+    try {
+      const n = name.trim();
+      const made = await api.instances.create({
+        name: n, art: { background: '#6b8afd', initial: n.charAt(0).toUpperCase() }, minecraft: version,
+        loader: LOADER_KINDS[loader] ?? '', group: group === 'none' ? '' : group, sandbox, shares: SHARES.filter((_, i) => shares[i]),
+      });
+      revs.bump('instances');
+      go({ name: 'instance', id: made.id, tab: 'overview' });
+    } catch (e) {
+      session.fail('New instance', e);
+    } finally {
+      creating = false;
+    }
+  }
 </script>
 
 <div class="scroll">
@@ -32,7 +60,7 @@
     <div style="display: flex; align-items: center; gap: 8px"><h1 class="h1" style="margin-right: auto">New instance</h1><a href={href({ name: 'import' })} class="btn"><Icon name="upload" size={14} sw={1.8} />Import file</a><a href={href({ name: 'browse' })} class="btn">Modpack</a></div>
     <div style="display: grid; grid-template-columns: 56px minmax(0,1fr); gap: 14px; align-items: center">
       <button class="ico" style="width: 56px; height: 56px; border-radius: 12px; background: #6b8afd; border: 0; font-size: 22px" aria-label="Change icon">{name.trim().charAt(0).toUpperCase()}</button>
-      <label class="field"><span class="sr">Name</span><input class="name" bind:value={name} maxlength="64" /></label>
+      <label class="field"><span class="sr">Name</span><input class="name" value={name} oninput={(e) => (typed = e.currentTarget.value)} maxlength="64" /></label>
     </div>
     <div class="field"><span class="field-label">Minecraft version</span><VersionPicker onpick={(v) => (version = v)} /></div>
     <div class="field"><span class="field-label">Mod loader</span>
@@ -56,8 +84,8 @@
         <Setting title="Sandbox" desc="Recommended for mods from unknown sources."><Toggle bind:on={sandbox} label="Sandbox" /></Setting>
       </div>
     {/if}
-    <button class="btn btn-accent btn-lg btn-block" disabled={!name.trim()} onclick={() => go({ name: 'instance', id: 'fo', tab: 'overview' })}>Create</button>
-    <p class="small faint" style="margin: 0; text-align: center">Minecraft {version}, {l.short}. Downloads about 180 MB the first time you play.</p>
+    <button class="btn btn-accent btn-lg btn-block" disabled={creating || !name.trim() || !version} onclick={create}>Create</button>
+    <p class="small faint" style="margin: 0; text-align: center">Minecraft {version}, {l.short}. {download}</p>
   </div>
 </div>
 

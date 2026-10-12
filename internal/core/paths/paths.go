@@ -120,3 +120,36 @@ func (p Paths) Instances() string { return filepath.Join(p.Root, "instances") }
 func (p Paths) Store() string     { return filepath.Join(p.Root, "store") }
 func (p Paths) Cache() string     { return filepath.Join(p.Root, "cache") }
 func (p Paths) Themes() string    { return filepath.Join(p.Root, "themes") }
+
+// DownloadHistory holds the last 24 hours of ended download jobs.
+func (p Paths) DownloadHistory() string { return filepath.Join(p.Root, "downloads.json") }
+
+// Accounts lists the player's accounts (never their tokens).
+func (p Paths) Accounts() string { return filepath.Join(p.Root, "accounts.json") }
+
+// Libraries is the shared Maven-layout library folder.
+func (p Paths) Libraries() string { return filepath.Join(p.Store(), "libraries") }
+
+// Versions holds client jars, one folder per version.
+func (p Paths) Versions() string { return filepath.Join(p.Store(), "versions") }
+
+// Assets holds asset indexes and objects (and legacy virtual copies).
+func (p Paths) Assets() string { return filepath.Join(p.Store(), "assets") }
+
+// LogConfigs holds the log4j configurations versions ask for.
+func (p Paths) LogConfigs() string { return filepath.Join(p.Store(), "logconfigs") }
+
+// Natives holds extracted native libraries, one folder per native set.
+func (p Paths) Natives() string { return filepath.Join(p.Store(), "natives") }
+
+// Java holds the Java runtimes the launcher installs.
+func (p Paths) Java() string { return filepath.Join(p.Store(), "java") }
+
+// Bin holds launcher helper files such as the wrapper jar.
+func (p Paths) Bin() string { return filepath.Join(p.Store(), "bin") }
+
+// JavaState caches Java probe results and user-added runtimes.
+func (p Paths) JavaState() string { return filepath.Join(p.Root, "java.json") }
+
+// VerifiedIndex remembers which store files passed their checksum.
+func (p Paths) VerifiedIndex() string { return filepath.Join(p.Root, "verified.json") }

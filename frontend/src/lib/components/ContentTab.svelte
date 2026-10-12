@@ -8,6 +8,7 @@
   import Icon from '../ui/Icon.svelte';
   import SearchField from '../ui/SearchField.svelte';
   import Toggle from '../ui/Toggle.svelte';
+  import Empty from '../ui/Empty.svelte';
 
   /** The one list used by Mods, Resource packs, Shaders, Data packs, Worlds and Servers. */
   interface Props { instanceId: string; kind: ContentKind }
@@ -37,6 +38,10 @@
   const CHECK_MS = 1400;
 
   const cfg = $derived(CONFIG[kind]);
+  const EMPTY: Record<ContentKind, string> = {
+    mods: 'No mods yet.', resourcepacks: 'No resource packs yet.', shaders: 'No shader packs yet.',
+    datapacks: 'No data packs yet.', worlds: 'No worlds yet. They show up here after you play.', servers: 'No servers yet.',
+  };
   const items = query(() => api.content.list(instanceId, kind));
   let rows = $state<ContentItem[]>([]);
   $effect(() => {
@@ -116,6 +121,8 @@
           <span class="opt">{#if c.source}<span class="src" title={SOURCES[c.source][1]}>{SOURCES[c.source][0]}</span>{/if}</span>
           <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {c.name}"><Icon name="more" size={14} /></button>
         </div>
+      {:else}
+        <Empty text={items.data.length ? 'Nothing matches this filter.' : EMPTY[kind]} />
       {/each}
     {:else}
       {#each SKELETON as [a, b], k (k)}
