@@ -1,0 +1,14 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - nilerr
+    - unconvert
+  exclusions:
+    rules:
+      # Tests read and write the temp files they create.
+      - path: _test\.go
+        linters: [gosec]
