@@ -30,7 +30,7 @@ export const families: VersionFamily[] = [
   F('1.6', '2013', [V('1.6.4', 8, 'Sep 19, 2013'), V('1.6.2', 8, 'Jul 8, 2013'), V('1.6.1', 8, 'Jul 1, 2013')]),
 ];
 
-const lv = (id: string, released: string) => ({ id, released: d(released) });
+const lv = (id: string, released: string) => ({ id, name: id, released: d(released) });
 export const loaders: LoaderOption[] = [
   { kind: 'none', name: 'None', note: 'Vanilla, no mods', stable: [], beta: [] },
   { kind: 'fabric', name: 'Fabric', note: 'Light, updates fast', stable: [lv('0.16.10', 'Jan 8, 2025'), lv('0.16.9', 'Nov 19, 2024'), lv('0.16.8', 'Oct 24, 2024'), lv('0.16.7', 'Oct 12, 2024'), lv('0.16.5', 'Sep 4, 2024')], beta: [lv('0.17.0-beta.2', 'Feb 3, 2025')] },

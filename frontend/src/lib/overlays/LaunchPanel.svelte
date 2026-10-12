@@ -21,7 +21,7 @@
 
 <section class="lp" role="status" aria-label="Launching {inst.data?.name ?? ''}">
   <div style="display: grid; grid-template-columns: 32px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 14px 14px 10px">
-    {#if inst.data}<Tile art={inst.data.art} />{:else}<span></span>{/if}
+    {#if inst.data}<Tile art={inst.data.art} icon={inst.data.icon} />{:else}<span></span>{/if}
     <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">Starting {inst.data?.name ?? ''}</span><span class="small faint tnum">{details ? `${pct}% ready` : `About ${Math.max(1, LAUNCH_STEPS.length - stage)} seconds`}</span></span>
     <button class="btn btn-sm btn-ghost" onclick={() => session.cancelLaunch()}>Cancel</button>
   </div>

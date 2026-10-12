@@ -1,15 +1,34 @@
 <script lang="ts">
+  import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
   import VersionPicker from '$lib/components/VersionPicker.svelte';
-  import { href } from '$lib/router.svelte';
+  import { query } from '$lib/query.svelte';
+  import { revs } from '$lib/revs.svelte';
+  import { go, href } from '$lib/router.svelte';
+  import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
   let sel = $state('');
+  let busy = $state(false);
   const back = $derived(href({ name: 'instance', id: i.id, tab: 'version' }));
-  const family = (v: string) => v.split('.').slice(0, 2).join('.');
-  const compat = $derived(!sel || sel === i.minecraft ? 'This is the current version.' : family(sel) === family(i.minecraft) ? '41 of 48 mods have a matching version' : 'Mods will be checked before switching');
+  const check = query(() => (sel && sel !== i.minecraft ? api.instances.compatibility(i.id, sel) : Promise.resolve(null)));
+  const compat = $derived(!sel || sel === i.minecraft ? 'This is the current version.' : check.data ? `${check.data.matching} of ${check.data.total} mods have a matching version` : 'Mods will be checked before switching');
+
+  // A loader stays and moves to its newest stable build for the new version.
+  async function switchTo() {
+    busy = true;
+    try {
+      await api.instances.setVersion(i.id, sel, i.loader?.kind ?? '', '');
+      revs.bump('instances');
+      go({ name: 'instance', id: i.id, tab: 'version' });
+    } catch (e) {
+      session.fail(`Minecraft ${sel}`, e);
+    } finally {
+      busy = false;
+    }
+  }
 </script>
 
 <div class="scroll">
@@ -21,5 +40,5 @@
 <div class="pfoot">
   <span class="mono muted">{i.minecraft}</span><Icon name="arrow-right" size={12} sw={2} /><span class="mono">{sel}</span>
   <span class="small faint" style="margin-left: 8px">{compat}</span>
-  <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={sel === i.minecraft}>Switch to {sel}</button></span>
+  <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={!sel || sel === i.minecraft || busy} onclick={switchTo}>Switch to {sel}</button></span>
 </div>

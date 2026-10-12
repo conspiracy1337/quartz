@@ -252,6 +252,19 @@ func (s *Instances) PickIcon(id string) (InstanceView, error) {
 	return s.changed(s.d.Store.SetIcon(id, hash))
 }
 
+// SetIcon uses a picture already in the icon library ("" goes back to the tile).
+func (s *Instances) SetIcon(id, hash string) (InstanceView, error) {
+	if err := checkInstanceID(id); err != nil {
+		return InstanceView{}, err
+	}
+	if hash != "" {
+		if _, err := s.d.Icons.Path(hash); err != nil {
+			return InstanceView{}, icons.ErrNotIcon
+		}
+	}
+	return s.changed(s.d.Store.SetIcon(id, hash))
+}
+
 // ChooseIcon picks a picture for an instance that doesn't exist yet (New
 // instance); it returns the icon's name, or "" when cancelled.
 func (s *Instances) ChooseIcon() (string, error) { return s.chooseIcon() }

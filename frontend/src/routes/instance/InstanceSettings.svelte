@@ -2,10 +2,11 @@
   import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
   import { query } from '$lib/query.svelte';
-  import { go, href } from '$lib/router.svelte';
+  import { href } from '$lib/router.svelte';
+  import { move, repair, trash } from '$lib/instanceActions';
+  import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { revs } from '$lib/revs.svelte';
-  import { tasks } from '$lib/tasks.svelte';
   import { ON_GAME_START } from '$lib/settings/registry';
   import { session } from '$lib/session.svelte';
   import Seg from '$lib/ui/Seg.svelte';
@@ -22,13 +23,20 @@
   const syncable = $derived(sync.data ? [...sync.data.files, ...sync.data.folders, ...sync.data.mods, ...sync.data.custom].filter((e) => e.enabled && e.available) : []);
   let joined = $state<Record<string, boolean>>({ options: true, servers: true, hotbar: true, resourcepacks: true, xaero: true });
 
-  // Java, memory and window settings are the instance's own (saved through Go); the
-  // sections below them stay local until syncing, quick play and performance land.
+  // Java, memory, window, performance and commands are the instance's own (saved
+  // through Go); syncing and quick play stay local until their milestones land.
   // svelte-ignore state_referenced_locally
   let st = $state($state.snapshot(i.settings));
   const info = query(() => api.app.info());
   const runtimes = query(() => api.java.runtimes());
-  const javaOptions = $derived([{ value: '', label: 'Automatic' }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
+  const groups = query(() => api.instances.groups());
+  const javaOptions = $derived([{ value: '', label: `Automatic (${i.javaAuto})` }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
+  // "6 GB suits 48 mods": about 2 GB plus 85 MB a mod, never more than half the PC's memory.
+  const suggestGb = $derived(i.counts.mods > 0 && prefs.value?.java.suggestMemory && info.data?.memoryMb
+    ? Math.min(Math.max(2, Math.round((2048 + i.counts.mods * 85) / 1024)), Math.floor(info.data.memoryMb / 2048)) : 0);
+  const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${Math.round(info.data.memoryMb / 1024)} GB.${suggestGb ? ` ${suggestGb} GB suits ${i.counts.mods} mods.` : ''}` : undefined);
+  const groupOptions = $derived([{ value: '', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
+  let naming = $state(false);
   const onStart = $derived(st.window.onGameStart || prefs.value?.general.onGameStart || 'hide');
   const num = (v: string) => Math.max(0, Math.round(Number(v)) || 0);
 
@@ -46,25 +54,21 @@
   }
   let quickPlay = $state('none');
   let sharedKeys = $state(true);
-  let gpu = $state(true);
-  let gamemode = $state(true);
-  let mangohud = $state(false);
   const sub = (s: string) => href({ name: 'instance', id: i.id, tab: 'settings', sub: s });
 
-  async function repair() {
+  async function edit(fn: () => Promise<unknown>, what: string) {
     try {
-      const job = await api.launch.repair(i.id);
-      if (job) await tasks.load();
-      else session.notify({ subject: i.name, text: 'All game files are intact.' });
+      await fn();
+      revs.bump('instances');
     } catch (e) {
-      session.fail('Repair', e);
+      session.fail(what, e);
     }
   }
-
-  function trash() {
-    go({ name: 'library' });
-    session.notify({ tone: 'trash', subject: i.name, text: 'to the trash', undo: () => go({ name: 'instance', id: i.id, tab: 'overview' }) });
+  function setGroup(v: string) {
+    if (v === '\u0000new') naming = true;
+    else void edit(() => api.instances.setGroup(i.id, v), 'Group');
   }
+  const tagsText = $derived(i.tags.join(', '));
 </script>
 
 <div class="scroll">
@@ -74,7 +78,7 @@
       <div class="card" class:inherited={!st.java.override}>
         <Setting title="Java runtime" desc="Automatic picks the version this Minecraft needs."><Select value={st.java.javaPath} options={javaOptions} label="Java runtime" onchange={(v) => change(() => (st.java.javaPath = v))} /></Setting>
         <div class="divider"></div>
-        <Setting title="Memory" desc={info.data?.memoryMb ? `This PC has ${Math.round(info.data.memoryMb / 1024)} GB.` : undefined}><span style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"><label class="input"><span class="sr">Minimum</span><input value={st.java.memoryMinMb} class="tnum" inputmode="numeric" onchange={(e) => change(() => (st.java.memoryMinMb = num(e.currentTarget.value)))} /><span class="suffix">MB min</span></label><label class="input"><span class="sr">Maximum</span><input value={st.java.memoryMaxMb} class="tnum" inputmode="numeric" onchange={(e) => change(() => (st.java.memoryMaxMb = num(e.currentTarget.value)))} /><span class="suffix">MB max</span></label></span></Setting>
+        <Setting title="Memory" desc={memoryDesc}><span style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"><label class="input"><span class="sr">Minimum</span><input value={st.java.memoryMinMb} class="tnum" inputmode="numeric" onchange={(e) => change(() => (st.java.memoryMinMb = num(e.currentTarget.value)))} /><span class="suffix">MB min</span></label><label class="input"><span class="sr">Maximum</span><input value={st.java.memoryMaxMb} class="tnum" inputmode="numeric" onchange={(e) => change(() => (st.java.memoryMaxMb = num(e.currentTarget.value)))} /><span class="suffix">MB max</span></label></span></Setting>
         <div class="divider"></div>
         <div style="padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 6px"><span class="setting-title">JVM arguments</span><textarea class="textarea" rows="2" aria-label="JVM arguments" value={st.java.jvmArgs} onchange={(e) => change(() => (st.java.jvmArgs = e.currentTarget.value))}></textarea></div>
       </div>
@@ -108,23 +112,40 @@
     <section class="sec" aria-label="Performance">
       <div class="sec-h"><h2 class="h3">Performance</h2><span class="small faint">Linux</span></div>
       <div class="card">
-        <Setting title="Use the dedicated GPU" desc="NVIDIA GeForce RTX 3070 Laptop GPU"><Toggle bind:on={gpu} label="Use the dedicated GPU" /></Setting>
+        <Setting title="Use the dedicated GPU" desc={i.gpu || 'This PC has one GPU.'}><Toggle on={st.performance.dedicatedGpu} label="Use the dedicated GPU" onchange={(v) => change(() => (st.performance.dedicatedGpu = v))} /></Setting>
         <div class="divider"></div>
-        <Setting title="Feral GameMode" desc="Asks the system for CPU and GPU performance while playing."><Toggle bind:on={gamemode} label="Feral GameMode" /></Setting>
+        <Setting title="Feral GameMode" desc="Asks the system for CPU and GPU performance while playing."><Toggle on={st.performance.gameMode} label="Feral GameMode" onchange={(v) => change(() => (st.performance.gameMode = v))} /></Setting>
         <div class="divider"></div>
-        <Setting title="MangoHud overlay" desc="Shows FPS, frame times and temperatures."><Toggle bind:on={mangohud} label="MangoHud overlay" /></Setting>
+        <Setting title="MangoHud overlay" desc="Shows FPS, frame times and temperatures."><Toggle on={st.performance.mangoHud} label="MangoHud overlay" onchange={(v) => change(() => (st.performance.mangoHud = v))} /></Setting>
+      </div>
+    </section>
+    <section class="sec" aria-label="About this instance">
+      <div class="sec-h"><h2 class="h3">About this instance</h2></div>
+      <div class="card">
+        <Setting title="Group"><Select value={i.group ?? ''} options={groupOptions} label="Group" onchange={setGroup} /></Setting>
+        <div class="divider"></div>
+        <Setting title="Tags" desc="Separate tags with commas."><label class="input"><span class="sr">Tags</span><input value={tagsText} placeholder="for example: survival, friends" onchange={(e) => edit(() => api.instances.setTags(i.id, e.currentTarget.value.split(',')), 'Tags')} /></label></Setting>
+        <div class="divider"></div>
+        <div style="padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 6px"><span class="setting-title">Notes</span><textarea class="textarea" rows="3" aria-label="Notes" maxlength="4000" value={i.notes} onchange={(e) => edit(() => api.instances.setNotes(i.id, e.currentTarget.value), 'Notes')}></textarea></div>
       </div>
     </section>
     <section class="sec" aria-label="Advanced">
       <div class="sec-h"><h2 class="h3">Advanced</h2><a href={sub('commands')} class="btn btn-sm btn-ghost">Commands and variables</a></div>
       <div class="card">
-        <Setting title="Repair game files" desc="Re-checks libraries, assets and the loader against their hashes."><button class="btn btn-sm" onclick={repair}>Repair</button></Setting>
+        <Setting title="Repair game files" desc="Re-checks libraries, assets and the loader against their hashes."><button class="btn btn-sm" onclick={() => repair(i)}>Repair</button></Setting>
         <div class="divider"></div>
-        <Setting title="Move to trash" desc="You can undo this for 30 days."><button class="btn btn-sm btn-danger" onclick={trash}>Move to trash</button></Setting>
+        <Setting title="Game folder" desc={i.folder}><span style="display: flex; gap: 6px; justify-content: flex-end">{#if i.moved}<button class="btn btn-sm btn-ghost" onclick={() => move(i, true)}>Default location</button>{/if}<button class="btn btn-sm" onclick={() => move(i)}>Move</button></span></Setting>
+        <div class="divider"></div>
+        <Setting title="Move to trash" desc="You can undo this for 30 days."><button class="btn btn-sm btn-danger" onclick={() => trash(i)}>Move to trash</button></Setting>
       </div>
     </section>
   </div>
 </div>
+
+{#if naming}
+  <PromptDialog title="New group" label="Name" help="The instance moves into it." action="Create group" maxlength={32}
+    submit={(v) => edit(() => api.instances.setGroup(i.id, v), 'Group')} onclose={() => (naming = false)} />
+{/if}
 
 <style>
   .ov{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--faint);border:0;background:transparent;padding:0}

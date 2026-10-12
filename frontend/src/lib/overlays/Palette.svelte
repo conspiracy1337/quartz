@@ -94,7 +94,7 @@
       <div role="listbox" aria-label="Instances" style="padding: 8px">
         {#each insts.slice(0, SHOWN) as r, i (r.id)}
           <button class="pi pi-inst" class:on={sel === i} role="option" aria-selected={sel === i} onpointermove={() => (sel = i)} onclick={() => runAt(i)}>
-            <Tile art={r.art} />
+            <Tile art={r.art} icon={r.icon} />
             <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small faint" style="display: block">{instanceMeta(r)}, {r.lastPlayed ? `played ${ago(r.lastPlayed)}` : 'never played'}</span></span>
             <span class="acts"><span class="kbd">Enter</span><span class="small faint">play</span><span class="kbd" style="margin-left: 6px">Ctrl Enter</span><span class="small faint">open</span></span>
           </button>

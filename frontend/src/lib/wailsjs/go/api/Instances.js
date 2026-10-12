@@ -74,6 +74,10 @@ export function SetGroupCollapsed(arg1, arg2) {
   return window['go']['api']['Instances']['SetGroupCollapsed'](arg1, arg2);
 }
 
+export function SetIcon(arg1, arg2) {
+  return window['go']['api']['Instances']['SetIcon'](arg1, arg2);
+}
+
 export function SetNotes(arg1, arg2) {
   return window['go']['api']['Instances']['SetNotes'](arg1, arg2);
 }

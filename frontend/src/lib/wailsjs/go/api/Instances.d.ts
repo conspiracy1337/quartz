@@ -39,6 +39,8 @@ export function SetGroup(arg1:string,arg2:string):Promise<api.InstanceView>;
 
 export function SetGroupCollapsed(arg1:string,arg2:boolean):Promise<void>;
 
+export function SetIcon(arg1:string,arg2:string):Promise<api.InstanceView>;
+
 export function SetNotes(arg1:string,arg2:string):Promise<api.InstanceView>;
 
 export function SetTags(arg1:string,arg2:Array<string>):Promise<api.InstanceView>;
