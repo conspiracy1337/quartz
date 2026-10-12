@@ -4,16 +4,23 @@
 //	/tex/skin/<sha256>.png  a library skin
 //	/tex/mc/<hash>.png      a textures.minecraft.net texture (fetched once)
 //	/tex/icon/<sha256>.png  an instance icon
+//	/tex/remote/<token>.png a Modrinth or CurseForge picture (see remoteimg;
+//	                        served as its real type, which may not be PNG)
 //
 // Each kind resolves a name to a file; resolvers accept only hex names, so a
-// request can't reach any other file.
+// request can't reach any other file. The file's extension names its type,
+// and only image types are served.
 package imagesrv
 
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"strings"
 )
+
+// types are the only files served, by extension.
+var types = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 
 // Resolver turns an image name into its file.
 type Resolver func(ctx context.Context, name string) (string, error)
@@ -26,19 +33,20 @@ func Handler(routes map[string]Resolver) http.Handler {
 			return
 		}
 		kind, file, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, "/tex/"), "/")
-		name, isPNG := strings.CutSuffix(file, ".png")
+		name, named := strings.CutSuffix(file, ".png")
 		resolve, known := routes[kind]
-		if !ok || !isPNG || !known || !strings.HasPrefix(r.URL.Path, "/tex/") {
+		if !ok || !named || !known || !strings.HasPrefix(r.URL.Path, "/tex/") {
 			http.NotFound(w, r)
 			return
 		}
 		path, err := resolve(r.Context(), name)
-		if err != nil {
+		ctype := types[strings.ToLower(filepath.Ext(path))]
+		if err != nil || ctype == "" {
 			http.NotFound(w, r)
 			return
 		}
 		h := w.Header()
-		h.Set("Content-Type", "image/png")
+		h.Set("Content-Type", ctype)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Cache-Control", "private, max-age=31536000, immutable") // content-addressed
 		http.ServeFile(w, r, path)

@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"os"
 	"testing"
 )
 
@@ -67,5 +68,19 @@ func TestSquare(t *testing.T) {
 	small, _ := Decode(pngOf(t, 20, 30, color.NRGBA{A: 255}), Limits{MaxBytes: 1 << 20, MaxSide: 400})
 	if s := Square(small, 128); s.Bounds().Dx() != 20 {
 		t.Fatal("small pictures are cropped, never enlarged")
+	}
+}
+
+func TestDecodesWebP(t *testing.T) {
+	data, err := os.ReadFile("testdata/icon.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := Decode(data, Limits{MaxBytes: 1 << 20, MaxSide: 64})
+	if err != nil || img.Bounds().Dx() != 20 || img.Bounds().Dy() != 10 {
+		t.Fatalf("webp: %v", err)
+	}
+	if _, err := Decode(data, Limits{MaxBytes: 1 << 20, MaxSide: 64, PNGOnly: true}); err == nil {
+		t.Fatal("webp accepted as a skin")
 	}
 }

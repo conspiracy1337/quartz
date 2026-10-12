@@ -34,6 +34,7 @@ import (
 	"quartz/internal/core/logging"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/paths"
+	"quartz/internal/core/remoteimg"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
 	"quartz/internal/icons"
@@ -88,6 +89,7 @@ type app struct {
 	platforms []modplatform.Platform // Modrinth first, then CurseForge
 	store     *store.Store
 	modIcons  *icons.Library
+	pictures  *remoteimg.Cache // project pictures from the platform CDNs
 	drops     *api.Drops
 	hidden    atomic.Bool // the window was hidden because a game started
 	ctx       *api.Ctx
@@ -145,6 +147,8 @@ func (a *app) images() http.Handler {
 		"icon": func(_ context.Context, h string) (string, error) { return a.icons.Path(h) },
 		// Icons read from mods and packs, re-encoded when they were stored.
 		"content": func(_ context.Context, h string) (string, error) { return a.modIcons.Path(h) },
+		// Project icons and pictures from Modrinth and CurseForge.
+		"remote": a.pictures.Path,
 	})
 }
 
@@ -289,6 +293,7 @@ func (a *app) buildContent() error {
 		return fmt.Errorf("opening the content store: %w", err)
 	}
 	a.modIcons = icons.OpenSized(a.paths.ContentIcons(), 64)
+	a.pictures = remoteimg.New(a.paths.RemoteImages(), a.http, a.log)
 	cfReady := brand.CurseForgeKey() != ""
 	a.platforms = []modplatform.Platform{modrinth.New(a.http), curseforge.New(a.http, func() bool { return cfReady })}
 	providers := make([]modplatform.Provider, len(a.platforms))

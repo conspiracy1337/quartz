@@ -12,6 +12,8 @@ import (
 	"image"
 	"image/color"
 	_ "image/jpeg" // icons may be photos
+
+	_ "golang.org/x/image/webp" // Modrinth serves project icons as WebP
 	"image/png"
 )
 
