@@ -27,11 +27,18 @@ var hashRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // ValidHash reports whether h names an icon.
 func ValidHash(h string) bool { return hashRe.MatchString(h) }
 
-// Library is the icon folder.
-type Library struct{ dir string }
+// Library is an icon folder.
+type Library struct {
+	dir  string
+	side int
+}
 
-// Open returns the library in dir.
-func Open(dir string) *Library { return &Library{dir: dir} }
+// Open returns the instance icon library in dir.
+func Open(dir string) *Library { return OpenSized(dir, Side) }
+
+// OpenSized returns a library whose pictures are stored at most side pixels
+// square (mod and pack icons are drawn smaller than instance icons).
+func OpenSized(dir string, side int) *Library { return &Library{dir: dir, side: side} }
 
 // Import reads a picture the user chose in a native dialog and returns its name.
 func (l *Library) Import(path string) (string, error) {
@@ -51,7 +58,7 @@ func (l *Library) Add(data []byte) (string, error) {
 	if err != nil {
 		return "", ErrNotIcon
 	}
-	out, hash, err := pngx.Encode(pngx.Square(img, Side))
+	out, hash, err := pngx.Encode(pngx.Square(img, l.side))
 	if err != nil {
 		return "", err
 	}

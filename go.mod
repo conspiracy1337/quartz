@@ -6,6 +6,7 @@ toolchain go1.26.9
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/ulikunitz/xz v0.5.17
 	github.com/wailsapp/wails/v2 v2.16.0
 	github.com/zalando/go-keyring v0.2.8
