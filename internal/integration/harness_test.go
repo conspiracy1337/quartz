@@ -27,6 +27,7 @@ type harness struct {
 	cache  *httpcache.Cache
 	meta   *meta.Service
 	dl     *download.Downloader
+	ver    *download.Verified
 	tasks  *tasks.Engine
 	java   *java.Manager
 	vendor string
@@ -55,7 +56,7 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.dl = download.New(h.http, ver)
+	h.dl, h.ver = download.New(h.http, ver), ver
 	if h.tasks, err = tasks.New(tasks.Config{Downloader: h.dl, Root: root, HistoryPath: filepath.Join(root, "downloads.json"), Parallel: 8, Log: log}); err != nil {
 		t.Fatal(err)
 	}
@@ -82,13 +83,16 @@ func (h *harness) ctx() context.Context {
 }
 
 // run submits a job and waits for it.
-func (h *harness) run(spec *tasks.Spec) {
-	h.t.Helper()
+func (h *harness) run(spec *tasks.Spec) { h.runIn(h.t, spec) }
+
+// runIn is run for a subtest, so a failure ends that subtest only.
+func (h *harness) runIn(t *testing.T, spec *tasks.Spec) {
+	t.Helper()
 	id, err := h.tasks.Submit(spec)
 	if err != nil {
-		h.t.Fatal(err)
+		t.Fatal(err)
 	}
 	if err := h.tasks.Wait(h.ctx(), id); err != nil {
-		h.t.Fatal(err)
+		t.Fatal(err)
 	}
 }

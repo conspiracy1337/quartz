@@ -31,8 +31,8 @@ const serve = preview;
  */
 const unbuilt = <A extends unknown[], T>(mock: (...a: A) => T, empty: T) => (...a: A): Promise<T> => (hasBridge() ? Promise.resolve(empty) : serve(mock(...a)));
 
-const summary = ({ id, name, art, minecraft, loader, kind, hasServers, lastPlayed, playtimeMin, running }: Instance): InstanceSummary =>
-  ({ id, name, art, minecraft, kind, hasServers, playtimeMin, running, ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
+const summary = ({ id, name, art, icon, minecraft, loader, kind, group, tags, hasServers, lastPlayed, playtimeMin, running }: Instance): InstanceSummary =>
+  ({ id, name, art, minecraft, kind, tags, hasServers, playtimeMin, running, ...(icon ? { icon } : {}), ...(group ? { group } : {}), ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
 
 const byId = (id: string) => inst.instances.find((i) => i.id === id) ?? inst.instances[0]!;
 
@@ -52,6 +52,31 @@ export const api = {
     create: bridged(InstancesGo.Create, inst.mockInstances.create),
     updateSettings: bridged(InstancesGo.UpdateSettings, inst.mockInstances.updateSettings),
     openFolder: bridged(InstancesGo.OpenFolder, (_id: string) => undefined),
+    rename: bridged(InstancesGo.Rename, inst.mockInstances.rename),
+    setArt: bridged(InstancesGo.SetArt, inst.mockInstances.setArt),
+    /** Opens a native picture picker; resolves unchanged when cancelled. */
+    pickIcon: bridged(InstancesGo.PickIcon, (id: string) => byId(id)),
+    /** Uses a picture chooseIcon returned ("" goes back to the tile). */
+    setIcon: bridged(InstancesGo.SetIcon, inst.mockInstances.setIcon),
+    /** A picture for an instance not created yet; "" when cancelled. */
+    chooseIcon: bridged(InstancesGo.ChooseIcon, () => ''),
+    setNotes: bridged(InstancesGo.SetNotes, inst.mockInstances.setNotes),
+    setTags: bridged(InstancesGo.SetTags, inst.mockInstances.setTags),
+    groups: () => revs.load('instances', bridged(InstancesGo.Groups, () => inst.groups)),
+    setGroup: bridged(InstancesGo.SetGroup, inst.mockInstances.setGroup),
+    createGroup: bridged(InstancesGo.CreateGroup, inst.mockInstances.createGroup),
+    /** Minecraft version and loader build; kind "" removes the loader, version "" picks its newest stable build. */
+    setVersion: bridged(InstancesGo.SetVersion, inst.mockInstances.setVersion),
+    setVersionOptions: bridged(InstancesGo.SetVersionOptions, inst.mockInstances.setVersionOptions),
+    trash: bridged(InstancesGo.Trash, inst.mockInstances.trash),
+    trashList: () => revs.load('instances', bridged(InstancesGo.TrashList, () => inst.trash)),
+    restore: bridged(InstancesGo.Restore, inst.mockInstances.restore),
+    purge: bridged(InstancesGo.Purge, inst.mockInstances.purge),
+    /** Picks a folder in a native dialog and moves the game folder there as a job; resolves with its id ("" if cancelled). */
+    move: bridged(InstancesGo.Move, (_id: string) => ''),
+    moveDefault: bridged(InstancesGo.MoveDefault, (_id: string) => ''),
+    /** How many mods have a build for another Minecraft version, or null when unknown (real with mods, M5). */
+    compatibility: unbuilt((_id: string, target: string): { matching: number; total: number } | null => (target.startsWith('1.21') ? { matching: 41, total: 48 } : null), null),
     activity: unbuilt((_id: string) => inst.activity, []),
     pendingUpdates: unbuilt((_id: string) => inst.pendingUpdates, []),
   },
@@ -89,9 +114,9 @@ export const api = {
   },
   versions: {
     minecraft: bridged(VersionsGo.Minecraft, () => versions.families),
-    /** Bytes the first launch of a version still downloads. */
-    estimate: bridged(VersionsGo.Estimate, (_id: string) => 180_000_000),
-    loaders: unbuilt((_minecraft: string) => versions.loaders, versions.loaders.filter((l) => l.kind === 'none')),
+    /** Bytes the first launch still downloads for a version and loader build ("" kind is vanilla, "" build the newest stable). */
+    estimate: bridged(VersionsGo.Estimate, (_minecraft: string, _loader: string, _build: string) => 180_000_000),
+    loaders: bridged(VersionsGo.Loaders, (_minecraft: string) => versions.loaders),
   },
   accounts: accountsApi,
   browse: {

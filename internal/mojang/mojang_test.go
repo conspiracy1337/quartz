@@ -266,3 +266,40 @@ func TestFamilies(t *testing.T) {
 		t.Fatal("24w14a needs Java 21")
 	}
 }
+
+func TestMergeLegacyForgeProfile(t *testing.T) {
+	parent := load(t, "1.12.2")
+	var lwjgl string
+	for _, l := range parent.Libraries {
+		if strings.HasPrefix(l.Name, "org.lwjgl.lwjgl:lwjgl:") {
+			lwjgl = l.Name
+		}
+	}
+	if lwjgl == "" {
+		t.Fatal("fixture has no lwjgl")
+	}
+	child := &Version{
+		ID: "1.12.2-forge-14.23.5.2860", InheritsFrom: "1.12.2", MainClass: "net.minecraft.launchwrapper.Launch",
+		MinecraftArguments: "--username ${auth_player_name} --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker",
+		Libraries: []Library{
+			{Name: "net.minecraftforge:forge:1.12.2-14.23.5.2860"},
+			{Name: lwjgl}, // listed again, bare
+		},
+	}
+	m := Merge(parent, child)
+	if m.MinecraftArguments != child.MinecraftArguments {
+		t.Fatal("legacy arguments must replace the parent's")
+	}
+	libs, err := m.ResolveLibraries(linux)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range libs {
+		if l.Name == lwjgl && l.SHA1 == "" {
+			t.Fatalf("bare relisted library lost Mojang's checksum: %+v", l)
+		}
+	}
+	if libs[0].Name != "net.minecraftforge:forge:1.12.2-14.23.5.2860" {
+		t.Fatalf("child library order lost: %+v", libs[0])
+	}
+}

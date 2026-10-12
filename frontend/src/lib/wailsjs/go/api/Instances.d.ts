@@ -3,12 +3,56 @@
 import {instance} from '../models';
 import {api} from '../models';
 
+export function ChooseIcon():Promise<string>;
+
 export function Create(arg1:instance.CreateRequest):Promise<api.InstanceView>;
+
+export function CreateGroup(arg1:string):Promise<instance.Group>;
+
+export function DeleteGroup(arg1:string):Promise<void>;
 
 export function Get(arg1:string):Promise<api.InstanceView>;
 
+export function Groups():Promise<Array<instance.Group>>;
+
 export function List():Promise<Array<api.InstanceSummary>>;
 
+export function Move(arg1:string):Promise<string>;
+
+export function MoveDefault(arg1:string):Promise<string>;
+
 export function OpenFolder(arg1:string):Promise<void>;
+
+export function PickIcon(arg1:string):Promise<api.InstanceView>;
+
+export function Purge(arg1:string):Promise<void>;
+
+export function Rename(arg1:string,arg2:string):Promise<api.InstanceView>;
+
+export function RenameGroup(arg1:string,arg2:string):Promise<void>;
+
+export function Restore(arg1:string):Promise<api.InstanceView>;
+
+export function SetArt(arg1:string,arg2:instance.Art):Promise<api.InstanceView>;
+
+export function SetGroup(arg1:string,arg2:string):Promise<api.InstanceView>;
+
+export function SetGroupCollapsed(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetIcon(arg1:string,arg2:string):Promise<api.InstanceView>;
+
+export function SetNotes(arg1:string,arg2:string):Promise<api.InstanceView>;
+
+export function SetTags(arg1:string,arg2:Array<string>):Promise<api.InstanceView>;
+
+export function SetVersion(arg1:string,arg2:string,arg3:string,arg4:string):Promise<api.InstanceView>;
+
+export function SetVersionOptions(arg1:string,arg2:boolean,arg3:boolean):Promise<api.InstanceView>;
+
+export function TotalPlaytime():Promise<number>;
+
+export function Trash(arg1:string):Promise<instance.TrashEntry>;
+
+export function TrashList():Promise<Array<instance.TrashEntry>>;
 
 export function UpdateSettings(arg1:string,arg2:instance.Settings):Promise<api.InstanceView>;

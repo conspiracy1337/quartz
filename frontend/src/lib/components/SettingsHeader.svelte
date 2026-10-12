@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SETTINGS_TAB_LABELS } from '../labels';
   import { go, href, type SettingsTab } from '../router.svelte';
   import Icon from '../ui/Icon.svelte';
   import PageHeader from '../ui/PageHeader.svelte';
@@ -8,10 +9,7 @@
   interface Props { active?: SettingsTab; query?: string }
   let { active, query }: Props = $props();
 
-  const labels: Record<SettingsTab, string> = {
-    general: 'General', appearance: 'Appearance', java: 'Java', downloads: 'Downloads', storage: 'Storage',
-    syncing: 'Syncing', integrations: 'Integrations', updates: 'Updates', about: 'About',
-  };
+  const labels = SETTINGS_TAB_LABELS;
   // Syncing is one page in the sidebar; its settings tab opens that page instead of a copy.
   const items = (Object.keys(labels) as SettingsTab[]).map((k) => ({
     key: k, label: labels[k], href: k === 'syncing' ? href({ name: 'syncing' }) : href({ name: 'settings', tab: k }),

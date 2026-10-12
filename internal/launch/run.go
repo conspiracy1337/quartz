@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"os"
 	"os/exec"
@@ -55,75 +56,107 @@ type run struct {
 	pending []gamelog.Line
 
 	record Record
+	// postExit is the player's after-exit command, with the variables it gets.
+	postExit string
+	vars     map[string]string
+	env      []string
+	gameDir  string
+}
+
+// spec is everything one game start needs.
+type spec struct {
+	inst    instance.Instance
+	eff     instance.Effective
+	acc     accounts.Account
+	sess    accounts.Session
+	res     *install.Resolved
+	rt      java.Runtime
+	mem     MemoryRange
+	env     mojang.Env
+	gameDir string
+	vars    map[string]string // $INST_* values
+}
+
+// moduleExports are the named-module main classes the wrapper jar calls
+// reflectively (Forge's BootstrapLauncher sits on the module path and does
+// not export its package to unnamed code; Pandora hit the same).
+var moduleExports = map[string]string{ //nolint:gosec // module names, not credentials
+	"cpw.mods.bootstraplauncher.BootstrapLauncher": "cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED",
 }
 
 // command builds the java command line and the stdin script. Nothing secret
 // goes on the command line: the account's token is a game argument and game
 // arguments only travel through the script.
-func (l *Launcher) command(inst instance.Instance, sess accounts.Session, res *install.Resolved, rt java.Runtime, mem MemoryRange, env mojang.Env) (*exec.Cmd, []byte, error) {
+func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, error) {
 	jar, err := wrapperjar.Install(l.cfg.BinDir)
 	if err != nil {
 		return nil, nil, err
 	}
-	gameDir := l.cfg.Instances.GameDir(inst.ID)
+	sess, res, eff := sp.sess, sp.res, sp.eff
 	v := res.Version
-	win := inst.Settings.Window
 	vars := mojang.Vars{
 		"auth_player_name": sess.Name, "auth_uuid": sess.UUID, "auth_access_token": sess.AccessToken,
 		"auth_session": sess.LegacySession(), "auth_xuid": sess.XUID, "clientid": sess.ClientID, "user_type": sess.UserType,
 		"user_properties": "{}", "version_name": v.ID, "version_type": v.Type,
-		"game_directory": gameDir, "assets_root": res.AssetsRoot, "assets_index_name": v.AssetsID(),
-		"game_assets": res.GameAssets, "natives_directory": res.NativesDir, "library_directory": filepath.Dir(res.ClientJar),
+		"game_directory": sp.gameDir, "assets_root": res.AssetsRoot, "assets_index_name": v.AssetsID(),
+		"game_assets": res.GameAssets, "natives_directory": res.NativesDir, "library_directory": res.LibrariesDir,
 		"classpath":           strings.Join(append(append([]string(nil), res.Classpath...), jar), string(os.PathListSeparator)),
 		"classpath_separator": string(os.PathListSeparator),
 		"launcher_name":       brand.Slug, "launcher_version": brand.Version,
-		"resolution_width": strconv.Itoa(win.Width), "resolution_height": strconv.Itoa(win.Height),
-		"quickPlayPath": filepath.Join(gameDir, "quickPlay", "log.json"),
+		"resolution_width": strconv.Itoa(eff.Width), "resolution_height": strconv.Itoa(eff.Height),
+		"quickPlayPath": filepath.Join(sp.gameDir, "quickPlay", "log.json"),
 	}
 	unknown := func(name string) {
 		l.cfg.Log.Warn("unknown placeholder in version metadata", "version", v.ID, "name", name)
 	}
 
-	args := v.JVMArgs(env, vars, unknown)
-	args = append(args, fmt.Sprintf("-Xms%dM", mem.Min), fmt.Sprintf("-Xmx%dM", mem.Max))
-	jvmArgs := l.cfg.Settings.Get().Java.JVMArgs
-	if j := inst.Settings.Java; j.Override {
-		jvmArgs = j.JVMArgs
-	}
-	user, err := shlex.Split(jvmArgs)
+	args := v.JVMArgs(sp.env, vars, unknown)
+	args = append(args, fmt.Sprintf("-Xms%dM", sp.mem.Min), fmt.Sprintf("-Xmx%dM", sp.mem.Max))
+	user, err := shlex.Split(eff.JVMArgs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("JVM arguments: %w", err)
 	}
 	args = append(args, user...)
+	args = append(args, nativeLibraryArgs(eff)...)
 	// Defence in depth against Log4Shell on old versions, whatever the config says.
 	args = append(args, "-Dlog4j2.formatMsgNoLookups=true")
 	if res.LogConfig != "" && res.LogArgument != "" {
 		args = append(args, mojang.Vars{"path": res.LogConfig}.Expand(res.LogArgument, unknown))
 	}
+	if exp, ok := moduleExports[v.MainClass]; ok {
+		args = append(args, "--add-exports", exp)
+	}
 	args = append(args, wrapperjar.MainClass)
 
 	script := new(wrapperjar.Script)
-	for _, a := range v.GameArgs(env, vars, unknown) {
+	for _, a := range v.GameArgs(sp.env, vars, unknown) {
 		script.Arg(a)
 	}
-	if win.Fullscreen {
+	if eff.Fullscreen {
 		script.Arg("--fullscreen")
 	}
 	script.Launch(v.MainClass)
 
-	cmd := exec.Command(java.LaunchBinary(rt.Path), args...) //nolint:gosec // argv slice built from validated metadata; no shell
-	cmd.Dir = gameDir
-	cmd.Env = java.CleanEnv(os.Environ())
+	argv, err := wrappers(eff, sp.vars)
+	if err != nil {
+		return nil, nil, err
+	}
+	argv = append(argv, java.LaunchBinary(sp.rt.Path))
+	argv = append(argv, args...)
+	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // argv slice from validated metadata and the player's own wrapper; no shell
+	cmd.Dir = sp.gameDir
+	cmd.Env = gameEnv(sp.vars, eff)
 	procx.Detach(cmd)
 	return cmd, script.Bytes(), nil
 }
 
 // start spawns the game and wires its output, events and exit handling.
-func (l *Launcher) start(ctx context.Context, inst instance.Instance, acc accounts.Account, sess accounts.Session, res *install.Resolved, rt java.Runtime, mem MemoryRange, env mojang.Env) (*run, error) {
+func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	cmd, script, err := l.command(inst, sess, res, rt, mem, env)
+	inst, acc, sess, rt, mem := sp.inst, sp.acc, sp.sess, sp.rt, sp.mem
+	cmd, script, err := l.command(sp)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +176,8 @@ func (l *Launcher) start(ctx context.Context, inst instance.Instance, acc accoun
 	r := &run{
 		id: newRunID(now), instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), accountID: acc.ID,
 		firstOutput: make(chan struct{}), done: make(chan struct{}),
-		record: Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID},
+		record:   Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID},
+		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: cmd.Env, gameDir: sp.gameDir,
 	}
 	r.record.ID = r.id
 	runsDir := l.cfg.Instances.RunsDir(inst.ID)
@@ -170,12 +204,8 @@ func (l *Launcher) start(ctx context.Context, inst instance.Instance, acc accoun
 	l.running[inst.ID] = r
 	l.mu.Unlock()
 	l.cfg.Bus.Emit(events.GameState, State{InstanceID: inst.ID, RunID: r.id, State: "running"})
-	onStart := l.cfg.Settings.Get().General.OnGameStart
-	if inst.Settings.Window.OnGameStart != "" {
-		onStart = inst.Settings.Window.OnGameStart
-	}
 	if l.cfg.Hooks.GameStarted != nil {
-		l.cfg.Hooks.GameStarted(onStart)
+		l.cfg.Hooks.GameStarted(sp.eff.OnGameStart)
 	}
 
 	var readers sync.WaitGroup
@@ -318,5 +348,12 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	l.cfg.Bus.Emit(events.GameState, State{InstanceID: r.instanceID, RunID: r.id, State: "exited", ExitCode: code, Result: result})
 	if none && l.cfg.Hooks.AllExited != nil {
 		l.cfg.Hooks.AllExited()
+	}
+	if r.postExit != "" {
+		vars := maps.Clone(r.vars)
+		vars["EXIT_CODE"] = strconv.Itoa(code)
+		if err := runCommand(context.Background(), r.postExit, r.gameDir, vars, append(r.env, "EXIT_CODE="+vars["EXIT_CODE"])); err != nil {
+			l.cfg.Log.Warn("after-exit command failed", "instance", r.instanceID, "err", err)
+		}
 	}
 }

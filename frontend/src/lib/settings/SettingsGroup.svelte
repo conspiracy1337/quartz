@@ -1,13 +1,16 @@
 <script lang="ts">
+  import { api } from '../api';
   import { prefs } from '../prefs.svelte';
+  import { query } from '../query.svelte';
   import Setting from '../ui/Setting.svelte';
   import SettingControl from './SettingControl.svelte';
-  import { visible, type SettingDef } from './registry';
+  import { descText, visible, type SettingDef } from './registry';
 
   /** A heading over a card of setting rows. A textarea setting renders as a full-width block. */
   interface Props { title?: string; defs: SettingDef[]; mark?: string }
   let { title, defs: all, mark }: Props = $props();
   const defs = $derived(all.filter((d) => visible(d, prefs.value)));
+  const info = query(() => api.app.info());
 </script>
 
 {#snippet rows()}
@@ -19,7 +22,8 @@
     {:else if mark}
       <div class="setting"><span><span class="small faint" style="display: block">{d.group}</span><span class="setting-title" style="display: block">{@render highlighted(d.title)}</span></span><SettingControl control={d.control} label={d.title} /></div>
     {:else}
-      <Setting title={d.title} {...(d.desc ? { desc: d.desc } : {})}><SettingControl control={d.control} label={d.title} /></Setting>
+      {@const desc = descText(d, info.data)}
+      <Setting title={d.title} {...(desc ? { desc } : {})}><SettingControl control={d.control} label={d.title} /></Setting>
     {/if}
   {/each}
 {/snippet}

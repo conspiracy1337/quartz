@@ -343,3 +343,29 @@ func TestValidate(t *testing.T) {
 }
 
 var _ io.Writer = (*counter)(nil)
+
+func TestUnhashedFileIsReadyAfterFirstFetch(t *testing.T) {
+	e := newEnv(t)
+	it := e.item("loader.jar", payload(4_000))
+	it.Sum, it.Size = hashx.Sum{}, 0 // a loader library whose metadata names no checksum
+	if e.dl.Ready(it) {
+		t.Fatal("ready before download")
+	}
+	if err := e.dl.Fetch(context.Background(), it, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !e.dl.Ready(it) {
+		t.Fatal("an unhashed file must be ready after its download, or every launch re-plans it")
+	}
+	// It is trusted by size and mtime only: a changed file is no longer ready.
+	if err := os.WriteFile(it.Dest, []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if e.dl.Ready(it) {
+		t.Fatal("changed unhashed file still ready")
+	}
+	// And it is never used as a same-content source for another file.
+	if _, ok := e.dl.ver.FindBySum(hashx.Sum{}, 0); ok {
+		t.Fatal("unhashed file offered by FindBySum")
+	}
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
-  import { ago, bytes, compact, shortMonthDay, fullDate } from '$lib/format';
+  import { ago, bytes, compact, shortMonthDay, shortDate } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
@@ -126,7 +126,7 @@
       {:else}
         <div class="md" style="display: flex; flex-direction: column; gap: 18px">
           {#each p.versions.slice(0, 4) as v (v.id)}
-            <section><h2 style="margin-top: 0; display: flex; gap: 10px; align-items: baseline"><span class="mono">{v.id}</span><span class="small faint" style="font-weight: 400">{fullDate(v.published)}</span></h2><ul>{#each v.notes as n (n)}<li>{n}</li>{/each}</ul></section>
+            <section><h2 style="margin-top: 0; display: flex; gap: 10px; align-items: baseline"><span class="mono">{v.id}</span><span class="small faint" style="font-weight: 400">{shortDate(v.published)}</span></h2><ul>{#each v.notes as n (n)}<li>{n}</li>{/each}</ul></section>
           {/each}
         </div>
       {/if}

@@ -180,3 +180,38 @@ func TestZipIncludeAndTraversal(t *testing.T) {
 		t.Fatalf("zip slip: %v", err)
 	}
 }
+
+func TestZipPrefixAndReadFile(t *testing.T) {
+	src := writeZip(t, map[string]string{
+		"maven/net/minecraftforge/forge/1/forge-1.jar": "jar",
+		"maven/../../escape":                           "x",
+		"data/client.lzma":                             "lzma",
+		"install_profile.json":                         `{"minecraft":"1.20.1"}`,
+	})
+	dest := t.TempDir()
+	// Traversal inside the prefix is still refused.
+	if err := ExtractZip(src, dest, Options{Prefix: "maven/"}); !errors.Is(err, fsx.ErrUnsafePath) {
+		t.Fatalf("traversal under prefix: %v", err)
+	}
+	src = writeZip(t, map[string]string{"maven/a/b/c.jar": "jar", "data/client.lzma": "lzma"})
+	if err := ExtractZip(src, dest, Options{Prefix: "maven"}); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, filepath.Join(dest, "a", "b", "c.jar")) != "jar" {
+		t.Fatal("prefixed entry missing")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "data")); err == nil {
+		t.Fatal("entry outside the prefix extracted")
+	}
+
+	data, err := ReadFile(src, "data/client.lzma", 16)
+	if err != nil || string(data) != "lzma" {
+		t.Fatalf("ReadFile = %q, %v", data, err)
+	}
+	if _, err := ReadFile(src, "data/client.lzma", 2); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("over the limit: %v", err)
+	}
+	if _, err := ReadFile(src, "missing.json", 16); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing entry: %v", err)
+	}
+}

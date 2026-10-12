@@ -24,6 +24,7 @@ import (
 	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
+	"quartz/internal/loader"
 	"quartz/internal/mojang"
 	"quartz/internal/settings"
 )
@@ -63,6 +64,7 @@ type Config struct {
 	Instances *instance.Store
 	Accounts  Sessions
 	Installer *install.Installer
+	Loaders   *loader.Registry
 	Java      *java.Manager
 	Tasks     *tasks.Engine
 	Settings  *settings.Store
@@ -158,6 +160,16 @@ func (l *Launcher) Running(id string) bool {
 	return ok
 }
 
+// Busy reports whether an instance is starting or running, when its files
+// must not move.
+func (l *Launcher) Busy(id string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, launching := l.launching[id]
+	_, running := l.running[id]
+	return launching || running
+}
+
 // Play starts the launch pipeline in the background with an account
 // (accountID "" means the default one; "Launch as" passes another, for this
 // launch only). Progress and the outcome arrive as events.
@@ -214,6 +226,7 @@ func (l *Launcher) Runs(id string) []Record { return listRecords(l.cfg.Instances
 type pipeline struct {
 	l       *Launcher
 	inst    instance.Instance
+	eff     instance.Effective // inst's settings over the global ones
 	account string
 	// signedIn is the account the sign-in step resolved, for failure events.
 	signedIn string
@@ -236,7 +249,7 @@ func (p *pipeline) progress(stage, pct int) {
 }
 
 func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance, accountID string) {
-	p := &pipeline{l: l, inst: inst, account: accountID, details: make([]string, stageCount)}
+	p := &pipeline{l: l, inst: inst, eff: inst.Resolve(l.cfg.Settings.Get()), account: accountID, details: make([]string, stageCount)}
 	stage, err := p.run(ctx)
 	l.mu.Lock()
 	delete(l.launching, inst.ID)
@@ -277,27 +290,32 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 		p.set(StageSignIn, "offline")
 	}
 
-	p.set(StageMods, "No mods")
+	p.set(StageMods, p.updateLoader(ctx))
 	p.progress(StageJava, 10)
 
 	gameDir := l.cfg.Instances.GameDir(p.inst.ID)
 	if err := os.MkdirAll(gameDir, 0o700); err != nil {
 		return StageJava, err
 	}
-	win := p.inst.Settings.Window
 	env := mojang.CurrentEnv(sysinfo.OSVersion())
-	env.Features["has_custom_resolution"] = win.Width > 0 && win.Height > 0
-	res, err := l.cfg.Installer.Resolve(ctx, p.inst.Minecraft, gameDir, env)
+	env.Features["has_custom_resolution"] = p.eff.Width > 0 && p.eff.Height > 0
+	res, err := l.cfg.Installer.Resolve(ctx, target(p.inst), gameDir, env)
 	if err != nil {
 		return StageJava, err
 	}
-	req := java.Request{Major: res.Version.JavaMajor(), Component: res.Version.JavaComponent()}
-	if j := p.inst.Settings.Java; j.Override && j.JavaPath != "" {
-		req.Override = j.JavaPath
-	}
+	// The game uses the instance's Java override if it has one; a loader's
+	// installer always runs with the Java its Minecraft version needs.
+	own := java.Request{Major: res.Version.JavaMajor(), Component: res.Version.JavaComponent()}
+	req := own
+	req.Override = p.eff.JavaPath
 	rt, plan, err := l.cfg.Java.Resolve(ctx, req)
 	if err != nil {
 		return StageJava, err
+	}
+	if res.Processing != nil && req.Override != "" && plan == nil && !res.Processing.Done() {
+		if _, ownPlan, err := l.cfg.Java.Resolve(ctx, own); err == nil {
+			plan = ownPlan
+		}
 	}
 	mem := p.memory()
 	if plan != nil {
@@ -312,7 +330,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	}
 	p.progress(StageFiles, 20)
 
-	if err := p.install(ctx, res, plan); err != nil {
+	if err := p.install(ctx, res, plan, l.processorJava(own)); err != nil {
 		return StageFiles, err
 	}
 	if plan != nil {
@@ -325,7 +343,17 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	p.set(StageSandbox, "Off")
 	p.progress(StageStart, 90)
 
-	r, err := l.start(ctx, p.inst, acc, sess, res, rt, mem, env)
+	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir}
+	sp.vars = instVars(p.inst, l.cfg.Instances.Dir(p.inst.ID), gameDir, rt.Path)
+	if pre := p.eff.Commands.PreLaunch; pre != "" {
+		p.set(StageStart, "Before-launch command")
+		p.progress(StageStart, 92)
+		if err := runCommand(ctx, pre, gameDir, sp.vars, gameEnv(sp.vars, p.eff)); err != nil {
+			return StageStart, fmt.Errorf("before-launch command: %w", err)
+		}
+		p.set(StageStart, "")
+	}
+	r, err := l.start(ctx, sp)
 	if err != nil {
 		return StageStart, err
 	}
@@ -338,13 +366,64 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	return StageStart, nil
 }
 
+// target is what an instance plays.
+func target(in instance.Instance) install.Target {
+	return install.Target{Minecraft: in.Minecraft, Loader: loader.Kind(in.Loader), LoaderVersion: in.LoaderVersion}
+}
+
+// subtitle names what an instance plays: "Fabric 0.16.10 for Minecraft 1.21.1".
+func subtitle(in instance.Instance) string {
+	if in.Loader == "" {
+		return "Minecraft " + in.Minecraft
+	}
+	return loader.Label(loader.Kind(in.Loader), in.Minecraft, in.LoaderVersion) + " for Minecraft " + in.Minecraft
+}
+
+// updateLoader moves the instance to its loader's newest stable build when
+// it asks for that, and returns the mods step's detail. Being offline or the
+// loader's site being down never stops a launch: the installed build is used.
+func (p *pipeline) updateLoader(ctx context.Context) string {
+	in := p.inst
+	if in.Loader == "" {
+		return "No mods"
+	}
+	k := loader.Kind(in.Loader)
+	if in.KeepLoaderUpdated && p.l.cfg.Loaders != nil {
+		latest, err := p.l.cfg.Loaders.Latest(ctx, k, in.Minecraft)
+		cur := loader.Display(k, in.Minecraft, in.LoaderVersion)
+		if err == nil && latest.ID != in.LoaderVersion && loader.Compare(latest.Name, cur) > 0 {
+			if updated, err := p.l.cfg.Instances.Update(in.ID, func(i *instance.Instance) error { i.LoaderVersion = latest.ID; return nil }); err == nil {
+				p.inst = updated
+				p.l.cfg.Bus.Emit(events.InstancesChanged, nil)
+				return "Updated to " + latest.Name
+			}
+		}
+	}
+	return loader.Label(k, in.Minecraft, p.inst.LoaderVersion)
+}
+
+// processorJava finds the Java a loader's installer runs with, after the
+// install job's own Java download (if any) has finished.
+func (l *Launcher) processorJava(req java.Request) func(context.Context) (string, error) {
+	return func(ctx context.Context) (string, error) {
+		rt, plan, err := l.cfg.Java.Resolve(ctx, req)
+		if err != nil {
+			return "", err
+		}
+		if plan != nil || rt.Path == "" {
+			return "", fmt.Errorf("launch: Java %d is needed to finish installing the mod loader", req.Major)
+		}
+		return rt.Path, nil
+	}
+}
+
 // install runs the install job (if anything is missing) and mirrors its
 // progress into the launch panel.
-func (p *pipeline) install(ctx context.Context, res *install.Resolved, plan *java.Plan) error {
+func (p *pipeline) install(ctx context.Context, res *install.Resolved, plan *java.Plan, procJava func(context.Context) (string, error)) error {
 	l := p.l
 	spec, err := l.cfg.Installer.Plan(install.Request{
-		Resolved: res, Java: plan,
-		Meta: tasks.Meta{Title: p.inst.Name, Subtitle: "Minecraft " + p.inst.Minecraft, Art: tasks.Art{Background: p.inst.Art.Background, Initial: p.inst.Art.Initial}, Kind: "install"},
+		Resolved: res, Java: plan, ProcessorJava: procJava,
+		Meta: tasks.Meta{Title: p.inst.Name, Subtitle: subtitle(p.inst), Art: tasks.Art{Background: p.inst.Art.Background, Initial: p.inst.Art.Initial}, Kind: "install"},
 	})
 	if err != nil || spec == nil {
 		return err
@@ -400,15 +479,9 @@ func thousands(n int64) string {
 	return s
 }
 
-// memory resolves the instance's memory, falling back to the global setting.
+// memory is the heap the game gets.
 func (p *pipeline) memory() MemoryRange {
-	g := p.l.cfg.Settings.Get().Java
-	m := MemoryRange{Min: g.MemoryMinMB, Max: g.MemoryMaxMB}
-	if j := p.inst.Settings.Java; j.Override && j.MemoryMaxMB > 0 {
-		m = MemoryRange{Min: max(j.MemoryMinMB, 256), Max: j.MemoryMaxMB}
-	}
-	m.Min = min(m.Min, m.Max)
-	return m
+	return MemoryRange{Min: p.eff.MemoryMinMB, Max: p.eff.MemoryMaxMB}
 }
 
 // lowMemory warns when free RAM is below the maximum heap (if enabled).
@@ -440,12 +513,12 @@ func (l *Launcher) Repair(ctx context.Context, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	res, err := l.cfg.Installer.Resolve(ctx, inst.Minecraft, l.cfg.Instances.GameDir(id), mojang.CurrentEnv(sysinfo.OSVersion()))
+	res, err := l.cfg.Installer.Resolve(ctx, target(inst), l.cfg.Instances.GameDir(id), mojang.CurrentEnv(sysinfo.OSVersion()))
 	if err != nil {
 		return "", err
 	}
 	spec, err := l.cfg.Installer.Plan(install.Request{
-		Resolved: res, Force: true,
+		Resolved: res, Force: true, ProcessorJava: l.processorJava(java.Request{Major: res.Version.JavaMajor(), Component: res.Version.JavaComponent()}),
 		Meta: tasks.Meta{Title: inst.Name, Subtitle: "Repairing game files", Art: tasks.Art{Background: inst.Art.Background, Initial: inst.Art.Initial}, Kind: "repair"},
 	})
 	if err != nil || spec == nil {

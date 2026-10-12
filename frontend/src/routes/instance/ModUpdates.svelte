@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
-  import { fullDate } from '$lib/format';
+  import { shortDate } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
   import { CHANNELS } from '$lib/settings/registry';
@@ -64,7 +64,7 @@
     {#snippet head()}<span><span class="h2" style="display: block">{cur.name}</span><span class="mono small faint">{cur.from} to {cur.to}</span></span>{/snippet}
     {#each cur.versions as v (v.id)}
       <section aria-label={v.id} style="display: flex; flex-direction: column; gap: 6px">
-        <div style="display: flex; justify-content: space-between; align-items: baseline"><span class="mono" style="font-weight: 500">{v.id}</span><span class="small faint">{fullDate(v.date)}</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline"><span class="mono" style="font-weight: 500">{v.id}</span><span class="small faint">{shortDate(v.date)}</span></div>
         <ul class="cl">{#each v.items as t (t)}<li>{t}</li>{/each}</ul>
       </section>
     {/each}

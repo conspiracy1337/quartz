@@ -25,6 +25,7 @@ describe('format', () => {
     expect(hours(2470)).toBe('41 h');
     expect(hm(128)).toBe('2 h 08 m');
     expect(hm(40)).toBe('40 m');
+    expect(hm(3, true)).toBe('0 h 03 m');
     expect(hmLoose(700)).toBe('11 h 40 m');
     expect(bytes(2_400_000)).toBe('2.4 MB');
     expect(bytes(240_000_000)).toBe('240 MB');
@@ -45,7 +46,8 @@ describe('recent times', () => {
     expect(left(0)).toBe('');
     expect(left(40)).toBe('40 s left');
     expect(left(150)).toBe('3 min left');
-    expect(rate(12_400_000)).toBe('12 MB/s');
+    expect(rate(12_400_000)).toBe('12.4 MB/s');
+    expect(rate(240_000_000)).toBe('240 MB/s');
   });
 });
 

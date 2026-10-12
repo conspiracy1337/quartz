@@ -24,7 +24,7 @@ type Version struct {
 	JavaVersion        *JavaVersion `json:"javaVersion,omitempty"`
 	Libraries          []Library    `json:"libraries"`
 	Logging            *Logging     `json:"logging,omitempty"`
-	ReleaseTime        time.Time    `json:"releaseTime"`
+	ReleaseTime        Time         `json:"releaseTime"`
 }
 
 // Downloads names the version's own files ("client", "server", …).
@@ -151,9 +151,56 @@ func Merge(parent, child *Version) *Version {
 	if child.Logging != nil {
 		out.Logging = child.Logging
 	}
-	if !child.ReleaseTime.IsZero() {
-		out.ReleaseTime = child.ReleaseTime
-	}
-	out.Libraries = append(append([]Library(nil), child.Libraries...), parent.Libraries...)
+	out.Libraries = append(mergeLibraries(child.Libraries, parent.Libraries), parent.Libraries...)
 	return &out
+}
+
+// mergeLibraries returns the child's libraries, where an entry that names
+// exactly a parent library but carries no checksum of its own (legacy Forge
+// profiles list vanilla's libraries again, bare) takes the parent's entry, so
+// the file keeps Mojang's URL, size and sha1.
+func mergeLibraries(child, parent []Library) []Library {
+	known := make(map[string]Library, len(parent))
+	for _, l := range parent {
+		if l.Downloads != nil {
+			known[l.Name] = l
+		}
+	}
+	out := make([]Library, len(child))
+	for i, l := range child {
+		if p, ok := known[l.Name]; ok && l.Downloads == nil && l.SHA1 == "" {
+			l = p
+		}
+		out[i] = l
+	}
+	return out
+}
+
+// Time is a timestamp in a version JSON. Mojang writes RFC 3339; Fabric,
+// Quilt and old Forge profiles write "+0000"-style offsets. An unreadable
+// timestamp is left zero instead of failing the whole profile (it only orders
+// versions).
+type Time struct{ time.Time }
+
+var timeLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05-0700", "2006-01-02T15:04:05.000-0700", "2006-01-02T15:04:05"}
+
+func (t *Time) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil || s == "" {
+		return nil //nolint:nilerr // tolerant on purpose, see Time
+	}
+	for _, l := range timeLayouts {
+		if v, err := time.Parse(l, s); err == nil {
+			t.Time = v
+			return nil
+		}
+	}
+	return nil
+}
+
+func (t Time) MarshalJSON() ([]byte, error) {
+	if t.IsZero() {
+		return []byte(`""`), nil
+	}
+	return json.Marshal(t.Format(time.RFC3339))
 }

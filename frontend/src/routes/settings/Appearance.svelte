@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Swatches from '$lib/ui/Swatches.svelte';
   import { tick } from 'svelte';
   import { api } from '$lib/api';
   import { prefs } from '$lib/prefs.svelte';
@@ -52,8 +53,8 @@
   </section>
   <section aria-label="Accent colour" style="display: flex; flex-direction: column; gap: 10px">
     <h2 class="h3">Accent colour</h2>
-    <div style="display: flex; gap: 10px; align-items: center" role="radiogroup" aria-label="Accent colour">
-      {#each ACCENTS as c (c)}<button class="acc" class:on={a?.accent === c} style="background: {c}" onclick={() => setAccent(c)} role="radio" aria-checked={a?.accent === c} aria-label={c}></button>{/each}
+    <div style="display: flex; gap: 10px; align-items: center">
+      <Swatches colors={ACCENTS} value={a?.accent ?? ''} label="Accent colour" onpick={setAccent} />
       <span class="input" style="width: 110px; margin-left: 8px"><span class="sr">Custom hex</span><input class="mono" bind:value={hex} onchange={() => setAccent(hex)} maxlength="7" /></span>
     </div>
   </section>
@@ -81,7 +82,5 @@
   .th.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
   .th .pv{height:72px;display:grid;grid-template-columns:28% 1fr}
   .th .lb{height:32px;display:flex;align-items:center;padding:0 10px;font-size:12px;border-top:1px solid var(--line)}
-  .acc{width:28px;height:28px;border-radius:50%;border:2px solid transparent;padding:0}
-  .acc.on{border-color:var(--text);box-shadow:inset 0 0 0 2px var(--bg)}
   .tok{display:grid;grid-template-columns:20px minmax(0,1fr) 92px;gap:10px;align-items:center;height:36px;padding:0 12px}
 </style>

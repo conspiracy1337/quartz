@@ -2,7 +2,8 @@
 // milestone by milestone. Timestamps are epoch milliseconds; sizes are bytes.
 
 export type Loader = 'fabric' | 'quilt' | 'forge' | 'neoforge';
-export interface LoaderRef { kind: Loader; version: string }
+/** An instance's loader: `version` is what is shown ("47.3.0"), `id` the build Go stores ("1.20.1-47.3.0"). */
+export interface LoaderRef { kind: Loader; version: string; id: string }
 
 /** A coloured tile: a solid tint or gradient, optionally with a letter on it. */
 export interface Art { background: string; initial?: string }
@@ -13,34 +14,53 @@ export interface InstanceSummary {
   id: string;
   name: string;
   art: Art;
+  /** A picture's sha256 (served at /tex/icon/<icon>.png), or in the design's fixtures a glyph name. */
+  icon?: string;
   minecraft: string;
   loader?: LoaderRef;
   kind: InstanceKind;
+  group?: string;
+  tags: string[];
   hasServers: boolean;
   lastPlayed?: number;
   playtimeMin: number;
   running: boolean;
 }
 
+export interface EnvVar { name: string; value: string }
 /** Per-instance settings (mirrors Go's instance.Settings). */
 export interface InstanceSettings {
   java: { override: boolean; javaPath: string; memoryMinMb: number; memoryMaxMb: number; jvmArgs: string };
   window: { width: number; height: number; fullscreen: boolean; onGameStart: string };
+  commands: { preLaunch: string; wrapper: string; postExit: string; env: EnvVar[]; systemGlfw: boolean; systemOpenal: boolean };
+  performance: { dedicatedGpu: boolean; gameMode: boolean; mangoHud: boolean };
 }
-/** What the New instance screen sends. */
-export interface CreateInstance { name: string; art: Art; minecraft: string; loader: string; group: string; sandbox: boolean; shares: string[] }
+/** What the New instance screen sends; an empty loaderVersion means the newest stable build. */
+export interface CreateInstance { name: string; art: Art; icon: string; minecraft: string; loader: string; loaderVersion: string; group: string; sandbox: boolean; shares: string[] }
 export interface Instance extends InstanceSummary {
-  icon?: 'bolt';
   sandboxed: boolean;
   counts: Record<'mods' | 'resourcepacks' | 'shaders' | 'datapacks' | 'worlds' | 'servers', number>;
   java: string;
   memoryMB: { min: number; max: number };
   created: number;
   folder: string;
+  /** The game folder was moved outside the data folder. */
+  moved: boolean;
+  /** What "Automatic" Java picks for this version, e.g. "Java 21". */
+  javaAuto: string;
+  notes: string;
+  keepLoaderUpdated: boolean;
+  followLatest: boolean;
   syncTargets: number;
   discordStatus: boolean;
   settings: InstanceSettings;
+  /** The dedicated GPU's name (Linux), "" when there is none. */
+  gpu: string;
 }
+
+export interface Group { name: string; collapsed?: boolean }
+/** An instance in the launcher's trash. */
+export interface TrashEntry { key: string; id: string; name: string; art: Art; icon?: string; minecraft: string; loader?: string; group?: string; trashedAt: number }
 
 export type ActivityKind = 'session' | 'change';
 export interface ActivityEvent {
@@ -126,7 +146,8 @@ export interface Run {
 // ---- versions ----
 export interface McVersion { id: string; java: number; released: number; snapshot?: boolean }
 export interface VersionFamily { id: string; note: string; releases: McVersion[]; snapshots: McVersion[] }
-export interface LoaderVersion { id: string; released: number }
+/** One loader build: `name` is shown, `id` is stored; `released` is 0 when the upstream doesn't say. */
+export interface LoaderVersion { id: string; name: string; released: number }
 export interface LoaderOption { kind: Loader | 'none'; name: string; note: string; stable: LoaderVersion[]; beta: LoaderVersion[] }
 
 // ---- accounts and skins ----

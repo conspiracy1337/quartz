@@ -121,7 +121,7 @@
     </div>
     <div class="wd-info">
       <div style="min-width: 0"><div class="h2 trunc">{cur?.name ?? ''}</div><div class="small faint">{cape ? `${cape.name} cape` : 'No cape'}, {cur?.slim ? 'slim' : 'classic'} arms</div></div>
-      <Seg options={ARMS} value={cur?.slim ? 'slim' : 'classic'} label="Arm type" fill onchange={setArms} />
+      <Seg options={ARMS} value={cur?.slim ? 'slim' : 'classic'} label="Arm type" fill center onchange={setArms} />
       <button class="btn btn-accent btn-lg btn-block" disabled={!me || !cur || busy || wearing} onclick={wear}>{wearing ? 'Wearing this skin and cape' : 'Wear this skin and cape'}</button>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px">
         <button class="btn btn-sm" disabled={!cur} onclick={() => (prompt = 'rename')}>Rename</button>

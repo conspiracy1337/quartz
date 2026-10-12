@@ -18,13 +18,16 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
 	"quartz/internal/core/archive"
 	"quartz/internal/core/download"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/hashx"
+	"quartz/internal/core/netx"
 	"quartz/internal/core/tasks"
 	"quartz/internal/java"
+	"quartz/internal/loader"
 	"quartz/internal/meta"
 	"quartz/internal/mojang"
 )
@@ -40,31 +43,48 @@ type Dirs struct {
 
 // Installer is safe for concurrent use.
 type Installer struct {
-	meta *meta.Service
-	dl   *download.Downloader
-	java *java.Manager
-	dirs Dirs
+	meta    *meta.Service
+	dl      *download.Downloader
+	java    *java.Manager
+	loaders *loader.Registry
+	dirs    Dirs
 }
 
 // New returns an installer.
-func New(m *meta.Service, dl *download.Downloader, j *java.Manager, d Dirs) *Installer {
-	return &Installer{meta: m, dl: dl, java: j, dirs: d}
+func New(m *meta.Service, dl *download.Downloader, j *java.Manager, l *loader.Registry, d Dirs) *Installer {
+	return &Installer{meta: m, dl: dl, java: j, loaders: l, dirs: d}
+}
+
+// Target is what one instance plays: a Minecraft version and, optionally, a
+// mod loader build on top of it.
+type Target struct {
+	Minecraft     string
+	Loader        loader.Kind // "" for vanilla
+	LoaderVersion string
 }
 
 // Resolved is everything a launch needs to know about a version.
 type Resolved struct {
-	Version     *mojang.Version
-	Env         mojang.Env
-	Index       mojang.AssetIndex
-	indexData   []byte
-	Libraries   []mojang.ResolvedLibrary
-	ClientJar   string
-	Classpath   []string // libraries and the client jar, absolute
-	NativesDir  string
-	AssetsRoot  string
-	GameAssets  string // the folder legacy versions read assets from by name
-	LogConfig   string // absolute path, "" when the version has none
-	LogArgument string // e.g. -Dlog4j.configurationFile=${path}
+	Version      *mojang.Version // vanilla, or the loader profile merged over it
+	Minecraft    string
+	Env          mojang.Env
+	LibrariesDir string
+	Index        mojang.AssetIndex
+	indexData    []byte
+	Libraries    []mojang.ResolvedLibrary
+	ClientJar    string
+	Classpath    []string // libraries and the client jar, absolute
+	NativesDir   string
+	AssetsRoot   string
+	GameAssets   string // the folder legacy versions read assets from by name
+	LogConfig    string // absolute path, "" when the version has none
+	LogArgument  string // e.g. -Dlog4j.configurationFile=${path}
+
+	// From the loader, if any: files only the install needs, library paths
+	// its processors create, and the processing itself.
+	Extra      []mojang.ResolvedLibrary
+	Produced   map[string]bool
+	Processing *loader.Processing
 }
 
 var (
@@ -72,30 +92,43 @@ var (
 	fileID    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
 )
 
-// Resolve reads the version's metadata (from cache when possible) and works
-// out every file path. gameDir is needed for map_to_resources assets.
-func (in *Installer) Resolve(ctx context.Context, id, gameDir string, env mojang.Env) (*Resolved, error) {
+// Resolve reads the target's metadata (from cache when possible) and works out
+// every file path. gameDir is needed for map_to_resources assets. A loader's
+// profile is merged over vanilla; the client jar, natives and assets stay
+// vanilla's, so every loader on one Minecraft version shares them.
+func (in *Installer) Resolve(ctx context.Context, t Target, gameDir string, env mojang.Env) (*Resolved, error) {
+	id := t.Minecraft
 	if !versionID.MatchString(id) {
 		return nil, fmt.Errorf("install: invalid version id %q", id)
 	}
-	v, err := in.meta.Version(ctx, id)
+	parent, err := in.meta.Version(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	libs, err := v.ResolveLibraries(env)
-	if err != nil {
-		return nil, err
-	}
-	ix, data, err := in.meta.AssetIndex(ctx, v)
-	if err != nil {
-		return nil, err
-	}
-	r := &Resolved{Version: v, Env: env, Index: ix, indexData: data, Libraries: libs, AssetsRoot: in.dirs.Assets}
+	r := &Resolved{Version: parent, Minecraft: id, Env: env, AssetsRoot: in.dirs.Assets, LibrariesDir: in.dirs.Libraries}
 	if r.ClientJar, err = fsx.SafeJoin(in.dirs.Versions, filepath.Join(id, id+".jar")); err != nil {
 		return nil, err
 	}
+	var prof *loader.Profile
+	if t.Loader != "" {
+		prof, err = in.loaders.Profile(ctx, t.Loader, loader.Request{Minecraft: id, Env: env, Parent: parent, ClientJar: r.ClientJar}, t.LoaderVersion)
+		if err != nil {
+			return nil, err
+		}
+		r.Version = mojang.Merge(parent, prof.Version)
+		r.Extra, r.Produced, r.Processing = prof.Extra, prof.Produced, prof.Processing
+	}
+	v := r.Version
+	if r.Libraries, err = v.ResolveLibraries(env); err != nil {
+		return nil, err
+	}
+	in.fillChecksums(ctx, r.Libraries)
+	in.fillChecksums(ctx, r.Extra)
+	if r.Index, r.indexData, err = in.meta.AssetIndex(ctx, v); err != nil {
+		return nil, err
+	}
 	var natives []string
-	for _, l := range libs {
+	for _, l := range r.Libraries {
 		p, err := fsx.SafeJoin(in.dirs.Libraries, l.Path)
 		if err != nil {
 			return nil, err
@@ -106,12 +139,14 @@ func (in *Installer) Resolve(ctx context.Context, id, gameDir string, env mojang
 		}
 		r.Classpath = append(r.Classpath, p)
 	}
-	r.Classpath = append(r.Classpath, r.ClientJar)
+	if prof == nil || !prof.NoClientJar {
+		r.Classpath = append(r.Classpath, r.ClientJar)
+	}
 	r.NativesDir = filepath.Join(in.dirs.Natives, nativesKey(id, natives))
 	switch {
-	case ix.MapToResources:
+	case r.Index.MapToResources:
 		r.GameAssets = filepath.Join(gameDir, "resources")
-	case ix.Virtual:
+	case r.Index.Virtual:
 		r.GameAssets = filepath.Join(in.dirs.Assets, "virtual", sanitize(v.AssetsID()))
 	default:
 		r.GameAssets = in.dirs.Assets
@@ -121,6 +156,30 @@ func (in *Installer) Resolve(ctx context.Context, id, gameDir string, env mojang
 		r.LogArgument = lc.Client.Argument
 	}
 	return r, nil
+}
+
+// fillChecksums asks the maven repository for the sha1 of libraries whose
+// metadata names none (common in loader profiles), so they are verified like
+// everything else. The answers are cached for good; a repository without
+// checksums leaves the library unhashed (see download.Verified).
+func (in *Installer) fillChecksums(ctx context.Context, libs []mojang.ResolvedLibrary) {
+	sem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
+	for i := range libs {
+		l := &libs[i]
+		if l.SHA1 != "" || l.URL == "" {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			if sum, err := in.meta.SidecarSHA1(ctx, l.URL); err == nil {
+				l.SHA1 = sum
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // nativesKey names the natives folder after the exact set of native jars, so
@@ -151,23 +210,24 @@ func (in *Installer) files(r *Resolved) (game, assets []download.Item, err error
 	if !ok {
 		return nil, nil, fmt.Errorf("install: %s has no client download", v.ID)
 	}
-	game = append(game, item(client.URL, r.ClientJar, client.Size, client.SHA1))
-	for _, l := range r.Libraries {
+	game = append(game, item([]string{client.URL}, r.ClientJar, client.Size, client.SHA1))
+	for _, l := range append(slices.Clone(r.Libraries), r.Extra...) {
 		dest, err := fsx.SafeJoin(in.dirs.Libraries, l.Path)
 		if err != nil {
 			return nil, nil, err
 		}
 		if l.URL == "" {
-			if _, err := os.Stat(dest); err != nil {
+			// Unpacked from a loader installer, or about to be made by its processors.
+			if _, err := os.Stat(dest); err != nil && !r.Produced[l.Path] {
 				return nil, nil, fmt.Errorf("install: library %s is missing and has no download", l.Name)
 			}
 			continue
 		}
-		game = append(game, item(l.URL, dest, l.Size, l.SHA1))
+		game = append(game, item(append([]string{l.URL}, l.Mirrors...), dest, l.Size, l.SHA1))
 	}
 	if r.LogConfig != "" {
 		f := v.Logging.Client.File
-		game = append(game, item(f.URL, r.LogConfig, f.Size, f.SHA1))
+		game = append(game, item([]string{f.URL}, r.LogConfig, f.Size, f.SHA1))
 	}
 	seen := map[string]bool{}
 	for _, o := range r.Index.Objects {
@@ -176,13 +236,13 @@ func (in *Installer) files(r *Resolved) (game, assets []download.Item, err error
 		}
 		seen[o.Hash] = true
 		dest := filepath.Join(in.dirs.Assets, "objects", filepath.FromSlash(o.ObjectPath()))
-		assets = append(assets, item(o.URL(), dest, o.Size, o.Hash))
+		assets = append(assets, item([]string{o.URL()}, dest, o.Size, o.Hash))
 	}
 	return game, assets, nil
 }
 
-func item(url, dest string, size int64, sha1 string) download.Item {
-	it := download.Item{URLs: []string{url}, Dest: dest, Size: size}
+func item(urls []string, dest string, size int64, sha1 string) download.Item {
+	it := download.Item{URLs: urls, Dest: dest, Size: size}
 	if sha1 != "" {
 		it.Sum = hashx.Of(hashx.SHA1, sha1)
 	}
@@ -195,6 +255,9 @@ type Request struct {
 	Meta     tasks.Meta
 	Java     *java.Plan // set when the Java runtime must be installed too
 	Force    bool       // Repair: verify every file again by hashing
+	// ProcessorJava finds the Java a loader's processors run with, once the
+	// job's own Java step (if any) is done. Needed only when Processing is set.
+	ProcessorJava func(context.Context) (string, error)
 }
 
 // Plan builds the job, or returns nil when everything is already in place.
@@ -215,7 +278,7 @@ func (in *Installer) Plan(req Request) (*tasks.Spec, error) {
 	spec := tasks.NewJob(req.Meta)
 	var pending bool
 	if works := in.pending(game); len(works) > 0 {
-		spec.Step(fmt.Sprintf("Minecraft %s and libraries", r.Version.ID), tasks.Bytes, works...)
+		spec.Step(fmt.Sprintf("Minecraft %s and libraries", r.Minecraft), tasks.Bytes, works...)
 		pending = true
 	}
 	if works := in.pending(assets); len(works) > 0 {
@@ -232,6 +295,23 @@ func (in *Installer) Plan(req Request) (*tasks.Spec, error) {
 	}
 	if r.Index.Legacy() && (req.Force || !complete(r.GameAssets)) {
 		spec.After("Legacy assets", tasks.Count, tasks.Func("copy legacy assets", func(context.Context) error { return in.legacyAssets(r) }))
+		pending = true
+	}
+	if p := r.Processing; p != nil && (req.Force || !p.Done()) {
+		if req.ProcessorJava == nil {
+			return nil, errors.New("install: this loader needs Java to finish installing")
+		}
+		spec.After("Processing Minecraft", tasks.Count, tasks.Func("run the loader's installer", func(ctx context.Context) error {
+			javaPath, err := req.ProcessorJava(ctx)
+			if err == nil {
+				err = p.Run(ctx, javaPath)
+			}
+			if err != nil && ctx.Err() == nil {
+				// A processor fails the same way every time; retrying only delays the message.
+				return &netx.PermanentError{Err: err}
+			}
+			return err
+		}))
 		pending = true
 	}
 	if !pending {

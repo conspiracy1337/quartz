@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '../api';
-  import { agoShort } from '../format';
-  import { instanceMeta } from '../labels';
+  import { ago } from '../format';
+  import { SETTINGS_TAB_LABELS, instanceMeta } from '../labels';
   import { query } from '../query.svelte';
   import { go, type Route } from '../router.svelte';
   import { registry } from '../settings/registry';
@@ -15,6 +15,7 @@
   interface Props { mode: 'commands' | 'instances' }
   let { mode }: Props = $props();
 
+  const SHOWN = 5; // instance rows, as the design's switcher shows
   interface Item { key: string; group: string; label: string; icon: IconName; hint?: string; run: () => void }
   const nav = (r: Route) => () => go(r);
   const COMMANDS: Item[] = [
@@ -26,7 +27,7 @@
     { key: 'self', group: 'Actions', label: 'Install launcher update 1.4.0', icon: 'shield', run: () => {} },
     { key: 'new', group: 'Actions', label: 'Create a new instance', icon: 'plus', run: nav({ name: 'new-instance' }) },
     { key: 'shortcuts', group: 'Actions', label: 'Show keyboard shortcuts', icon: 'settings-simple', run: () => session.open({ kind: 'shortcuts' }) },
-    ...registry.map((d) => ({ key: d.id, group: 'Settings', label: d.title, icon: 'settings-simple' as const, hint: `Settings, ${d.group}`, run: nav({ name: 'settings', tab: d.tab }) })),
+    ...registry.map((d) => ({ key: d.id, group: 'Settings', label: d.title, icon: 'settings-simple' as const, hint: `Settings, ${SETTINGS_TAB_LABELS[d.tab]}`, run: nav({ name: 'settings', tab: d.tab }) })),
   ];
 
   const instances = query(() => api.instances.list());
@@ -38,7 +39,7 @@
   const needle = $derived(q.trim().toLowerCase());
   const commands = $derived(COMMANDS.filter((c) => !needle || c.label.toLowerCase().includes(needle)).slice(0, 8));
   const insts = $derived((instances.data ?? []).filter((i) => !needle || `${i.name} ${instanceMeta(i)}`.toLowerCase().includes(needle)));
-  const count = $derived(mode === 'commands' ? commands.length : Math.min(insts.length, 6));
+  const count = $derived(mode === 'commands' ? commands.length : Math.min(insts.length, SHOWN));
   const groups = $derived([...new Set(commands.map((c) => c.group))]);
 
   function runAt(i: number, open = false) {
@@ -91,15 +92,15 @@
       <div class="pfoot-p"><span><span class="kbd">↑</span> <span class="kbd">↓</span> move</span><span><span class="kbd">Enter</span> run</span><span><span class="kbd">Tab</span> switch to instances</span><button class="link" style="margin-left: auto" onclick={() => session.open({ kind: 'shortcuts' })}><span class="kbd">?</span> shortcuts</button></div>
     {:else}
       <div role="listbox" aria-label="Instances" style="padding: 8px">
-        {#each insts.slice(0, 6) as r, i (r.id)}
+        {#each insts.slice(0, SHOWN) as r, i (r.id)}
           <button class="pi pi-inst" class:on={sel === i} role="option" aria-selected={sel === i} onpointermove={() => (sel = i)} onclick={() => runAt(i)}>
-            <Tile art={r.art} />
-            <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small faint" style="display: block">{instanceMeta(r)}, {r.lastPlayed ? `played ${agoShort(r.lastPlayed).toLowerCase()}` : 'never played'}</span></span>
+            <Tile art={r.art} icon={r.icon} />
+            <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small faint" style="display: block">{instanceMeta(r)}, {r.lastPlayed ? `played ${ago(r.lastPlayed)}` : 'never played'}</span></span>
             <span class="acts"><span class="kbd">Enter</span><span class="small faint">play</span><span class="kbd" style="margin-left: 6px">Ctrl Enter</span><span class="small faint">open</span></span>
           </button>
         {/each}
       </div>
-      <div class="pfoot-p"><span><span class="kbd">↑</span> <span class="kbd">↓</span> move</span><span><span class="kbd">Tab</span> commands</span><span style="margin-left: auto">{Math.min(insts.length, 6)} of {instances.data?.length ?? 0}</span></div>
+      <div class="pfoot-p"><span><span class="kbd">↑</span> <span class="kbd">↓</span> move</span><span><span class="kbd">Tab</span> commands</span><span style="margin-left: auto">{Math.min(insts.length, SHOWN)} of {instances.data?.length ?? 0}</span></div>
     {/if}
   </div>
 </div>

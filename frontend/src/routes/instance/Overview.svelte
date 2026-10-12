@@ -33,7 +33,7 @@
       <div class="ov-body">
         {#each events as e, k (k)}
           <div class="ev">
-            <span class="ev-ic" style="color: {TONES[e.tone]}" aria-hidden="true"><Icon name={e.icon} size={14} sw={1.8} /></span>
+            <span class="ev-ic" style="color: {TONES[e.tone]}" aria-hidden="true"><Icon name={e.icon} size={14} sw={1.8} outline /></span>
             <span style="min-width: 0"><span class="trunc" style="display: block">{e.title}</span><span class="trunc small faint" style="display: block">{e.detail}</span></span>
             <span class="small faint tnum" style="white-space: nowrap">{Day(e.at)}</span>
           </div>
