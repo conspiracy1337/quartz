@@ -539,16 +539,27 @@ func (l *Launcher) Repair(ctx context.Context, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	res, err := l.cfg.Installer.Resolve(ctx, target(inst), l.cfg.Instances.GameDir(id), mojang.CurrentEnv(sysinfo.OSVersion()))
-	if err != nil {
-		return "", err
-	}
-	spec, err := l.cfg.Installer.Plan(install.Request{
-		Resolved: res, Force: true, ProcessorJava: l.processorJava(java.Request{Major: res.Version.JavaMajor(), Component: res.Version.JavaComponent()}),
-		Meta: tasks.Meta{Title: inst.Name, Subtitle: "Repairing game files", Art: tasks.Art{Background: inst.Art.Background, Initial: inst.Art.Initial}, Kind: "repair"},
-	})
+	meta := tasks.Meta{Title: inst.Name, Subtitle: "Repairing game files", Art: tasks.Art{Background: inst.Art.Background, Initial: inst.Art.Initial}, Kind: "repair"}
+	spec, err := l.Prepare(ctx, target(inst), l.cfg.Instances.GameDir(id), meta, true)
 	if err != nil || spec == nil {
 		return "", err
 	}
 	return l.cfg.Tasks.Submit(spec)
+}
+
+// Prepare plans everything a target needs before it can be played: game
+// files, the loader, its processing and the Java its version needs. It does
+// not submit the job (a modpack install adds its own steps first), and it
+// returns nil when everything is in place. force re-verifies every file.
+func (l *Launcher) Prepare(ctx context.Context, t install.Target, gameDir string, meta tasks.Meta, force bool) (*tasks.Spec, error) {
+	res, err := l.cfg.Installer.Resolve(ctx, t, gameDir, mojang.CurrentEnv(sysinfo.OSVersion()))
+	if err != nil {
+		return nil, err
+	}
+	own := java.Request{Major: res.Version.JavaMajor(), Component: res.Version.JavaComponent()}
+	_, plan, err := l.cfg.Java.Resolve(ctx, own)
+	if err != nil {
+		return nil, err
+	}
+	return l.cfg.Installer.Plan(install.Request{Resolved: res, Java: plan, Force: force, ProcessorJava: l.processorJava(own), Meta: meta})
 }

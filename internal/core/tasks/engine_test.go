@@ -412,3 +412,72 @@ func TestFriendly(t *testing.T) {
 		}
 	}
 }
+
+func TestAwaitTakesNoSlotAndShowsWarn(t *testing.T) {
+	f := newFixture(t, 1)
+	release := make(chan struct{})
+	var calls atomic.Int32
+	wait := Await("manual files", func(ctx context.Context) error {
+		calls.Add(1)
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+	id, err := f.eng.Submit(NewJob(Meta{Title: "pack"}).
+		Step("Manual", Count, wait).
+		Step("Mods", Bytes, f.items("m", 3, 1000)...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stepState := func(name string) StepState {
+		for _, v := range f.eng.Snapshot().Active {
+			for _, s := range v.Steps {
+				if v.ID == id && s.Name == name {
+					return s.State
+				}
+			}
+		}
+		return ""
+	}
+	// The waiting work holds no slot, so the single slot still downloads.
+	f.eventually("mods done", func() bool { return stepState("Mods") == StepDone })
+	if s := stepState("Manual"); s != StepWarn {
+		t.Fatalf("manual step = %q, want warn", s)
+	}
+	// Pause interrupts the wait; resume calls it again.
+	if err := f.eng.Pause(id); err != nil {
+		t.Fatal(err)
+	}
+	f.eventually("paused", func() bool { return f.state(id) == Paused })
+	if err := f.eng.Resume(id); err != nil {
+		t.Fatal(err)
+	}
+	f.eventually("second call", func() bool { return calls.Load() == 2 })
+	close(release)
+	if err := f.wait(id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAppendRunsParallelStepsFirst(t *testing.T) {
+	noop := Func("x", func(context.Context) error { return nil })
+	a := NewJob(Meta{}).Step("Mods", Bytes, noop).After("Installing", Count, noop)
+	b := NewJob(Meta{}).Step("Libraries", Bytes, noop).Step("Assets", Count, noop).After("Natives", Count, noop)
+	a.Append(b).Append(nil)
+	var names []string
+	for _, s := range a.steps {
+		names = append(names, s.name)
+	}
+	want := []string{"Mods", "Libraries", "Assets", "Installing", "Natives"}
+	if len(names) != len(want) {
+		t.Fatalf("steps = %v", names)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("steps = %v, want %v", names, want)
+		}
+	}
+}

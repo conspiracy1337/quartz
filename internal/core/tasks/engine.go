@@ -346,7 +346,9 @@ func (e *Engine) start(w *work) {
 	j := w.job
 	w.state = wRunning
 	j.running++
-	e.inflight++
+	if !w.wait {
+		e.inflight++
+	}
 	if j.state == Queued {
 		j.state = Running
 	}
@@ -370,7 +372,9 @@ func (e *Engine) start(w *work) {
 // finish records a work unit's outcome and moves the job along.
 func (e *Engine) finish(w *work, err error, interrupted bool) {
 	j := w.job
-	e.inflight--
+	if !w.wait {
+		e.inflight--
+	}
 	j.running--
 	w.cancel = nil
 	switch {

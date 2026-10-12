@@ -66,6 +66,7 @@ type Work struct {
 	label string
 	item  *download.Item
 	fn    Fn
+	wait  bool // waits on the user, not the network (see Await)
 }
 
 // Download wraps a file download as work.
@@ -73,6 +74,12 @@ func Download(it download.Item) Work { return Work{item: &it} }
 
 // Func wraps a function as work; label names it in error messages.
 func Func(label string, fn Fn) Work { return Work{label: label, fn: fn} }
+
+// Await wraps a function that waits for the user, such as a file they must
+// download by hand. It takes no worker slot, and its step shows as a warning
+// while it waits. fn must return when ctx ends (pause, cancel, shutdown) and
+// may be called again after a resume.
+func Await(label string, fn Fn) Work { return Work{label: label, fn: fn, wait: true} }
 
 // Spec is a job under construction.
 type Spec struct {
@@ -93,6 +100,29 @@ func NewJob(m Meta) *Spec { return &Spec{meta: m} }
 // Step adds a step whose work may run alongside earlier steps.
 func (s *Spec) Step(name string, unit Unit, works ...Work) *Spec {
 	s.steps = append(s.steps, stepSpec{name: name, unit: unit, works: works})
+	return s
+}
+
+// Append adds another job's steps to this one. Steps that run in parallel
+// (Step) from both jobs come first, so neither job's barriers hold back the
+// other's downloads; then this job's barrier steps (After), then the other's.
+func (s *Spec) Append(o *Spec) *Spec {
+	if o == nil {
+		return s
+	}
+	head := func(st []stepSpec) int {
+		i := 0
+		for i < len(st) && !st[i].barrier {
+			i++
+		}
+		return i
+	}
+	a, b := head(s.steps), head(o.steps)
+	steps := make([]stepSpec, 0, len(s.steps)+len(o.steps))
+	steps = append(steps, s.steps[:a]...)
+	steps = append(steps, o.steps[:b]...)
+	steps = append(steps, s.steps[a:]...)
+	s.steps = append(steps, o.steps[b:]...)
 	return s
 }
 
