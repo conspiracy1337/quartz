@@ -4,6 +4,7 @@
   import LogsNav from '$lib/components/LogsNav.svelte';
   import { Day, clock, hm } from '$lib/format';
   import { query } from '$lib/query.svelte';
+  import { go } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
   import Empty from '$lib/ui/Empty.svelte';
 
@@ -19,6 +20,12 @@
   const run = $derived(runs.data?.[cur]);
   const when = (t: number) => `${Day(t)}, ${clock(t)}`;
   const gb = (mb: number) => Math.round((mb / 1024) * 10) / 10;
+  /** Shows one of the run's saved files in the Log files viewer. */
+  function open(runId: string, kind: 'log' | 'cmd', title: string) {
+    session.runFile = { instanceId, runId, kind, title };
+    go({ name: 'instance', id: instanceId, tab: 'logs', sub: 'files' });
+  }
+  const debug = async (runId: string) => session.copy(await api.logs.debugInfo(instanceId, runId), 'Debug info');
   // Runs recorded by Go carry what they used; the design's fixtures do not.
   const used = $derived(run?.java ? {
     java: run.java, memory: run.memory ? `${gb(run.memory.min)} to ${gb(run.memory.max)} GB` : '', account: run.account ?? '', sandbox: 'Off', mods: run.mods ? `${run.mods} loaded` : 'None',
@@ -45,12 +52,12 @@
             <div style="display: flex; flex-direction: column; gap: 6px">
               <h3 class="h3">Saved with this launch</h3>
               <div class="list">
-                <div class="row row-sm" style="grid-template-columns: minmax(0,1fr) auto"><span class="mono trunc">latest.log</span><button class="btn btn-sm btn-ghost">Open</button></div>
-                {#if run.result === 'crash'}<div class="row row-sm" style="grid-template-columns: minmax(0,1fr) auto"><span class="mono trunc" style="color: var(--danger)">crash-report.txt</span><button class="btn btn-sm btn-ghost" onclick={() => session.open({ kind: 'crash', instanceId })}>Open</button></div>{/if}
-                <div class="row row-sm" style="grid-template-columns: minmax(0,1fr) auto"><span class="mono trunc">launch-command.txt</span><button class="btn btn-sm btn-ghost">Open</button></div>
+                <div class="row row-sm" style="grid-template-columns: minmax(0,1fr) auto"><span class="mono trunc">latest.log</span><button class="btn btn-sm btn-ghost" onclick={() => open(run.id, 'log', 'latest.log')}>Open</button></div>
+                {#if run.result === 'crash' || run.crash?.report}<div class="row row-sm" style="grid-template-columns: minmax(0,1fr) auto"><span class="mono trunc" style="color: var(--danger)">crash-report.txt</span><button class="btn btn-sm btn-ghost" onclick={() => session.open({ kind: 'crash', instanceId, runId: run.id })}>Open</button></div>{/if}
+                <div class="row row-sm" style="grid-template-columns: minmax(0,1fr) auto"><span class="mono trunc">launch-command.txt</span><button class="btn btn-sm btn-ghost" onclick={() => open(run.id, 'cmd', 'launch-command.txt')}>Open</button></div>
               </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"><button class="btn btn-sm">Copy debug info</button><button class="btn btn-sm">Upload logs</button></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"><button class="btn btn-sm" onclick={() => debug(run.id)}>Copy debug info</button><button class="btn btn-sm" onclick={() => session.upload(() => api.logs.uploadRun(instanceId, run.id))}>Upload logs</button></div>
           </div>
         </section>
       {/if}

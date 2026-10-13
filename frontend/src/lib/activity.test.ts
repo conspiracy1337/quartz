@@ -16,3 +16,21 @@ describe('activity feed', () => {
     expect(feed[3]).toMatchObject({ kind: 'session', icon: 'warn', tone: 'danger' });
   });
 });
+
+describe('session details', () => {
+  it('names the world, the crash cause and the screenshots taken', () => {
+    const feed = activityFeed(
+      [
+        { id: 'a', startedAt: 10 * 60_000, lengthMin: 128, exitCode: 0, result: 'ok', world: 'Northwatch', shots: 3 },
+        { id: 'b', startedAt: 1_000, lengthMin: 3, exitCode: 1, result: 'crash', crash: { title: 'Entity Culling 1.7.2 failed to load', detail: 'Mixin apply failed in entityculling', report: true } },
+      ],
+      [],
+    );
+    expect(feed.map((e) => [e.title, e.detail])).toEqual([
+      ['Took 3 screenshots', 'Northwatch'],
+      ['Played for 2 h 08 m', 'Northwatch, closed normally'],
+      ['Game crashed after 3 minutes', 'Mixin apply failed in entityculling'],
+    ]);
+    expect(feed[0]).toMatchObject({ icon: 'camera', tone: 'muted' });
+  });
+});

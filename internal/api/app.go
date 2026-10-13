@@ -9,6 +9,7 @@ import (
 
 	"quartz/internal/brand"
 	"quartz/internal/core/paths"
+	"quartz/internal/core/procx"
 	"quartz/internal/core/sysinfo"
 )
 
@@ -58,3 +59,6 @@ func checkHTTPS(raw string) error {
 	}
 	return nil
 }
+
+// OpenDataFolder shows the launcher's data folder.
+func (a *App) OpenDataFolder() error { return procx.OpenFolder(a.paths.Root) }

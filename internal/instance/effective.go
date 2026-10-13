@@ -14,6 +14,7 @@ type Effective struct {
 	Height      int
 	Fullscreen  bool
 	OnGameStart string // keep-open | hide | close
+	OpenInto    Into
 	Commands    CommandSettings
 	Performance PerformanceSettings
 }
@@ -27,6 +28,7 @@ func (in Instance) Resolve(g settings.Settings) Effective {
 		MemoryMinMB: g.Java.MemoryMinMB, MemoryMaxMB: g.Java.MemoryMaxMB, JVMArgs: g.Java.JVMArgs,
 		OnGameStart: settings.Resolve(nonEmpty(in.Settings.Window.OnGameStart), g.General.OnGameStart),
 		Width:       in.Settings.Window.Width, Height: in.Settings.Window.Height, Fullscreen: in.Settings.Window.Fullscreen,
+		OpenInto:    in.Settings.Window.OpenInto,
 		Commands: in.Settings.Commands, Performance: in.Settings.Performance,
 	}
 	if j := in.Settings.Java; j.Override {

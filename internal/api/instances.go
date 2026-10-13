@@ -34,7 +34,13 @@ type InstanceDeps struct {
 	Busy     func(id string) bool // starting or running: files must stay put
 	// Content counts items and moves mods along with version changes; nil in tests.
 	Content *content.Service
+	// Worlds and Servers count an instance's worlds and servers; nil in tests.
+	Worlds  Counter
+	Servers Counter
 }
+
+// Counter counts one kind of thing an instance has.
+type Counter interface{ Count(id string) int }
 
 // Instances exposes the instance list and everything done to one instance.
 type Instances struct {
@@ -106,6 +112,7 @@ func (s *Instances) summary(in instance.Instance) InstanceSummary {
 	v := InstanceSummary{
 		ID: in.ID, Name: in.Name, Art: in.Art, Icon: in.Icon, Minecraft: in.Minecraft, Kind: "vanilla",
 		Group: in.Group, Tags: in.Tags, PlaytimeMin: in.PlaytimeMin, Running: s.d.Running(in.ID),
+		HasServers: s.d.Servers != nil && s.d.Servers.Count(in.ID) > 0,
 	}
 	if v.Tags == nil {
 		v.Tags = []string{}
@@ -145,13 +152,19 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 	}
 }
 
-// counts is how many items each content tab has (worlds and servers: M7).
+// counts is how many items each content tab has.
 func (s *Instances) counts(id string) map[string]int {
 	out := map[string]int{"mods": 0, "resourcepacks": 0, "shaders": 0, "datapacks": 0, "worlds": 0, "servers": 0}
 	if s.d.Content != nil {
 		for k, n := range s.d.Content.Counts(id) {
 			out[string(k)] = n
 		}
+	}
+	if s.d.Worlds != nil {
+		out["worlds"] = s.d.Worlds.Count(id)
+	}
+	if s.d.Servers != nil {
+		out["servers"] = s.d.Servers.Count(id)
 	}
 	return out
 }

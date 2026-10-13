@@ -1,0 +1,27 @@
+---- Minecraft Crash Report ----
+// Who set us up the TNT?
+
+Time: 2025-03-21 19:33:40
+Description: Initializing game
+
+java.lang.RuntimeException: Mixin transformation of net.minecraft.class_897 failed
+	at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.getPostMixinClassByteArray(KnotClassDelegate.java:427)
+	at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.tryLoadClass(KnotClassDelegate.java:323)
+	at net.fabricmc.loader.impl.launch.knot.KnotClassDelegate.loadClass(KnotClassDelegate.java:218)
+	at net.fabricmc.loader.impl.launch.knot.KnotClassLoader.loadClass(KnotClassLoader.java:119)
+	at java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:526)
+	at knot//net.minecraft.class_898.<init>(class_898.java:62) ~[client-intermediary.jar:?]
+Caused by: org.spongepowered.asm.mixin.transformer.throwables.MixinTransformerError: An unexpected critical error was encountered
+	at org.spongepowered.asm.mixin.transformer.MixinProcessor.applyMixins(MixinProcessor.java:392)
+	at org.spongepowered.asm.mixin.transformer.MixinTransformer.transformClass(MixinTransformer.java:234)
+Caused by: org.spongepowered.asm.mixin.throwables.MixinApplyError: Mixin [entityculling.mixins.json:EntityRendererMixin from mod entityculling] from phase [DEFAULT] in config [entityculling.mixins.json] FAILED during APPLY
+	at org.spongepowered.asm.mixin.transformer.MixinProcessor.handleMixinError(MixinProcessor.java:638)
+	at org.spongepowered.asm.mixin.transformer.MixinProcessor.handleMixinApplyError(MixinProcessor.java:589)
+Caused by: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException: Critical injection failure: @Inject annotation on shouldRender could not find any targets matching 'shouldRender' in net/minecraft/class_897. Using refmap entityculling-refmap.json [PREINJECT Applicator Phase -> entityculling.mixins.json:EntityRendererMixin -> Prepare Injections ->  -> handler$zbb000$entityculling$shouldDoRender(Lnet/minecraft/class_1297;)V -> Parse]
+	at org.spongepowered.asm.mixin.injection.struct.InjectionInfo.validateTargets(InjectionInfo.java:656)
+	at dev.tr7zw.entityculling.EntityCullingMod.onInitialize(EntityCullingMod.java:40) ~[entityculling-fabric-1.7.2-mc1.21.jar:?]
+
+-- System Details --
+Details:
+	Minecraft Version: 1.21.4
+	Java Version: 21.0.5, Eclipse Adoptium

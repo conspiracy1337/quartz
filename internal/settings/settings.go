@@ -30,6 +30,8 @@ type General struct {
 	OnGameStart       string `json:"onGameStart"` // keep-open | hide | close
 	StartPage         string `json:"startPage"`   // home | library | last-instance
 	StartWithComputer bool   `json:"startWithComputer"`
+	// HiddenNews is the news article Home's strip was dismissed for.
+	HiddenNews string `json:"hiddenNews,omitempty"`
 }
 
 type Downloads struct {
@@ -138,6 +140,9 @@ func (s Settings) Normalize() Settings {
 	}
 	s.General.OnGameStart = oneOf(s.General.OnGameStart, d.General.OnGameStart, "keep-open", "hide", "close")
 	s.General.StartPage = oneOf(s.General.StartPage, d.General.StartPage, "home", "library", "last-instance")
+	if len(s.General.HiddenNews) > 128 {
+		s.General.HiddenNews = ""
+	}
 
 	s.Downloads.Parallel = clamp(s.Downloads.Parallel, 1, 16, d.Downloads.Parallel)
 	s.Downloads.Proxy = oneOf(s.Downloads.Proxy, d.Downloads.Proxy, "system", "none", "custom")

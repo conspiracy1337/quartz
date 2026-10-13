@@ -8,6 +8,7 @@ import (
 	"quartz/internal/content"
 	"quartz/internal/content/store"
 	"quartz/internal/core/procx"
+	"quartz/internal/instance"
 	"quartz/internal/modplatform"
 	"quartz/internal/settings"
 )
@@ -18,6 +19,8 @@ type ContentDeps struct {
 	Store    *store.Store
 	Settings *settings.Store
 	Drops    *Drops
+	// Watch also follows the shown instance's worlds, screenshots and servers; nil in tests.
+	Watch func(id string)
 }
 
 // Content exposes the content tabs, updates and the shared store.
@@ -41,7 +44,6 @@ var (
 	checkIDRe = regexp.MustCompile(`^[0-9a-f]{12}$`)
 	tokenRe   = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	updateRe  = regexp.MustCompile(`^(?:[0-9a-f]{16}|dep-(?:modrinth|curseforge)-[A-Za-z0-9]{1,32})$`)
-	worldRe   = regexp.MustCompile(`^[^/\\\x00-\x1f]{1,128}$`)
 	mcRe      = regexp.MustCompile(`^[A-Za-z0-9._ -]{1,64}$`)
 )
 
@@ -159,7 +161,7 @@ func (c *Content) Undo(instanceID, token string) error {
 	return c.d.Service.Undo(c.ctx.Get(), instanceID, token)
 }
 
-// ShowInFolder opens the folder an item is in.
+// ShowInFolder shows the item selected in the file manager.
 func (c *Content) ShowInFolder(instanceID, item string) error {
 	if err := checkInstanceID(instanceID); err != nil {
 		return err
@@ -167,11 +169,11 @@ func (c *Content) ShowInFolder(instanceID, item string) error {
 	if err := checkItems([]string{item}); err != nil {
 		return err
 	}
-	dir, err := c.d.Service.Folder(instanceID, item)
+	p, err := c.d.Service.Path(instanceID, item)
 	if err != nil {
 		return err
 	}
-	return procx.OpenFolder(dir)
+	return procx.Reveal(p)
 }
 
 // AddDropped adds the files of a drop to a tab (a world for data packs).
@@ -183,7 +185,7 @@ func (c *Content) AddDropped(dropID, instanceID, kind, world string) (content.Ad
 	if err := checkInstanceID(instanceID); err != nil {
 		return content.AddResult{}, err
 	}
-	if world != "" && !worldRe.MatchString(world) {
+	if world != "" && !instance.ValidWorldFolder(world) {
 		return content.AddResult{}, ErrBadWorld
 	}
 	paths, err := c.d.Drops.Take(dropID)
@@ -272,6 +274,9 @@ func (c *Content) Watch(instanceID string) error {
 		}
 	}
 	c.d.Service.Watch(instanceID)
+	if c.d.Watch != nil {
+		c.d.Watch(instanceID)
+	}
 	return nil
 }
 
@@ -306,7 +311,7 @@ func (c *Content) PlanInstall(instanceID, kind, world, ref, source, version stri
 	if err := checkInstanceID(instanceID); err != nil {
 		return nil, err
 	}
-	if world != "" && !worldRe.MatchString(world) {
+	if world != "" && !instance.ValidWorldFolder(world) {
 		return nil, ErrBadWorld
 	}
 	r, err := modplatform.ParseRef(ref)

@@ -12,3 +12,8 @@ linters:
       # Tests read and write the temp files they create.
       - path: _test\.go
         linters: [gosec]
+      # Binary wire codecs (NBT, the Minecraft protocol): converting between
+      # integer widths is the format itself (two's complement, fixed widths).
+      - path: internal/core/(nbt|slp)/
+        linters: [gosec]
+        text: G115

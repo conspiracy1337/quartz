@@ -1,0 +1,9 @@
+---- Minecraft Crash Report ----
+Description: Mod loading error has occurred
+
+java.lang.Exception: Mod Loading has failed
+	at net.minecraftforge.logging.CrashReportExtender.dumpModLoadingCrashReport(CrashReportExtender.java:60)
+
+-- Mod loading issue --
+Missing or unsupported mandatory dependencies:
+	Mod ID: 'architectury', Requested by: 'roughlyenoughitems', Expected range: '[9.1.12,)', Actual version: '[MISSING]'

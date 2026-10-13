@@ -47,12 +47,11 @@ type removal struct {
 	Items []removedEntry `json:"items"`
 }
 
+// removedEntry keeps what the store needs about a held item (holdbin moves it).
 type removedEntry struct {
 	ID    string `json:"id"`
 	Entry Entry  `json:"entry"`
-	Held  string `json:"held"`         // where it waits, relative to the game folder
-	PW    string `json:"pw,omitempty"` // its .pw.toml, held beside it
-	PWRel string `json:"pwRel,omitempty"`
+	Held  string `json:"held"` // where it waits, relative to the game folder
 }
 
 // Index is instances/<id>/content.json: what the last scan found, so an

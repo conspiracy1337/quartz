@@ -143,7 +143,7 @@ func TestLaunchOffline(t *testing.T) {
 	bus.Subscribe(events.GameState, func(p any) { states <- p.(launch.State) })
 	bus.Subscribe(events.LaunchFailed, func(p any) { failed <- p.(launch.Failure) })
 
-	if err := l.Play(inst.ID, ""); err != nil {
+	if err := l.Play(inst.ID, "", instance.Into{}); err != nil {
 		t.Fatal(err)
 	}
 	select {

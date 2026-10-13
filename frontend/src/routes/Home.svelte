@@ -6,12 +6,20 @@
   import ServerList from '$lib/components/ServerList.svelte';
   import ShotRotator from '$lib/components/ShotRotator.svelte';
   import SkinCard from '$lib/components/SkinCard.svelte';
+  import { prefs } from '$lib/prefs.svelte';
   import { query } from '$lib/query.svelte';
 
   // Home 2.6 "Focus column": alerts, the profile row, the news strip, then servers.
   const alerts = query(() => api.home.alerts());
   const news = query(() => api.home.news());
-  let newsHidden = $state(false);
+  // Dismissing hides that article for good (the next one shows again).
+  let dismissed = $state(false);
+  const newsHidden = $derived(dismissed || (!!news.data?.id && prefs.value?.general.hiddenNews === news.data.id));
+  function hideNews() {
+    dismissed = true;
+    const id = news.data?.id;
+    if (id) void prefs.update((s) => (s.general.hiddenNews = id));
+  }
   const wide = new MediaQuery('min-width: 1640px');
 
   // Rows that have nothing to show leave the grid, so no empty gap is left behind.
@@ -27,7 +35,7 @@
     <div class="cell"><SkinCard scale={wide.current ? 5 : 4} /></div>
     <div class="cell"><ShotRotator /></div>
   </div>
-  {#if showNews && news.data}<div class="cell" style="grid-area: news"><NewsBanner item={news.data} ondismiss={() => (newsHidden = true)} /></div>{/if}
+  {#if showNews && news.data}<div class="cell" style="grid-area: news"><NewsBanner item={news.data} ondismiss={hideNews} /></div>{/if}
   <div class="cell" style="grid-area: servers"><ServerList /></div>
 </div>
 

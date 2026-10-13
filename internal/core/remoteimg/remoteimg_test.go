@@ -108,7 +108,7 @@ func TestEvictsLeastRecentlyUsed(t *testing.T) {
 		when := time.Now().Add(time.Duration(i-2) * time.Hour)
 		_ = os.Chtimes(p, when, when)
 	}
-	c.grow(0)
+	c.lru.Added(0)
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
 		t.Fatal("least recently used file kept")
 	}

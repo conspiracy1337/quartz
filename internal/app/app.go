@@ -28,17 +28,22 @@ import (
 	"quartz/internal/brand"
 	"quartz/internal/browse"
 	"quartz/internal/content"
+	contentmeta "quartz/internal/content/meta"
 	"quartz/internal/content/store"
 	"quartz/internal/core/download"
 	"quartz/internal/core/events"
 	"quartz/internal/core/hashx"
 	"quartz/internal/core/httpcache"
+	"quartz/internal/core/localimg"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/paths"
 	"quartz/internal/core/remoteimg"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
+	"quartz/internal/crash"
+	"quartz/internal/gamewatch"
+	"quartz/internal/home"
 	"quartz/internal/icons"
 	"quartz/internal/imagesrv"
 	"quartz/internal/install"
@@ -46,6 +51,7 @@ import (
 	"quartz/internal/java"
 	"quartz/internal/launch"
 	"quartz/internal/loader"
+	"quartz/internal/logfiles"
 	"quartz/internal/manual"
 	"quartz/internal/meta"
 	"quartz/internal/modpack"
@@ -53,9 +59,12 @@ import (
 	"quartz/internal/modplatform/curseforge"
 	"quartz/internal/modplatform/modrinth"
 	"quartz/internal/network"
+	"quartz/internal/screenshots"
+	"quartz/internal/servers"
 	"quartz/internal/settings"
 	"quartz/internal/skins"
 	"quartz/internal/theme"
+	"quartz/internal/worlds"
 )
 
 // Options are the inputs main passes in.
@@ -102,6 +111,16 @@ type app struct {
 	drops     *api.Drops
 	hidden    atomic.Bool // the window was hidden because a game started
 	ctx       *api.Ctx
+	// Worlds, servers, screenshots, crashes, logs and Home (M7).
+	gameImages  *localimg.Registry
+	favicons    *servers.Favicons
+	worlds      *worlds.Service
+	servers     *servers.Service
+	screenshots *screenshots.Service
+	crash       *crash.Service
+	logFiles    *logfiles.Service
+	home        *home.Service
+	gameWatch   *gamewatch.Watcher
 }
 
 // Run builds the app and blocks until the window closes.
@@ -140,15 +159,19 @@ func Run(o Options) error {
 			api.NewAccounts(a.ctx, a.accounts, a.skins, a.bus),
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
-				Running: a.launcher.Running, Busy: a.launcher.Busy, Content: a.content,
+				Running: a.launcher.Running, Busy: a.launcher.Busy, Content: a.content, Worlds: a.worlds, Servers: a.servers,
 			}),
-			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops}),
+			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
 			api.NewBrowse(a.ctx, a.browse),
 			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Picture: a.pictures.Src}),
 			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
 			api.NewManual(api.ManualDeps{Service: a.manual, Drops: a.drops, App: appFacade}),
 			api.NewLaunch(a.ctx, a.launcher),
-			api.NewLogs(a.launcher),
+			api.NewLogs(a.ctx, a.launcher, a.logFiles, a.crash),
+			api.NewHome(a.ctx, api.HomeDeps{Home: a.home, Servers: a.servers, Screenshots: a.screenshots}),
+			api.NewWorlds(a.ctx, a.worlds, a.drops),
+			api.NewServers(a.ctx, a.servers),
+			api.NewScreenshots(api.ScreenshotDeps{Service: a.screenshots, Instances: a.instances, Icons: a.icons, Bus: a.bus}),
 		},
 	})
 }
@@ -161,8 +184,14 @@ func (a *app) images() http.Handler {
 		"icon": func(_ context.Context, h string) (string, error) { return a.icons.Path(h) },
 		// Icons read from mods and packs, re-encoded when they were stored.
 		"content": func(_ context.Context, h string) (string, error) { return a.modIcons.Path(h) },
-		// Project icons and pictures from Modrinth and CurseForge.
+		// Project icons and pictures from Modrinth and CurseForge, and news pictures.
 		"remote": a.pictures.Path,
+		// Screenshots (full size and thumbnails) and world icons, by token.
+		"shot":  a.gameImages.Path,
+		"thumb": a.gameImages.Thumb,
+		"world": a.gameImages.Path,
+		// Server pictures from pings and servers.dat.
+		"server": a.favicons.Path,
 	})
 }
 
@@ -291,13 +320,67 @@ func (a *app) buildTasks() error {
 		Libraries: a.paths.Libraries(), Versions: a.paths.Versions(), Assets: a.paths.Assets(),
 		LogConfigs: a.paths.LogConfigs(), Natives: a.paths.Natives(),
 	})
+	a.buildGame()
 	a.launcher = launch.New(launch.Config{
 		Instances: a.instances, Accounts: a.accounts, Installer: a.installer, Loaders: a.loaders, Java: a.java, Tasks: eng,
 		Settings: a.settings, Bus: a.bus, Redactor: a.redactor, BinDir: a.paths.Bin(), Log: a.log,
 		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited}, Mods: a.content,
+		// In order: the world played names the screenshots it took; the crash goes last.
+		Finishers: []launch.Finisher{a.worlds, a.screenshots, a.servers, a.crash},
 	})
 	a.buildBrowse(dl)
 	return nil
+}
+
+// buildGame wires worlds, servers, screenshots, crashes, game logs and Home.
+// The launcher is built after them, so they look it up when called.
+func (a *app) buildGame() {
+	busy := func(id string) bool { return a.launcher.Busy(id) }
+	runs := func(id string) []launch.Record { return a.launcher.Runs(id) }
+	a.gameImages = localimg.New(filepath.Join(a.paths.Cache(), "thumbs"))
+	a.favicons = servers.NewFavicons(filepath.Join(a.paths.Cache(), "favicons"))
+	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: busy, Bus: a.bus, Log: a.log})
+	a.servers = servers.New(servers.Deps{
+		Instances: a.instances, Busy: busy, Runs: runs, Favicons: a.favicons, Bus: a.bus, Log: a.log,
+		Protocol: func(mc string) int { return contentmeta.ClientProtocol(filepath.Join(a.paths.Versions(), mc, mc+".jar")) },
+	})
+	a.screenshots = screenshots.New(screenshots.Deps{Instances: a.instances, Images: a.gameImages, Bus: a.bus})
+	a.crash = crash.New(crash.Deps{Instances: a.instances, Mods: a.content, Runs: launcherRuns{a}, Redactor: a.redactor})
+	a.logFiles = logfiles.New(logfiles.Deps{
+		Instances: a.instances, Runs: launcherRuns{a}, HTTP: a.http, Redactor: a.redactor,
+		Mods: func(ctx context.Context, id string) []content.Row {
+			rows, _ := a.content.List(ctx, id, content.Mods)
+			return rows
+		},
+		Names: func() []string {
+			list, _ := a.accounts.Store().List()
+			names := make([]string, 0, len(list))
+			for _, acc := range list {
+				names = append(names, acc.Name)
+			}
+			return names
+		},
+	})
+	a.home = home.New(home.Deps{Instances: a.instances, Runs: runs, Meta: a.meta, Pictures: a.pictures, DataDir: a.paths.Root})
+	a.gameWatch = gamewatch.New(a.bus, a.instances.GameDir)
+	// A finished game changes this week's play time.
+	a.bus.Subscribe(events.GameState, func(p any) {
+		if st, ok := p.(launch.State); ok && st.State == "exited" {
+			a.home.Invalidate()
+		}
+	})
+}
+
+// launcherRuns reads the launch history; the launcher is built after the
+// services that use it.
+type launcherRuns struct{ a *app }
+
+func (r launcherRuns) Runs(id string) []launch.Record { return r.a.launcher.Runs(id) }
+func (r launcherRuns) Run(id, runID string) (launch.Record, error) {
+	return r.a.launcher.Run(id, runID)
+}
+func (r launcherRuns) Evidence(id, runID, kind string) (string, error) {
+	return r.a.launcher.Evidence(id, runID, kind)
 }
 
 // buildBrowse wires Browse, the modpack reader and pack installs and updates.
@@ -512,6 +595,7 @@ func (a *app) shutdown(context.Context) {
 		a.log.Error("saving verified index on exit failed", "err", err)
 	}
 	a.content.Watch("")
+	a.gameWatch.Watch("")
 	a.content.Flush()
 	if err := a.store.Flush(); err != nil {
 		a.log.Error("saving the content store on exit failed", "err", err)

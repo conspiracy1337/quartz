@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { copyText } from '../clipboard';
   import { onDestroy, untrack } from 'svelte';
   import { api } from '../api';
   import type { SignInEvent } from '../api/types';
@@ -89,7 +90,7 @@
     void api.accounts.cancelSignIn();
   });
 
-  const copy = () => void navigator.clipboard?.writeText(st.code);
+  const copy = () => void copyText(st.code);
   // Shown in two halves for reading aloud and typing ("K7QX-2M9P"); Copy keeps the raw code.
   const shown = $derived(st.code && !st.code.includes('-') ? `${st.code.slice(0, Math.ceil(st.code.length / 2))}-${st.code.slice(Math.ceil(st.code.length / 2))}` : st.code);
   const waiting = $derived(started && !st.error && !st.accountId);

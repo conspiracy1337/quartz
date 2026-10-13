@@ -13,19 +13,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"io/fs"
 	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"golang.org/x/sync/singleflight"
 
+	"quartz/internal/core/disklru"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/netx"
 )
@@ -33,16 +31,16 @@ import (
 const (
 	// MaxFile caps one picture.
 	MaxFile = 10 << 20
-	// maxTotal is the cache size; eviction brings it down to 3/4 of this.
+	// maxTotal is the cache size (see disklru).
 	maxTotal = 256 << 20
-	// touchEvery limits how often a cache hit rewrites the file's time.
-	touchEvery = time.Hour
-	maxURL     = 2048
+	maxURL   = 2048
 )
 
 // Hosts are the CDNs pictures may come from.
 var Hosts = map[string]bool{
 	"cdn.modrinth.com": true, "media.forgecdn.net": true, "edge.forgecdn.net": true, "mediafilez.forgecdn.net": true,
+	// The official launcher's news pictures (Home's news strip).
+	"launchercontent.mojang.com": true,
 }
 
 // ErrUnknown is returned for a token the launcher never handed out.
@@ -61,9 +59,9 @@ type Cache struct {
 	// allowed is Allowed; tests point it at a local server.
 	allowed func(string) bool
 
-	mu    sync.Mutex
-	urls  map[string]string // token → URL
-	total int64             // bytes on disk, -1 until first counted
+	mu   sync.Mutex
+	urls map[string]string // token → URL
+	lru  *disklru.LRU
 
 	flight singleflight.Group
 }
@@ -73,7 +71,7 @@ func New(dir string, h *netx.Client, log *slog.Logger) *Cache {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Cache{dir: dir, http: h, log: log, allowed: Allowed, urls: map[string]string{}, total: -1}
+	return &Cache{dir: dir, http: h, log: log, allowed: Allowed, urls: map[string]string{}, lru: disklru.New(dir, maxTotal)}
 }
 
 // Allowed reports whether raw is an https URL on an allowed host.
@@ -132,11 +130,7 @@ func (c *Cache) Path(ctx context.Context, token string) (string, error) {
 // cached finds a token's file and marks it recently used.
 func (c *Cache) cached(token string) string {
 	for _, ext := range exts {
-		p := filepath.Join(c.dir, token+ext)
-		if fi, err := os.Stat(p); err == nil { //nolint:gosec // token matched tokenRe, so p stays in dir
-			if now := time.Now(); now.Sub(fi.ModTime()) > touchEvery {
-				_ = os.Chtimes(p, now, now)
-			}
+		if p := c.lru.Hit(filepath.Join(c.dir, token+ext)); p != "" { // token matched tokenRe, so p stays in dir
 			return p
 		}
 	}
@@ -164,7 +158,7 @@ func (c *Cache) fetch(ctx context.Context, token, raw string) (string, error) {
 	if err := fsx.AtomicWrite(p, data, fsx.FilePerm); err != nil {
 		return "", err
 	}
-	c.grow(int64(len(data)))
+	c.lru.Added(int64(len(data)))
 	return p, nil
 }
 
@@ -181,52 +175,4 @@ func Sniff(b []byte) string {
 		return ".webp"
 	}
 	return ""
-}
-
-// grow counts n new bytes and evicts the least recently used files once the
-// cache is over its size.
-func (c *Cache) grow(n int64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.total < 0 {
-		c.total = 0
-		for _, f := range c.files() {
-			c.total += f.size
-		}
-	} else {
-		c.total += n
-	}
-	if c.total <= maxTotal {
-		return
-	}
-	files := c.files()
-	sort.Slice(files, func(i, j int) bool { return files[i].used.Before(files[j].used) })
-	for _, f := range files {
-		if c.total <= maxTotal*3/4 {
-			break
-		}
-		if os.Remove(f.path) == nil {
-			c.total -= f.size
-		}
-	}
-}
-
-type entry struct {
-	path string
-	size int64
-	used time.Time
-}
-
-func (c *Cache) files() []entry {
-	var out []entry
-	_ = filepath.WalkDir(c.dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil //nolint:nilerr // an unreadable entry is skipped, not fatal
-		}
-		if fi, err := d.Info(); err == nil {
-			out = append(out, entry{p, fi.Size(), fi.ModTime()})
-		}
-		return nil
-	})
-	return out
 }

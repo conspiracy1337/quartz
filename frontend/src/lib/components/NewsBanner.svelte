@@ -16,7 +16,7 @@
 
 <div class="nb" style="font-family: var(--font)">
   <div class="nb-grid">
-    <span class="nb-pic" aria-hidden="true"><span class="nb-art"><span class="nb-sky"></span><span class="nb-sun"></span><span class="nb-m1"></span><span class="nb-tree"></span><span class="nb-m2"></span></span><span class="nb-shade"></span></span>
+    <span class="nb-pic" aria-hidden="true">{#if item.image}<span class="nb-art" style="background: url({item.image}) center/cover no-repeat"></span>{:else}<span class="nb-art"><span class="nb-sky"></span><span class="nb-sun"></span><span class="nb-m1"></span><span class="nb-tree"></span><span class="nb-m2"></span></span>{/if}<span class="nb-shade"></span></span>
     <span class="nb-txt" aria-hidden="true">
       <span class="nb-ttl">{item.title}</span>
       <span class="nb-meta"><span class="trunc">{item.source}, {monthDay(item.published)}</span><Icon name="external" size={12} sw={2} style="flex: 0 0 12px" /></span>

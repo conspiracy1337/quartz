@@ -45,6 +45,8 @@ type WindowSettings struct {
 	Height      int    `json:"height"`
 	Fullscreen  bool   `json:"fullscreen"`
 	OnGameStart string `json:"onGameStart"` // "" follows the global setting
+	// OpenInto skips the title screen when nothing else is asked for.
+	OpenInto Into `json:"openInto"`
 }
 
 // CommandSettings run the player's own programs around the game. Each command
@@ -499,7 +501,7 @@ func checkLoader(kind, ver string) error {
 // SetSettings replaces an instance's settings after validation.
 func (s *Store) SetSettings(id string, st Settings) (Instance, error) {
 	if st.Java.MemoryMinMB < 0 || st.Java.MemoryMaxMB < 0 || len(st.Java.JVMArgs) > maxJVMArgs ||
-		(st.Java.JavaPath != "" && !filepath.IsAbs(st.Java.JavaPath)) {
+		(st.Java.JavaPath != "" && !filepath.IsAbs(st.Java.JavaPath)) || !st.Window.OpenInto.Valid() {
 		return Instance{}, ErrInvalidSettings
 	}
 	c := st.Commands

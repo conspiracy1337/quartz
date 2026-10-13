@@ -3,16 +3,21 @@
 // parts (launch steps, server start) are simulated; M2 and M9 drive them from Go.
 
 import { api } from './api';
-import type { ContentKind, Src } from './api/types';
+import type { ContentKind, PlayInto, ServerEntry, Src } from './api/types';
+import { copyText } from './clipboard';
 import { errorText } from './format';
 import { hasBridge, onEvent } from './bridge';
 import { revs } from './revs.svelte';
-import { go } from './router.svelte';
 
 export type Overlay =
   | { kind: 'add-account'; mode?: AddAccountMode; accountId?: string }
   | { kind: 'install'; ref: string; source: Src; instanceId: string; content: ContentKind; version?: string }
-  | { kind: 'crash'; instanceId: string }
+  /** A run's crash (runId), or a report in crash-reports (file). */
+  | { kind: 'crash'; instanceId: string; runId?: string; file?: string }
+  /** Add a server, or edit `entry`. */
+  | { kind: 'server'; instanceId: string; entry?: ServerEntry }
+  | { kind: 'copy-world'; instanceId: string; folder: string; name: string; sub: string }
+  | { kind: 'rename-world'; instanceId: string; folder: string; name: string }
   | { kind: 'blocked'; jobId: string }
   | { kind: 'host'; instanceId: string }
   | { kind: 'palette'; mode: 'commands' | 'instances' }
@@ -55,6 +60,8 @@ class Session {
   browseTarget = $state<string | null>(null);
   /** Browse's "Hide projects with" choices, kept while the launcher runs. */
   browseHide = $state({ ai: true, ads: false, installed: true });
+  /** A file a launch saved, for the Log files viewer to show (set by Launch history's Open). */
+  runFile = $state<{ instanceId: string; runId: string; kind: 'log' | 'cmd'; title: string } | null>(null);
   /** Self-update arrives in M11; until then only the preview shows the design's banner. */
   updateReady = $state(!hasBridge());
 
@@ -72,12 +79,12 @@ class Session {
   /** Starts a launch with the default account, or once with another ("Launch as").
       Inside the app Go runs it and reports through events; the browser preview walks
       through the steps on a timer. */
-  play(instanceId: string, accountId = '') {
+  play(instanceId: string, accountId = '', into?: PlayInto) {
     clearInterval(this.#launchTimer);
     this.overlay = null;
     this.launch = { instanceId, accountId, stage: 0 };
     if (hasBridge()) {
-      api.launch.play(instanceId, accountId).catch((e) => {
+      (into ? api.launch.playInto(instanceId, accountId, into) : api.launch.play(instanceId, accountId)).catch((e) => {
         this.launch = null;
         this.fail('Play', e);
       });
@@ -146,12 +153,8 @@ class Session {
         }
         delete this.running[g.instanceId];
         revs.bump('instances');
-        if (g.result === 'crash') {
-          this.notify({
-            tone: 'error', subject: 'The game stopped', text: `with exit code ${g.exitCode}`,
-            action: { label: 'View log', run: () => go({ name: 'instance', id: g.instanceId, tab: 'logs' }) },
-          });
-        }
+        // A crash (or a game that never started) opens the crash dialog with its likely cause.
+        if (g.result === 'crash' || g.result === 'failed') this.open({ kind: 'crash', instanceId: g.instanceId, runId: g.runId });
       }),
     ];
     return () => offs.forEach((off) => off());
@@ -173,6 +176,23 @@ class Session {
     clearTimeout(this.#toastTimer);
     this.toast = t;
     this.#toastTimer = setTimeout(() => (this.toast = null), TOAST_MS);
+  }
+
+  /** Uploads to mclo.gs, copies the link and offers to open it. */
+  async upload(fn: () => Promise<string>) {
+    try {
+      const url = await fn();
+      const copied = await copyText(url);
+      this.notify({ subject: 'Uploaded to mclo.gs', text: copied ? 'The link is copied.' : url, action: { label: 'Open', run: () => void api.app.openUrl(url) } });
+    } catch (e) {
+      this.fail('Upload', e);
+    }
+  }
+
+  /** Copies text and says so. */
+  async copy(text: string, what: string) {
+    if (await copyText(text)) this.notify({ subject: what, text: 'copied' });
+    else this.notify({ tone: 'error', subject: "Couldn't copy", text: 'The system refused the clipboard.' });
   }
 
   /** Shows an error from a failed action as a notice. */

@@ -2,6 +2,8 @@
   import { api } from '$lib/api';
   import { bytes, shortMonthDay, clock } from '$lib/format';
   import { query } from '$lib/query.svelte';
+  import { revs } from '$lib/revs.svelte';
+  import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
   interface Props { instanceId: string; shotId: string }
@@ -17,6 +19,30 @@
   const cur = $derived(list[i]);
   const when = (t: number) => `${shortMonthDay(t)}, ${clock(t)}`;
 
+  // The viewer shows the full picture, letterboxed; the filmstrip keeps the thumbnails.
+  const full = $derived(cur?.image ? `url(${cur.image}) center/contain no-repeat, #08080a` : cur?.art.background);
+
+  async function run(what: string, fn: () => Promise<unknown>, done?: string) {
+    try {
+      await fn();
+      if (done && cur) session.notify({ subject: cur.file, text: done });
+    } catch (e) {
+      session.fail(what, e);
+    }
+  }
+  async function trash() {
+    if (!cur) return;
+    const name = cur.id;
+    try {
+      const token = await api.screenshots.trash(instanceId, [name]);
+      revs.bump('screenshots');
+      session.notify({ tone: 'trash', subject: name, text: 'to the trash',
+        undo: () => void api.screenshots.undo(instanceId, token).then(() => revs.bump('screenshots')).catch((e: unknown) => session.fail('Undo', e)) });
+    } catch (e) {
+      session.fail('Move to trash', e);
+    }
+  }
+
   function keys(e: KeyboardEvent) {
     if (!n) return;
     if (e.key === 'ArrowLeft') i = (i + n - 1) % n;
@@ -30,7 +56,7 @@
   <section aria-label="Viewer" style="display: flex; flex-direction: column; min-height: 0; min-width: 0">
     <div style="flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 40px minmax(0,1fr) 40px; align-items: center; gap: 8px; padding: 16px">
       <button class="btn btn-icon" onclick={() => (i = (i + n - 1) % n)} aria-label="Previous"><Icon name="chevron-left" size={14} sw={2} /></button>
-      <div style="height: 100%; display: grid; place-items: center; min-width: 0">{#if cur}<div role="img" aria-label="Screenshot {when(cur.takenAt)}" style="width: 100%; max-height: 100%; aspect-ratio: 16/9; border-radius: 8px; background: {cur.art.background}"></div>{:else}<div class="sk" style="width: 100%; aspect-ratio: 16/9; border-radius: 8px"></div>{/if}</div>
+      <div style="height: 100%; display: grid; place-items: center; min-width: 0">{#if cur}<div role="img" aria-label="Screenshot {when(cur.takenAt)}" style="width: 100%; max-height: 100%; aspect-ratio: 16/9; border-radius: 8px; background: {full}"></div>{:else}<div class="sk" style="width: 100%; aspect-ratio: 16/9; border-radius: 8px"></div>{/if}</div>
       <button class="btn btn-icon" onclick={() => (i = (i + 1) % n)} aria-label="Next"><Icon name="chevron-right" size={14} sw={2} /></button>
     </div>
     <div class="film" role="listbox" aria-label="Screenshots">
@@ -43,10 +69,10 @@
       <div class="kv small" style="grid-template-columns: 76px minmax(0,1fr); row-gap: 8px"><span>Size</span><span class="mono">{cur.width} × {cur.height}</span><span>File</span><span class="mono">{bytes(cur.bytes)}</span><span>World</span><span>{cur.world}</span></div>
     {/if}
     <div style="display: flex; flex-direction: column; gap: 6px">
-      <button class="btn btn-block">Copy image</button>
-      <button class="btn btn-block">Show in folder</button>
-      <button class="btn btn-block">Use as instance cover</button>
-      <button class="btn btn-block btn-danger">Move to trash</button>
+      <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Copy image', () => api.screenshots.copy(instanceId, cur.id), 'copied')}>Copy image</button>
+      <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Show in folder', () => api.screenshots.showInFolder(instanceId, cur.id))}>Show in folder</button>
+      <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Use as instance cover', () => api.screenshots.useAsCover(instanceId, cur.id).then(() => revs.bump('instances')), 'is the instance cover now')}>Use as instance cover</button>
+      <button class="btn btn-block btn-danger" disabled={!cur} onclick={trash}>Move to trash</button>
     </div>
   </aside>
 </div>

@@ -29,6 +29,20 @@
       cleaning = false;
     }
   }
+  // Old logs of every instance (id "").
+  const oldLogs = query(() => revs.load('instances', () => api.logs.oldSize('')));
+  const oldDesc = $derived(oldLogs.data === undefined
+    ? 'Compressed game logs older than 30 days.'
+    : oldLogs.data > 0 ? `${bytes(oldLogs.data)} of compressed game logs older than 30 days.` : 'Compressed game logs older than 30 days. Nothing to clean right now.');
+  async function deleteOld() {
+    try {
+      const freed = await api.logs.deleteOld('');
+      revs.bump('instances');
+      session.notify({ subject: 'Cleaned up', text: `${bytes(freed)} freed` });
+    } catch (err) {
+      session.fail('Delete old logs', err);
+    }
+  }
   const trash = query(() => api.instances.trashList());
   const KEEP_DAYS = 30;
   const daysLeft = (e: TrashEntry) => Math.max(0, KEEP_DAYS - Math.floor((Date.now() - e.trashedAt) / 86_400_000));
@@ -58,7 +72,7 @@
     <div class="card">
       <Setting title="Location" desc={info.data?.portable ? 'Portable mode: kept next to the launcher.' : 'Instances, the shared store and logs live here.'}><span class="mono small trunc muted" title={info.data?.dataDir}>{info.data?.dataDir ?? ''}</span></Setting>
       <div class="divider"></div>
-      <Setting title="Open the data folder"><button class="btn btn-sm">Open</button></Setting>
+      <Setting title="Open the data folder"><button class="btn btn-sm" onclick={() => api.app.openDataFolder().catch((e: unknown) => session.fail('Open', e))}>Open</button></Setting>
     </div>
   </section>
   <section class="grp" aria-label="Trash">
@@ -83,7 +97,7 @@
   <section class="grp" aria-label="Clean up">
     <h2 class="h3">Clean up</h2>
     <div class="card">
-      <Setting title="Old logs" desc="Compressed game logs older than 30 days."><button class="btn btn-sm">Delete old logs</button></Setting>
+      <Setting title="Old logs" desc={oldDesc}><button class="btn btn-sm" disabled={!oldLogs.data} onclick={deleteOld}>Delete old logs</button></Setting>
       <div class="divider"></div>
       <Setting title="Unused files in the shared store" desc={unusedDesc}><button class="btn btn-sm" disabled={cleaning || !usage.data?.unusedBytes} onclick={cleanUp}>Clean up</button></Setting>
     </div>

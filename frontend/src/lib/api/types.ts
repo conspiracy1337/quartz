@@ -31,7 +31,8 @@ export interface EnvVar { name: string; value: string }
 /** Per-instance settings (mirrors Go's instance.Settings). */
 export interface InstanceSettings {
   java: { override: boolean; javaPath: string; memoryMinMb: number; memoryMaxMb: number; jvmArgs: string };
-  window: { width: number; height: number; fullscreen: boolean; onGameStart: string };
+  /** openInto skips the title screen: a world (its folder) or a server (its address); kind "" opens the title screen. */
+  window: { width: number; height: number; fullscreen: boolean; onGameStart: string; openInto?: { kind: '' | 'world' | 'server'; target: string } };
   commands: { preLaunch: string; wrapper: string; postExit: string; env: EnvVar[]; systemGlfw: boolean; systemOpenal: boolean };
   performance: { dedicatedGpu: boolean; gameMode: boolean; mangoHud: boolean };
 }
@@ -125,9 +126,17 @@ export interface ContentChange { at: number; kind: 'added' | 'updated' | 'remove
 
 // ---- home ----
 export interface Alert { tone: 'warn' | 'info'; subject: string; text: string; action: string; target: AlertTarget }
-export type AlertTarget = { kind: 'sign-in'; accountId: string } | { kind: 'instance'; id: string; tab: 'mods' } | { kind: 'modpack-update'; id: string };
-export interface NewsItem { title: string; source: string; published: number; url: string }
-export interface DayPlay { day: number; minutes: number }
+export type AlertTarget =
+  | { kind: 'sign-in'; accountId: string }
+  | { kind: 'instance'; id: string; tab: 'mods' }
+  | { kind: 'modpack-update'; id: string }
+  | { kind: 'settings'; tab: 'storage' };
+/** The latest minecraft.net article; `image` is its picture on Go's image route. */
+export interface NewsItem { id?: string; title: string; source: string; published: number; url: string; image?: string }
+/** Minutes played on one day of this week (0 is Monday). */
+export interface DayPlay { day: number; minutes: number; today?: boolean }
+/** Free space on the data folder's drive; `low` under 5 GB. */
+export interface DiskSpace { free: number; low: boolean }
 
 export interface MergedServer {
   id: string;
@@ -148,22 +157,50 @@ export interface Screenshot {
   world: string;
   title: string;
   takenAt: number;
+  /** The grid's picture (a thumbnail inside the app). */
   art: Art;
+  /** The full-size picture, for the viewer (the app only). */
+  image?: string;
   file: string;
   width: number;
   height: number;
   bytes: number;
 }
 
+/** A server-list entry as the Add and Edit dialog edits it. */
+export interface ServerEntry { index: number; name: string; address: string; packs: 'prompt' | 'enabled' | 'disabled' }
+
+/** Where a launch opens straight away. */
+export interface PlayInto { kind: 'world' | 'server'; target: string }
+
 // ---- logs ----
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
 export interface LogLine { time: string; level: LogLevel; thread: string; message: string; redacted?: boolean }
 export interface LogFile { name: string; bytes: number; crash: boolean }
+/** The crash dialog: the likely cause (when a rule matched), the fixes it offers and the trace. */
+export interface CrashInfo {
+  instanceId: string;
+  runId?: string;
+  file?: string;
+  lengthMin: number;
+  exitCode: number;
+  cause?: CrashCause;
+  trace: string;
+}
+export interface CrashCause {
+  title: string;
+  text: string;
+  detail: string;
+  mod?: { item: string; name: string; version: string; icon?: string; update?: string; enabled: boolean };
+  fixes: ('update' | 'disable')[];
+}
 export type RunResult = 'ok' | 'crash' | 'killed' | 'failed';
 export interface Run {
   id: string; startedAt: number; lengthMin: number; exitCode: number; result: RunResult;
   /** What the run used (recorded by Go; absent in older fixtures). */
   java?: string; memory?: { min: number; max: number }; account?: string; mods?: number;
+  /** Filled in after the game exits: the world played, the server joined, screenshots taken, the crash. */
+  world?: string; server?: string; shots?: number; crash?: { title: string; detail?: string; report: boolean };
 }
 
 // ---- versions ----

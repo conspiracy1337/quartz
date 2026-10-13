@@ -115,3 +115,27 @@ func SymlinkInside(root, p string) bool {
 	}
 	return true
 }
+
+// ReadTail reads at most the last limit bytes of a regular file: the end of
+// a log is the part worth showing.
+func ReadTail(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path) //nolint:gosec // a caller-chosen path; the size is bounded below
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("fsx: %s is not a regular file", path)
+	}
+	off := max(0, info.Size()-limit)
+	buf := make([]byte, info.Size()-off)
+	n, err := f.ReadAt(buf, off)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return buf[:n], nil
+}

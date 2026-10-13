@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"quartz/internal/instance"
 	"quartz/internal/modplatform"
 )
 
@@ -267,18 +268,14 @@ func (s *Service) installDir(v view, k Kind, world string) (string, error) {
 	if k != DataPacks {
 		return specs[k].folders(nil)[0].Rel, nil
 	}
-	if !worldRe(world) {
+	if !instance.ValidWorldFolder(world) {
 		return "", ErrPickWorld
 	}
 	rel := path.Join("saves", world)
-	if fi, err := os.Stat(filepath.Join(v.game, filepath.FromSlash(rel))); err != nil || !fi.IsDir() { //nolint:gosec // world checked by worldRe
+	if fi, err := os.Stat(filepath.Join(v.game, filepath.FromSlash(rel))); err != nil || !fi.IsDir() { //nolint:gosec // world checked by instance.ValidWorldFolder
 		return "", ErrPickWorld
 	}
 	return path.Join(rel, "datapacks"), nil
-}
-
-func worldRe(w string) bool {
-	return w != "" && w != "." && w != ".." && len(w) <= 128 && !strings.ContainsAny(w, `/\`+"\x00") && !strings.HasPrefix(w, ".")
 }
 
 // presence answers "does the instance have this project already?", by id on
