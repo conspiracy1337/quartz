@@ -240,7 +240,7 @@ func (l *Launcher) Live(id string) []gamelog.Line {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if copies := l.running[id]; len(copies) > 0 {
-		return copies[len(copies)-1].buf.Lines()
+		return copies[len(copies)-1].con.Lines()
 	}
 	if b, ok := l.last[id]; ok {
 		return b.Lines()
@@ -395,7 +395,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	}
 	p.progress(StageFiles, 20)
 
-	if err := p.install(ctx, res, plan, l.processorJava(own)); err != nil {
+	if err := p.install(ctx, res, plan, l.cfg.Java.Installed(own)); err != nil {
 		return StageFiles, err
 	}
 	if plan != nil {
@@ -429,7 +429,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 		return StageStart, err
 	}
 	select {
-	case <-r.firstOutput:
+	case <-r.con.First():
 	case <-r.done:
 	case <-ctx.Done():
 		// The game is already starting; cancelling now would only orphan it.
@@ -487,21 +487,6 @@ func (p *pipeline) updateLoader(ctx context.Context) string {
 		}
 	}
 	return loader.Label(k, in.Minecraft, p.inst.LoaderVersion)
-}
-
-// processorJava finds the Java a loader's installer runs with, after the
-// install job's own Java download (if any) has finished.
-func (l *Launcher) processorJava(req java.Request) func(context.Context) (string, error) {
-	return func(ctx context.Context) (string, error) {
-		rt, plan, err := l.cfg.Java.Resolve(ctx, req)
-		if err != nil {
-			return "", err
-		}
-		if plan != nil || rt.Path == "" {
-			return "", fmt.Errorf("launch: Java %d is needed to finish installing the mod loader", req.Major)
-		}
-		return rt.Path, nil
-	}
 }
 
 // install runs the install job (if anything is missing) and mirrors its
@@ -622,5 +607,5 @@ func (l *Launcher) Prepare(ctx context.Context, t install.Target, gameDir string
 	if err != nil {
 		return nil, err
 	}
-	return l.cfg.Installer.Plan(install.Request{Resolved: res, Java: plan, Force: force, ProcessorJava: l.processorJava(own), Meta: meta})
+	return l.cfg.Installer.Plan(install.Request{Resolved: res, Java: plan, Force: force, ProcessorJava: l.cfg.Java.Installed(own), Meta: meta})
 }

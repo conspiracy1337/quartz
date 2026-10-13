@@ -1,12 +1,10 @@
 package launch
 
 import (
-	"bufio"
 	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"math"
 	"os"
@@ -49,7 +47,7 @@ type run struct {
 	instanceID string
 	cmd        *exec.Cmd
 	started    time.Time
-	buf        *gamelog.Buffer
+	con        *gamelog.Console
 	logFile    *os.File
 	accountID  string
 
@@ -59,13 +57,10 @@ type run struct {
 	// non-zero exit before that is "Failed to start", after it a crash.
 	loaded atomic.Bool
 
-	firstOnce   sync.Once
-	firstOutput chan struct{}
-	done        chan struct{}
+	done chan struct{}
 
-	pmu     sync.Mutex
-	pending []gamelog.Line
-	server  string // the last "Connecting to host, port" (guarded by pmu)
+	pmu    sync.Mutex
+	server string // the last "Connecting to host, port" (guarded by pmu)
 
 	record Record
 	// postExit is the player's after-exit command, with the variables it gets.
@@ -226,13 +221,15 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	}
 	now := time.Now()
 	r := &run{
-		id: sp.runID, instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), accountID: acc.ID,
-		firstOutput: make(chan struct{}), done: make(chan struct{}),
+		id: sp.runID, instanceID: inst.ID, cmd: cmd, started: now, accountID: acc.ID, done: make(chan struct{}),
 		record:   Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID, Mods: sp.mods},
 		server:   serverOf(sp.into),
 		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: cmd.Env, sp: sp,
 	}
 	r.record.ID = r.id
+	r.con = gamelog.NewConsole(consoleLines, l.cfg.Redactor, logBatch, r.add, func(lines []gamelog.Line) {
+		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, RunID: r.id, Lines: lines})
+	})
 	runsDir := l.cfg.Instances.RunsDir(inst.ID)
 	if err := os.MkdirAll(runsDir, 0o700); err != nil {
 		return nil, err
@@ -268,38 +265,18 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		l.cfg.Hooks.GameStarted(sp.eff.OnGameStart)
 	}
 
-	var readers sync.WaitGroup
-	readers.Add(2)
-	go l.read(r, stdout, false, &readers)
-	go l.read(r, stderr, true, &readers)
-	stopFlush := make(chan struct{})
-	go l.flushLoop(r, stopFlush)
+	wait := r.con.Start(stdout, stderr)
 	go func() {
-		readers.Wait()
-		err := cmd.Wait()
-		close(stopFlush)
-		l.exited(r, err)
+		wait()
+		l.exited(r, cmd.Wait())
 	}()
 	return r, nil
 }
 
-// read parses one output stream line by line.
-func (l *Launcher) read(r *run, src io.Reader, stderr bool, wg *sync.WaitGroup) {
-	defer wg.Done()
-	p := gamelog.NewParser(func(line gamelog.Line) { r.add(line) }, l.cfg.Redactor, stderr)
-	sc := bufio.NewScanner(src)
-	sc.Buffer(make([]byte, 64<<10), 1<<20)
-	for sc.Scan() {
-		r.firstOnce.Do(func() { close(r.firstOutput) })
-		p.Feed(sc.Text())
-	}
-	p.Close()
-}
-
 var connectingRe = regexp.MustCompile(`^Connecting to (\S+), (\d{1,5})$`)
 
+// add sees every console line as it is parsed.
 func (r *run) add(line gamelog.Line) {
-	r.buf.Add(line)
 	if !r.loaded.Load() && (strings.HasPrefix(line.Message, "Setting user: ") || strings.HasPrefix(line.Message, "Backend library: LWJGL") || strings.HasPrefix(line.Message, "LWJGL Version")) {
 		r.loaded.Store(true)
 	}
@@ -317,34 +294,6 @@ func (r *run) add(line gamelog.Line) {
 		thread = line.Thread + "/"
 	}
 	_, _ = fmt.Fprintf(r.logFile, "[%s] [%s%s]: %s\n", line.Time, thread, line.Level, line.Message)
-	r.pmu.Lock()
-	r.pending = append(r.pending, line)
-	r.pmu.Unlock()
-}
-
-// flushLoop sends new console lines to the UI in batches.
-func (l *Launcher) flushLoop(r *run, stop <-chan struct{}) {
-	t := time.NewTicker(logBatch)
-	defer t.Stop()
-	for {
-		select {
-		case <-t.C:
-			l.flush(r)
-		case <-stop:
-			l.flush(r)
-			return
-		}
-	}
-}
-
-func (l *Launcher) flush(r *run) {
-	r.pmu.Lock()
-	lines := r.pending
-	r.pending = nil
-	r.pmu.Unlock()
-	if len(lines) > 0 {
-		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, RunID: r.id, Lines: lines})
-	}
 }
 
 // tailLines is how much of the console finishers see.
@@ -414,7 +363,7 @@ func (l *Launcher) stop(r *run) error {
 // exited records the run, updates playtime and tells the UI.
 func (l *Launcher) exited(r *run, waitErr error) {
 	close(r.done)
-	r.firstOnce.Do(func() { close(r.firstOutput) })
+	r.con.Done()
 	_ = r.logFile.Close()
 
 	code := 0
@@ -442,7 +391,7 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	kept := l.disassemble(&r.sp)
 	gameDir := l.cfg.Instances.GameDir(r.instanceID)
 	runsDir := l.cfg.Instances.RunsDir(r.instanceID)
-	f := &Finished{InstanceID: r.instanceID, GameDir: gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record, Tail: tail(r.buf.Lines(), tailLines)}
+	f := &Finished{InstanceID: r.instanceID, GameDir: gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record, Tail: tail(r.con.Lines(), tailLines)}
 	for _, fin := range l.cfg.Finishers {
 		fin.FinishRun(f)
 	}
@@ -465,7 +414,7 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	} else {
 		l.running[r.instanceID] = rest
 	}
-	l.last[r.instanceID] = r.buf
+	l.last[r.instanceID] = r.con.Buffer()
 	none := len(l.running) == 0
 	l.mu.Unlock()
 	l.cfg.Bus.Emit(events.InstancesChanged, nil)
