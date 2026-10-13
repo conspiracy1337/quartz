@@ -87,8 +87,10 @@
     }
   }
 
+  /** The project page's Versions tab; the platform's site for an item without a reference. */
   function allVersions(u: ModUpdate) {
-    if (u.versionsUrl) void api.app.openUrl(u.versionsUrl);
+    if (u.ref) go({ name: 'project', id: u.ref, tab: 'versions' });
+    else if (u.versionsUrl) void api.app.openUrl(u.versionsUrl);
   }
 </script>
 
@@ -133,7 +135,7 @@
         <ul class="cl">{#each v.items as t (t)}<li>{t}</li>{/each}</ul>
       </section>
     {/each}
-    {#snippet foot()}{#if hasBridge()}<button class="btn" style="margin-right: auto" disabled={!cur.versionsUrl} onclick={() => allVersions(cur)}>All versions</button>{:else}<a href={href({ name: 'project', id: 'iris-shaders' })} class="btn" style="margin-right: auto">All versions</a>{/if}<button class="btn" onclick={() => (open = -1)}>Close</button><button class="btn btn-accent" onclick={() => ((picked[cur.id] = true), (open = -1))}>Keep selected</button>{/snippet}
+    {#snippet foot()}<button class="btn" style="margin-right: auto" disabled={!cur.ref && !cur.versionsUrl} onclick={() => allVersions(cur)}>All versions</button><button class="btn" onclick={() => (open = -1)}>Close</button><button class="btn btn-accent" onclick={() => ((picked[cur.id] = true), (open = -1))}>Keep selected</button>{/snippet}
   </Dialog>
 {/if}
 

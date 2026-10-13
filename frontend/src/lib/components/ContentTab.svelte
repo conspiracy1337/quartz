@@ -5,6 +5,7 @@
   import { hasBridge, onEvent } from '../bridge';
   import { searchIn } from '../format';
   import { query } from '../query.svelte';
+  import { projectKindOf } from '../labels';
   import { go, href } from '../router.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -230,7 +231,7 @@
     <div style="flex: 1 1 0"></div>
     <button class="btn" onclick={secondary}>{cfg.secondary}</button>
     {#if cfg.projects}
-      <a href={href({ name: 'browse' })} class="btn btn-accent"><Icon name="plus" size={14} sw={2} />{cfg.primary}</a>
+      <a href={href({ name: 'browse', type: projectKindOf(kind), instance: instanceId })} class="btn btn-accent"><Icon name="plus" size={14} sw={2} />{cfg.primary}</a>
     {:else}
       <button class="btn btn-accent"><Icon name="plus" size={14} sw={2} />{cfg.primary}</button>
     {/if}
@@ -245,7 +246,7 @@
           role={reorderable && c.enabled ? 'listitem' : undefined} onpointerdown={(e) => dragStart(e, c)} onpointermove={dragMove} onpointerup={dragEnd} onpointercancel={dragEnd} onclickcapture={swallow} ondragstart={(e) => reorderable && e.preventDefault()}>
           <span>{#if cfg.toggles}<Toggle {on} label="Enable {c.name}" onchange={() => flip(c)} />{/if}</span>
           <span class="media dim" style="background: {c.art.background}">{c.art.initial ?? ''}</span>
-          <a href={cfg.projects && !hasBridge() ? href({ name: 'project', id: c.id }) : undefined} class="dim" style="min-width: 0; text-decoration: none"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></a>
+          <a href={cfg.projects && c.ref ? href({ name: 'project', id: c.ref }) : undefined} class="dim" style="min-width: 0; text-decoration: none"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></a>
           <span class="c-stat">
             {#if b}<span class="badge {b.cls}">{b.text}</span>{/if}
             {#if c.action}<button class="btn btn-sm" onclick={() => session.play(instanceId)}>{c.action}</button>{/if}

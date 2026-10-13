@@ -6,7 +6,7 @@
   import Toggle from '$lib/ui/Toggle.svelte';
   import SetupLayout from './SetupLayout.svelte';
 
-  const launchers = query(() => api.imports.launchers());
+  const launchers = query(() => api.launchers());
   let picked = $state<Record<string, boolean>>({ 'Prism Launcher': true, 'Modrinth App': true });
   const count = $derived((launchers.data ?? []).filter((l) => picked[l.name]).reduce((n, l) => n + l.instances, 0));
 </script>
