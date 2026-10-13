@@ -48,10 +48,10 @@ func (s *Service) scan(ctx context.Context, id string, k Kind) error {
 	if err != nil {
 		return err
 	}
-	game := s.d.Instances.GameDir(id)
+	game := s.base(id, k)
 	sp := specs[k]
 	cur := ix.Get()
-	s.purgeRemovals(id, game, cur)
+	s.purgeRemovals(id, cur)
 	next := map[string]Entry{}
 	var jobs []job
 	if root, err := os.OpenRoot(game); err == nil {

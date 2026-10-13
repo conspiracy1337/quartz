@@ -6,8 +6,9 @@
    * Escape, a click elsewhere, scrolling or resizing closes it. Rows are `.mi` buttons
    * with role="menuitem"; the first one gets focus.
    */
-  interface Props { x: number; y: number; label: string; title?: string | undefined; onclose: () => void; children: Snippet }
-  let { x, y, label, title, onclose, children }: Props = $props();
+  /** scroll caps a long menu at the height the Select menu uses and scrolls inside it. */
+  interface Props { x: number; y: number; label: string; title?: string | undefined; scroll?: boolean; onclose: () => void; children: Snippet }
+  let { x, y, label, title, scroll = false, onclose, children }: Props = $props();
   let el = $state<HTMLElement>();
   let size = $state({ w: 0, h: 0 });
 
@@ -20,9 +21,12 @@
     el.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   });
 
-  // Inner panes scroll without bubbling, so listen in the capture phase.
+  // Inner panes scroll without bubbling, so listen in the capture phase (but not to
+  // the menu's own scrolling).
   $effect(() => {
-    const close = () => onclose();
+    const close = (e: Event) => {
+      if (!el?.contains(e.target as Node)) onclose();
+    };
     window.addEventListener('scroll', close, true);
     return () => window.removeEventListener('scroll', close, true);
   });
@@ -41,11 +45,12 @@
 </script>
 
 <svelte:window onkeydown={keys} onpointerdown={outside} onresize={onclose} onblur={onclose} />
-<div class="menu um" role="menu" aria-label={label} bind:this={el} style="left: {left}px; top: {top}px">
+<div class="menu um" class:um-scroll={scroll} role="menu" aria-label={label} bind:this={el} style="left: {left}px; top: {top}px">
   {#if title}<div class="small faint menu-title trunc">{title}</div>{/if}
   {@render children()}
 </div>
 
 <style>
   .um{position:fixed;z-index:50;min-width:240px;max-width:320px}
+  .um-scroll{max-height:280px;overflow:auto}
 </style>

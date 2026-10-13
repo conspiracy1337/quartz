@@ -38,3 +38,6 @@ func cloneHandle(dst, src *os.File, _ int64) error {
 	}
 	return nil
 }
+
+// cloneDir: only APFS clones a folder in one call.
+func cloneDir(_, _ string) error { return ErrUnsupported }

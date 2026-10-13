@@ -31,7 +31,7 @@ const maxContentFile = 512 << 20
 
 // Errors from checks and updates.
 var (
-	ErrCheckExpired = errors.New("content: this update check is too old; check again")
+	ErrCheckExpired  = errors.New("content: this update check is too old; check again")
 	ErrNothingPicked = errors.New("content: pick at least one update")
 )
 
@@ -568,7 +568,7 @@ func (s *Service) install(inst string, k Kind, pi *planned) error {
 	if disabled {
 		rel += Disabled
 	}
-	abs := filepath.Join(v.game, filepath.FromSlash(rel))
+	abs := s.abs(v.in.ID, rel)
 	if had && rel == old.Rel {
 		_ = s.d.Store.Unlink(abs, old.SHA1)
 	} else if _, err := os.Lstat(abs); err == nil {
@@ -581,7 +581,7 @@ func (s *Service) install(inst string, k Kind, pi *planned) error {
 		return err
 	}
 	if had && rel != old.Rel {
-		if err := s.d.Store.Unlink(filepath.Join(v.game, filepath.FromSlash(old.Rel)), old.SHA1); err != nil {
+		if err := s.d.Store.Unlink(s.abs(v.in.ID, old.Rel), old.SHA1); err != nil {
 			_ = s.d.Store.Unlink(abs, sha1) // roll back: keep the old one working
 			if s.running(inst) {
 				return &netx.PermanentError{Err: ErrGameHasFiles}
@@ -612,7 +612,7 @@ func (s *Service) install(inst string, k Kind, pi *planned) error {
 
 // movePW replaces an item's .pw.toml with one for the new file.
 func (s *Service) movePW(v *view, k Kind, old Entry, had bool, e Entry, ident *Ident) {
-	idxDir := filepath.Join(v.game, filepath.FromSlash(path.Join(path.Dir(e.Rel), specs[k].indexIn)))
+	idxDir := s.abs(v.in.ID, path.Join(path.Dir(e.Rel), specs[k].indexIn))
 	if had {
 		if pw, ok := s.pwFor(v, old); ok {
 			_ = packwiz.Remove(idxDir, pw.Slug)
@@ -646,7 +646,7 @@ func (s *Service) followRename(v *view, k Kind, from, to string) {
 			s.d.Log.Warn("content: following a renamed pack failed", "err", err)
 		}
 	case Shaders:
-		dir := filepath.Join(v.game, "shaderpacks")
+		dir := s.abs(v.in.ID, "shaderpacks")
 		_ = os.Rename(filepath.Join(dir, from+".txt"), filepath.Join(dir, to+".txt"))
 		if v.shader == from {
 			if err := s.writeShader(v.in.ID, to); err != nil {

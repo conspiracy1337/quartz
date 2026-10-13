@@ -28,6 +28,7 @@ import (
 	"quartz/internal/backup"
 	"quartz/internal/core/archive"
 	"quartz/internal/core/events"
+	"quartz/internal/core/fsx"
 	"quartz/internal/core/linkx"
 	"quartz/internal/core/localimg"
 	"quartz/internal/core/nbt"
@@ -93,7 +94,7 @@ func New(d Deps) *Service {
 	return &Service{d: d, sizes: map[string]sized{}}
 }
 
-func (s *Service) saves(id string) string { return filepath.Join(s.d.Instances.GameDir(id), "saves") }
+func (s *Service) saves(id string) string { return s.d.Instances.Path(id, "saves") }
 
 // List returns an instance's worlds, the most recently played first.
 func (s *Service) List(ctx context.Context, id string) ([]World, error) {
@@ -279,7 +280,16 @@ func (s *Service) Rename(id, folder, name string) error {
 	if err != nil {
 		return err
 	}
-	lvl := filepath.Join(d, "level.dat")
+	if err := setLevelName(d, func(string) string { return name }); err != nil {
+		return err
+	}
+	s.changed(id)
+	return nil
+}
+
+// setLevelName rewrites a world's LevelName from its current one.
+func setLevelName(dir string, name func(old string) string) error {
+	lvl := filepath.Join(dir, "level.dat")
 	f, err := nbt.ReadFile(lvl)
 	if err != nil {
 		return err
@@ -288,12 +298,24 @@ func (s *Service) Rename(id, folder, name string) error {
 	if data == nil || data.Kind != nbt.Compound {
 		return ErrNotWorld
 	}
-	data.Comp.Set("LevelName", nbt.NewString(name))
-	if err := nbt.WriteFile(lvl, f); err != nil {
-		return err
+	old := ""
+	if t := data.Get("LevelName"); t != nil {
+		old = t.Str
 	}
-	s.changed(id)
-	return nil
+	data.Comp.Set("LevelName", nbt.NewString(name(old)))
+	return nbt.WriteFile(lvl, f)
+}
+
+// Retitle adds a suffix to the name the game shows for the world in dir
+// ("Northwatch" becomes "Northwatch (2)"), after its folder got the same
+// suffix while syncing or merging copies. The folder name is the fallback.
+func Retitle(dir, suffix string) error {
+	return setLevelName(dir, func(old string) string {
+		if old == "" {
+			old = strings.TrimSuffix(filepath.Base(dir), suffix)
+		}
+		return old + suffix
+	})
 }
 
 // Delete moves a world aside and returns the token Undo takes.
@@ -304,7 +326,7 @@ func (s *Service) Delete(id, folder string) (string, error) {
 	if _, err := s.dir(id, folder); err != nil {
 		return "", err
 	}
-	root, err := os.OpenRoot(s.d.Instances.GameDir(id))
+	root, err := os.OpenRoot(s.d.Instances.Base(id, "saves"))
 	if err != nil {
 		return "", err
 	}
@@ -319,7 +341,7 @@ func (s *Service) Delete(id, folder string) (string, error) {
 
 // Undo brings back a deleted world.
 func (s *Service) Undo(id, token string) error {
-	root, err := os.OpenRoot(s.d.Instances.GameDir(id))
+	root, err := os.OpenRoot(s.d.Instances.Base(id, "saves"))
 	if err != nil {
 		return err
 	}
@@ -331,7 +353,7 @@ func (s *Service) Undo(id, token string) error {
 
 // purge deletes worlds whose Undo time is over.
 func (s *Service) purge(id string) {
-	if root, err := os.OpenRoot(s.d.Instances.GameDir(id)); err == nil {
+	if root, err := os.OpenRoot(s.d.Instances.Base(id, "saves")); err == nil {
 		holdbin.Purge(root, s.d.Now(), nil)
 		_ = root.Close()
 	}
@@ -409,7 +431,7 @@ func (s *Service) Import(id, src string) (string, error) {
 		base = strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
 	}
 	// Unpack beside saves/ first, so a failed import leaves nothing behind.
-	staging := filepath.Join(s.d.Instances.GameDir(id), ".quartz", "import-"+random())
+	staging := filepath.Join(s.d.Instances.Base(id, "saves"), ".quartz", "import-"+random())
 	defer func() { _ = os.RemoveAll(staging) }()
 	if err := archive.ExtractZip(src, staging, archive.Options{Prefix: prefix}); err != nil {
 		return "", err
@@ -470,15 +492,7 @@ func folderName(s string) string {
 }
 
 // free returns name, or "name (2)", "name (3)" … when it is taken in dir.
-func free(dir, name string) string {
-	try := name
-	for n := 2; ; n++ {
-		if _, err := os.Lstat(filepath.Join(dir, try)); errors.Is(err, fs.ErrNotExist) {
-			return try
-		}
-		try = name + " (" + strconv.Itoa(n) + ")"
-	}
-}
+func free(dir, name string) string { return fsx.FreeName(dir, name, true) }
 
 func random() string {
 	var b [6]byte
@@ -495,7 +509,7 @@ func (s *Service) changed(id string) {
 // FinishRun names the world a run played: the one whose level.dat changed
 // last while the game ran.
 func (s *Service) FinishRun(f *launch.Finished) {
-	saves := filepath.Join(f.GameDir, "saves")
+	saves := s.saves(f.InstanceID)
 	entries, err := os.ReadDir(saves)
 	if err != nil {
 		return

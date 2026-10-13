@@ -81,7 +81,7 @@ func New(d Deps) *Service {
 }
 
 func (s *Service) folder(id string) string {
-	return filepath.Join(s.d.Instances.GameDir(id), "screenshots")
+	return s.d.Instances.Path(id, "screenshots")
 }
 
 // indexFile maps screenshot file names to the world they were taken in.
@@ -97,7 +97,7 @@ func (s *Service) index(id string) map[string]string {
 
 // List returns an instance's screenshots, newest first.
 func (s *Service) List(id string) ([]Shot, error) {
-	if root, err := os.OpenRoot(s.d.Instances.GameDir(id)); err == nil {
+	if root, err := os.OpenRoot(s.d.Instances.Base(id, "screenshots")); err == nil {
 		holdbin.Purge(root, s.d.Now(), nil)
 		_ = root.Close()
 	}
@@ -153,9 +153,13 @@ func (s *Service) size(p string, fi os.FileInfo) (int, int) {
 // Recent returns the newest n screenshots of all instances.
 func (s *Service) Recent(n int) []Shot {
 	var all []Shot
+	seen := map[string]bool{} // instances sharing screenshots list the same folder
 	for _, in := range s.d.Instances.List() {
-		if list, err := s.List(in.ID); err == nil {
-			all = append(all, list...)
+		if dir := s.folder(in.ID); !seen[dir] {
+			seen[dir] = true
+			if list, err := s.List(in.ID); err == nil {
+				all = append(all, list...)
+			}
 		}
 	}
 	slices.SortStableFunc(all, func(a, b Shot) int { return cmp.Compare(b.TakenAt, a.TakenAt) })
@@ -186,7 +190,7 @@ func (s *Service) Trash(id string, names []string) (string, error) {
 	if len(moves) == 0 {
 		return "", ErrNoShot
 	}
-	root, err := os.OpenRoot(s.d.Instances.GameDir(id))
+	root, err := os.OpenRoot(s.d.Instances.Base(id, "screenshots"))
 	if err != nil {
 		return "", err
 	}
@@ -201,7 +205,7 @@ func (s *Service) Trash(id string, names []string) (string, error) {
 
 // Undo brings back trashed screenshots.
 func (s *Service) Undo(id, token string) error {
-	root, err := os.OpenRoot(s.d.Instances.GameDir(id))
+	root, err := os.OpenRoot(s.d.Instances.Base(id, "screenshots"))
 	if err != nil {
 		return err
 	}
@@ -214,7 +218,7 @@ func (s *Service) Undo(id, token string) error {
 // FinishRun counts the screenshots a run took and files them under the
 // world it played. It runs after worlds.Service.FinishRun, which names it.
 func (s *Service) FinishRun(f *launch.Finished) {
-	dir := filepath.Join(f.GameDir, "screenshots")
+	dir := s.folder(f.InstanceID)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return

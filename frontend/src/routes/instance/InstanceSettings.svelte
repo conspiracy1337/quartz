@@ -4,6 +4,7 @@
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import { move, repair, trash } from '$lib/instanceActions';
+  import { plural } from '$lib/format';
   import { suggestMemoryGb } from '$lib/look';
   import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
@@ -21,11 +22,17 @@
 
   // Only what is turned on in Syncing shows here, in the same order.
   const sync = query(() => api.sync.groups());
+  const sharedKeys = query(() => api.sync.keybinds());
   const syncable = $derived(sync.data ? [...sync.data.files, ...sync.data.folders, ...sync.data.mods, ...sync.data.custom].filter((e) => e.enabled && e.available) : []);
-  let joined = $state<Record<string, boolean>>({ options: true, servers: true, hotbar: true, resourcepacks: true, xaero: true });
+  // Joining moves the instance's own items into the shared copy; leaving keeps a copy.
+  const join = (target: string, on: boolean) =>
+    edit(async () => {
+      await api.instances.setSync(i.id, target, on);
+      revs.bump('sync');
+    }, 'Syncing');
 
   // Java, memory, window (with "Open straight into"), performance and commands are
-  // the instance's own (saved through Go); syncing stays local until its milestone lands.
+  // the instance's own (saved through Go).
   // svelte-ignore state_referenced_locally
   let st = $state($state.snapshot(i.settings));
   const info = query(() => api.app.info());
@@ -72,7 +79,6 @@
     const kind = v === 'none' ? '' : (v.slice(0, at) as 'world' | 'server');
     change(() => (st.window.openInto = { kind, target: kind ? v.slice(at + 1) : '' }));
   }
-  let sharedKeys = $state(true);
   const sub = (s: string) => href({ name: 'instance', id: i.id, tab: 'settings', sub: s });
 
   async function edit(fn: () => Promise<unknown>, what: string) {
@@ -117,10 +123,10 @@
     <section class="sec" aria-label="Syncing">
       <div class="sec-h"><h2 class="h3">Syncing</h2><a href={href({ name: 'syncing' })} class="btn btn-sm btn-ghost">Sync settings</a></div>
       <div class="card">
-        <Setting title="Shared keybinds" desc="Writes your 7 chosen keys into this instance on every launch. Other options stay untouched."><Toggle bind:on={sharedKeys} label="Shared keybinds" /></Setting>
+        <Setting title="Shared keybinds" desc="Writes your {plural(sharedKeys.data?.length ?? 0, 'chosen key')} into this instance on every launch. Other options stay untouched."><Toggle on={i.sync.keys} label="Shared keybinds" onchange={(v) => edit(() => api.instances.setSharedKeys(i.id, v), 'Shared keybinds')} /></Setting>
         <div class="divider"></div>
         <div class="tgl-grid">
-          {#each syncable as e (e.id)}<ToggleRow name={e.name || 'Custom'} hint={e.path} on={!!joined[e.id]} onchange={(v) => (joined[e.id] = v)} />{/each}
+          {#each syncable as e (e.id)}<ToggleRow name={e.name || 'Custom'} hint={e.path} on={i.sync.join.includes(e.id)} onchange={(v) => join(e.id, v)} />{/each}
         </div>
       </div>
     </section>

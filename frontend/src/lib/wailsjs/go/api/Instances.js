@@ -82,6 +82,14 @@ export function SetNotes(arg1, arg2) {
   return window['go']['api']['Instances']['SetNotes'](arg1, arg2);
 }
 
+export function SetSharedKeys(arg1, arg2) {
+  return window['go']['api']['Instances']['SetSharedKeys'](arg1, arg2);
+}
+
+export function SetSync(arg1, arg2, arg3) {
+  return window['go']['api']['Instances']['SetSync'](arg1, arg2, arg3);
+}
+
 export function SetTags(arg1, arg2) {
   return window['go']['api']['Instances']['SetTags'](arg1, arg2);
 }

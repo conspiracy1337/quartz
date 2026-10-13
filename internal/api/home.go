@@ -29,7 +29,9 @@ func (h *Home) News() (*home.News, error) { return h.d.Home.News(h.ctx.Get()) }
 
 // Servers merges every instance's servers and pings them (force skips the
 // one-minute cache).
-func (h *Home) Servers(force bool) ([]servers.Merged, error) { return h.d.Servers.Home(h.ctx.Get(), force) }
+func (h *Home) Servers(force bool) ([]servers.Merged, error) {
+	return h.d.Servers.Home(h.ctx.Get(), force)
+}
 
 // RecentShots is the newest screenshots across instances.
 func (h *Home) RecentShots() []screenshots.Shot { return h.d.Screenshots.Recent(6) }

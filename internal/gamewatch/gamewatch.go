@@ -6,33 +6,38 @@ package gamewatch
 
 import (
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 
 	"quartz/internal/core/events"
+	"quartz/internal/core/fsx"
 )
 
 const delay = 400 * time.Millisecond
 
 // Watcher is safe for concurrent use.
 type Watcher struct {
-	bus     *events.Bus
-	gameDir func(id string) string
+	bus  *events.Bus
+	path func(id, rel string) string
 
 	mu    sync.Mutex
 	w     *fsnotify.Watcher
 	id    string
-	game  string
+	dirs  dirs
 	timer *time.Timer
 	dirty map[events.Topic]bool
 }
 
-// New returns a Watcher that finds game folders through gameDir.
-func New(bus *events.Bus, gameDir func(id string) string) *Watcher {
-	return &Watcher{bus: bus, gameDir: gameDir}
+// dirs are the watched places: saves/ and screenshots/ may live in the
+// shared folder rather than the game folder.
+type dirs struct{ game, saves, screenshots string }
+
+// New returns a Watcher that finds an instance's folders through path
+// (instance.Store.Path: the game folder, or the shared one).
+func New(bus *events.Bus, path func(id, rel string) string) *Watcher {
+	return &Watcher{bus: bus, path: path}
 }
 
 // Watch follows instance id ("" stops).
@@ -54,11 +59,11 @@ func (w *Watcher) Watch(id string) {
 	if err != nil {
 		return
 	}
-	game := w.gameDir(id)
-	for _, d := range []string{game, filepath.Join(game, "saves"), filepath.Join(game, "screenshots")} {
-		_ = fw.Add(d)
+	d := dirs{game: w.path(id, ""), saves: w.path(id, "saves"), screenshots: w.path(id, "screenshots")}
+	for _, p := range []string{d.game, d.saves, d.screenshots, filepath.Dir(d.saves), filepath.Dir(d.screenshots)} {
+		_ = fw.Add(p)
 	}
-	w.w, w.game, w.dirty = fw, game, map[events.Topic]bool{}
+	w.w, w.dirs, w.dirty = fw, d, map[events.Topic]bool{}
 	go w.loop(fw, id)
 }
 
@@ -79,18 +84,13 @@ func (w *Watcher) loop(fw *fsnotify.Watcher, id string) {
 }
 
 // topic maps a changed path to the event that announces it.
-func topic(game, name string) (events.Topic, bool) {
-	rel, err := filepath.Rel(game, name)
-	if err != nil {
-		return "", false
-	}
-	rel = filepath.ToSlash(rel)
+func topic(d dirs, name string) (events.Topic, bool) {
 	switch {
-	case rel == "servers.dat":
+	case name == filepath.Join(d.game, "servers.dat"):
 		return events.ServersChanged, true
-	case rel == "saves" || strings.HasPrefix(rel, "saves/"):
+	case fsx.Inside(d.saves, name):
 		return events.WorldsChanged, true
-	case rel == "screenshots" || strings.HasPrefix(rel, "screenshots/"):
+	case fsx.Inside(d.screenshots, name):
 		return events.ScreenshotsChanged, true
 	}
 	return "", false
@@ -102,12 +102,12 @@ func (w *Watcher) touched(fw *fsnotify.Watcher, id string, ev fsnotify.Event) {
 	if w.id != id || w.w != fw {
 		return
 	}
-	t, ok := topic(w.game, ev.Name)
+	t, ok := topic(w.dirs, ev.Name)
 	if !ok {
 		return
 	}
 	// saves/ or screenshots/ appearing for the first time: follow them too.
-	if base := filepath.Base(ev.Name); filepath.Dir(ev.Name) == w.game && (base == "saves" || base == "screenshots") && ev.Has(fsnotify.Create) {
+	if (ev.Name == w.dirs.saves || ev.Name == w.dirs.screenshots) && ev.Has(fsnotify.Create) {
 		_ = fw.Add(ev.Name)
 	}
 	w.dirty[t] = true

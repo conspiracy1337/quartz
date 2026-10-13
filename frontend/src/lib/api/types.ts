@@ -53,6 +53,7 @@ export interface Instance extends InstanceSummary {
   keepLoaderUpdated: boolean;
   followLatest: boolean;
   syncTargets: number;
+  sync: InstanceSync;
   discordStatus: boolean;
   settings: InstanceSettings;
   /** The dedicated GPU's name (Linux), "" when there is none. */
@@ -345,8 +346,13 @@ export interface TaskSnapshot { active: Job[]; speed: number; etaSec: number; hi
 
 // ---- syncing ----
 export interface SyncEntry { id: string; name: string; path: string; users: number; enabled: boolean; available: boolean }
-export interface SyncGroups { files: SyncEntry[]; folders: SyncEntry[]; mods: SyncEntry[]; custom: SyncEntry[] }
-export interface Keybind { name: string; key: string }
+export interface SyncGroups { files: SyncEntry[]; folders: SyncEntry[]; mods: SyncEntry[]; custom: SyncEntry[]; total: number }
+/** A shared keybind: the game's id (options.txt key_<id>) and its key's label. */
+export interface Keybind { id: string; name: string; key: string }
+/** A keybind an instance has, for "Add key"; category is "Minecraft" or the mod's name. */
+export interface KeyChoice { id: string; name: string; category: string; key: string; shared: boolean }
+/** Which shared targets an instance joins, and whether it takes the shared keybinds. */
+export interface InstanceSync { join: string[]; keys: boolean }
 
 // ---- java ----
 export interface JavaRuntime { major: number; name: string; source: 'Managed' | 'System' | 'SDKMAN' | 'Found'; path: string; usedBy: number }

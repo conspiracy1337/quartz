@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -31,6 +32,8 @@ import (
 	"quartz/internal/instance"
 	"quartz/internal/java"
 	"quartz/internal/mojang"
+	"quartz/internal/runview"
+	"quartz/internal/syncing"
 	"quartz/internal/wrapperjar"
 )
 
@@ -69,7 +72,8 @@ type run struct {
 	postExit string
 	vars     map[string]string
 	env      []string
-	gameDir  string
+	// sp holds the run's view and shared-files session until it exits.
+	sp spec
 }
 
 // spec is everything one game start needs.
@@ -86,6 +90,9 @@ type spec struct {
 	vars    map[string]string // $INST_* values
 	mods    int
 	into    instance.Into // a world or server to open straight into
+	runID   string
+	view    *runview.View    // nil runs in the game folder itself
+	session *syncing.Session // nil shares nothing
 }
 
 // moduleExports are the named-module main classes the wrapper jar calls
@@ -158,6 +165,9 @@ func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, string, error) {
 	}
 	argv = append(argv, java.LaunchBinary(sp.rt.Path))
 	argv = append(argv, args...)
+	if sp.view != nil {
+		argv = sp.view.Wrap(argv)
+	}
 	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // argv slice from validated metadata and the player's own wrapper; no shell
 	cmd.Dir = sp.gameDir
 	cmd.Env = gameEnv(sp.vars, eff)
@@ -216,11 +226,11 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	}
 	now := time.Now()
 	r := &run{
-		id: newRunID(now), instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), accountID: acc.ID,
+		id: sp.runID, instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), accountID: acc.ID,
 		firstOutput: make(chan struct{}), done: make(chan struct{}),
 		record:   Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID, Mods: sp.mods},
 		server:   serverOf(sp.into),
-		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: cmd.Env, gameDir: sp.gameDir,
+		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: cmd.Env, sp: sp,
 	}
 	r.record.ID = r.id
 	runsDir := l.cfg.Instances.RunsDir(inst.ID)
@@ -240,6 +250,9 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		_ = r.logFile.Close()
 		return nil, err
 	}
+	if sp.view != nil {
+		sp.view.Started(cmd.Process.Pid)
+	}
 	_, werr := stdin.Write(script)
 	_ = stdin.Close()
 	if werr != nil {
@@ -247,9 +260,10 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	}
 
 	l.mu.Lock()
-	l.running[inst.ID] = r
+	l.running[inst.ID] = append(l.running[inst.ID], r)
+	copies := len(l.running[inst.ID])
 	l.mu.Unlock()
-	l.cfg.Bus.Emit(events.GameState, State{InstanceID: inst.ID, RunID: r.id, State: "running"})
+	l.cfg.Bus.Emit(events.GameState, State{InstanceID: inst.ID, RunID: r.id, State: "running", Copies: copies})
 	if l.cfg.Hooks.GameStarted != nil {
 		l.cfg.Hooks.GameStarted(sp.eff.OnGameStart)
 	}
@@ -329,7 +343,7 @@ func (l *Launcher) flush(r *run) {
 	r.pending = nil
 	r.pmu.Unlock()
 	if len(lines) > 0 {
-		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, Lines: lines})
+		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, RunID: r.id, Lines: lines})
 	}
 }
 
@@ -357,17 +371,27 @@ func serverOf(into instance.Into) string {
 // LogBatch is what game:log carries.
 type LogBatch struct {
 	InstanceID string         `json:"instanceId"`
+	RunID      string         `json:"runId"`
 	Lines      []gamelog.Line `json:"lines"`
 }
 
-// Stop asks the game to quit; after 3 seconds, or on a second Stop, it is killed.
+// Stop asks every copy of the game to quit; after 3 seconds, or on a second
+// Stop, they are killed.
 func (l *Launcher) Stop(id string) error {
 	l.mu.Lock()
-	r, ok := l.running[id]
+	copies := slices.Clone(l.running[id])
 	l.mu.Unlock()
-	if !ok {
+	if len(copies) == 0 {
 		return ErrNotRunning
 	}
+	var errs []error
+	for _, r := range copies {
+		errs = append(errs, l.stop(r))
+	}
+	return errors.Join(errs...)
+}
+
+func (l *Launcher) stop(r *run) error {
 	if r.stopping.Swap(true) {
 		r.killed.Store(true)
 		return procx.Kill(r.cmd.Process)
@@ -413,8 +437,12 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	r.pmu.Lock()
 	r.record.Server = r.server
 	r.pmu.Unlock()
+	// The run's changes go back into the instance (and shared folders)
+	// before anything reads them.
+	kept := l.disassemble(&r.sp)
+	gameDir := l.cfg.Instances.GameDir(r.instanceID)
 	runsDir := l.cfg.Instances.RunsDir(r.instanceID)
-	f := &Finished{InstanceID: r.instanceID, GameDir: r.gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record, Tail: tail(r.buf.Lines(), tailLines)}
+	f := &Finished{InstanceID: r.instanceID, GameDir: gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record, Tail: tail(r.buf.Lines(), tailLines)}
 	for _, fin := range l.cfg.Finishers {
 		fin.FinishRun(f)
 	}
@@ -431,19 +459,24 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	}
 
 	l.mu.Lock()
-	delete(l.running, r.instanceID)
+	rest := slices.DeleteFunc(l.running[r.instanceID], func(o *run) bool { return o == r })
+	if len(rest) == 0 {
+		delete(l.running, r.instanceID)
+	} else {
+		l.running[r.instanceID] = rest
+	}
 	l.last[r.instanceID] = r.buf
 	none := len(l.running) == 0
 	l.mu.Unlock()
 	l.cfg.Bus.Emit(events.InstancesChanged, nil)
-	l.cfg.Bus.Emit(events.GameState, State{InstanceID: r.instanceID, RunID: r.id, State: "exited", ExitCode: code, Result: result})
+	l.cfg.Bus.Emit(events.GameState, State{InstanceID: r.instanceID, RunID: r.id, State: "exited", ExitCode: code, Result: result, Copies: len(rest), Kept: kept})
 	if none && l.cfg.Hooks.AllExited != nil {
 		l.cfg.Hooks.AllExited()
 	}
 	if r.postExit != "" {
 		vars := maps.Clone(r.vars)
 		vars["EXIT_CODE"] = strconv.Itoa(code)
-		if err := runCommand(context.Background(), r.postExit, r.gameDir, vars, append(r.env, "EXIT_CODE="+vars["EXIT_CODE"])); err != nil {
+		if err := runCommand(context.Background(), r.postExit, gameDir, vars, append(r.env, "EXIT_CODE="+vars["EXIT_CODE"])); err != nil {
 			l.cfg.Log.Warn("after-exit command failed", "instance", r.instanceID, "err", err)
 		}
 	}

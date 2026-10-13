@@ -59,10 +59,12 @@ import (
 	"quartz/internal/modplatform/curseforge"
 	"quartz/internal/modplatform/modrinth"
 	"quartz/internal/network"
+	"quartz/internal/runview"
 	"quartz/internal/screenshots"
 	"quartz/internal/servers"
 	"quartz/internal/settings"
 	"quartz/internal/skins"
+	"quartz/internal/syncing"
 	"quartz/internal/theme"
 	"quartz/internal/worlds"
 )
@@ -121,6 +123,8 @@ type app struct {
 	logFiles    *logfiles.Service
 	home        *home.Service
 	gameWatch   *gamewatch.Watcher
+	// The shared layer (M8).
+	syncing *syncing.Service
 }
 
 // Run builds the app and blocks until the window closes.
@@ -160,6 +164,7 @@ func Run(o Options) error {
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
 				Running: a.launcher.Running, Busy: a.launcher.Busy, Content: a.content, Worlds: a.worlds, Servers: a.servers,
+				Syncing: a.syncing,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
 			api.NewBrowse(a.ctx, a.browse),
@@ -172,6 +177,7 @@ func Run(o Options) error {
 			api.NewWorlds(a.ctx, a.worlds, a.drops),
 			api.NewServers(a.ctx, a.servers),
 			api.NewScreenshots(api.ScreenshotDeps{Service: a.screenshots, Instances: a.instances, Icons: a.icons, Bus: a.bus}),
+			api.NewSync(a.ctx, a.syncing),
 		},
 	})
 }
@@ -311,6 +317,20 @@ func (a *app) buildTasks() error {
 	if err := a.buildContent(); err != nil {
 		return err
 	}
+	a.syncing = syncing.New(syncing.Config{
+		Root: a.paths.Shared(), Trash: a.paths.Trash(), Settings: a.settings, Instances: a.instances, Bus: a.bus,
+		Running: func(id string) bool { return a.launcher.Busy(id) }, HasMod: a.content.AnyHasMod,
+		Retitle: worlds.Retitle, Tasks: eng, Log: a.log,
+		ClientJar: func(mc string) string { return filepath.Join(a.paths.Versions(), mc, mc+".jar") },
+		ModJars: func(id string) []syncing.ModJar {
+			jars := a.content.ModJars(id)
+			out := make([]syncing.ModJar, len(jars))
+			for i, j := range jars {
+				out[i] = syncing.ModJar{Path: j.Path, Name: j.Name}
+			}
+			return out
+		},
+	})
 	dl := download.New(a.http, ver)
 	a.loaders = loader.New(loader.Deps{
 		Meta: a.meta, Downloader: dl, Verified: ver, Log: a.log,
@@ -327,6 +347,8 @@ func (a *app) buildTasks() error {
 		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited}, Mods: a.content,
 		// In order: the world played names the screenshots it took; the crash goes last.
 		Finishers: []launch.Finisher{a.worlds, a.screenshots, a.servers, a.crash},
+		Syncing:   a.syncing,
+		Views:     runview.New(runview.Config{Retitle: worlds.Retitle, Log: a.log}),
 	})
 	a.buildBrowse(dl)
 	return nil
@@ -339,10 +361,14 @@ func (a *app) buildGame() {
 	runs := func(id string) []launch.Record { return a.launcher.Runs(id) }
 	a.gameImages = localimg.New(filepath.Join(a.paths.Cache(), "thumbs"))
 	a.favicons = servers.NewFavicons(filepath.Join(a.paths.Cache(), "favicons"))
-	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: busy, Bus: a.bus, Log: a.log})
+	// Worlds may be shared: another instance playing them counts too.
+	worldsBusy := func(id string) bool { return a.syncing.Busy(id, "saves") }
+	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: worldsBusy, Bus: a.bus, Log: a.log})
 	a.servers = servers.New(servers.Deps{
 		Instances: a.instances, Busy: busy, Runs: runs, Favicons: a.favicons, Bus: a.bus, Log: a.log,
-		Protocol: func(mc string) int { return contentmeta.ClientProtocol(filepath.Join(a.paths.Versions(), mc, mc+".jar")) },
+		Protocol: func(mc string) int {
+			return contentmeta.ClientProtocol(filepath.Join(a.paths.Versions(), mc, mc+".jar"))
+		},
 	})
 	a.screenshots = screenshots.New(screenshots.Deps{Instances: a.instances, Images: a.gameImages, Bus: a.bus})
 	a.crash = crash.New(crash.Deps{Instances: a.instances, Mods: a.content, Runs: launcherRuns{a}, Redactor: a.redactor})
@@ -362,7 +388,7 @@ func (a *app) buildGame() {
 		},
 	})
 	a.home = home.New(home.Deps{Instances: a.instances, Runs: runs, Meta: a.meta, Pictures: a.pictures, DataDir: a.paths.Root})
-	a.gameWatch = gamewatch.New(a.bus, a.instances.GameDir)
+	a.gameWatch = gamewatch.New(a.bus, a.instances.Path)
 	// A finished game changes this week's play time.
 	a.bus.Subscribe(events.GameState, func(p any) {
 		if st, ok := p.(launch.State); ok && st.State == "exited" {
@@ -542,6 +568,8 @@ func (a *app) startup(ctx context.Context) {
 		wruntime.EventsEmit(ctx, string(t), payload)
 	})
 	a.accounts.Start()
+	// Games that ran when the launcher last quit get merged back.
+	go a.launcher.Recover()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
@@ -562,6 +590,7 @@ func (a *app) purgeTrash() func() {
 			if n := a.instances.PurgeExpired(time.Now()); n > 0 {
 				a.log.Info("emptied old trash", "instances", n)
 			}
+			a.syncing.PurgeTrash(time.Now())
 			if freed, n, err := a.store.GC(a.content.Refs, storeGrace); err != nil {
 				a.log.Warn("cleaning the content store failed", "err", err)
 			} else if n > 0 {

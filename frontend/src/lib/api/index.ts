@@ -15,6 +15,7 @@ import * as InstancesGo from '../wailsjs/go/api/Instances';
 import * as JavaGo from '../wailsjs/go/api/Java';
 import * as LaunchGo from '../wailsjs/go/api/Launch';
 import * as LogsGo from '../wailsjs/go/api/Logs';
+import * as SyncGo from '../wailsjs/go/api/Sync';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { accountsApi, signInAlerts } from './accounts';
 import { browseApi, importsApi, manualApi, packsApi } from './browse';
@@ -66,6 +67,9 @@ export const api = {
     /** A picture for an instance not created yet; "" when cancelled. */
     chooseIcon: bridged(InstancesGo.ChooseIcon, () => ''),
     setNotes: bridged(InstancesGo.SetNotes, inst.mockInstances.setNotes),
+    /** Joins or leaves a shared target (its own items merge in; leaving keeps a copy). */
+    setSync: bridged(InstancesGo.SetSync, inst.mockInstances.setSync),
+    setSharedKeys: bridged(InstancesGo.SetSharedKeys, inst.mockInstances.setSharedKeys),
     setTags: bridged(InstancesGo.SetTags, inst.mockInstances.setTags),
     groups: () => revs.load('instances', bridged(InstancesGo.Groups, () => inst.groups)),
     setGroup: bridged(InstancesGo.SetGroup, inst.mockInstances.setGroup),
@@ -128,8 +132,18 @@ export const api = {
   manual: manualApi,
   downloads: downloadsApi,
   sync: {
-    groups: unbuilt(() => ({ ...misc.sync, total: misc.totalInstances }), { files: [], folders: [], mods: [], custom: [], total: 0 }),
-    keybinds: unbuilt(() => misc.keybinds, []),
+    groups: () => revs.load('sync', bridged(SyncGo.Groups, misc.mockSync.groups)),
+    /** Turns a target on, or off: every joined instance keeps a copy and the shared one goes to the trash. */
+    setEnabled: bridged(SyncGo.SetEnabled, misc.mockSync.setEnabled),
+    addCustom: bridged(SyncGo.AddCustom, misc.mockSync.addCustom),
+    removeCustom: bridged(SyncGo.RemoveCustom, misc.mockSync.removeCustom),
+    openFolder: bridged(SyncGo.OpenFolder, () => undefined),
+    keybinds: () => revs.load('sync', bridged(SyncGo.Keybinds, misc.mockSync.keybinds)),
+    keyCatalog: bridged(SyncGo.KeyCatalog, misc.mockSync.keyCatalog),
+    addKey: bridged(SyncGo.AddKey, misc.mockSync.addKey),
+    /** Binds a shared keybind to a key the page captured (KeyboardEvent.code or "Mouse<button>"). */
+    setKey: bridged(SyncGo.SetKey, misc.mockSync.setKey),
+    removeKey: bridged(SyncGo.RemoveKey, misc.mockSync.removeKey),
   },
   java: {
     runtimes: bridged(JavaGo.Runtimes, () => misc.runtimes),

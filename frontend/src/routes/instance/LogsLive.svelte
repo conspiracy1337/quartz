@@ -7,6 +7,7 @@
   import SearchField from '$lib/ui/SearchField.svelte';
   import { copyText } from '$lib/clipboard';
   import { session } from '$lib/session.svelte';
+  import { follows } from '$lib/console';
 
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
@@ -24,17 +25,24 @@
   let height = $state(600);
   let follow = true;
 
+  // With several copies running, the console follows the newest one.
   $effect(() => {
     const id = instanceId;
     let alive = true;
+    let run = '';
     void api.logs.live(id).then((l) => {
       if (alive) void append(l ?? [], true);
     });
-    const offLog = onEvent<{ instanceId: string; lines: LogLine[] }>('game:log', (b) => {
-      if (b.instanceId === id) void append(b.lines, false);
+    const offLog = onEvent<{ instanceId: string; runId: string; lines: LogLine[] }>('game:log', (b) => {
+      if (b.instanceId !== id || !follows(run, b.runId)) return;
+      run = b.runId;
+      void append(b.lines, false);
     });
-    const offState = onEvent<{ instanceId: string; state: string }>('game:state', (s) => {
-      if (s.instanceId === id && s.state === 'running') all = [];
+    const offState = onEvent<{ instanceId: string; runId: string; state: string }>('game:state', (s) => {
+      if (s.instanceId === id && s.state === 'running') {
+        all = [];
+        run = s.runId;
+      }
     });
     return () => {
       alive = false;

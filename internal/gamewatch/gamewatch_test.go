@@ -10,14 +10,17 @@ import (
 )
 
 func TestTopics(t *testing.T) {
-	game := "/g"
-	for name, want := range map[string]events.Topic{"/g/servers.dat": events.ServersChanged, "/g/saves/New World": events.WorldsChanged, "/g/screenshots/a.png": events.ScreenshotsChanged} {
-		if got, ok := topic(game, name); !ok || got != want {
+	// Worlds shared: saves/ lives in the shared folder.
+	d := dirs{game: "/g", saves: "/shared/saves", screenshots: "/g/screenshots"}
+	for name, want := range map[string]events.Topic{"/g/servers.dat": events.ServersChanged, "/shared/saves/New World": events.WorldsChanged, "/g/screenshots/a.png": events.ScreenshotsChanged} {
+		if got, ok := topic(d, name); !ok || got != want {
 			t.Errorf("%s: %v", name, got)
 		}
 	}
-	if _, ok := topic(game, "/g/options.txt"); ok {
-		t.Error("options.txt announced")
+	for _, name := range []string{"/g/options.txt", "/g/saves/x", "/shared/servers.dat"} {
+		if _, ok := topic(d, name); ok {
+			t.Errorf("%s announced", name)
+		}
 	}
 }
 
@@ -28,7 +31,7 @@ func TestWatchEmits(t *testing.T) {
 	for _, tp := range []events.Topic{events.WorldsChanged, events.ScreenshotsChanged, events.ServersChanged} {
 		bus.Subscribe(tp, func(any) { got <- tp })
 	}
-	w := New(bus, func(string) string { return game })
+	w := New(bus, func(_, rel string) string { return filepath.Join(game, rel) })
 	w.Watch("a")
 	defer w.Watch("")
 	_ = os.WriteFile(filepath.Join(game, "servers.dat"), []byte("x"), 0o600)

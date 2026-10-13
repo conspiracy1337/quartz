@@ -3,13 +3,13 @@ package content
 import (
 	"context"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
 	"quartz/internal/content/meta"
 	"quartz/internal/content/packwiz"
+	"quartz/internal/core/optfile"
 	"quartz/internal/instance"
 )
 
@@ -83,12 +83,12 @@ func (s *Service) view(id string) (view, error) {
 		}
 	}
 	v.known = s.cat.many(sha)
-	opts, _ := readLines(optionsPath(v.game), ":")
+	opts, _ := optfile.Read(optionsPath(v.game), ":")
 	v.packs = enabledPacks(opts)
 	if v.idx.Pending.Packs != nil {
 		v.packs = v.idx.Pending.Packs
 	}
-	props, _ := readLines(shaderConfig(v.game, s.oculus(v)), "=")
+	props, _ := optfile.Read(s.abs(v.in.ID, shaderConfig(s.oculus(v))), "=")
 	v.shader = activeShader(props)
 	if v.idx.Pending.Shader != nil {
 		v.shader = *v.idx.Pending.Shader
@@ -102,7 +102,7 @@ func (s *Service) pwFor(v *view, e Entry) (packwiz.Meta, bool) {
 	dir := path.Join(path.Dir(e.Rel), specs[e.Kind].indexIn)
 	m, ok := v.pw[dir]
 	if !ok {
-		m, _ = packwiz.ReadDir(filepath.Join(v.game, filepath.FromSlash(dir)))
+		m, _ = packwiz.ReadDir(s.abs(v.in.ID, dir))
 		v.pw[dir] = m
 	}
 	pw, ok := m[strings.ToLower(strings.TrimSuffix(path.Base(e.Rel), Disabled))]

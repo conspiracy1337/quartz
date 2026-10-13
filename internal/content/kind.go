@@ -26,6 +26,18 @@ const (
 	DataPacks     Kind = "datapacks"
 )
 
+// top is the instance folder a kind's items live under (data packs live in
+// worlds); it decides whether they are in the game or the shared folder.
+func (k Kind) top() string {
+	switch k {
+	case DataPacks:
+		return "saves"
+	case Shaders:
+		return "shaderpacks"
+	}
+	return string(k)
+}
+
 // Kinds lists every kind, in tab order.
 var Kinds = []Kind{Mods, ResourcePacks, Shaders, DataPacks}
 

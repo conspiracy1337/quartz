@@ -21,7 +21,9 @@ import (
 	"quartz/internal/launch"
 	"quartz/internal/loader"
 	"quartz/internal/mojang"
+	"quartz/internal/runview"
 	"quartz/internal/settings"
+	"quartz/internal/syncing"
 )
 
 func (h *harness) loaders() *loader.Registry {
@@ -191,5 +193,90 @@ func TestLaunchOffline(t *testing.T) {
 	mu.Unlock()
 	if got, _ := insts.Get(inst.ID); got.LastPlayed == nil {
 		t.Fatal("last played not recorded")
+	}
+}
+
+// TestTwoCopies starts two real game windows of one instance with the same
+// offline account, sharing worlds: the first sees the shared folder in
+// place, the second a private view that merges back when it stops. It needs
+// a display and QUARTZ_IT_LAUNCH=1.
+func TestTwoCopies(t *testing.T) {
+	if os.Getenv("QUARTZ_IT_LAUNCH") != "1" || (os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "") {
+		t.Skip("set QUARTZ_IT_LAUNCH=1 with a display to open two game windows")
+	}
+	h := newHarness(t)
+	bus := events.NewBus()
+	accs, err := accounts.Open(filepath.Join(h.root, "accounts.json"), h.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = accs.AddOffline("Quartz_Test")
+	insts, err := instance.Open(filepath.Join(h.root, "instances"), h.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := settings.Open(filepath.Join(h.root, "settings.json"), bus, h.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst, err := insts.Create(instance.CreateRequest{Name: "Two copies", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared := syncing.New(syncing.Config{Root: filepath.Join(h.root, "shared"), Trash: filepath.Join(h.root, "trash"), Settings: st, Instances: insts, Bus: bus, Log: h.log})
+	if err := shared.JoinAll(h.ctx(), inst.ID, []string{"saves", "options"}); err != nil {
+		t.Fatal(err)
+	}
+	red := logging.NewRedactor("")
+	mgr := accounts.NewManager(accounts.Config{Store: accs, Bus: bus, Redactor: red, Settings: func() settings.Accounts { return st.Get().Accounts }})
+	l := launch.New(launch.Config{
+		Instances: insts, Accounts: mgr, Installer: h.installer(), Loaders: h.loaders(), Java: h.java, Tasks: h.tasks,
+		Settings: st, Bus: bus, Redactor: red, BinDir: filepath.Join(h.root, "store", "bin"), Log: h.log,
+		Syncing: shared, Views: runview.New(runview.Config{Log: h.log}),
+	})
+	states := make(chan launch.State, 8)
+	failed := make(chan launch.Failure, 2)
+	bus.Subscribe(events.GameState, func(p any) { states <- p.(launch.State) })
+	bus.Subscribe(events.LaunchFailed, func(p any) { failed <- p.(launch.Failure) })
+	wait := func(want string) launch.State {
+		t.Helper()
+		select {
+		case s := <-states:
+			if s.State != want {
+				t.Fatalf("state %+v, want %s", s, want)
+			}
+			return s
+		case f := <-failed:
+			t.Fatalf("launch failed at stage %d: %s", f.Stage, f.Message)
+		case <-time.After(10 * time.Minute):
+			t.Fatalf("no %s state", want)
+		}
+		return launch.State{}
+	}
+	for copies := 1; copies <= 2; copies++ {
+		if err := l.Play(inst.ID, "", instance.Into{}); err != nil {
+			t.Fatal(err)
+		}
+		if s := wait("running"); s.Copies != copies {
+			t.Fatalf("copies = %d, want %d", s.Copies, copies)
+		}
+		time.Sleep(20 * time.Second) // let the game write its options
+	}
+	if err := l.Stop(inst.ID); err != nil {
+		t.Fatal(err)
+	}
+	wait("exited")
+	wait("exited")
+	if l.Running(inst.ID) || len(l.Runs(inst.ID)) != 2 {
+		t.Fatalf("running %v, runs %d", l.Running(inst.ID), len(l.Runs(inst.ID)))
+	}
+	if views, _ := filepath.Glob(filepath.Join(insts.RunsDir(inst.ID), "*.view")); len(views) != 0 {
+		t.Fatalf("views left: %v", views)
+	}
+	if _, err := os.Stat(filepath.Join(insts.GameDir(inst.ID), "options.txt")); err != nil {
+		t.Fatal("the game's options never reached the instance")
+	}
+	if _, err := os.Stat(filepath.Join(h.root, "shared", "options.txt")); err != nil {
+		t.Fatal("the options never reached the shared copy")
 	}
 }

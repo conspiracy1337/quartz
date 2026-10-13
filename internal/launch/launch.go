@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"quartz/internal/accounts"
 	"quartz/internal/auth"
@@ -29,7 +30,9 @@ import (
 	"quartz/internal/java"
 	"quartz/internal/loader"
 	"quartz/internal/mojang"
+	"quartz/internal/runview"
 	"quartz/internal/settings"
+	"quartz/internal/syncing"
 )
 
 // Stages in the order the launch panel lists them.
@@ -45,7 +48,7 @@ const (
 
 // Errors returned to the UI.
 var (
-	ErrBusy       = errors.New("launch: this instance is already starting or running")
+	ErrBusy       = errors.New("launch: this instance is already starting")
 	ErrNotRunning = errors.New("launch: this instance is not running")
 )
 
@@ -80,6 +83,11 @@ type Config struct {
 	Mods ModChecker
 	// Finishers add to a run's record after the game exits, in order.
 	Finishers []Finisher
+	// Syncing copies shared files in before a run and out after it, and
+	// names the shared folders the run assembles (nil shares nothing).
+	Syncing *syncing.Service
+	// Views assembles each run's folders (nil runs in the game folder).
+	Views *runview.Assembler
 }
 
 // ModChecker summarises the mods a launch will load. It never blocks a
@@ -94,7 +102,7 @@ type Launcher struct {
 
 	mu        sync.Mutex
 	launching map[string]context.CancelFunc
-	running   map[string]*run
+	running   map[string][]*run          // each instance's running copies, oldest first
 	last      map[string]*gamelog.Buffer // the console of each instance's last run
 }
 
@@ -103,7 +111,7 @@ func New(c Config) *Launcher {
 	if c.Log == nil {
 		c.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Launcher{cfg: c, launching: map[string]context.CancelFunc{}, running: map[string]*run{}, last: map[string]*gamelog.Buffer{}}
+	return &Launcher{cfg: c, launching: map[string]context.CancelFunc{}, running: map[string][]*run{}, last: map[string]*gamelog.Buffer{}}
 }
 
 // Progress is what launch:progress carries.
@@ -131,6 +139,11 @@ type State struct {
 	State      string `json:"state"` // running | exited
 	ExitCode   int    `json:"exitCode"`
 	Result     Result `json:"result,omitempty"`
+	// Copies is how many copies of the instance run after this change.
+	Copies int `json:"copies"`
+	// Kept are worlds this run changed while another copy changed them too,
+	// kept beside them as "W (copy 2)".
+	Kept []runview.Copy `json:"kept,omitempty"`
 }
 
 // Status is the launcher's current state, for a UI that just loaded.
@@ -157,9 +170,11 @@ func (l *Launcher) Status() Status {
 func (l *Launcher) AccountInUse(id string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, r := range l.running {
-		if r.accountID == id {
-			return true
+	for _, copies := range l.running {
+		for _, r := range copies {
+			if r.accountID == id {
+				return true
+			}
 		}
 	}
 	return false
@@ -169,8 +184,7 @@ func (l *Launcher) AccountInUse(id string) bool {
 func (l *Launcher) Running(id string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	_, ok := l.running[id]
-	return ok
+	return len(l.running[id]) > 0
 }
 
 // Busy reports whether an instance is starting or running, when its files
@@ -179,8 +193,7 @@ func (l *Launcher) Busy(id string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	_, launching := l.launching[id]
-	_, running := l.running[id]
-	return launching || running
+	return launching || len(l.running[id]) > 0
 }
 
 // ErrBadTarget is returned for a world or server Play can't open into.
@@ -190,7 +203,8 @@ var ErrBadTarget = errors.New("launch: not a world or server to open")
 // (accountID "" means the default one; "Launch as" passes another, for this
 // launch only). into opens a world or server straight away; its zero value
 // uses the instance's "Open straight into" setting. Progress and the outcome
-// arrive as events.
+// arrive as events. An instance that already runs starts another copy, which
+// gets its own view of the instance (see package runview).
 func (l *Launcher) Play(id, accountID string, into instance.Into) error {
 	if !into.Valid() {
 		return ErrBadTarget
@@ -201,10 +215,6 @@ func (l *Launcher) Play(id, accountID string, into instance.Into) error {
 	}
 	l.mu.Lock()
 	if _, ok := l.launching[id]; ok {
-		l.mu.Unlock()
-		return ErrBusy
-	}
-	if _, ok := l.running[id]; ok {
 		l.mu.Unlock()
 		return ErrBusy
 	}
@@ -225,12 +235,12 @@ func (l *Launcher) CancelLaunch(id string) {
 	}
 }
 
-// Live returns the console lines of the running (or last) run.
+// Live returns the console lines of the newest running copy (or the last run).
 func (l *Launcher) Live(id string) []gamelog.Line {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if r, ok := l.running[id]; ok {
-		return r.buf.Lines()
+	if copies := l.running[id]; len(copies) > 0 {
+		return copies[len(copies)-1].buf.Lines()
 	}
 	if b, ok := l.last[id]; ok {
 		return b.Lines()
@@ -395,21 +405,27 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 		p.set(StageJava, "Java "+rt.Version)
 	}
 	p.set(StageFiles, "Ready")
+	p.progress(StageSandbox, 88)
+
+	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir, mods: p.mods, into: p.into, runID: newRunID(time.Now())}
+	if err := l.assemble(&sp); err != nil {
+		return StageSandbox, err
+	}
 	p.set(StageSandbox, "Off")
 	p.progress(StageStart, 90)
-
-	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir, mods: p.mods, into: p.into}
-	sp.vars = instVars(p.inst, l.cfg.Instances.Dir(p.inst.ID), gameDir, rt.Path)
+	sp.vars = instVars(p.inst, l.cfg.Instances.Dir(p.inst.ID), sp.gameDir, rt.Path)
 	if pre := p.eff.Commands.PreLaunch; pre != "" {
 		p.set(StageStart, "Before-launch command")
 		p.progress(StageStart, 92)
-		if err := runCommand(ctx, pre, gameDir, sp.vars, gameEnv(sp.vars, p.eff)); err != nil {
+		if err := runCommand(ctx, pre, sp.gameDir, sp.vars, gameEnv(sp.vars, p.eff)); err != nil {
+			l.disassemble(&sp)
 			return StageStart, fmt.Errorf("before-launch command: %w", err)
 		}
 		p.set(StageStart, "")
 	}
 	r, err := l.start(ctx, sp)
 	if err != nil {
+		l.disassemble(&sp)
 		return StageStart, err
 	}
 	select {

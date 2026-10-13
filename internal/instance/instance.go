@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -98,19 +99,56 @@ type Instance struct {
 	KeepLoaderUpdated bool `json:"keepLoaderUpdated"`
 	// FollowLatest moves to the newest Minecraft release once every mod
 	// supports it (checked from M5 on; stored now).
-	FollowLatest bool       `json:"followLatest"`
-	Group        string     `json:"group,omitempty"`
-	Notes        string     `json:"notes,omitempty"`
-	Tags         []string   `json:"tags,omitempty"`
-	Location     string     `json:"location,omitempty"` // a moved game folder; "" is instances/<id>/game
-	Sandbox      bool       `json:"sandbox"`
-	Shares       []string   `json:"shares,omitempty"` // stored now, used by syncing (M8)
-	Created      time.Time  `json:"created"`
-	LastPlayed   *time.Time `json:"lastPlayed,omitempty"`
-	PlaytimeMin  int        `json:"playtimeMin"`
-	Settings     Settings   `json:"settings"`
+	FollowLatest bool     `json:"followLatest"`
+	Group        string   `json:"group,omitempty"`
+	Notes        string   `json:"notes,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
+	Location     string   `json:"location,omitempty"` // a moved game folder; "" is instances/<id>/game
+	Sandbox      bool     `json:"sandbox"`
+	// Shares is the pre-M8 list of New instance labels, migrated into Sync.
+	Shares      []string   `json:"shares,omitempty"`
+	Sync        Sync       `json:"sync"`
+	Created     time.Time  `json:"created"`
+	LastPlayed  *time.Time `json:"lastPlayed,omitempty"`
+	PlaytimeMin int        `json:"playtimeMin"`
+	Settings    Settings   `json:"settings"`
 	// Pack is the modpack the instance was installed from (nil for none).
 	Pack *PackRef `json:"pack,omitempty"`
+}
+
+// Sync is which shared targets the instance joins (see package syncing).
+type Sync struct {
+	Join []string `json:"join"` // target ids: "options", "saves", "c-…"
+	Keys bool     `json:"keys"` // write the shared keybinds on launch
+}
+
+// legacyShares maps the New instance labels stored before M8 to target ids.
+var legacyShares = map[string]string{
+	"Game options": "options", "Servers": "servers", "Worlds": "saves", "Resource packs": "resourcepacks",
+	"Shaders": "shaderpacks", "Screenshots": "screenshots", "Hotbars": "hotbar",
+}
+
+var syncIDRe = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+
+// ValidSyncID reports whether s can name a sync target.
+func ValidSyncID(s string) bool { return syncIDRe.MatchString(s) }
+
+func (y Sync) normalize(legacy []string) Sync {
+	join := y.Join
+	for _, label := range legacy {
+		if label == "Keybinds" {
+			y.Keys = true
+		} else if id, ok := legacyShares[label]; ok {
+			join = append(join, id)
+		}
+	}
+	y.Join = nil
+	for _, id := range join {
+		if ValidSyncID(id) && !slices.Contains(y.Join, id) && len(y.Join) < 128 {
+			y.Join = append(y.Join, id)
+		}
+	}
+	return y
 }
 
 // PackRef names an instance's modpack and its installed version.
@@ -208,6 +246,7 @@ func normalize(in Instance) Instance {
 	if !iconRe.MatchString(in.Icon) {
 		in.Icon = ""
 	}
+	in.Sync, in.Shares = in.Sync.normalize(in.Shares), nil
 	in.Notes = clip(in.Notes, maxNotes)
 	in.Tags = cleanTags(in.Tags)
 	in.Group, _ = cleanGroup(in.Group)
@@ -281,6 +320,32 @@ type Store struct {
 
 	mu    sync.Mutex
 	files map[string]*jsonfile.Store[Instance]
+
+	locate atomic.Pointer[Locator]
+}
+
+// Locator says under which folder an instance-relative path really lives:
+// the game folder, or the shared folder when the instance shares it.
+type Locator func(id, rel string) string
+
+// SetLocator installs the shared layer's resolver (package syncing).
+func (s *Store) SetLocator(l Locator) { s.locate.Store(&l) }
+
+// Base is the folder an instance-relative path (such as "saves" or
+// "resourcepacks/x.zip") lives under: the game folder, or the shared folder
+// for a folder the instance shares. The relative path is the same in both.
+func (s *Store) Base(id, rel string) string {
+	if l := s.locate.Load(); l != nil {
+		if b := (*l)(id, rel); b != "" {
+			return b
+		}
+	}
+	return s.GameDir(id)
+}
+
+// Path is where an instance-relative path really is: Base joined with rel.
+func (s *Store) Path(id, rel string) string {
+	return filepath.Join(s.Base(id, rel), filepath.FromSlash(rel))
 }
 
 // Open loads every instance folder in dir. Folders whose name is not a valid
@@ -369,15 +434,17 @@ func (s *Store) Get(id string) (Instance, error) {
 
 // CreateRequest is what the New instance screen sends.
 type CreateRequest struct {
-	Name          string   `json:"name"`
-	Art           Art      `json:"art"`
-	Icon          string   `json:"icon"`
-	Minecraft     string   `json:"minecraft"`
-	Loader        string   `json:"loader"` // "" or "none" for vanilla
-	LoaderVersion string   `json:"loaderVersion"`
-	Group         string   `json:"group"`
-	Sandbox       bool     `json:"sandbox"`
-	Shares        []string `json:"shares"`
+	Name          string `json:"name"`
+	Art           Art    `json:"art"`
+	Icon          string `json:"icon"`
+	Minecraft     string `json:"minecraft"`
+	Loader        string `json:"loader"` // "" or "none" for vanilla
+	LoaderVersion string `json:"loaderVersion"`
+	Group         string `json:"group"`
+	Sandbox       bool   `json:"sandbox"`
+	// Shares are the sync targets to join ("keys" for the shared keybinds);
+	// the caller joins them once the instance exists (syncing.JoinAll).
+	Shares []string `json:"shares"`
 }
 
 // Create makes a new instance folder. The Minecraft version and loader build
@@ -403,17 +470,11 @@ func (s *Store) Create(req CreateRequest, defaults JavaSettings) (Instance, erro
 	if req.Icon != "" && !iconRe.MatchString(req.Icon) {
 		return Instance{}, fmt.Errorf("%w: icon", ErrInvalidSettings)
 	}
-	shares := make([]string, 0, len(req.Shares))
-	for _, sh := range req.Shares {
-		if len(sh) <= 64 && !strings.ContainsFunc(sh, unicode.IsControl) {
-			shares = append(shares, sh)
-		}
-	}
 	defaults.Override = false
 	in := Instance{
 		Version: schema, ID: s.newID(name), Name: name, Art: req.Art, Icon: req.Icon, Minecraft: req.Minecraft,
 		Loader: req.Loader, LoaderVersion: req.LoaderVersion, KeepLoaderUpdated: true,
-		Group: group, Sandbox: req.Sandbox, Shares: shares, Created: time.Now().UTC(),
+		Group: group, Sandbox: req.Sandbox, Created: time.Now().UTC(),
 		Settings: Settings{Java: defaults},
 	}
 	if in.Art.Initial == "" {

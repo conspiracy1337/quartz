@@ -307,6 +307,7 @@ export namespace api {
 	    keepLoaderUpdated: boolean;
 	    followLatest: boolean;
 	    syncTargets: number;
+	    sync: instance.Sync;
 	    discordStatus: boolean;
 	    settings: instance.Settings;
 	    gpu: string;
@@ -343,6 +344,7 @@ export namespace api {
 	        this.keepLoaderUpdated = source["keepLoaderUpdated"];
 	        this.followLatest = source["followLatest"];
 	        this.syncTargets = source["syncTargets"];
+	        this.sync = this.convertValues(source["sync"], instance.Sync);
 	        this.discordStatus = source["discordStatus"];
 	        this.settings = this.convertValues(source["settings"], instance.Settings);
 	        this.gpu = source["gpu"];
@@ -1697,6 +1699,20 @@ export namespace instance {
 		    return a;
 		}
 	}
+	export class Sync {
+	    join: string[];
+	    keys: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Sync(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.join = source["join"];
+	        this.keys = source["keys"];
+	    }
+	}
 	export class TrashEntry {
 	    key: string;
 	    id: string;
@@ -2432,6 +2448,72 @@ export namespace settings {
 	    }
 	}
 	
+	export class SharedKey {
+	    id: string;
+	    key: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SharedKey(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.key = source["key"];
+	        this.name = source["name"];
+	    }
+	}
+	export class SyncCustom {
+	    id: string;
+	    path: string;
+	    dir: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SyncCustom(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.path = source["path"];
+	        this.dir = source["dir"];
+	    }
+	}
+	export class Syncing {
+	    enabled: string[];
+	    custom: SyncCustom[];
+	    keys: SharedKey[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Syncing(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.custom = this.convertValues(source["custom"], SyncCustom);
+	        this.keys = this.convertValues(source["keys"], SharedKey);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Updates {
 	    autoCheck: boolean;
 	    modChannel: string;
@@ -2455,6 +2537,7 @@ export namespace settings {
 	    appearance: Appearance;
 	    java: Java;
 	    updates: Updates;
+	    syncing: Syncing;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -2470,6 +2553,7 @@ export namespace settings {
 	        this.appearance = this.convertValues(source["appearance"], Appearance);
 	        this.java = this.convertValues(source["java"], Java);
 	        this.updates = this.convertValues(source["updates"], Updates);
+	        this.syncing = this.convertValues(source["syncing"], Syncing);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2490,6 +2574,9 @@ export namespace settings {
 		    return a;
 		}
 	}
+	
+	
+	
 
 }
 
@@ -2511,6 +2598,107 @@ export namespace store {
 	        this.bytes = source["bytes"];
 	        this.unused = source["unused"];
 	        this.unusedBytes = source["unusedBytes"];
+	    }
+	}
+
+}
+
+export namespace syncing {
+	
+	export class Entry {
+	    id: string;
+	    name: string;
+	    path: string;
+	    users: number;
+	    enabled: boolean;
+	    available: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.users = source["users"];
+	        this.enabled = source["enabled"];
+	        this.available = source["available"];
+	    }
+	}
+	export class Groups {
+	    files: Entry[];
+	    folders: Entry[];
+	    mods: Entry[];
+	    custom: Entry[];
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Groups(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.files = this.convertValues(source["files"], Entry);
+	        this.folders = this.convertValues(source["folders"], Entry);
+	        this.mods = this.convertValues(source["mods"], Entry);
+	        this.custom = this.convertValues(source["custom"], Entry);
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class KeyChoice {
+	    id: string;
+	    name: string;
+	    category: string;
+	    key: string;
+	    shared: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new KeyChoice(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.category = source["category"];
+	        this.key = source["key"];
+	        this.shared = source["shared"];
+	    }
+	}
+	export class Keybind {
+	    id: string;
+	    name: string;
+	    key: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Keybind(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.key = source["key"];
 	    }
 	}
 

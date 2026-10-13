@@ -19,6 +19,7 @@ import (
 	"quartz/internal/meta"
 	"quartz/internal/modplatform"
 	"quartz/internal/settings"
+	"quartz/internal/syncing"
 )
 
 // InstanceDeps are what the instances facade works with.
@@ -37,6 +38,8 @@ type InstanceDeps struct {
 	// Worlds and Servers count an instance's worlds and servers; nil in tests.
 	Worlds  Counter
 	Servers Counter
+	// Syncing joins instances to shared targets; nil in tests.
+	Syncing *syncing.Service
 }
 
 // Counter counts one kind of thing an instance has.
@@ -94,7 +97,8 @@ type InstanceView struct {
 	Notes             string            `json:"notes"`
 	KeepLoaderUpdated bool              `json:"keepLoaderUpdated"`
 	FollowLatest      bool              `json:"followLatest"`
-	SyncTargets       int               `json:"syncTargets"`
+	SyncTargets       int               `json:"syncTargets"` // shared targets it joins that are on
+	Sync              instance.Sync     `json:"sync"`
 	DiscordStatus     bool              `json:"discordStatus"`
 	Settings          instance.Settings `json:"settings"`
 	GPU               string            `json:"gpu"` // the dedicated GPU's name, Linux only
@@ -149,7 +153,15 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),
 		DiscordStatus: g.Integrations.DiscordStatus, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),
+		SyncTargets: s.syncTargets(in.ID), Sync: in.Sync,
 	}
+}
+
+func (s *Instances) syncTargets(id string) int {
+	if s.d.Syncing == nil {
+		return 0
+	}
+	return len(s.d.Syncing.Joined(id))
 }
 
 // counts is how many items each content tab has.
@@ -224,8 +236,52 @@ func (s *Instances) Create(req instance.CreateRequest) (InstanceView, error) {
 		}
 		req.LoaderVersion = v
 	}
+	if len(req.Shares) > 32 {
+		return InstanceView{}, fmt.Errorf("%w: shares", instance.ErrInvalidSettings)
+	}
 	g := s.d.Settings.Get().Java
-	return s.changed(s.d.Store.Create(req, instance.JavaSettings{MemoryMinMB: g.MemoryMinMB, MemoryMaxMB: g.MemoryMaxMB, JVMArgs: g.JVMArgs}))
+	in, err := s.d.Store.Create(req, instance.JavaSettings{MemoryMinMB: g.MemoryMinMB, MemoryMaxMB: g.MemoryMaxMB, JVMArgs: g.JVMArgs})
+	if err == nil && s.d.Syncing != nil && len(req.Shares) > 0 {
+		// A new instance has nothing to merge in; a target that can't be
+		// joined just stays off for it.
+		_ = s.d.Syncing.JoinAll(ctx, in.ID, req.Shares)
+		in, err = s.d.Store.Get(in.ID)
+	}
+	return s.changed(in, err)
+}
+
+// SetSync joins or leaves a shared target (see package syncing).
+func (s *Instances) SetSync(id, target string, on bool) (InstanceView, error) {
+	if err := checkInstanceID(id); err != nil {
+		return InstanceView{}, err
+	}
+	if !instance.ValidSyncID(target) || s.d.Syncing == nil {
+		return InstanceView{}, errBadSync
+	}
+	var err error
+	if on {
+		err = s.d.Syncing.Join(s.ctx.Get(), id, target)
+	} else {
+		err = s.d.Syncing.Leave(s.ctx.Get(), id, target)
+	}
+	if err != nil {
+		return InstanceView{}, err
+	}
+	return s.changed(s.d.Store.Get(id))
+}
+
+// SetSharedKeys turns the shared keybinds on or off for an instance.
+func (s *Instances) SetSharedKeys(id string, on bool) (InstanceView, error) {
+	if err := checkInstanceID(id); err != nil {
+		return InstanceView{}, err
+	}
+	if s.d.Syncing == nil {
+		return InstanceView{}, errBadSync
+	}
+	if err := s.d.Syncing.SetKeys(id, on); err != nil {
+		return InstanceView{}, err
+	}
+	return s.changed(s.d.Store.Get(id))
 }
 
 // loaderBuild checks kind's build id for mc upstream ("" picks the newest stable).

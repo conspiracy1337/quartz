@@ -67,7 +67,7 @@
               <a href={href({ name: 'instance', id: r.id, tab: 'overview' })} style="min-width: 0; text-decoration: none"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small muted" style="display: block">{instanceMeta(r)}</span></a>
               <span class="small faint tnum" style="display: flex; justify-content: space-between"><span>{agoShort(r.lastPlayed)}</span><span>{hours(r.playtimeMin)}</span></span>
             </div>
-            <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={() => session.play(r.id)}><Icon name="play" size={14} /></button>
+            <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={(e) => (session.running[r.id] ? session.openLaunchAs(r.id, e) : session.play(r.id))}><Icon name="play" size={14} /></button>
           </div>
         {:else}
           {#if list.data.length}

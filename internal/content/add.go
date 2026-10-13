@@ -45,7 +45,7 @@ func (s *Service) Add(ctx context.Context, id string, k Kind, world string, path
 	if err != nil {
 		return res, err
 	}
-	game := s.d.Instances.GameDir(id)
+	game := s.base(id, k)
 	for _, p := range paths {
 		name := filepath.Base(p)
 		if err := ctx.Err(); err != nil {
@@ -221,4 +221,3 @@ func exists(p string) bool {
 	_, err := os.Lstat(p)
 	return err == nil
 }
-

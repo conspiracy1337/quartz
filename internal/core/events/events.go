@@ -27,6 +27,7 @@ const (
 	WorldsChanged      Topic = "worlds:changed"
 	ServersChanged     Topic = "servers:changed"
 	ScreenshotsChanged Topic = "screenshots:changed"
+	SyncChanged        Topic = "sync:changed"
 )
 
 // Sink receives every emitted event, used to bridge events to the UI.

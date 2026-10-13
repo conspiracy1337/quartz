@@ -1,8 +1,6 @@
 package api
 
 import (
-	"path/filepath"
-
 	"quartz/internal/core/clipimg"
 	"quartz/internal/core/events"
 	"quartz/internal/core/procx"
@@ -62,7 +60,7 @@ func (a *Screenshots) OpenFolder(id string) error {
 	if err := checkInstanceID(id); err != nil {
 		return err
 	}
-	return procx.OpenFolder(filepath.Join(a.d.Instances.GameDir(id), "screenshots"))
+	return procx.OpenFolder(a.d.Instances.Path(id, "screenshots"))
 }
 
 // UseAsCover makes a screenshot the instance's picture (cropped square).

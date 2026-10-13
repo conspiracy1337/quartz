@@ -20,3 +20,11 @@ func clonePath(src, dst string, perm os.FileMode) error {
 
 // cloneHandle can't clone into an already open file on macOS.
 func cloneHandle(_, _ *os.File, _ int64) error { return ErrUnsupported }
+
+// cloneDir clones a whole folder at once (APFS clones directories too).
+func cloneDir(src, dst string) error {
+	if err := unix.Clonefile(src, dst, unix.CLONE_NOFOLLOW|unix.CLONE_NOOWNERCOPY); err != nil {
+		return errors.Join(ErrUnsupported, err)
+	}
+	return nil
+}
