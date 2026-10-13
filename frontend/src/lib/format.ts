@@ -81,7 +81,7 @@ export const left = (sec: number) => (sec <= 0 ? '' : sec < 60 ? `${sec} s left`
 
 /** "Options, servers and shaders": names joined as a sentence, the first capitalised. */
 export function sentenceList(names: string[]): string {
-  const parts = names.map((n, i) => (i === 0 ? n.charAt(0).toUpperCase() + n.slice(1) : n.toLowerCase()));
+  const parts = names.map((n, i) => (i === 0 ? n.charAt(0).toUpperCase() + n.slice(1) : n));
   return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
 }
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;

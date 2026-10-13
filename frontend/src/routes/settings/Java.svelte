@@ -23,6 +23,12 @@
   const manual = $derived(prefs.value?.java.autoPick === false);
   let menu = $state<{ x: number; y: number; j: JavaRuntime } | null>(null);
   let pick = $state<{ x: number; y: number } | null>(null);
+  // A menu row reads its runtime before the menu closes (closing drops `menu`).
+  function fromMenu(fn: (j: JavaRuntime) => Promise<unknown>) {
+    const j = menu?.j;
+    menu = null;
+    if (j) void fn(j);
+  }
   const at = (e: MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     return { x: r.right - 240, y: r.bottom + 4 };
@@ -78,10 +84,10 @@
 {#if menu}
   {@const j = menu.j}
   <Menu x={menu.x} y={menu.y} label="More for {j.name}" onclose={() => (menu = null)}>
-    <button class="mi" role="menuitem" onclick={() => { menu = null; api.java.showInFolder(j.id).catch((e) => session.fail('Show in folder', e)); }}><Icon name="folder" size={14} /><span>Show in folder</span><span></span></button>
-    {#if manual && !j.default}<button class="mi" role="menuitem" onclick={() => { menu = null; void act(() => api.java.setDefault(j.id)); }}><Icon name="check" size={14} /><span>Use for every instance</span><span></span></button>{/if}
-    {#if j.removable}<button class="mi" role="menuitem" onclick={() => { menu = null; void act(() => api.java.remove(j.id)); }}><Icon name="trash" size={14} /><span>Remove</span><span></span></button>
-    {:else if j.forgettable}<button class="mi" role="menuitem" onclick={() => { menu = null; void act(() => api.java.forget(j.id)); }}><Icon name="trash" size={14} /><span>Forget</span><span></span></button>{/if}
+    <button class="mi" role="menuitem" onclick={() => fromMenu((r) => api.java.showInFolder(r.id).catch((e) => session.fail('Show in folder', e)))}><Icon name="folder" size={14} /><span>Show in folder</span><span></span></button>
+    {#if manual && !j.default}<button class="mi" role="menuitem" onclick={() => fromMenu((r) => act(() => api.java.setDefault(r.id)))}><Icon name="check" size={14} /><span>Use for every instance</span><span></span></button>{/if}
+    {#if j.removable}<button class="mi" role="menuitem" onclick={() => fromMenu((r) => act(() => api.java.remove(r.id)))}><Icon name="trash" size={14} /><span>Remove</span><span></span></button>
+    {:else if j.forgettable}<button class="mi" role="menuitem" onclick={() => fromMenu((r) => act(() => api.java.forget(r.id)))}><Icon name="trash" size={14} /><span>Forget</span><span></span></button>{/if}
   </Menu>
 {/if}
 {#if pick}

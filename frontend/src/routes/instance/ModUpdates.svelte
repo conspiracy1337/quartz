@@ -117,7 +117,7 @@
           <Check on={!!picked[u.id] && !u.blocked} label="Update {u.name}" onchange={(v) => (picked[u.id] = v)} />
           <Tile art={u.art} />
           <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{u.name}</span><span class="trunc small faint" style="display: block">{u.note}</span></span>
-          <span class="mono muted opt" style="display: flex; gap: 8px; align-items: center"><span>{u.from}</span><Icon name="arrow-right" size={12} sw={2} /><span style="color: var(--text)">{u.to}</span></span>
+          <span class="mono muted opt" style="gap: 8px; align-items: center"><span>{u.from}</span><Icon name="arrow-right" size={12} sw={2} /><span style="color: var(--text)">{u.to}</span></span>
           <span style="display: flex; justify-content: flex-end"><button class="btn btn-sm" onclick={() => show(k)}>Changelog</button></span>
         </div>
       {:else}
@@ -146,5 +146,6 @@
 
 <style>
   .ur{grid-template-columns:16px 32px minmax(0,1fr) 200px 96px;height:56px}
+  .ur > .opt:not(.sk){display:flex}
   @media (max-width:1100px){.ur{grid-template-columns:16px 32px minmax(0,1fr) 96px}.ur .opt{display:none}}
 </style>

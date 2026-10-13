@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ago, agoShort, bytes, day, errorText, hm, hmLoose, hours, left, rate, since } from './format';
+import { ago, agoShort, bytes, day, errorText, hm, hmLoose, hours, left, rate, sentenceList, since } from './format';
 
 const now = new Date('2026-10-11T12:00:00').getTime(); // a Sunday
 const daysBack = (d: number) => now - d * 86_400_000;
@@ -55,5 +55,13 @@ describe('errorText', () => {
   it('drops Go package prefixes', () => {
     expect(errorText(new Error('skins: not a Minecraft skin'))).toBe('Not a Minecraft skin');
     expect(errorText('accounts: sign in again: msa: expired')).toBe('Sign in again: msa: expired');
+  });
+});
+
+describe('sentenceList', () => {
+  it('joins names as a sentence', () => {
+    expect(sentenceList([])).toBe('');
+    expect(sentenceList(['keybinds'])).toBe('Keybinds');
+    expect(sentenceList(['keybinds', 'server list', "Xaero's Minimap"])).toBe("Keybinds, server list and Xaero's Minimap");
   });
 });

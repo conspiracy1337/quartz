@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '$lib/api';
-  import type { ActivityKind, Instance } from '$lib/api/types';
+  import type { ActivityKind, Instance, SyncEntry } from '$lib/api/types';
   import { Day, fullDate, sentenceList } from '$lib/format';
   import { loaderLabel } from '$lib/labels';
   import { query } from '$lib/query.svelte';
@@ -36,10 +36,12 @@
   const sync = query(() => api.sync.groups());
   const syncText = $derived.by(() => {
     const g = sync.data;
-    const all = g ? [...g.files, ...g.folders, ...g.mods, ...g.custom] : [];
-    const names = all.filter((t) => t.enabled && i.sync.join.includes(t.id)).map((t) => t.name);
-    if (i.sync.keys) names.unshift('Keybinds');
-    return names.length ? `${sentenceList(names)}.` : g ? 'Nothing shared.' : '';
+    if (!g) return '';
+    // Built-in targets read as words ("server list"); mod names and custom paths keep their case.
+    const joined = (l: SyncEntry[], lower: boolean) => l.filter((t) => t.enabled && i.sync.join.includes(t.id)).map((t) => (lower ? t.name.toLowerCase() : t.name));
+    const names = [...joined(g.files, true), ...joined(g.folders, true), ...joined(g.mods, false), ...joined(g.custom, false)];
+    if (i.sync.keys) names.unshift('keybinds');
+    return names.length ? `${sentenceList(names)}.` : 'Nothing shared.';
   });
 </script>
 

@@ -23,7 +23,7 @@
     { value: 'csv', label: 'CSV' },
   ] as const;
   const PARTS: { key: keyof ExportInclude; label: string }[] = [
-    { key: 'options', label: 'Game options and keybinds' },
+    { key: 'options', label: 'Options and keybinds' },
     { key: 'servers', label: 'Server list' },
     { key: 'config', label: 'Mod settings' },
     { key: 'worlds', label: 'Worlds' },

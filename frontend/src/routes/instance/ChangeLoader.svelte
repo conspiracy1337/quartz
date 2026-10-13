@@ -27,7 +27,7 @@
   const sel = $derived(list[vi]);
   const selId = $derived(sel?.id ?? '');
   const isCurrent = $derived(i.loader ? opt?.kind === i.loader.kind && selId === i.loader.id : opt?.kind === 'none');
-  const action = $derived(isCurrent ? 'Already installed' : list.length ? `Install ${opt?.name} ${sel?.name}` : 'Remove loader');
+  const action = $derived(!loaders.data ? 'Install' : isCurrent ? 'Already installed' : list.length ? `Install ${opt?.name} ${sel?.name}` : 'Remove loader');
   let busy = $state(false);
   // Moving to another loader: how many mods have a build for it (same wording as Change Minecraft).
   const other = $derived(list.length > 0 && !!i.loader && opt?.kind !== i.loader.kind ? opt?.kind : undefined);
@@ -57,7 +57,7 @@
         </div>
       </section>
       <section aria-label="Loader version">
-        <div class="plabel"><span>{opt?.name ?? ''} versions</span><span class="tnum">{list.length}</span></div>
+        <div class="plabel"><span>{opt ? `${opt.name} versions` : ''}</span><span class="tnum">{loaders.data ? list.length : ''}</span></div>
         {#if !loaders.data}
           <div class="list" aria-hidden="true">{#each { length: 6 } as _, k (k)}<div class="prow min"><span class="sk" style="width: 14px; height: 14px; border-radius: 50%"></span><span class="sk" style="height: 12px; width: {[34, 28, 40, 30, 36, 26][k]}%"></span><span></span></div>{/each}</div>
         {:else if list.length}
@@ -74,7 +74,7 @@
   </div>
 </div>
 <div class="pfoot">
-  <span class="muted">{i.loader ? loaderLabel(i.loader) : 'No loader'}</span><Icon name="arrow-right" size={12} sw={2} /><span>{list.length ? `${opt?.name} ${sel?.name}` : 'No loader'}</span>
+  <span class="muted">{i.loader ? loaderLabel(i.loader) : 'No loader'}</span><Icon name="arrow-right" size={12} sw={2} /><span>{!loaders.data ? '' : list.length ? `${opt?.name} ${sel?.name}` : 'No loader'}</span>
   {#if compat}<span class="small faint" style="margin-left: 8px">{compat}</span>{/if}
   <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={isCurrent || busy || !loaders.data} onclick={apply}>{action}</button></span>
 </div>
