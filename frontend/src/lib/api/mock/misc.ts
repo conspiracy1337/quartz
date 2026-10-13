@@ -61,14 +61,28 @@ export const mockSync = {
   },
 };
 
+const rt = (id: string, major: number, name: string, source: JavaRuntime['source'], path: string, usedBy: number): JavaRuntime =>
+  ({ id, major, name, source, path, usedBy, removable: source === 'Managed', forgettable: source === 'Found', default: false });
 export const runtimes: JavaRuntime[] = [
-  { major: 21, name: 'Temurin 21.0.5', source: 'Managed', path: 'java/temurin-21.0.5', usedBy: 9 },
-  { major: 17, name: 'Temurin 17.0.13', source: 'Managed', path: 'java/temurin-17.0.13', usedBy: 3 },
-  { major: 8, name: 'Temurin 8u432', source: 'Managed', path: 'java/temurin-8u432', usedBy: 1 },
-  { major: 21, name: 'OpenJDK 21.0.4', source: 'System', path: '/usr/lib/jvm/java-21-openjdk', usedBy: 0 },
-  { major: 23, name: 'GraalVM 23.0.1', source: 'SDKMAN', path: '~/.sdkman/candidates/java/23.0.1-graal', usedBy: 0 },
-  { major: 17, name: 'Zulu 17.0.12 (x86)', source: 'Found', path: '~/.jdks/zulu-17', usedBy: 0 },
+  rt('a1', 21, 'Temurin 21.0.5', 'Managed', 'java/temurin-21.0.5', 9),
+  rt('a2', 17, 'Temurin 17.0.13', 'Managed', 'java/temurin-17.0.13', 3),
+  rt('a3', 8, 'Temurin 8u432', 'Managed', 'java/temurin-8u432', 1),
+  rt('a4', 21, 'OpenJDK 21.0.4', 'System', '/usr/lib/jvm/java-21-openjdk', 0),
+  rt('a5', 23, 'GraalVM 23.0.1', 'SDKMAN', '~/.sdkman/candidates/java/23.0.1-graal', 0),
+  rt('a6', 17, 'Zulu 17.0.12 (x86)', 'Found', '~/.jdks/zulu-17', 0),
 ];
+/** The preview's runtime actions edit the list above. */
+export const mockJava = {
+  without: (id: string) => {
+    const i = runtimes.findIndex((r) => r.id === id);
+    if (i >= 0) runtimes.splice(i, 1);
+    return [...runtimes];
+  },
+  setDefault: (id: string) => {
+    for (const r of runtimes) r.default = r.id === id;
+    return [...runtimes];
+  },
+};
 
 const V = (id: string, d: number, items: string[]) => ({ id, date: d, items });
 export const modUpdates: ModUpdate[] = [

@@ -6,8 +6,20 @@ export function AddFromFolder() {
   return window['go']['api']['Java']['AddFromFolder']();
 }
 
-export function Download() {
-  return window['go']['api']['Java']['Download']();
+export function Download(arg1) {
+  return window['go']['api']['Java']['Download'](arg1);
+}
+
+export function Forget(arg1) {
+  return window['go']['api']['Java']['Forget'](arg1);
+}
+
+export function Majors() {
+  return window['go']['api']['Java']['Majors']();
+}
+
+export function Remove(arg1) {
+  return window['go']['api']['Java']['Remove'](arg1);
 }
 
 export function Runtimes() {
@@ -16,4 +28,12 @@ export function Runtimes() {
 
 export function Scan() {
   return window['go']['api']['Java']['Scan']();
+}
+
+export function SetDefault(arg1) {
+  return window['go']['api']['Java']['SetDefault'](arg1);
+}
+
+export function ShowInFolder(arg1) {
+  return window['go']['api']['Java']['ShowInFolder'](arg1);
 }

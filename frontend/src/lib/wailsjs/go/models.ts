@@ -390,11 +390,15 @@ export namespace api {
 	    }
 	}
 	export class JavaRuntime {
+	    id: string;
 	    major: number;
 	    name: string;
 	    source: string;
 	    path: string;
 	    usedBy: number;
+	    removable: boolean;
+	    forgettable: boolean;
+	    default: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new JavaRuntime(source);
@@ -402,11 +406,15 @@ export namespace api {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
 	        this.major = source["major"];
 	        this.name = source["name"];
 	        this.source = source["source"];
 	        this.path = source["path"];
 	        this.usedBy = source["usedBy"];
+	        this.removable = source["removable"];
+	        this.forgettable = source["forgettable"];
+	        this.default = source["default"];
 	    }
 	}
 	export class LoaderVersion {
@@ -2699,6 +2707,7 @@ export namespace settings {
 	}
 	export class Java {
 	    autoPick: boolean;
+	    defaultPath: string;
 	    downloadVendor: string;
 	    memoryMinMb: number;
 	    memoryMaxMb: number;
@@ -2713,6 +2722,7 @@ export namespace settings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.autoPick = source["autoPick"];
+	        this.defaultPath = source["defaultPath"];
 	        this.downloadVendor = source["downloadVendor"];
 	        this.memoryMinMb = source["memoryMinMb"];
 	        this.memoryMaxMb = source["memoryMaxMb"];

@@ -120,6 +120,27 @@ func TestResolveLayersOverGlobals(t *testing.T) {
 	}
 }
 
+func TestResolveWithAutomaticJavaOff(t *testing.T) {
+	g := settings.Defaults()
+	g.Java.AutoPick = false
+	in := Instance{}
+	if e := in.Resolve(g); !e.JavaUnset || e.JavaPath != "" {
+		t.Fatalf("no default chosen must fail closed: %+v", e)
+	}
+	g.Java.DefaultPath = "/usr/lib/jvm/java-21/bin/java"
+	if e := in.Resolve(g); e.JavaUnset || e.JavaPath != g.Java.DefaultPath {
+		t.Fatalf("the default applies: %+v", e)
+	}
+	in.Settings.Java = JavaSettings{Override: true, JavaPath: "/opt/jdk/bin/java", MemoryMaxMB: 4096}
+	if e := in.Resolve(g); e.JavaPath != "/opt/jdk/bin/java" {
+		t.Fatalf("the instance's own choice wins: %+v", e)
+	}
+	g.Java.AutoPick = true
+	if e := (Instance{}).Resolve(g); e.JavaPath != "" || e.JavaUnset {
+		t.Fatalf("automatic picking ignores the default: %+v", e)
+	}
+}
+
 func TestCommandValidation(t *testing.T) {
 	s, _ := Open(t.TempDir(), nil)
 	in, _ := s.Create(CreateRequest{Name: "C", Minecraft: "1.21.1"}, JavaSettings{})

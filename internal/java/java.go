@@ -8,10 +8,13 @@ package java
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -372,13 +375,86 @@ func (m *Manager) Resolve(ctx context.Context, req Request) (Runtime, *Plan, err
 		rt, err := m.probeCached(ctx, req.Override)
 		return rt, nil, err
 	}
-	for _, rt := range m.Runtimes(ctx) {
-		if rt.Major == req.Major && (rt.Arch == m.arch || rt.Arch == "") {
-			return rt, nil, nil
-		}
+	if rt, ok := m.Pick(ctx, req.Major); ok {
+		return rt, nil, nil
 	}
 	p, err := m.Plan(ctx, req.Major, req.Component)
 	return Runtime{}, p, err
+}
+
+// Pick is the installed runtime automatic picking uses for a major: managed
+// first, then detected, of the host's architecture.
+func (m *Manager) Pick(ctx context.Context, major int) (Runtime, bool) {
+	for _, rt := range m.Runtimes(ctx) {
+		if rt.Major == major && (rt.Arch == m.arch || rt.Arch == "") {
+			return rt, true
+		}
+	}
+	return Runtime{}, false
+}
+
+// ID names a runtime in the UI without sending its path.
+func ID(path string) string {
+	sum := sha256.Sum256([]byte(path))
+	return hex.EncodeToString(sum[:6])
+}
+
+// Find returns the listed runtime with that id.
+func (m *Manager) Find(ctx context.Context, id string) (Runtime, bool) {
+	for _, rt := range m.Runtimes(ctx) {
+		if ID(rt.Path) == id {
+			return rt, true
+		}
+	}
+	return Runtime{}, false
+}
+
+// Added reports whether the user added path (Settings → Java, Add from folder).
+func (m *Manager) Added(path string) bool { return slices.Contains(m.state.Get().Extra, path) }
+
+// Majors are the Java versions that can be downloaded, newest first.
+func Majors() []int {
+	out := make([]int, 0, len(mojangComponents))
+	for major := range mojangComponents {
+		out = append(out, major)
+	}
+	slices.SortFunc(out, func(a, b int) int { return b - a })
+	return out
+}
+
+// ErrNotManaged refuses to delete a runtime the launcher didn't install.
+var ErrNotManaged = errors.New("java: only runtimes Quartz downloaded can be removed")
+
+// Remove deletes a runtime the launcher installed. Its marker goes first, so
+// an interrupted delete never leaves a half runtime that looks complete.
+func (m *Manager) Remove(rt Runtime) error {
+	if rt.Source != Managed {
+		return ErrNotManaged
+	}
+	rel, err := filepath.Rel(m.cfg.Dir, rt.Path)
+	if err != nil || !filepath.IsLocal(rel) {
+		return ErrNotManaged
+	}
+	top := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
+	dir, err := fsx.SafeJoin(m.cfg.Dir, top)
+	if err != nil || dir == filepath.Clean(m.cfg.Dir) {
+		return ErrNotManaged
+	}
+	if err := os.Remove(filepath.Join(dir, markerName)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return os.RemoveAll(dir)
+}
+
+// Forget drops a runtime the user added; the installation itself stays.
+func (m *Manager) Forget(path string) {
+	_, _ = m.state.Update(func(d *stateDoc) error {
+		d.Extra = slices.DeleteFunc(d.Extra, func(p string) bool { return p == path })
+		return nil
+	})
+	m.mu.Lock()
+	m.detected = slices.DeleteFunc(m.detected, func(r Runtime) bool { return r.Path == path })
+	m.mu.Unlock()
 }
 
 // managed lists runtimes the launcher installed (from their markers).

@@ -1,12 +1,21 @@
 package instance
 
-import "quartz/internal/settings"
+import (
+	"errors"
+
+	"quartz/internal/settings"
+)
+
+// ErrJavaNotChosen fails a launch when Java isn't picked automatically and
+// neither the instance nor Settings names one: nothing is downloaded silently.
+var ErrJavaNotChosen = errors.New("pick Java automatically is off. Choose a runtime in Settings, Java")
 
 // Effective is an instance's settings with the global ones filled in: the one
 // place that decides what a launch actually uses (Prism's override model, as
 // the instance settings page shows it).
 type Effective struct {
 	JavaPath    string // "" picks Java automatically
+	JavaUnset   bool   // automatic picking is off and no runtime is chosen
 	MemoryMinMB int
 	MemoryMaxMB int
 	JVMArgs     string
@@ -28,7 +37,7 @@ func (in Instance) Resolve(g settings.Settings) Effective {
 		MemoryMinMB: g.Java.MemoryMinMB, MemoryMaxMB: g.Java.MemoryMaxMB, JVMArgs: g.Java.JVMArgs,
 		OnGameStart: settings.Resolve(nonEmpty(in.Settings.Window.OnGameStart), g.General.OnGameStart),
 		Width:       in.Settings.Window.Width, Height: in.Settings.Window.Height, Fullscreen: in.Settings.Window.Fullscreen,
-		OpenInto:    in.Settings.Window.OpenInto,
+		OpenInto: in.Settings.Window.OpenInto,
 		Commands: in.Settings.Commands, Performance: in.Settings.Performance,
 	}
 	if j := in.Settings.Java; j.Override {
@@ -36,6 +45,10 @@ func (in Instance) Resolve(g settings.Settings) Effective {
 		if j.MemoryMaxMB > 0 {
 			e.MemoryMinMB, e.MemoryMaxMB = max(j.MemoryMinMB, minHeapMB), j.MemoryMaxMB
 		}
+	}
+	if e.JavaPath == "" && !g.Java.AutoPick {
+		e.JavaPath = g.Java.DefaultPath
+		e.JavaUnset = e.JavaPath == ""
 	}
 	e.MemoryMinMB = min(e.MemoryMinMB, e.MemoryMaxMB)
 	return e

@@ -190,7 +190,7 @@ func Run(o Options) error {
 			api.NewSettings(a.ctx, a.settings, a.css, a.network),
 			api.NewDownloads(a.tasks),
 			api.NewVersions(a.ctx, a.meta, a.loaders, a.installer),
-			api.NewJava(a.ctx, a.java, a.meta, a.tasks, a.settings),
+			api.NewJava(a.ctx, api.JavaDeps{Java: a.java, Meta: a.meta, Tasks: a.tasks, Settings: a.settings, Instances: a.instances, Busy: a.launcher.Busy}),
 			api.NewAccounts(a.ctx, a.accounts, a.skins, a.bus),
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,

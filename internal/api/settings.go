@@ -32,6 +32,7 @@ func (s *Settings) Get() settings.Settings { return s.store.Get() }
 // path can only be changed through PickCustomCSS, never set directly by the UI.
 func (s *Settings) Save(next settings.Settings) settings.Settings {
 	next.Appearance.CustomCSS.Path = s.store.Get().Appearance.CustomCSS.Path
+	next.Java.DefaultPath = s.store.Get().Java.DefaultPath // only Java.SetDefault changes it
 	return s.store.Replace(next)
 }
 

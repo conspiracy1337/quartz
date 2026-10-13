@@ -152,8 +152,14 @@ export const api = {
     runtimes: bridged(JavaGo.Runtimes, () => misc.runtimes),
     scan: bridged(JavaGo.Scan, () => misc.runtimes),
     addFromFolder: bridged(JavaGo.AddFromFolder, () => misc.runtimes),
-    /** Starts a download job for the Java the newest release needs; resolves with its id. */
-    download: bridged(JavaGo.Download, () => ''),
+    showInFolder: bridged(JavaGo.ShowInFolder, (_id: string) => undefined),
+    remove: bridged(JavaGo.Remove, misc.mockJava.without),
+    forget: bridged(JavaGo.Forget, misc.mockJava.without),
+    /** Makes a runtime every instance's Java while automatic picking is off. */
+    setDefault: bridged(JavaGo.SetDefault, misc.mockJava.setDefault),
+    majors: bridged(JavaGo.Majors, () => [25, 21, 17, 16, 8]),
+    /** Starts a download job for that Java version; resolves with its id. */
+    download: bridged(JavaGo.Download, (_major: number) => ''),
   },
   /** Other launchers on this computer and bringing their instances over (first-run setup). */
   launchers: {

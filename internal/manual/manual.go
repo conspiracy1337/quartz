@@ -71,7 +71,7 @@ type Item struct {
 
 // View is the dialog for one job.
 type View struct {
-	JobID  string `json:"jobId"`
+	JobID    string `json:"jobId"`
 	Folder   string `json:"folder"`   // the watched folder, with ~ for home
 	Watching bool   `json:"watching"` // off in Settings: files only come by drop
 	Items    []Item `json:"items"`

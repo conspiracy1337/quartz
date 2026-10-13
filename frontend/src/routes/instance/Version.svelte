@@ -3,6 +3,7 @@
   import type { Instance } from '$lib/api/types';
   import { fullDate } from '$lib/format';
   import { LOADER_PRODUCTS } from '$lib/labels';
+  import { prefs } from '$lib/prefs.svelte';
   import { query } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { href } from '$lib/router.svelte';
@@ -46,12 +47,15 @@
   const java = $derived.by(() => {
     const list = runtimes.data ?? [];
     const own = i.settings.java.override && i.settings.java.javaPath ? list.find((r) => r.path === i.settings.java.javaPath) : undefined;
-    const rt = own ?? list.find((r) => r.major === release?.java && r.source === 'Managed') ?? list.find((r) => r.major === release?.java);
-    if (!rt) return { title: release ? `Java ${release.java}` : 'Java', line: 'Downloads automatically the first time you play.' };
+    // With automatic picking off, Settings → Java names one runtime for every instance.
+    const manual = prefs.value?.java.autoPick === false;
+    const fixed = own ? undefined : manual ? list.find((r) => r.default) : undefined;
+    const rt = own ?? fixed ?? (manual ? undefined : list.find((r) => r.major === release?.java && r.source === 'Managed') ?? list.find((r) => r.major === release?.java));
+    if (!rt) return manual ? { title: 'Java', line: 'Not chosen. Pick one in Settings, Java.' } : { title: release ? `Java ${release.java}` : 'Java', line: 'Downloads automatically the first time you play.' };
     const parts = rt.name.split(' ');
     const version = parts.length > 1 ? parts.pop()! : rt.name;
     const vendor = parts.join(' ') || rt.name;
-    return { title: `Java ${version}`, line: `${VENDORS[vendor] ?? vendor}, ${own ? 'set in this instance' : 'chosen automatically'}.` };
+    return { title: `Java ${version}`, line: `${VENDORS[vendor] ?? vendor}, ${own ? 'set in this instance' : fixed ? 'set in Settings, Java' : 'chosen automatically'}.` };
   });
 
   async function edit(fn: () => Promise<unknown>, what: string) {

@@ -3,6 +3,7 @@
 package settings
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
@@ -85,6 +86,7 @@ type CustomCSS struct {
 
 type Java struct {
 	AutoPick       bool   `json:"autoPick"`
+	DefaultPath    string `json:"defaultPath"`    // with AutoPick off: the java every instance uses unless it overrides
 	DownloadVendor string `json:"downloadVendor"` // temurin | zulu | mojang
 	MemoryMinMB    int    `json:"memoryMinMb"`
 	MemoryMaxMB    int    `json:"memoryMaxMb"`
@@ -174,6 +176,9 @@ func (s Settings) Normalize() Settings {
 	j.MemoryMaxMB = clamp(j.MemoryMaxMB, minMemoryMB, maxMemoryMB, d.Java.MemoryMaxMB)
 	if j.MemoryMaxMB < j.MemoryMinMB {
 		j.MemoryMaxMB = j.MemoryMinMB
+	}
+	if j.DefaultPath != "" && (!filepath.IsAbs(j.DefaultPath) || len(j.DefaultPath) > maxPathLen) {
+		j.DefaultPath = ""
 	}
 	if len(j.JVMArgs) > maxJVMArgs {
 		j.JVMArgs = d.Java.JVMArgs

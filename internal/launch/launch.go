@@ -387,6 +387,9 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	}
 	// The game uses the instance's Java override if it has one; a loader's
 	// installer always runs with the Java its Minecraft version needs.
+	if p.eff.JavaUnset {
+		return StageJava, instance.ErrJavaNotChosen
+	}
 	own := java.Request{Major: res.Version.JavaMajor(), Component: res.Version.JavaComponent()}
 	req := own
 	req.Override = p.eff.JavaPath

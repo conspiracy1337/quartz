@@ -361,7 +361,11 @@ export interface KeyChoice { id: string; name: string; category: string; key: st
 export interface InstanceSync { join: string[]; keys: boolean }
 
 // ---- java ----
-export interface JavaRuntime { major: number; name: string; source: 'Managed' | 'System' | 'SDKMAN' | 'Found'; path: string; usedBy: number }
+export interface JavaRuntime {
+  id: string; major: number; name: string; source: 'Managed' | 'System' | 'SDKMAN' | 'Found'; path: string; usedBy: number;
+  /** Downloaded by Quartz (Remove), added from a folder (Forget), or every instance's Java while automatic picking is off. */
+  removable: boolean; forgettable: boolean; default: boolean;
+}
 
 // ---- review screens ----
 export interface ChangelogVersion { id: string; date: number; items: string[] }
