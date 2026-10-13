@@ -88,3 +88,6 @@ func cloneHandle(dst, src *os.File, size int64) error {
 	_ = windows.DeviceIoControl(dh, windows.FSCTL_SET_SPARSE, &sparse, 1, nil, 0, &n, nil)
 	return nil
 }
+
+// cloneDir: only APFS clones a folder in one call.
+func cloneDir(_, _ string) error { return ErrUnsupported }

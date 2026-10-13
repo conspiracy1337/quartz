@@ -10,6 +10,7 @@ import (
 
 	"quartz/internal/content/meta"
 	"quartz/internal/content/packwiz"
+	"quartz/internal/core/optfile"
 	"quartz/internal/instance"
 )
 
@@ -83,12 +84,12 @@ func (s *Service) view(id string) (view, error) {
 		}
 	}
 	v.known = s.cat.many(sha)
-	opts, _ := readLines(optionsPath(v.game), ":")
+	opts, _ := optfile.Read(optionsPath(v.game), ":")
 	v.packs = enabledPacks(opts)
 	if v.idx.Pending.Packs != nil {
 		v.packs = v.idx.Pending.Packs
 	}
-	props, _ := readLines(shaderConfig(v.game, s.oculus(v)), "=")
+	props, _ := optfile.Read(shaderConfig(v.game, s.oculus(v)), "=")
 	v.shader = activeShader(props)
 	if v.idx.Pending.Shader != nil {
 		v.shader = *v.idx.Pending.Shader

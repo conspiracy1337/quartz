@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,6 +96,11 @@ func ReadCapped(path string, limit int64) ([]byte, error) {
 func Inside(root, p string) bool {
 	return p == root || strings.HasPrefix(p, root+string(filepath.Separator))
 }
+
+// IsLink reports whether a mode is a link of any kind: a symlink, or on
+// Windows a junction or other reparse point (Go reports those as irregular).
+// Tree walkers must never descend through one.
+func IsLink(m fs.FileMode) bool { return m&(fs.ModeSymlink|fs.ModeIrregular) != 0 }
 
 // SymlinkInside reports whether the symlink at p really points inside root
 // (a resolved directory). Its parent folder is resolved physically, because it

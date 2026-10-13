@@ -31,7 +31,7 @@ const maxContentFile = 512 << 20
 
 // Errors from checks and updates.
 var (
-	ErrCheckExpired = errors.New("content: this update check is too old; check again")
+	ErrCheckExpired  = errors.New("content: this update check is too old; check again")
 	ErrNothingPicked = errors.New("content: pick at least one update")
 )
 

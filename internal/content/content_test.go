@@ -15,6 +15,7 @@ import (
 	"quartz/internal/content/packwiz"
 	"quartz/internal/content/store"
 	"quartz/internal/core/events"
+	"quartz/internal/core/optfile"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
 	"quartz/internal/modplatform"
@@ -392,13 +393,13 @@ func TestQuick(t *testing.T) {
 }
 
 func TestConfigEditsKeepOtherBytes(t *testing.T) {
-	l := lines{sep: "=", text: []string{"# comment", "a=1", "shaderPack=old"}, crlf: true, exist: true}
+	l := optfile.File{Sep: "=", Text: []string{"# comment", "a=1", "shaderPack=old"}, CRLF: true, Exist: true}
 	setShader(&l, "Ünï code.zip")
-	if got, _ := l.get("shaderPack"); got != "Ünï code.zip" {
+	if got, _ := l.Get("shaderPack"); got != "Ünï code.zip" {
 		t.Fatalf("%q", got)
 	}
-	if l.text[0] != "# comment" || l.text[1] != "a=1" || l.text[2] != "shaderPack=\\u00dcn\\u00ef code.zip" {
-		t.Fatalf("%q", l.text)
+	if l.Text[0] != "# comment" || l.Text[1] != "a=1" || l.Text[2] != "shaderPack=\\u00dcn\\u00ef code.zip" {
+		t.Fatalf("%q", l.Text)
 	}
 }
 

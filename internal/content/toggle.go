@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"quartz/internal/content/packwiz"
+	"quartz/internal/core/optfile"
 )
 
 // Errors the UI shows as they are.
@@ -172,12 +173,12 @@ func (s *Service) writePacks(id string, packs []string) error {
 			incompatible[base(e)] = true
 		}
 	}
-	l, err := readLines(optionsPath(v.game), ":")
+	l, err := optfile.Read(optionsPath(v.game), ":")
 	if err != nil {
 		return err
 	}
 	orderPacks(&l, packs, incompatible, v.formats.WorldVersion)
-	if err := l.write(optionsPath(v.game)); err != nil {
+	if err := l.Write(optionsPath(v.game)); err != nil {
 		return err
 	}
 	_, err = ix.Update(func(i *Index) error { i.Pending.Packs = nil; return nil })
@@ -210,12 +211,12 @@ func (s *Service) writeShader(id, name string) error {
 		return err
 	}
 	p := shaderConfig(v.game, s.oculus(v))
-	l, err := readLines(p, "=")
+	l, err := optfile.Read(p, "=")
 	if err != nil {
 		return err
 	}
 	setShader(&l, name)
-	if err := l.write(p); err != nil {
+	if err := l.Write(p); err != nil {
 		return err
 	}
 	_, err = ix.Update(func(i *Index) error { i.Pending.Shader = nil; return nil })
