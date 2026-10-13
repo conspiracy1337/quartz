@@ -3,6 +3,8 @@
 </script>
 
 <script lang="ts">
+  import { chords, keysOf } from '../shortcuts';
+  import { prefs } from '../prefs.svelte';
   import { api } from '../api';
   import { avatar } from '../look';
   import { revs } from '../revs.svelte';
@@ -37,7 +39,7 @@
   </div>
   <button class="side-link" style="border: 1px solid var(--line-2); background: var(--panel); color: var(--faint); text-align: left" onclick={() => session.open({ kind: 'palette', mode: 'commands' })}>
     <Icon name="search" size={14} sw={1.8} />
-    <span>Search</span><span class="kbd">Ctrl K</span>
+    <span>Search</span><span class="kbd">{keysOf(chords(prefs.value?.general.keys).palette).join(' ')}</span>
   </button>
   <nav class="side-nav" aria-label="Main">
     {#each nav as n (n.key)}

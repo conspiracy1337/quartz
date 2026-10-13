@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { ActivityKind, Instance } from '$lib/api/types';
-  import { Day, fullDate } from '$lib/format';
+  import { Day, fullDate, sentenceList } from '$lib/format';
   import { loaderLabel } from '$lib/labels';
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
@@ -32,6 +32,15 @@
   const events = $derived((activity.data ?? []).filter((e) => filter === 'all' || e.kind === filter));
   const gb = (mb: number) => Math.round(mb / 1024);
   const contentLine = $derived(`${i.counts.mods} mods, ${i.counts.resourcepacks} packs, ${i.counts.worlds} worlds`);
+  // What this instance shares, by the Syncing page's names (the shared keybinds first).
+  const sync = query(() => api.sync.groups());
+  const syncText = $derived.by(() => {
+    const g = sync.data;
+    const all = g ? [...g.files, ...g.folders, ...g.mods, ...g.custom] : [];
+    const names = all.filter((t) => t.enabled && i.sync.join.includes(t.id)).map((t) => t.name);
+    if (i.sync.keys) names.unshift('Keybinds');
+    return names.length ? `${sentenceList(names)}.` : g ? 'Nothing shared.' : '';
+  });
 </script>
 
 <div class="ov-wrap">
@@ -77,9 +86,9 @@
     <section class="card ov-card ov-fixed" aria-label="Protection and sync" style="grid-area: protect">
       <div class="card-head"><h2 class="h3">Protection and sync</h2></div>
       <div class="ov-body">
-        <Setting title="Sandbox" desc="Mods only reach this instance's folder." oneLine href={href({ name: 'instance', id: i.id, tab: 'settings', sub: 'sandbox' })}><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
+        <Setting title="Sandbox" desc={i.sandboxed ? "Mods only reach this instance's folder." : 'Off. Mods can reach your files.'} oneLine href={href({ name: 'instance', id: i.id, tab: 'settings', sub: 'sandbox' })}><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
         <div class="divider"></div>
-        <Setting title="Syncing" desc="Keybinds, servers and shaders." oneLine href={href({ name: 'syncing' })}><span class="badge">{i.syncTargets} targets</span></Setting>
+        <Setting title="Syncing" desc={syncText} oneLine href={href({ name: 'syncing' })}><span class="badge">{i.syncTargets} targets</span></Setting>
         <div class="divider"></div>
         <Setting title="Discord status" desc="Show this instance while you play." oneLine><Toggle on={i.discordStatus} label="Discord status" onchange={setDiscord} /></Setting>
       </div>

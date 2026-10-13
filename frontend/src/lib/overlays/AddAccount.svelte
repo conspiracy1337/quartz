@@ -114,7 +114,7 @@
         <div class="qr sk" aria-hidden="true"></div>
       {/if}
       <div style="display: flex; flex-direction: column; gap: 10px; min-width: 0">
-        <span class="small muted">Scan the code, or go to <a href="https://www.microsoft.com/link">microsoft.com/link</a> and enter:</span>
+        <span class="small muted">Scan the code, or go to <a href="https://www.microsoft.com/link" onclick={(e) => { e.preventDefault(); void api.app.openUrl('https://www.microsoft.com/link'); }}>microsoft.com/link</a> and enter:</span>
         {#if st.code}<span class="code">{shown}</span>{:else}<span class="code sk" aria-hidden="true">&nbsp;</span>{/if}
         <button class="btn btn-sm" style="align-self: flex-start" disabled={!st.code} onclick={copy}>Copy code</button>
         <span class="small faint tnum">{st.step ? `${st.step}…` : st.expiresAt ? `Expires in ${countdown(st.expiresAt, now)}` : '\u00a0'}</span>

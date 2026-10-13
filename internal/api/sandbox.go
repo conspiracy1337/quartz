@@ -85,6 +85,7 @@ func (a *Sandbox) view(in instance.Instance) SandboxView {
 		rules.Java:      a.javaPath(in),
 		rules.Synced:    a.syncedPaths(in.ID),
 		rules.Graphics:  sandbox.Desktop(),
+		rules.Home:      homeRow(goos),
 	}
 	if in.Location != "" {
 		paths[rules.Instance] = a.short(in.Location) + "/"
@@ -253,4 +254,12 @@ func (a *Sandbox) SetFolder(id, folder, level string) (SandboxView, error) {
 		}
 		return nil
 	})
+}
+
+// homeRow names the home folder the way this system writes it.
+func homeRow(goos string) string {
+	if goos == "windows" {
+		return `%USERPROFILE%\ and other instances`
+	}
+	return "~/ and other instances"
 }

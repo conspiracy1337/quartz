@@ -132,9 +132,10 @@
     </section>
     <section class="sec" aria-label="Sandbox">
       <div class="sec-h"><h2 class="h3">Sandbox</h2></div>
-      <Setting title="Run in a sandbox" desc="Mods can only reach this instance's folder. {capitalize(i.sandboxPreset || 'standard')} access rules." href={sub('sandbox')} class="card"><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
+      <Setting title="Run in a sandbox" desc={i.sandboxed ? `Mods can only reach this instance's folder. ${capitalize(i.sandboxPreset || 'standard')} access rules.` : 'Off. Mods can reach your files.'} href={sub('sandbox')} class="card"><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
     </section>
-    <section class="sec" aria-label="Performance">
+{#if info.data?.os === 'linux'}
+        <section class="sec" aria-label="Performance">
       <div class="sec-h"><h2 class="h3">Performance</h2><span class="small faint">Linux</span></div>
       <div class="card">
         <Setting title="Use the dedicated GPU" desc={i.gpu || 'This PC has one GPU.'}><Toggle on={st.performance.dedicatedGpu} label="Use the dedicated GPU" onchange={(v) => change(() => (st.performance.dedicatedGpu = v))} /></Setting>
@@ -144,6 +145,7 @@
         <Setting title="MangoHud overlay" desc="Shows FPS, frame times and temperatures."><Toggle on={st.performance.mangoHud} label="MangoHud overlay" onchange={(v) => change(() => (st.performance.mangoHud = v))} /></Setting>
       </div>
     </section>
+    {/if}
     <section class="sec" aria-label="About this instance">
       <div class="sec-h"><h2 class="h3">About this instance</h2></div>
       <div class="card">
