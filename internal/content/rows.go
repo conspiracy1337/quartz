@@ -28,6 +28,8 @@ type Row struct {
 	Status  *Status `json:"status,omitempty"`
 	// Project is the item's page on its platform, when identified.
 	Project string `json:"project,omitempty"`
+	// Ref names the project for the launcher's own project page.
+	Ref string `json:"ref,omitempty"`
 }
 
 // Status is the one badge a row shows, most important first.
@@ -164,6 +166,7 @@ func (s *Service) row(v *view, id string, e Entry, problems map[string]Problem) 
 	switch {
 	case ident != nil:
 		r.Source, r.Version, r.Project = ident.Source, orElse(ident.Version, r.Version), projectURL(e.Kind, ident)
+		r.Ref = k.Ref().String()
 	case hasPW && pw.Modrinth != nil:
 		r.Source, r.Version = "modrinth", orElse(pw.VersionNumber, r.Version)
 	case hasPW && pw.CurseForge != nil:

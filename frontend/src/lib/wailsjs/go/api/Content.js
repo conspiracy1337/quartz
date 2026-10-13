@@ -10,6 +10,10 @@ export function AddDropped(arg1, arg2, arg3, arg4) {
   return window['go']['api']['Content']['AddDropped'](arg1, arg2, arg3, arg4);
 }
 
+export function ApplyInstall(arg1, arg2) {
+  return window['go']['api']['Content']['ApplyInstall'](arg1, arg2);
+}
+
 export function ApplyUpdates(arg1, arg2) {
   return window['go']['api']['Content']['ApplyUpdates'](arg1, arg2);
 }
@@ -44,6 +48,10 @@ export function Missing() {
 
 export function Pending(arg1) {
   return window['go']['api']['Content']['Pending'](arg1);
+}
+
+export function PlanInstall(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['api']['Content']['PlanInstall'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function Remove(arg1, arg2, arg3) {

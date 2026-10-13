@@ -14,13 +14,18 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export type SetupStep = 1 | 2 | 4;
 
+/** Browse's tabs (Go's project types). */
+export const PROJECT_KINDS = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'] as const;
+type Kind = (typeof PROJECT_KINDS)[number];
+const SOURCES = ['modrinth', 'curseforge'] as const;
+
 export type Route =
   | { name: 'home' }
   | { name: 'library' }
   | { name: 'new-instance' }
-  | { name: 'import' }
-  | { name: 'browse' }
-  | { name: 'project'; id: string }
+  | { name: 'import'; ref?: string; source?: (typeof SOURCES)[number] }
+  | { name: 'browse'; type?: Kind; instance?: string }
+  | { name: 'project'; id: string; tab?: 'versions' }
   | { name: 'skins' }
   | { name: 'accounts' }
   | { name: 'syncing' }
@@ -35,8 +40,9 @@ const simple = ['home', 'library', 'browse', 'skins', 'accounts', 'syncing', 'do
 export function path(r: Route): string {
   switch (r.name) {
     case 'new-instance': return '/library/new';
-    case 'import': return '/library/import';
-    case 'project': return `/browse/${enc(r.id)}`;
+    case 'import': return '/library/import' + (r.ref && r.source ? `/${enc(r.ref)}/${r.source}` : '');
+    case 'browse': return '/browse' + (r.type ? `/t/${r.type}${r.instance ? '/' + enc(r.instance) : ''}` : '');
+    case 'project': return `/browse/${enc(r.id)}${r.tab ? '/' + r.tab : ''}`;
     case 'settings': return `/settings/${r.tab}`;
     case 'settings-search': return `/settings/search/${enc(r.query)}`;
     case 'instance': return `/instance/${enc(r.id)}/${r.tab}${r.sub ? '/' + enc(r.sub) : ''}`;
@@ -66,10 +72,11 @@ export function parse(p: string): Route {
   switch (a) {
     case 'library':
       if (b === 'new') return { name: 'new-instance' };
-      if (b === 'import') return { name: 'import' };
+      if (b === 'import') return c && isOneOf(SOURCES, d) ? { name: 'import', ref: dec(c), source: d } : { name: 'import' };
       break;
     case 'browse':
-      if (b) return { name: 'project', id: dec(b) };
+      if (b === 't' && isOneOf(PROJECT_KINDS, c)) return { name: 'browse', type: c, ...(d ? { instance: dec(d) } : {}) };
+      if (b) return { name: 'project', id: dec(b), ...(c === 'versions' ? { tab: 'versions' as const } : {}) };
       break;
     case 'settings':
       if (b === 'search') return { name: 'settings-search', query: dec(c ?? '') };

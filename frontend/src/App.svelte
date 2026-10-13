@@ -81,9 +81,9 @@
   {#if r.name === 'home'}<Home />
   {:else if r.name === 'library'}<Library />
   {:else if r.name === 'new-instance'}<NewInstance />
-  {:else if r.name === 'import'}<Import />
-  {:else if r.name === 'browse'}<Browse />
-  {:else if r.name === 'project'}<Project id={r.id} />
+  {:else if r.name === 'import'}{#key r.ref}<Import ref={r.ref} source={r.source} />{/key}
+  {:else if r.name === 'browse'}{#key `${r.type}/${r.instance}`}<Browse type={r.type} instance={r.instance} />{/key}
+  {:else if r.name === 'project'}{#key r.id}<Project id={r.id} tab={r.tab} />{/key}
   {:else if r.name === 'skins'}<Skins />
   {:else if r.name === 'accounts'}<Accounts />
   {:else if r.name === 'syncing'}<Syncing />
@@ -121,9 +121,9 @@
   {#if session.launchAs}{#key session.launchAs}<InstanceMenu {...session.launchAs} />{/key}{/if}
 
   {#if overlay?.kind === 'add-account'}<AddAccount mode={overlay.mode} accountId={overlay.accountId} />
-  {:else if overlay?.kind === 'install'}<Install projectId={overlay.projectId} />
+  {:else if overlay?.kind === 'install'}{#key overlay}<Install {...overlay} />{/key}
   {:else if overlay?.kind === 'crash'}<Crash instanceId={overlay.instanceId} />
-  {:else if overlay?.kind === 'blocked'}<Blocked />
+  {:else if overlay?.kind === 'blocked'}<Blocked jobId={overlay.jobId} />
   {:else if overlay?.kind === 'host'}<Host instanceId={overlay.instanceId} />
   {:else if overlay?.kind === 'palette'}{#key overlay.mode}<Palette mode={overlay.mode} />{/key}
   {:else if overlay?.kind === 'shortcuts'}<Shortcuts />

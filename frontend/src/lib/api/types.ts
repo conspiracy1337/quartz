@@ -106,6 +106,8 @@ export interface ContentItem {
   locked?: boolean;
   /** Its page on Modrinth or CurseForge, when identified. */
   project?: string;
+  /** Its reference for the launcher's own project page (identified items). */
+  ref?: string;
 }
 
 /** What a content tab shows besides its rows. */
@@ -209,21 +211,75 @@ export interface SignInEvent {
   error?: SignInProblem;
 }
 
-// ---- browse ----
+// ---- browse (mirrors Go's browse, content.InstallPlan and modpack) ----
 export type ProjectType = 'Mods' | 'Modpacks' | 'Resource packs' | 'Shaders' | 'Data packs';
+/** Go's project types, in Browse's tab order. */
+export type ProjectKind = 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datapack';
+export type Src = 'modrinth' | 'curseforge';
 export interface SourceStats { downloads: number; updated: number }
+/** One merged search result; `id` stays the same when a twin from the other platform merges in. */
 export interface ProjectHit {
   id: string;
+  ref: string;
   name: string;
   author: string;
-  description: string;
-  art: Art;
+  summary: string;
+  icon?: string;
+  /** The preview's painted tile (real rows draw their icon). */
+  art?: Art;
   modrinth?: SourceStats;
   curseforge?: SourceStats;
 }
-/** A block of project description text. Inline `code` is marked with backticks. */
-export type DocBlock = { type: 'p' | 'h2'; text: string } | { type: 'ul'; items: string[] };
-export interface ProjectVersion { id: string; channel: 'Release' | 'Beta' | 'Alpha'; minecraft: string; published: number; bytes: number; notes: string[] }
+export type BrowseSort = 'relevance' | 'downloads' | 'updated';
+export interface BrowseQuery {
+  type: ProjectKind; text: string; sort: BrowseSort; instance: string;
+  version: boolean; loader: boolean; categories: string[];
+  hideAi: boolean; hideAds: boolean; hideInstalled: boolean;
+}
+/** A page of results: rows to append and rows already shown that changed. */
+export interface BrowseResults { searchId: string; rows: ProjectHit[]; changed: ProjectHit[]; more: boolean }
+/** A run of description text: plain, code, or a link. */
+export interface Span { text: string; code?: boolean; href?: string }
+/** A block of project description text. Never raw HTML. */
+export type DocBlock = { type: 'p' | 'h2'; spans: Span[] } | { type: 'ul'; items: Span[][] } | { type: 'img'; src: string; alt?: string };
+/** A gallery picture: a same-origin picture, or (in the preview) a painted stand-in. */
+export interface GalleryItem { src?: string; art?: string; title: string }
+export interface ProjectLink { icon: string; label: string; url: string }
+/** A project as one platform shows it. */
+export interface ProjectSide {
+  name: string; author: string; summary: string; icon?: string; art?: Art;
+  downloads: number; updated: number; url: string; versions: number;
+  badges: string[]; body: DocBlock[]; gallery: GalleryItem[]; links: ProjectLink[];
+  blocked?: boolean;
+}
+export interface InstalledVersion { item: string; source: Src; versionId: string; version: string; published: number }
+export interface ProjectPage {
+  ref: string; type: ProjectKind; name: string;
+  modrinth?: ProjectSide; curseforge?: ProjectSide;
+  fresher: Src;
+  installed?: InstalledVersion;
+}
+export interface ProjectVersion {
+  id: string; number: string; channel: 'Release' | 'Beta' | 'Alpha'; minecraft: string; published: number; bytes: number;
+  /** What the row's button does for the target; "" for the installed version. */
+  action: '' | 'Install' | 'Update' | 'Switch';
+}
+export interface VersionNotes { id: string; number: string; published: number; items: string[] }
+export interface InstallDep { id: string; name: string; summary?: string; icon?: string; art?: Art; required: boolean; installed: boolean; size: number; blocked?: boolean }
+export interface InstallPlan {
+  planId: string; name: string; kind: ContentKind; version: string; size: number;
+  replaces?: string; blocked?: boolean; deps: InstallDep[]; mods: number;
+}
+export interface PackStats { mods: number; modBytes: number; files: number; folders: string[]; blocked: number; foreign: string[] }
+/** The Import screen's Detected card. */
+export interface ImportPreview {
+  token: string; name: string; version: string; minecraft: string; loader: string; source: string;
+  icon?: string; art?: Art; stats: PackStats; warnings: string[];
+}
+export interface PackUpdate { instanceId: string; name: string; version: string }
+export interface ManualItem { id: string; name: string; fileName: string; size: number; state: 'waiting' | 'fetching' | 'found' | 'skipped'; twin: boolean; page?: string; art?: Art }
+/** The blocked-downloads dialog of one job. */
+export interface ManualView { jobId: string; folder: string; items: ManualItem[]; done: boolean }
 
 // ---- downloads (mirrors Go's tasks.JobView and tasks.Snapshot) ----
 export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled';
@@ -269,11 +325,14 @@ export interface ModUpdate {
   dependency?: boolean;
   /** Its version list on its platform's site. */
   versionsUrl?: string;
+  /** Its reference for the launcher's own project page. */
+  ref?: string;
 }
 /** An update check: what to update, what was skipped because it is locked. */
 export interface UpdateReview { checkId: string; updates: ModUpdate[]; locked: { id: string; name: string; version: string }[]; failed: string[] }
 export type DiffKind = 'Added' | 'Updated' | 'Removed';
 export interface ModpackDiffRow { name: string; version: string; kind: DiffKind }
+export interface ModpackDiff { from: string; to: string; summary: string; keptEdits: string[]; rows: ModpackDiffRow[]; game?: string }
 
 // ---- importing ----
 export interface OtherLauncher { name: string; art: Art; summary: string; instances: number }

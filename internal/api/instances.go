@@ -115,6 +115,9 @@ func (s *Instances) summary(in instance.Instance) InstanceSummary {
 		v.Loader = &LoaderRef{Kind: in.Loader, Version: loader.Display(k, in.Minecraft, in.LoaderVersion), ID: in.LoaderVersion}
 		v.Kind = "modded"
 	}
+	if in.Pack != nil {
+		v.Kind = "modpack"
+	}
 	if in.LastPlayed != nil {
 		v.LastPlayed = in.LastPlayed.UnixMilli()
 	}

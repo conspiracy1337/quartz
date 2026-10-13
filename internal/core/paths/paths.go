@@ -139,6 +139,9 @@ func (p Paths) Textures() string { return filepath.Join(p.Cache(), "textures") }
 // ContentIcons caches icons read from mods and packs.
 func (p Paths) ContentIcons() string { return filepath.Join(p.Cache(), "content-icons") }
 
+// RemoteImages caches project pictures from the platform CDNs.
+func (p Paths) RemoteImages() string { return filepath.Join(p.Cache(), "remote-img") }
+
 // Content is the content-addressed, read-only store of mods and packs.
 func (p Paths) Content() string { return filepath.Join(p.Store(), "content") }
 

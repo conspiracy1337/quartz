@@ -3,6 +3,7 @@
 // parts (launch steps, server start) are simulated; M2 and M9 drive them from Go.
 
 import { api } from './api';
+import type { ContentKind, Src } from './api/types';
 import { errorText } from './format';
 import { hasBridge, onEvent } from './bridge';
 import { revs } from './revs.svelte';
@@ -10,9 +11,9 @@ import { go } from './router.svelte';
 
 export type Overlay =
   | { kind: 'add-account'; mode?: AddAccountMode; accountId?: string }
-  | { kind: 'install'; projectId: string }
+  | { kind: 'install'; ref: string; source: Src; instanceId: string; content: ContentKind; version?: string }
   | { kind: 'crash'; instanceId: string }
-  | { kind: 'blocked' }
+  | { kind: 'blocked'; jobId: string }
   | { kind: 'host'; instanceId: string }
   | { kind: 'palette'; mode: 'commands' | 'instances' }
   | { kind: 'shortcuts' }
@@ -50,6 +51,10 @@ class Session {
   toast = $state<Toast | null>(null);
   /** The right-click "Play as" menu of an instance, at a window position. */
   launchAs = $state<{ instanceId: string; x: number; y: number } | null>(null);
+  /** The instance Browse and project pages install into, once picked (else the most recent). */
+  browseTarget = $state<string | null>(null);
+  /** Browse's "Hide projects with" choices, kept while the launcher runs. */
+  browseHide = $state({ ai: true, ads: false, installed: true });
   /** Self-update arrives in M11; until then only the preview shows the design's banner. */
   updateReady = $state(!hasBridge());
 

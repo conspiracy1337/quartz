@@ -89,7 +89,7 @@
 
 <div class="scroll">
   <div style="max-width: 760px; margin: 0 auto; padding: 28px 24px 32px; display: flex; flex-direction: column; gap: 18px">
-    <div style="display: flex; align-items: center; gap: 8px"><h1 class="h1" style="margin-right: auto">New instance</h1><a href={href({ name: 'import' })} class="btn"><Icon name="upload" size={14} sw={1.8} />Import file</a><a href={href({ name: 'browse' })} class="btn">Modpack</a></div>
+    <div style="display: flex; align-items: center; gap: 8px"><h1 class="h1" style="margin-right: auto">New instance</h1><a href={href({ name: 'import' })} class="btn"><Icon name="upload" size={14} sw={1.8} />Import file</a><a href={href({ name: 'browse', type: 'modpack' })} class="btn">Modpack</a></div>
     <div style="display: grid; grid-template-columns: 56px minmax(0,1fr); gap: 14px; align-items: center">
       <button class="ico" style="width: 56px; height: 56px; border-radius: 12px; background: {art.background}; border: 0; font-size: 22px" aria-label="Change icon" onclick={() => (picking = true)}><InstanceMark art={{ background: art.background, initial }} {icon} /></button>
       <label class="field"><span class="sr">Name</span><input class="name" value={name} oninput={(e) => (typed = e.currentTarget.value)} maxlength="64" /></label>

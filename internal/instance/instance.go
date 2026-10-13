@@ -107,6 +107,17 @@ type Instance struct {
 	LastPlayed   *time.Time `json:"lastPlayed,omitempty"`
 	PlaytimeMin  int        `json:"playtimeMin"`
 	Settings     Settings   `json:"settings"`
+	// Pack is the modpack the instance was installed from (nil for none).
+	Pack *PackRef `json:"pack,omitempty"`
+}
+
+// PackRef names an instance's modpack and its installed version.
+type PackRef struct {
+	Source      string `json:"source"` // modrinth | curseforge | ftb | technic | file
+	Project     string `json:"project,omitempty"`
+	Version     string `json:"version,omitempty"` // the platform's version id
+	Name        string `json:"name"`
+	VersionName string `json:"versionName,omitempty"` // "1.4.0"
 }
 
 // schema is the instance.json version this build writes. Version 1 files

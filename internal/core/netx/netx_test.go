@@ -288,3 +288,17 @@ func TestRateLimitResetHeader(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestJSONBodyCapFromContext(t *testing.T) {
+	big := `["` + strings.Repeat("x", maxJSONBody) + `"]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, big) }))
+	defer srv.Close()
+	c := newClient(t, Options{})
+	var out []string
+	if err := c.JSON(context.Background(), http.MethodGet, srv.URL, nil, nil, &out); err == nil {
+		t.Fatal("a body over the default cap was decoded")
+	}
+	if err := c.JSON(WithBodyCap(context.Background(), 2*maxJSONBody), http.MethodGet, srv.URL, nil, nil, &out); err != nil || len(out) != 1 {
+		t.Fatalf("raised cap: %v", err)
+	}
+}

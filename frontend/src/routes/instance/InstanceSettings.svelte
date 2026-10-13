@@ -4,6 +4,7 @@
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import { move, repair, trash } from '$lib/instanceActions';
+  import { suggestMemoryGb } from '$lib/look';
   import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { revs } from '$lib/revs.svelte';
@@ -31,9 +32,7 @@
   const runtimes = query(() => api.java.runtimes());
   const groups = query(() => api.instances.groups());
   const javaOptions = $derived([{ value: '', label: `Automatic (${i.javaAuto})` }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
-  // "6 GB suits 48 mods": about 2 GB plus 85 MB a mod, never more than half the PC's memory.
-  const suggestGb = $derived(i.counts.mods > 0 && prefs.value?.java.suggestMemory && info.data?.memoryMb
-    ? Math.min(Math.max(2, Math.round((2048 + i.counts.mods * 85) / 1024)), Math.floor(info.data.memoryMb / 2048)) : 0);
+  const suggestGb = $derived(prefs.value?.java.suggestMemory ? suggestMemoryGb(i.counts.mods, info.data?.memoryMb ?? 0) : 0);
   const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${Math.round(info.data.memoryMb / 1024)} GB.${suggestGb ? ` ${suggestGb} GB suits ${i.counts.mods} mods.` : ''}` : undefined);
   const groupOptions = $derived([{ value: '', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
   let naming = $state(false);

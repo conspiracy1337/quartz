@@ -1,7 +1,7 @@
 // Mods, resource packs, shaders and data packs: Go's content service. The browser
 // preview serves the design's fixtures and keeps its edits in memory.
 import { bridged, hasBridge, preview } from '../bridge';
-import { tintOf } from '../look';
+import { artOf } from '../look';
 import { revs } from '../revs.svelte';
 import * as Go from '../wailsjs/go/api/Content';
 import { content as fixtures } from './mock/content';
@@ -19,11 +19,7 @@ export const managed = (k: ContentKind): k is ManagedKind => k !== 'worlds' && k
 const ICON = /^[0-9a-f]{64}$/;
 
 /** An item's picture: its own icon (served by Go, named by its hash), else a tint and an initial. */
-export function contentArt(name: string, icon?: string): Art {
-  const tint = tintOf(name);
-  if (icon && ICON.test(icon)) return { background: `url(/tex/content/${icon}.png) center/cover no-repeat, ${tint}` };
-  return { background: tint, initial: (/[\p{L}\p{N}]/u.exec(name)?.[0] ?? '?').toUpperCase() };
-}
+export const contentArt = (name: string, icon?: string): Art => artOf(name, icon && ICON.test(icon) ? `/tex/content/${icon}.png` : undefined);
 
 type GoRow = Awaited<ReturnType<typeof Go.List>>[number];
 
@@ -43,7 +39,7 @@ export function toItem(r: GoRow): ContentItem {
   const status = toStatus(r.status);
   return {
     id: r.id, name: r.name, sub: r.sub, meta: r.version, art: contentArt(r.name, r.icon), source: r.source as Source, enabled: r.enabled,
-    ...(r.locked ? { locked: true } : {}), ...(status ? { status } : {}), ...(r.group ? { group: r.group } : {}), ...(r.project ? { project: r.project } : {}),
+    ...(r.locked ? { locked: true } : {}), ...(status ? { status } : {}), ...(r.group ? { group: r.group } : {}), ...(r.project ? { project: r.project } : {}), ...(r.ref ? { ref: r.ref } : {}),
   };
 }
 
@@ -52,7 +48,7 @@ const toReview = (r: GoReview): UpdateReview => ({
   checkId: r.checkId,
   updates: (r.updates ?? []).map((u) => ({
     id: u.id, name: u.name, note: u.note, from: u.from, to: u.to, art: contentArt(u.name, u.icon), size: u.size, versions: [],
-    ...(u.blocked ? { blocked: true } : {}), ...(u.dependency ? { dependency: true } : {}), ...(u.versions ? { versionsUrl: u.versions } : {}),
+    ...(u.blocked ? { blocked: true } : {}), ...(u.dependency ? { dependency: true } : {}), ...(u.versions ? { versionsUrl: u.versions } : {}), ...(u.ref ? { ref: u.ref } : {}),
   })),
   locked: r.locked ?? [],
   failed: r.failed ?? [],
@@ -64,7 +60,8 @@ class MockContent {
   removed = new Map<string, { kind: ContentKind; items: ContentItem[] }>();
 
   find = (kind: ContentKind, id: string) => this.items[kind].find((c) => c.id === id);
-  list = (_id: string, kind: ContentKind) => this.items[kind];
+  // Preview items open their project page by their own id.
+  list = (_id: string, kind: ContentKind) => this.items[kind].map((c) => ({ ...c, ref: c.ref ?? c.id }));
   info = (_id: string): ContentInfo => ({ shaderMod: 'Iris 1.8.1', worlds: ['Creative Plots', 'Northwatch'] });
   setEnabled = (_id: string, kind: ContentKind, item: string, on: boolean) => {
     const c = this.find(kind, item);

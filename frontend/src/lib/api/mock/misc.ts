@@ -1,4 +1,4 @@
-import type { JavaRuntime, Keybind, ModpackDiffRow, ModUpdate, OtherLauncher, SyncEntry, SyncGroups } from '../types';
+import type { ImportPreview, InstallPlan, JavaRuntime, Keybind, ManualView, ModUpdate, ModpackDiffRow, OtherLauncher, SyncEntry, SyncGroups } from '../types';
 import { date } from './time';
 
 const S = (id: string, name: string, path: string, users: number, enabled: boolean, available = true): SyncEntry => ({ id, name, path, users, enabled, available });
@@ -27,7 +27,7 @@ export const runtimes: JavaRuntime[] = [
 
 const V = (id: string, d: number, items: string[]) => ({ id, date: d, items });
 export const modUpdates: ModUpdate[] = [
-  { id: 'u1', size: 1_300_000, name: 'Iris Shaders', note: 'Modrinth, release', from: '1.8.1', to: '1.8.3', art: { background: '#b48cf2', initial: 'I' }, versions: [V('1.8.3', date(2025, 2, 28), ['Fixes shadows flickering with Distant Horizons', 'Faster shader pack loading on first launch']), V('1.8.2', date(2025, 1, 30), ['Updated for Sodium 0.6.5', 'Fixes a crash with some AMD drivers'])] },
+  { id: 'u1', ref: 'iris-shaders', size: 1_300_000, name: 'Iris Shaders', note: 'Modrinth, release', from: '1.8.1', to: '1.8.3', art: { background: '#b48cf2', initial: 'I' }, versions: [V('1.8.3', date(2025, 2, 28), ['Fixes shadows flickering with Distant Horizons', 'Faster shader pack loading on first launch']), V('1.8.2', date(2025, 1, 30), ['Updated for Sodium 0.6.5', 'Fixes a crash with some AMD drivers'])] },
   { id: 'u2', size: 1_300_000, name: 'Not Enough Animations: Extended Compatibility Edition', note: 'CurseForge, release', from: '1.9.2', to: '1.9.4', art: { background: '#f2a25c', initial: 'N' }, versions: [V('1.9.4', date(2025, 2, 2), ['Fixes crossbow animation in first person']), V('1.9.3', date(2025, 1, 18), ['Adds support for 1.21.4 maps'])] },
   { id: 'u3', size: 1_300_000, name: 'Sodium Extra', note: 'Modrinth, release', from: '0.6.0', to: '0.6.1', art: { background: '#e8e8e8', initial: 'S' }, versions: [V('0.6.1', date(2025, 1, 22), ['Restores the fog toggle', 'Translation updates'])] },
   { id: 'u4', size: 1_300_000, name: 'Zoomify', note: 'CurseForge, release', from: '2.14.1', to: '2.14.2', art: { background: '#f2d45c', initial: 'Z' }, versions: [V('2.14.2', date(2025, 1, 9), ['Smoother scroll zoom on high refresh rate screens'])] },
@@ -57,3 +57,29 @@ export const otherLaunchers: OtherLauncher[] = [
   { name: 'Modrinth App', art: { background: '#3ecf8e', initial: 'M' }, summary: '3 instances', instances: 3 },
   { name: 'CurseForge', art: { background: '#f2a25c', initial: 'C' }, summary: '2 modpacks', instances: 2 },
 ];
+
+/** RevC: installing Distant Horizons. */
+export const installPlan: InstallPlan = {
+  planId: 'preview', name: 'Distant Horizons', kind: 'mods', version: '2.3.0-b', size: 4_200_000, mods: 48,
+  deps: [
+    { id: 'dep-modrinth-fabric-api', name: 'Fabric API', required: true, installed: true, size: 0, art: { background: '#dbc18e', initial: 'F' } },
+    { id: 'dep-modrinth-indium', name: 'Indium', summary: 'improves Sodium compatibility', required: false, installed: false, size: 160_000, art: { background: '#c7a3e8', initial: 'I' } },
+  ],
+};
+
+/** NewC's Detected card. */
+export const importPreview: ImportPreview = {
+  token: 'preview', name: 'Cobblemon Official Modpack', version: '1.6.1', minecraft: '1.21.1', loader: 'Fabric', source: 'Modrinth',
+  art: { background: '#f2a25c', initial: 'C' },
+  stats: { mods: 74, modBytes: 71_000_000, files: 212, folders: ['config'], blocked: 0, foreign: ['mods/cobblemon-extras-hotfix.jar'] },
+  warnings: [],
+};
+
+/** DlgBlocked: three files waiting for a manual download. */
+export const manualView: ManualView = {
+  jobId: 'preview', folder: '~/Downloads', done: false, items: [
+    { id: '0', name: 'Waystones', fileName: 'waystones-forge-1.16.5-7.6.4.jar', size: 0, state: 'found', twin: false },
+    { id: '1', name: 'Balm', fileName: 'balm-1.16.5-1.6.2.jar', size: 312_000, state: 'waiting', twin: true, page: 'https://www.curseforge.com/minecraft/mc-mods/balm', art: { background: '#e2a03f', initial: 'B' } },
+    { id: '2', name: 'Controlling', fileName: 'Controlling-forge-1.16.5-7.0.0.jar', size: 88_000, state: 'waiting', twin: false, page: 'https://www.curseforge.com/minecraft/mc-mods/controlling', art: { background: '#9aa3ad', initial: 'C' } },
+  ],
+};

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"quartz/internal/core/fsx"
+	"quartz/internal/modplatform"
 )
 
 // Counts is how many items of each kind an instance has, from its index.
@@ -178,4 +179,41 @@ func (s *Service) Folder(id, item string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(s.d.Instances.GameDir(id), filepath.FromSlash(path.Dir(e.Rel))), nil
+}
+
+// Installed is an identified item an instance has.
+type Installed struct {
+	Item string `json:"item"`
+	Kind Kind   `json:"kind"`
+	Name string `json:"name"`
+	// Modrinth and CurseForge are the item's version on each platform that
+	// knows it.
+	Modrinth   *Ident `json:"modrinth,omitempty"`
+	CurseForge *Ident `json:"curseforge,omitempty"`
+}
+
+// Ident is the item's identification on src.
+func (i Installed) Ident(src modplatform.Source) *Ident {
+	if src == modplatform.CurseForge {
+		return i.CurseForge
+	}
+	return i.Modrinth
+}
+
+// Installed lists an instance's identified items, from its index (no scan).
+func (s *Service) Installed(id string) []Installed {
+	v, err := s.view(id)
+	if err != nil {
+		return nil
+	}
+	var out []Installed
+	for item, e := range v.idx.Entries {
+		k := v.known[e.SHA1]
+		if k.Modrinth == nil && k.CurseForge == nil {
+			continue
+		}
+		out = append(out, Installed{Item: item, Kind: e.Kind, Name: displayName(e, k), Modrinth: k.Modrinth, CurseForge: k.CurseForge})
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Item < out[b].Item })
+	return out
 }

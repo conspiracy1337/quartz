@@ -209,6 +209,21 @@ func (r *Registry) Find(ctx context.Context, k Kind, mc, id string) (Version, er
 	return Version{}, fmt.Errorf("%w: %s %s for Minecraft %s", ErrUnknownVersion, k.Name(), id, mc)
 }
 
+// Match finds the build a modpack names, which may be the build id or the
+// shown version ("47.2.0" for the id "1.20.1-47.2.0").
+func (r *Registry) Match(ctx context.Context, k Kind, mc, version string) (Version, error) {
+	vs, err := r.Versions(ctx, k, mc)
+	if err != nil {
+		return Version{}, err
+	}
+	for _, v := range vs {
+		if v.ID == version || v.Name == version || strings.HasSuffix(v.ID, "-"+version) {
+			return v, nil
+		}
+	}
+	return Version{}, fmt.Errorf("%w: %s %s for Minecraft %s", ErrUnknownVersion, k.Name(), version, mc)
+}
+
 // Profile prepares build id of k.
 func (r *Registry) Profile(ctx context.Context, k Kind, req Request, id string) (*Profile, error) {
 	if !ValidVersionID(id) {

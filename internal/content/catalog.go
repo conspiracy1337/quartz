@@ -45,6 +45,18 @@ type Known struct {
 	IdentAt    int64      `json:"identAt,omitempty"` // when platforms were last asked
 }
 
+// Ref names the blob's project on every platform that knows it.
+func (k Known) Ref() modplatform.Ref {
+	var r modplatform.Ref
+	if k.Modrinth != nil {
+		r.Modrinth = k.Modrinth.ProjectID
+	}
+	if k.CurseForge != nil {
+		r.CurseForge = k.CurseForge.ProjectID
+	}
+	return r
+}
+
 // Ident returns the preferred identification: Modrinth, else CurseForge.
 func (k Known) Ident() *Ident {
 	if k.Modrinth != nil {
@@ -106,3 +118,6 @@ func (c *catalog) update(sha1 string, fn func(*Known)) {
 		d.Blobs[sha1] = k
 	})
 }
+
+// Known returns what the catalog knows about blobs, by sha1.
+func (s *Service) Known(sha1s []string) map[string]Known { return s.cat.many(sha1s) }

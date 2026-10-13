@@ -244,7 +244,7 @@ func (j *job) view(now time.Time) JobView {
 	}
 	for _, st := range j.steps {
 		sv := StepView{Name: st.name, Unit: st.unit}
-		var running, done, failed int
+		var running, done, failed, waiting int
 		for _, w := range st.works {
 			if w.item != nil {
 				b := w.done.Load()
@@ -258,6 +258,9 @@ func (j *job) view(now time.Time) JobView {
 			switch w.state {
 			case wRunning:
 				running++
+				if w.wait {
+					waiting++
+				}
 			case wDone:
 				done++
 			case wFailed:
@@ -272,6 +275,8 @@ func (j *job) view(now time.Time) JobView {
 			sv.State = StepDone
 		case failed > 0 && running == 0:
 			sv.State = StepFailed
+		case waiting > 0:
+			sv.State = StepWarn
 		case running > 0 || done > 0:
 			sv.State = StepRun
 		default:
