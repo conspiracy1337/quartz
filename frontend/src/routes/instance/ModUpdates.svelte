@@ -146,6 +146,6 @@
 
 <style>
   .ur{grid-template-columns:16px 32px minmax(0,1fr) 200px 96px;height:56px}
-  .ur > .opt:not(.sk){display:flex}
+  .ur .opt{display:flex}
   @media (max-width:1100px){.ur{grid-template-columns:16px 32px minmax(0,1fr) 96px}.ur .opt{display:none}}
 </style>

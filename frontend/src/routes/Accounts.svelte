@@ -97,7 +97,7 @@
 
 <style>
   .ar{grid-template-columns:40px minmax(0,1fr) 150px auto;height:68px}
-  .ar > .opt{display:flex}
+  .ar .opt{display:flex}
   @media (max-width:1100px){.ar{grid-template-columns:40px minmax(0,1fr) auto}.ar .opt{display:none}}
   .head{width:40px;height:40px;border-radius:8px;display:grid;grid-template-rows:30% 70%;overflow:hidden;image-rendering:pixelated}
 </style>

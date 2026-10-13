@@ -205,6 +205,6 @@
   .fl{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:8px;align-items:center;height:26px;border:0;background:transparent;padding:0;color:var(--muted);text-align:left;width:100%}
   .fl:hover{color:var(--text)}
   .res{grid-template-columns:48px minmax(0,1fr) 136px 84px;height:84px;column-gap:16px}
-  .res > .opt:not(.sk){display:flex}
+  .res .opt{display:flex}
   @media (max-width:1100px){.res{grid-template-columns:48px minmax(0,1fr) 84px}.res .opt{display:none}}
 </style>

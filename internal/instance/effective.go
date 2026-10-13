@@ -8,7 +8,7 @@ import (
 
 // ErrJavaNotChosen fails a launch when Java isn't picked automatically and
 // neither the instance nor Settings names one: nothing is downloaded silently.
-var ErrJavaNotChosen = errors.New("pick Java automatically is off. Choose a runtime in Settings, Java")
+var ErrJavaNotChosen = errors.New("instance: pick Java automatically is off. Choose a runtime in Settings, Java")
 
 // Effective is an instance's settings with the global ones filled in: the one
 // place that decides what a launch actually uses (Prism's override model, as

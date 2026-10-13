@@ -82,10 +82,13 @@
   const count = $derived(mode === 'commands' ? commands.length : Math.min(insts.length, SHOWN));
   const groups = $derived([...new Set(commands.map((c) => c.group))]);
 
+  // Read the row before closing: closing unmounts the palette and drops its props.
   function runAt(i: number, open = false) {
+    const cmd = mode === 'commands' ? commands[i] : undefined;
+    const inst = mode === 'commands' ? undefined : insts[i];
     session.close();
-    if (mode === 'commands') commands[i]?.run();
-    else if (insts[i]) open ? go({ name: 'instance', id: insts[i].id, tab: 'overview' }) : session.play(insts[i].id);
+    if (cmd) cmd.run();
+    else if (inst) open ? go({ name: 'instance', id: inst.id, tab: 'overview' }) : session.play(inst.id);
   }
   function keys(e: KeyboardEvent) {
     if (e.key === 'Escape') session.close();
