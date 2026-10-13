@@ -28,6 +28,7 @@ import (
 	"quartz/internal/backup"
 	"quartz/internal/core/archive"
 	"quartz/internal/core/events"
+	"quartz/internal/core/fsx"
 	"quartz/internal/core/linkx"
 	"quartz/internal/core/localimg"
 	"quartz/internal/core/nbt"
@@ -279,7 +280,16 @@ func (s *Service) Rename(id, folder, name string) error {
 	if err != nil {
 		return err
 	}
-	lvl := filepath.Join(d, "level.dat")
+	if err := setLevelName(d, func(string) string { return name }); err != nil {
+		return err
+	}
+	s.changed(id)
+	return nil
+}
+
+// setLevelName rewrites a world's LevelName from its current one.
+func setLevelName(dir string, name func(old string) string) error {
+	lvl := filepath.Join(dir, "level.dat")
 	f, err := nbt.ReadFile(lvl)
 	if err != nil {
 		return err
@@ -288,12 +298,24 @@ func (s *Service) Rename(id, folder, name string) error {
 	if data == nil || data.Kind != nbt.Compound {
 		return ErrNotWorld
 	}
-	data.Comp.Set("LevelName", nbt.NewString(name))
-	if err := nbt.WriteFile(lvl, f); err != nil {
-		return err
+	old := ""
+	if t := data.Get("LevelName"); t != nil {
+		old = t.Str
 	}
-	s.changed(id)
-	return nil
+	data.Comp.Set("LevelName", nbt.NewString(name(old)))
+	return nbt.WriteFile(lvl, f)
+}
+
+// Retitle adds a suffix to the name the game shows for the world in dir
+// ("Northwatch" becomes "Northwatch (2)"), after its folder got the same
+// suffix while syncing or merging copies. The folder name is the fallback.
+func Retitle(dir, suffix string) error {
+	return setLevelName(dir, func(old string) string {
+		if old == "" {
+			old = strings.TrimSuffix(filepath.Base(dir), suffix)
+		}
+		return old + suffix
+	})
 }
 
 // Delete moves a world aside and returns the token Undo takes.
@@ -470,15 +492,7 @@ func folderName(s string) string {
 }
 
 // free returns name, or "name (2)", "name (3)" … when it is taken in dir.
-func free(dir, name string) string {
-	try := name
-	for n := 2; ; n++ {
-		if _, err := os.Lstat(filepath.Join(dir, try)); errors.Is(err, fs.ErrNotExist) {
-			return try
-		}
-		try = name + " (" + strconv.Itoa(n) + ")"
-	}
-}
+func free(dir, name string) string { return fsx.FreeName(dir, name, true) }
 
 func random() string {
 	var b [6]byte

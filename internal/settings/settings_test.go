@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"quartz/internal/core/events"
@@ -87,7 +88,7 @@ func TestStoreCorruptFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Get() != Defaults() {
+	if !reflect.DeepEqual(s.Get(), Defaults()) {
 		t.Fatal("corrupt file did not fall back to defaults")
 	}
 	if _, err := os.Stat(path + ".corrupt"); err != nil {

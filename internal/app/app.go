@@ -63,6 +63,7 @@ import (
 	"quartz/internal/servers"
 	"quartz/internal/settings"
 	"quartz/internal/skins"
+	"quartz/internal/syncing"
 	"quartz/internal/theme"
 	"quartz/internal/worlds"
 )
@@ -121,6 +122,8 @@ type app struct {
 	logFiles    *logfiles.Service
 	home        *home.Service
 	gameWatch   *gamewatch.Watcher
+	// The shared layer (M8).
+	syncing *syncing.Service
 }
 
 // Run builds the app and blocks until the window closes.
@@ -311,6 +314,11 @@ func (a *app) buildTasks() error {
 	if err := a.buildContent(); err != nil {
 		return err
 	}
+	a.syncing = syncing.New(syncing.Config{
+		Root: a.paths.Shared(), Trash: a.paths.Trash(), Settings: a.settings, Instances: a.instances, Bus: a.bus,
+		Running: func(id string) bool { return a.launcher.Busy(id) }, HasMod: a.content.AnyHasMod,
+		Retitle: worlds.Retitle, Tasks: eng, Log: a.log,
+	})
 	dl := download.New(a.http, ver)
 	a.loaders = loader.New(loader.Deps{
 		Meta: a.meta, Downloader: dl, Verified: ver, Log: a.log,
@@ -342,7 +350,9 @@ func (a *app) buildGame() {
 	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: busy, Bus: a.bus, Log: a.log})
 	a.servers = servers.New(servers.Deps{
 		Instances: a.instances, Busy: busy, Runs: runs, Favicons: a.favicons, Bus: a.bus, Log: a.log,
-		Protocol: func(mc string) int { return contentmeta.ClientProtocol(filepath.Join(a.paths.Versions(), mc, mc+".jar")) },
+		Protocol: func(mc string) int {
+			return contentmeta.ClientProtocol(filepath.Join(a.paths.Versions(), mc, mc+".jar"))
+		},
 	})
 	a.screenshots = screenshots.New(screenshots.Deps{Instances: a.instances, Images: a.gameImages, Bus: a.bus})
 	a.crash = crash.New(crash.Deps{Instances: a.instances, Mods: a.content, Runs: launcherRuns{a}, Redactor: a.redactor})
@@ -562,6 +572,7 @@ func (a *app) purgeTrash() func() {
 			if n := a.instances.PurgeExpired(time.Now()); n > 0 {
 				a.log.Info("emptied old trash", "instances", n)
 			}
+			a.syncing.PurgeTrash(time.Now())
 			if freed, n, err := a.store.GC(a.content.Refs, storeGrace); err != nil {
 				a.log.Warn("cleaning the content store failed", "err", err)
 			} else if n > 0 {

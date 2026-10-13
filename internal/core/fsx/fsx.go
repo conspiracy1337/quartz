@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -95,6 +96,23 @@ func ReadCapped(path string, limit int64) ([]byte, error) {
 // Inside reports whether p is root or lies below it (both already resolved).
 func Inside(root, p string) bool {
 	return p == root || strings.HasPrefix(p, root+string(filepath.Separator))
+}
+
+// FreeName returns name, or "name (2)", "name (3)" … when it is taken in
+// dir. For a file the number goes before the extension ("pack (2).zip").
+func FreeName(dir, name string, isDir bool) string {
+	stem, ext := name, ""
+	if !isDir {
+		ext = filepath.Ext(name)
+		stem = strings.TrimSuffix(name, ext)
+	}
+	try := name
+	for n := 2; ; n++ {
+		if _, err := os.Lstat(filepath.Join(dir, try)); errors.Is(err, fs.ErrNotExist) {
+			return try
+		}
+		try = stem + " (" + strconv.Itoa(n) + ")" + ext
+	}
 }
 
 // IsLink reports whether a mode is a link of any kind: a symlink, or on

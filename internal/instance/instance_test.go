@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -168,5 +169,13 @@ func TestSettingsValidation(t *testing.T) {
 	}
 	if got.Settings.Java.MemoryMaxMB != 4096 || got.Settings.Window.OnGameStart != "" {
 		t.Fatalf("not normalised: %+v", got.Settings)
+	}
+}
+
+func TestSyncMigratesShareLabels(t *testing.T) {
+	in := normalize(Instance{ID: "a", Name: "A", Shares: []string{"Keybinds", "Worlds", "Shaders", "Nonsense"},
+		Sync: Sync{Join: []string{"saves", "Bad Id", "c-1a2b"}}})
+	if in.Shares != nil || !in.Sync.Keys || !slices.Equal(in.Sync.Join, []string{"saves", "c-1a2b", "shaderpacks"}) {
+		t.Fatalf("%+v %v", in.Sync, in.Shares)
 	}
 }

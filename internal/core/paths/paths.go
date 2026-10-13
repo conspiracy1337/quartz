@@ -121,6 +121,13 @@ func (p Paths) Store() string     { return filepath.Join(p.Root, "store") }
 func (p Paths) Cache() string     { return filepath.Join(p.Root, "cache") }
 func (p Paths) Themes() string    { return filepath.Join(p.Root, "themes") }
 
+// Shared holds the one real copy of everything instances share (syncing);
+// it mirrors an instance folder's layout.
+func (p Paths) Shared() string { return filepath.Join(p.Root, "shared") }
+
+// Trash is where trashed instances and shared folders wait to be purged.
+func (p Paths) Trash() string { return filepath.Join(p.Root, "trash") }
+
 // DownloadHistory holds the last 24 hours of ended download jobs.
 func (p Paths) DownloadHistory() string { return filepath.Join(p.Root, "downloads.json") }
 

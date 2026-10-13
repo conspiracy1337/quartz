@@ -23,6 +23,7 @@ type Settings struct {
 	Appearance   Appearance   `json:"appearance"`
 	Java         Java         `json:"java"`
 	Updates      Updates      `json:"updates"`
+	Syncing      Syncing      `json:"syncing"`
 }
 
 type General struct {
@@ -171,6 +172,7 @@ func (s Settings) Normalize() Settings {
 		j.JVMArgs = d.Java.JVMArgs
 	}
 	s.Updates.ModChannel = oneOf(s.Updates.ModChannel, d.Updates.ModChannel, "release", "beta", "alpha")
+	s.Syncing = s.Syncing.normalize()
 	return s
 }
 
