@@ -2,9 +2,16 @@ package launch
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 
+	"quartz/internal/core/linkx"
+	"quartz/internal/java"
 	"quartz/internal/runview"
+	"quartz/internal/sandbox"
+	"quartz/internal/sandbox/rules"
 )
 
 // assemble readies a run's files: shared files copied in, then the view of
@@ -21,10 +28,19 @@ func (l *Launcher) assemble(sp *spec) error {
 	if l.cfg.Views == nil {
 		return nil
 	}
-	req := runview.Request{Game: sp.gameDir, Scratch: filepath.Join(l.cfg.Instances.RunsDir(sp.inst.ID), sp.runID+".view")}
+	req := runview.Request{Game: sp.gameDir, Scratch: l.scratch(sp)}
+	mode := runview.Shared
+	if sp.sandboxed {
+		switch sp.inst.Sandbox.Level(rules.Synced, runtime.GOOS) {
+		case rules.RO:
+			mode = runview.Private
+		case rules.Blocked:
+			mode = runview.Empty
+		}
+	}
 	if l.cfg.Syncing != nil {
 		for _, f := range l.cfg.Syncing.RunFolders(sp.inst.ID) {
-			req.Folders = append(req.Folders, runview.Folder{Rel: f.Rel, Shared: f.Shared})
+			req.Folders = append(req.Folders, runview.Folder{Rel: f.Rel, Shared: f.Shared, Mode: mode})
 		}
 	}
 	v, err := l.cfg.Views.Assemble(req)
@@ -37,9 +53,67 @@ func (l *Launcher) assemble(sp *spec) error {
 	return nil
 }
 
+// natives is the folder the game loads and unpacks native libraries in.
+// Minecraft also points JNA's and LWJGL's temporary files there, so a
+// sandboxed run gets its own copy (a clone where the file system can,
+// never a hardlink): the shared one stays read-only, so no run can plant a
+// library another loads.
+func (l *Launcher) natives(sp *spec) (string, error) {
+	if !sp.sandboxed || sp.res.NativesDir == "" {
+		return sp.res.NativesDir, nil
+	}
+	dst := filepath.Join(l.scratch(sp), "natives")
+	if err := os.RemoveAll(dst); err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(sp.res.NativesDir); err != nil {
+		return dst, os.MkdirAll(dst, 0o700)
+	}
+	return dst, linkx.CopyTree(sp.res.NativesDir, dst, linkx.Options{NoHardlink: true})
+}
+
+// scratch is the run's own folder.
+func (l *Launcher) scratch(sp *spec) string {
+	return filepath.Join(l.cfg.Instances.RunsDir(sp.inst.ID), sp.runID+".view")
+}
+
+// sandboxRun is what a sandboxed run may reach: its game folder and view,
+// the store, its Java and the player's own wrapper program.
+func (l *Launcher) sandboxRun(sp *spec, argv []string) sandbox.Run {
+	id := sp.inst.ID
+	r := sandbox.Run{
+		Instance: id, Rules: sp.inst.Sandbox, GameDir: sp.gameDir,
+		Scratch:  l.scratch(sp),
+		Write:    []string{filepath.Join(l.scratch(sp), "natives")},
+		Data:     filepath.Join(l.cfg.Instances.Dir(id), "sandbox"),
+		Read:     append(slices.Clone(l.cfg.StoreRead), sandbox.JavaRoot(sp.rt.Path)),
+		GameMode: sp.eff.Performance.GameMode && runtime.GOOS == "linux",
+	}
+	if sp.view != nil {
+		r.Mounts = sp.view.Mounts()
+	}
+	// Absolute programs in front of java (the player's wrapper, MangoHud).
+	for _, a := range argv {
+		if a == java.LaunchBinary(sp.rt.Path) {
+			break
+		}
+		if filepath.IsAbs(a) {
+			r.Read = append(r.Read, a)
+		}
+	}
+	if l.cfg.Syncing != nil {
+		for _, f := range l.cfg.Syncing.RunFolders(id) {
+			r.Shared = append(r.Shared, f.Shared)
+		}
+	}
+	return r
+}
+
 // disassemble merges a run's changes back and copies shared files out; it
 // returns the worlds kept as copies.
 func (l *Launcher) disassemble(sp *spec) []runview.Copy {
+	sp.jail.Close()
+	sp.jail = nil
 	var kept []runview.Copy
 	if sp.view != nil {
 		var err error

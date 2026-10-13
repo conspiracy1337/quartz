@@ -1,44 +1,59 @@
 <script lang="ts">
   import { api } from '$lib/api';
+  import type { SandboxLevel, SandboxPreset, SandboxRow } from '$lib/api/sandbox';
   import type { Instance } from '$lib/api/types';
-  import { hasBridge } from '$lib/bridge';
   import { query } from '$lib/query.svelte';
+  import { revs } from '$lib/revs.svelte';
   import { href } from '$lib/router.svelte';
+  import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import type { IconName } from '$lib/ui/icons';
   import Seg from '$lib/ui/Seg.svelte';
-  import Setting from '$lib/ui/Setting.svelte';
+  import Select from '$lib/ui/Select.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
 
-  type Level = 'rw' | 'ro' | 'no' | 'on';
-  const LEVELS: Record<Level, [string, string]> = { rw: ['Read and write', 'l-rw'], ro: ['Read only', 'l-ro'], no: ['Blocked', 'l-no'], on: ['Allowed', 'l-rw'] };
-  const rules: { name: string; path: string; level: Level; icon: IconName }[] = $derived([
-    { name: 'This instance', path: `${i.folder}/`, level: 'rw', icon: 'folder' },
-    { name: 'Shared libraries and assets', path: 'libraries/, assets/', level: 'ro', icon: 'folder' },
-    { name: 'Java runtime', path: 'java/temurin-21.0.5/', level: 'ro', icon: 'folder' },
-    { name: 'Synced folders', path: 'sync/options, sync/servers', level: 'rw', icon: 'folder' },
-    { name: 'Internet', path: 'Needed for servers and skins', level: 'on', icon: 'globe' },
-    { name: 'Discord status', path: 'Discord IPC socket', level: 'on', icon: 'chat' },
-    { name: 'Graphics and audio', path: 'GPU, PipeWire, Wayland', level: 'on', icon: 'gpu' },
-    { name: 'Your home folder', path: '~/ and other instances', level: 'no', icon: 'house' },
-  ]);
+  const LEVELS: Record<SandboxLevel, [string, string]> = { rw: ['Read and write', 'l-rw'], ro: ['Read only', 'l-ro'], no: ['Blocked', 'l-no'], on: ['Allowed', 'l-rw'], remove: ['Remove', 'l-no'] };
+  // Each rule's name and icon, and the description shown when Go names no path.
+  const RULES: Record<string, { name: string; icon: IconName; path: string }> = {
+    instance: { name: 'This instance', icon: 'folder', path: '' },
+    libraries: { name: 'Shared libraries and assets', icon: 'folder', path: '' },
+    java: { name: 'Java runtime', icon: 'folder', path: '' },
+    synced: { name: 'Synced folders', icon: 'folder', path: '' },
+    internet: { name: 'Internet', icon: 'globe', path: 'Needed for servers and skins' },
+    discord: { name: 'Discord status', icon: 'chat', path: 'Discord IPC socket' },
+    graphics: { name: 'Graphics and audio', icon: 'gpu', path: 'GPU, PipeWire, Wayland' },
+    home: { name: 'Your home folder', icon: 'house', path: '~/ and other instances' },
+  };
   const PRESETS = [{ value: 'standard', label: 'Standard' }, { value: 'strict', label: 'Strict' }, { value: 'custom', label: 'Custom' }] as const;
 
-  let on = $state(true);
-  let preset = $state<string>('standard');
-  let checkJars = $state(true);
-  // How many mods were found on Modrinth or CurseForge (the sandbox's jar check itself is M10).
-  const mods = query(() => (hasBridge() ? api.content.list(i.id, 'mods') : Promise.resolve(null)));
-  const jarLine = $derived.by(() => {
-    if (!mods.data) return '47 of 48 mods match a known Modrinth or CurseForge file. 1 is unknown.';
-    const known = mods.data.filter((m) => m.source && m.source !== 'file').length;
-    const unknown = mods.data.length - known;
-    return `${known} of ${mods.data.length} mods match a known Modrinth or CurseForge file.${unknown ? ` ${unknown} ${unknown === 1 ? 'is' : 'are'} unknown.` : ''}`;
+  const status = query(() => api.sandbox.status());
+  const sb = query(() => api.sandbox.view(i.id));
+  const on = $derived(sb.data?.on ?? i.sandboxed);
+  const uses = $derived.by(() => {
+    const s = status.data;
+    if (!s) return '';
+    return s.available ? ` Uses ${s.name}${s.version ? ` ${s.version}` : ''} on this system.` : ` ${s.reason}`;
   });
-  let scan = $state(true);
+
+  const meta = (r: SandboxRow) => (r.folder ? { name: r.path.split(/[\\/]/).filter(Boolean).pop() ?? r.path, icon: 'folder' as IconName, path: '' } : RULES[r.id] ?? { name: r.id, icon: 'folder' as IconName, path: '' });
+
+  /** Runs a change; the page reloads from Go's answer (instances:changed). */
+  async function edit(what: string, fn: () => Promise<unknown>) {
+    try {
+      await fn();
+    } catch (e) {
+      session.fail(what, e);
+    }
+    revs.bump('instances');
+  }
+  const setOn = (v: boolean) => edit('Sandbox', () => api.sandbox.setOn(i.id, v));
+  const setPreset = (p: SandboxPreset) => edit('Sandbox', () => api.sandbox.setPreset(i.id, p));
+  const setLevel = (r: SandboxRow, l: SandboxLevel) =>
+    edit(meta(r).name, () => (r.folder ? api.sandbox.setFolder(i.id, r.id, l) : api.sandbox.setLevel(i.id, r.id, l)));
+  const addFolder = () => edit('Allow another folder', () => api.sandbox.addFolder(i.id));
 </script>
 
 <div class="scroll">
@@ -46,26 +61,28 @@
     <div style="display: flex; align-items: center; gap: 8px"><a href={href({ name: 'instance', id: i.id, tab: 'settings' })} class="btn btn-sm btn-ghost"><Icon name="chevron-left" size={12} sw={2} />Settings</a><h2 class="h2">Sandbox</h2></div>
     <section class="card card-pad" aria-label="Sandbox" style="display: grid; grid-template-columns: 44px minmax(0,1fr) auto; gap: 14px; align-items: center">
       <span class="shield" style="background: {on ? 'color-mix(in srgb, var(--info) 16%, transparent)' : 'var(--raise)'}; color: {on ? 'var(--info)' : 'var(--faint)'}" aria-hidden="true"><Icon name="shield-check" size={22} sw={1.8} /></span>
-      <span><span class="h2" style="display: block">Sandbox this instance</span><span class="small muted" style="display: block">Mods run in an isolated jail and can only reach the folders below. Uses bubblewrap 0.9.0 on this system.</span></span>
-      <Toggle bind:on label="Sandbox this instance" />
+      <span><span class="h2" style="display: block">Sandbox this instance</span><span class="small muted" style="display: block">Mods run in an isolated jail and can only reach the folders below.{uses}</span></span>
+      <Toggle {on} label="Sandbox this instance" onchange={setOn} />
     </section>
     <section class="sec" class:off-all={!on} aria-label="Access">
-      <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="h3">What the game can reach</h2><Seg options={PRESETS} bind:value={preset} label="Access preset" /></div>
+      <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="h3">What the game can reach</h2><Seg options={PRESETS} value={sb.data?.preset ?? 'standard'} label="Access preset" onchange={setPreset} /></div>
       <div class="list">
-        {#each rules as r (r.name)}
-          <div class="row acc">
-            <span style="color: var(--muted); display: grid; place-items: center" aria-hidden="true"><Icon name={r.icon} size={16} /></span>
-            <span style="min-width: 0"><span class="trunc" style="display: block">{r.name}</span><span class="trunc small faint mono" style="display: block">{r.path}</span></span>
-            <button class="select" style="height: 28px"><span class="lvl {LEVELS[r.level][1]}">{LEVELS[r.level][0]}</span><Icon name="chevron-down" size={12} sw={2} /></button>
-          </div>
-        {/each}
+        {#if sb.data}
+          {#each sb.data.rows as r (r.id)}
+            {@const m = meta(r)}
+            <div class="row acc">
+              <span style="color: var(--muted); display: grid; place-items: center" aria-hidden="true"><Icon name={m.icon} size={16} /></span>
+              <span style="min-width: 0"><span class="trunc" style="display: block">{m.name}</span><span class="trunc small faint mono" style="display: block">{r.path || m.path}</span></span>
+              <Select value={r.level} options={r.choices.map((c) => ({ value: c, label: LEVELS[c][0] }))} label="{m.name} access" style="height: 28px" fixed onchange={(l) => setLevel(r, l)}>
+                {#snippet current(l)}<span class="lvl {LEVELS[l][1]}">{LEVELS[l][0]}</span>{/snippet}
+              </Select>
+            </div>
+          {/each}
+        {:else}
+          {#each { length: 8 } as _, k (k)}<div class="row acc" aria-hidden="true"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk" style="height: 28px; border-radius: var(--radius)"></div></div>{/each}
+        {/if}
       </div>
-      <button class="btn" style="align-self: flex-start">Allow another folder</button>
-    </section>
-    <section class="card" aria-label="Mod check">
-      <Setting title="Check jars before launch" desc={jarLine}><Toggle bind:on={checkJars} label="Check jars before launch" /></Setting>
-      <div class="divider"></div>
-      <Setting title="Scan for known malware" desc="Looks for signatures like fractureiser. Signatures updated 2 days ago."><Toggle bind:on={scan} label="Scan for known malware" /></Setting>
+      <button class="btn" style="align-self: flex-start" onclick={addFolder}>Allow another folder</button>
     </section>
   </div>
 </div>

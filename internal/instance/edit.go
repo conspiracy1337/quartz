@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+
+	"quartz/internal/sandbox/rules"
 )
 
 // Rename changes the display name only: the id and folder never change.
@@ -74,4 +76,17 @@ func (s *Store) TotalPlaytime() int {
 		n += in.PlaytimeMin
 	}
 	return n
+}
+
+// EditSandbox changes an instance's sandbox choices; edit validates them
+// (package sandbox) and the result is normalized.
+func (s *Store) EditSandbox(id string, edit func(*rules.Settings) error) (Instance, error) {
+	return s.Update(id, func(in *Instance) error {
+		next := in.Sandbox
+		if err := edit(&next); err != nil {
+			return err
+		}
+		in.Sandbox = next.Normalize()
+		return nil
+	})
 }

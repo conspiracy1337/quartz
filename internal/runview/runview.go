@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"quartz/internal/core/bwrap"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/linkx"
 )
@@ -32,7 +33,19 @@ import (
 type Folder struct {
 	Rel    string // inside the game folder, slash-separated ("saves")
 	Shared string // the one real copy
+	Mode   Mode
 }
+
+// Mode is how a run sees a shared folder.
+type Mode string
+
+// Modes. Private and Empty are the sandbox's "Read only" and "Blocked":
+// the run may write, and nothing it writes is kept.
+const (
+	Shared  Mode = ""        // the real shared copy, changes kept
+	Private Mode = "private" // a throwaway layer over the shared copy
+	Empty   Mode = "empty"   // an empty throwaway folder
+)
 
 // Request describes one run.
 type Request struct {
@@ -50,20 +63,12 @@ type Config struct {
 	Backend string
 }
 
-type support struct {
-	bwrap   string // the binary, "" when it can't make a namespace
-	overlay bool
-}
-
 // Assembler builds views and tracks which folders live runs use.
 type Assembler struct {
 	c Config
 
 	mu     sync.Mutex
 	leases map[string]int
-
-	once sync.Once
-	sup  support
 }
 
 // New returns an Assembler.
@@ -72,14 +77,6 @@ func New(c Config) *Assembler {
 		c.Log = slog.New(slog.DiscardHandler)
 	}
 	return &Assembler{c: c, leases: map[string]int{}}
-}
-
-func (a *Assembler) support() support {
-	a.once.Do(func() {
-		a.sup = bwrapSupport()
-		a.c.Log.Info("run views", "bwrap", a.sup.bwrap != "", "overlay", a.sup.overlay)
-	})
-	return a.sup
 }
 
 // lease marks folders used by one more run and reports, per folder,
@@ -112,6 +109,7 @@ const (
 	overlay  = "overlay"  // bubblewrap overlay, merged back from its upper folder
 	clone    = "clone"    // a private copy, merged back from a snapshot diff
 	junction = "junction" // a Windows junction to the real folder
+	scratch  = "scratch"  // a throwaway folder, never merged back
 )
 
 // mount is one folder of the view and how its changes come back.
@@ -137,9 +135,11 @@ type state struct {
 	Game    string    `json:"game"`
 	GameDir string    `json:"gameDir"`
 	Scratch string    `json:"scratch"`
-	Bwrap   []string  `json:"bwrap,omitempty"`
-	Mounts  []mount   `json:"mounts"`
-	Leased  []string  `json:"leased"`
+	// Bin and Bwrap are bubblewrap and the view's mounts (no root, no command).
+	Bin    string   `json:"bin,omitempty"`
+	Bwrap  []string `json:"bwrap,omitempty"`
+	Mounts []mount  `json:"mounts"`
+	Leased []string `json:"leased"`
 }
 
 const stateFile = "view.json"
@@ -154,17 +154,22 @@ type View struct {
 func (v *View) GameDir() string { return v.st.GameDir }
 
 // Wrap prefixes the game's command with bubblewrap when the view needs a
-// mount namespace.
+// mount namespace; the rest of the system is shared as is.
 func (v *View) Wrap(argv []string) []string {
-	if len(v.st.Bwrap) == 0 {
+	if v.st.Bin == "" {
 		return argv
 	}
-	return append(slices.Clone(v.st.Bwrap), argv...)
+	b := new(bwrap.Args).Add(v.st.Bin).DevBind("/", "/").Add(v.st.Bwrap...)
+	return append(b.List(), argv...)
 }
+
+// Mounts are the view's bubblewrap mounts, for a sandbox that builds its own
+// root: nil when the view needs no namespace.
+func (v *View) Mounts() []string { return slices.Clone(v.st.Bwrap) }
 
 // Backend names how the view was built, for the log.
 func (v *View) Backend() string {
-	if len(v.st.Bwrap) > 0 {
+	if v.st.Bin != "" {
 		return "bwrap"
 	}
 	for _, m := range v.st.Mounts {
@@ -191,7 +196,9 @@ func (v *View) save() {
 func (a *Assembler) Assemble(r Request) (*View, error) {
 	leased := []string{r.Game}
 	for _, f := range r.Folders {
-		leased = append(leased, f.Shared)
+		if f.Mode == Shared {
+			leased = append(leased, f.Shared)
+		}
 	}
 	only := a.lease(leased)
 	v := &View{a: a, st: state{Start: time.Now(), Game: r.Game, GameDir: r.Game, Scratch: r.Scratch, Leased: leased}}
@@ -223,14 +230,16 @@ func (a *Assembler) assemble(v *View, r Request, only map[string]bool) error {
 		gameWorlds = "-"
 	}
 	private := !only[r.Game]
+	overlays := private
 	for _, f := range r.Folders {
-		private = private || !only[f.Shared]
+		private = private || (f.Mode == Shared && !only[f.Shared])
+		overlays = overlays || f.Mode == Private || (f.Mode == Shared && !only[f.Shared])
 	}
-	sup := a.support()
+	sup := bwrap.Detect()
 	backend := a.c.Backend
 	if backend == "" {
 		backend = "clone"
-		if sup.bwrap != "" && (!private || sup.overlay) {
+		if sup.Bin != "" && (!overlays || sup.Overlay) {
 			backend = "bwrap"
 		}
 	}
@@ -238,7 +247,7 @@ func (a *Assembler) assemble(v *View, r Request, only map[string]bool) error {
 		backend = "clone" // nothing to assemble: run in place, no namespace
 	}
 	if backend == "bwrap" {
-		return a.assembleBwrap(v, r, only, skip, gameWorlds, sup.bwrap)
+		return a.assembleBwrap(v, r, only, skip, gameWorlds, sup.Bin)
 	}
 	return a.assembleClone(v, r, only, skip, gameWorlds)
 }
@@ -249,11 +258,8 @@ func (a *Assembler) assemble(v *View, r Request, only map[string]bool) error {
 func (a *Assembler) assembleBwrap(v *View, r Request, only map[string]bool, skip []string, gameWorlds, bin string) error {
 	if bin == "" {
 		bin = "bwrap"
-		if sup := a.support(); sup.bwrap != "" {
-			bin = sup.bwrap
-		}
 	}
-	args := []string{bin, "--dev-bind", "/", "/"}
+	var args bwrap.Args
 	add := func(i int, lower, at string, worlds string, s []string) error {
 		m := mount{Kind: overlay, Path: at, Target: lower, Worlds: worlds, Skip: s,
 			Upper: filepath.Join(r.Scratch, "upper"+strconv.Itoa(i)), Work: filepath.Join(r.Scratch, "work"+strconv.Itoa(i))}
@@ -262,7 +268,7 @@ func (a *Assembler) assembleBwrap(v *View, r Request, only map[string]bool, skip
 				return err
 			}
 		}
-		args = append(args, "--overlay-src", lower, "--overlay", m.Upper, m.Work, at)
+		args.Overlay(lower, m.Upper, m.Work, at)
 		v.st.Mounts = append(v.st.Mounts, m)
 		return nil
 	}
@@ -274,16 +280,23 @@ func (a *Assembler) assembleBwrap(v *View, r Request, only map[string]bool, skip
 	for i, f := range r.Folders {
 		at := filepath.Join(r.Game, filepath.FromSlash(f.Rel))
 		worlds := worldsOf(f.Rel)
-		if only[f.Shared] {
-			args = append(args, "--bind", f.Shared, at)
+		switch {
+		case f.Mode == Private:
+			args.TmpOverlay(f.Shared, at)
+			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at, Target: f.Shared})
+		case f.Mode == Empty:
+			args.Tmpfs(at)
+			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at})
+		case only[f.Shared]:
+			args.Bind(f.Shared, at)
 			v.st.Mounts = append(v.st.Mounts, mount{Kind: bind, Path: at, Target: f.Shared, Worlds: worlds})
-			continue
-		}
-		if err := add(i+1, f.Shared, at, worlds, nil); err != nil {
-			return err
+		default:
+			if err := add(i+1, f.Shared, at, worlds, nil); err != nil {
+				return err
+			}
 		}
 	}
-	v.st.Bwrap = args
+	v.st.Bin, v.st.Bwrap = bin, args.List()
 	return nil
 }
 
@@ -309,6 +322,21 @@ func (a *Assembler) assembleClone(v *View, r Request, only map[string]bool, skip
 		if err := os.Remove(at); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err // a mount point must be empty (syncing empties it before each launch)
 		}
+		inPlace := v.st.GameDir == r.Game
+		switch f.Mode {
+		case Empty:
+			if err := os.MkdirAll(at, 0o700); err != nil {
+				return err
+			}
+			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at, InPlace: inPlace})
+			continue
+		case Private:
+			if err := linkx.CloneTree(f.Shared, at); err != nil {
+				return err
+			}
+			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at, Target: f.Shared, InPlace: inPlace})
+			continue
+		}
 		if only[f.Shared] && runtime.GOOS == "windows" {
 			if err := linkx.Junction(at, f.Shared); err != nil {
 				return err
@@ -319,7 +347,7 @@ func (a *Assembler) assembleClone(v *View, r Request, only map[string]bool, skip
 		if err := linkx.CloneTree(f.Shared, at); err != nil {
 			return err
 		}
-		m := mount{Kind: clone, Path: at, Target: f.Shared, Worlds: worldsOf(f.Rel), InPlace: v.st.GameDir == r.Game}
+		m := mount{Kind: clone, Path: at, Target: f.Shared, Worlds: worldsOf(f.Rel), InPlace: inPlace}
 		if err := a.snap(&m, r.Scratch, i+1); err != nil {
 			return err
 		}

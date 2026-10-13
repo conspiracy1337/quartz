@@ -33,6 +33,7 @@ import (
 	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
+	"quartz/internal/sandbox"
 	"quartz/internal/settings"
 	"quartz/internal/worlds"
 )
@@ -77,6 +78,11 @@ type Deps struct {
 	Log       *slog.Logger
 	// InUse reports whether a game uses the instance's worlds right now.
 	InUse func(id string) bool
+	// Sandbox runs a sandboxed instance's server in its sandbox (headless;
+	// not on Windows, where an app container can't take connections from
+	// this computer). StoreRead are the store folders the server reads.
+	Sandbox   *sandbox.Service
+	StoreRead []string
 }
 
 // Service runs at most one server at a time.

@@ -1,0 +1,230 @@
+package sandbox
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+
+	"quartz/internal/core/procx"
+	"quartz/internal/sandbox/rules"
+)
+
+// The jail tests start this test binary again inside a real sandbox; the
+// helper then probes what it can reach and prints one "name=result" line
+// per probe ("ok" or the error).
+func TestMain(m *testing.M) {
+	if os.Getenv("QUARTZ_SANDBOX_HELPER") != "" {
+		helper()
+		return
+	}
+	os.Exit(m.Run())
+}
+
+func say(name string, err error) {
+	r := "ok"
+	if err != nil {
+		r = err.Error()
+		var en syscall.Errno
+		if errors.As(err, &en) {
+			r = en.Error()
+		}
+	}
+	fmt.Printf("%s=%s\n", name, r)
+}
+
+func helper() {
+	if os.Getenv("QUARTZ_SANDBOX_HELPER") == "sleep" {
+		time.Sleep(time.Minute)
+		return
+	}
+	say("write-game", os.WriteFile(filepath.Join(os.Getenv("GAME"), "made.txt"), []byte("x"), 0o600))
+	_, err := os.ReadDir(os.Getenv("OTHER"))
+	say("see-other", err)
+	_, err = os.ReadFile(os.Getenv("SECRET"))
+	say("see-secret", err)
+	say("write-ro", os.WriteFile(filepath.Join(os.Getenv("RO"), "x"), []byte("x"), 0o600))
+	_, err = os.ReadDir(os.Getenv("RO"))
+	say("read-ro", err)
+	say("write-rw", os.WriteFile(filepath.Join(os.Getenv("RW"), "x"), []byte("x"), 0o600))
+	say("read-store", func() error { _, err := os.ReadFile(os.Getenv("STORE")); return err }())
+	say("write-store", os.WriteFile(os.Getenv("STORE"), []byte("y"), 0o600))
+	say("dial", func() error {
+		c, err := net.DialTimeout("tcp", os.Getenv("LISTEN"), 2*time.Second)
+		if err == nil {
+			_ = c.Close()
+		}
+		return err
+	}())
+	platformProbes()
+}
+
+type jailFixture struct {
+	s                         *Service
+	root, game, other, secret string
+	store, ro, rw             string
+	scratch, data, listen     string
+}
+
+func newJailFixture(t *testing.T) *jailFixture {
+	t.Helper()
+	st := New(Config{}).Status()
+	if !st.Available {
+		t.Skip(st.Reason)
+	}
+	root := t.TempDir()
+	f := &jailFixture{root: root, game: filepath.Join(root, "instances", "a", "game"), other: filepath.Join(root, "instances", "b", "game"),
+		secret: filepath.Join(root, "accounts.json"), store: filepath.Join(root, "store", "libraries", "lib.jar"),
+		scratch: filepath.Join(root, "instances", "a", "runs", "1.view"), data: filepath.Join(root, "instances", "a", "sandbox")}
+	outside := t.TempDir()
+	f.ro, f.rw = filepath.Join(outside, "maps"), filepath.Join(outside, "notes")
+	for _, d := range []string{f.game, f.other, f.scratch, f.ro, f.rw, filepath.Dir(f.store)} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []string{f.secret, f.store} {
+		if err := os.WriteFile(p, []byte("data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
+	f.listen = ln.Addr().String()
+	f.s = New(Config{DataRoot: root})
+	t.Cleanup(func() { _ = f.s.Forget("sandbox-test") })
+	return f
+}
+
+func (f *jailFixture) runArgs(t *testing.T, set rules.Settings, mode string) (procx.Spec, *Jail) {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	set.Folders = []rules.Folder{{ID: "a1", Path: f.ro, Level: rules.RO}, {ID: "b2", Path: f.rw, Level: rules.RW}}
+	r := Run{Instance: "sandbox-test", Rules: set, GameDir: f.game, Scratch: f.scratch, Data: f.data,
+		Read: []string{filepath.Dir(exe), filepath.Join(f.root, "store", "libraries")}}
+	env := append(FilterEnv(os.Environ()), "QUARTZ_SANDBOX_HELPER="+mode, "GAME="+f.game, "OTHER="+f.other, "SECRET="+f.secret,
+		"PARENT="+fmt.Sprint(os.Getpid()), "RO="+f.ro, "RW="+f.rw, "STORE="+f.store, "LISTEN="+f.listen)
+	spec, j, err := f.s.Wrap(r, procx.Spec{Argv: []string{exe}, Dir: f.game, Env: env})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return spec, j
+}
+
+func (f *jailFixture) probe(t *testing.T, set rules.Settings) map[string]string {
+	t.Helper()
+	spec, j := f.runArgs(t, set, "probe")
+	defer j.Close()
+	c, err := procx.Start(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.Started(c.Process.Pid)
+	_ = c.Stdin.Close()
+	errc := make(chan []byte, 1)
+	go func() { b, _ := io.ReadAll(c.Stderr); errc <- b }()
+	out, _ := io.ReadAll(c.Stdout)
+	errOut := <-errc
+	_ = c.Wait()
+	got := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok {
+			got[k] = v
+		}
+	}
+	if len(got) == 0 {
+		t.Fatalf("the helper printed nothing: %s", errOut)
+	}
+	t.Logf("%v", got)
+	return got
+}
+
+func TestJailStandard(t *testing.T) {
+	f := newJailFixture(t)
+	got := f.probe(t, rules.Default())
+	for _, k := range []string{"write-game", "write-rw", "read-store", "read-ro"} {
+		if got[k] != "ok" {
+			t.Errorf("%s = %q, want ok", k, got[k])
+		}
+	}
+	for _, k := range []string{"see-other", "see-secret", "write-ro", "write-store"} {
+		if got[k] == "ok" {
+			t.Errorf("%s: the jail reached it", k)
+		}
+	}
+	if runtime.GOOS != "windows" && got["dial"] != "ok" { // app containers never reach loopback
+		t.Errorf("dial = %q: Standard lost the network", got["dial"])
+	}
+	if _, err := os.Stat(filepath.Join(f.game, "made.txt")); err != nil {
+		t.Error("the game's write didn't reach its folder")
+	}
+	checkPlatform(t, got)
+}
+
+func TestJailStrictHasNoNetwork(t *testing.T) {
+	f := newJailFixture(t)
+	got := f.probe(t, rules.Default().Apply(rules.Strict, runtime.GOOS))
+	if got["dial"] == "ok" {
+		t.Error("Strict reached the network")
+	}
+}
+
+// Stop signals the game's process group (or posts WM_CLOSE, then kills),
+// which reaches the jailed game.
+func TestJailStopReachesGame(t *testing.T) {
+	f := newJailFixture(t)
+	spec, j := f.runArgs(t, rules.Default(), "sleep")
+	defer j.Close()
+	c, err := procx.Start(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.Started(c.Process.Pid)
+	go func() { _, _ = io.Copy(io.Discard, c.Stdout) }()
+	go func() { _, _ = io.Copy(io.Discard, c.Stderr) }()
+	time.Sleep(300 * time.Millisecond)
+	if err := procx.Terminate(c.Process); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- c.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = procx.Kill(c.Process)
+		t.Fatal("the jailed game outlived Stop")
+	}
+}
+
+func TestFilterEnv(t *testing.T) {
+	got := FilterEnv([]string{"PATH=/usr/bin", "SSH_AUTH_SOCK=/run/agent", "DBUS_SESSION_BUS_ADDRESS=unix:x", "LC_ALL=C",
+		"GITHUB_TOKEN=secret", "DISPLAY=:0", "__GL_SYNC_TO_VBLANK=0", "broken"})
+	if strings.Join(got, " ") != "PATH=/usr/bin LC_ALL=C DISPLAY=:0 __GL_SYNC_TO_VBLANK=0" {
+		t.Fatal(got)
+	}
+	if e := setEnv([]string{"A=1", "B=2"}, "A=3"); strings.Join(e, " ") != "B=2 A=3" {
+		t.Fatal(e)
+	}
+}

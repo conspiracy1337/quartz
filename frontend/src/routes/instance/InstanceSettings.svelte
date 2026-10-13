@@ -4,7 +4,7 @@
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import { move, repair, trash } from '$lib/instanceActions';
-  import { plural } from '$lib/format';
+  import { capitalize, plural } from '$lib/format';
   import { suggestMemoryGb } from '$lib/look';
   import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
@@ -132,7 +132,7 @@
     </section>
     <section class="sec" aria-label="Sandbox">
       <div class="sec-h"><h2 class="h3">Sandbox</h2></div>
-      <Setting title="Run in a sandbox" desc="Mods can only reach this instance's folder. Standard access rules." href={sub('sandbox')} class="card"><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
+      <Setting title="Run in a sandbox" desc="Mods can only reach this instance's folder. {capitalize(i.sandboxPreset || 'standard')} access rules." href={sub('sandbox')} class="card"><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
     </section>
     <section class="sec" aria-label="Performance">
       <div class="sec-h"><h2 class="h3">Performance</h2><span class="small faint">Linux</span></div>

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"quartz/internal/sandbox/rules"
 	"quartz/internal/settings"
 )
 
@@ -86,7 +87,7 @@ func TestVersionOneFilesMigrate(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, id, "game"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	v1 := `{"version":1,"id":"old-1a2b","name":"Old","art":{"background":"#3ecf8e"},"minecraft":"1.21.1","loader":"quilt-ish",
+	v1 := `{"version":1,"id":"old-1a2b","name":"Old","art":{"background":"#3ecf8e"},"minecraft":"1.21.1","loader":"quilt-ish","sandbox":true,
 		"settings":{"java":{"override":true,"memoryMinMb":2048,"memoryMaxMb":6144,"jvmArgs":"-XX:+UseZGC"},"window":{}}}`
 	if err := os.WriteFile(filepath.Join(dir, id, "instance.json"), []byte(v1), 0o600); err != nil {
 		t.Fatal(err)
@@ -99,7 +100,8 @@ func TestVersionOneFilesMigrate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if in.Version != schema || !in.KeepLoaderUpdated || in.Loader != "" || in.Settings.Java.MemoryMaxMB != 6144 {
+	if in.Version != schema || !in.KeepLoaderUpdated || in.Loader != "" || in.Settings.Java.MemoryMaxMB != 6144 ||
+		!in.Sandbox.On || in.Sandbox.Preset != rules.Standard {
 		t.Fatalf("migrated = %+v", in)
 	}
 }

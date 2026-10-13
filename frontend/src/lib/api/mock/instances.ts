@@ -33,6 +33,7 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   running: false,
   ...(id === 'fo' ? { icon: 'bolt' as const } : {}),
   sandboxed: true,
+  sandboxPreset: 'standard',
   counts: { mods: 48, resourcepacks: 6, shaders: 4, datapacks: 4, worlds: 6, servers: 4 },
   java: '21.0.5, automatic',
   javaAuto: 'Java 21.0.5',

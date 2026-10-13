@@ -14,6 +14,7 @@ import (
 	"quartz/internal/core/shlex"
 	"quartz/internal/instance"
 	"quartz/internal/java"
+	"quartz/internal/sandbox"
 )
 
 // commandTimeout bounds the player's before-launch and after-exit commands.
@@ -59,10 +60,15 @@ func envList(vars map[string]string) []string {
 }
 
 // gameEnv is the game's environment: the cleaned launcher environment (no
-// JVM-flag injection), the $INST_* values, the Linux performance switches and
-// the instance's own variables last, so they win.
-func gameEnv(vars map[string]string, eff instance.Effective) []string {
-	env := append(java.CleanEnv(os.Environ()), envList(vars)...)
+// JVM-flag injection; only the sandbox's allowlist when sandboxed), the
+// $INST_* values, the Linux performance switches and the instance's own
+// variables last, so they win.
+func gameEnv(vars map[string]string, eff instance.Effective, sandboxed bool) []string {
+	base := os.Environ()
+	if sandboxed {
+		base = sandbox.FilterEnv(base)
+	}
+	env := append(java.CleanEnv(base), envList(vars)...)
 	if runtime.GOOS == "linux" && eff.Performance.DedicatedGPU {
 		env = append(env, "DRI_PRIME=1")
 		if _, err := os.Stat("/proc/driver/nvidia"); err == nil {
@@ -76,8 +82,10 @@ func gameEnv(vars map[string]string, eff instance.Effective) []string {
 }
 
 // wrappers returns the programs put in front of java: the player's wrapper,
-// then GameMode and MangoHud when enabled and installed (Linux only).
-func wrappers(eff instance.Effective, vars map[string]string) ([]string, error) {
+// then GameMode and MangoHud when enabled and installed (Linux only). A
+// sandboxed game has no session bus for gamemoderun; the sandbox registers
+// it with GameMode from outside instead.
+func wrappers(eff instance.Effective, vars map[string]string, sandboxed bool) ([]string, error) {
 	var out []string
 	if eff.Commands.Wrapper != "" {
 		w, err := commandArgv(eff.Commands.Wrapper, vars)
@@ -90,7 +98,7 @@ func wrappers(eff instance.Effective, vars map[string]string) ([]string, error) 
 		for _, t := range []struct {
 			on  bool
 			bin string
-		}{{eff.Performance.GameMode, "gamemoderun"}, {eff.Performance.MangoHud, "mangohud"}} {
+		}{{eff.Performance.GameMode && !sandboxed, "gamemoderun"}, {eff.Performance.MangoHud, "mangohud"}} {
 			if t.on {
 				if p, err := exec.LookPath(t.bin); err == nil {
 					out = append(out, p)

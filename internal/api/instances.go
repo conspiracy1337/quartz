@@ -91,7 +91,8 @@ type InstanceView struct {
 	Sandboxed         bool              `json:"sandboxed"`
 	Counts            map[string]int    `json:"counts"`
 	Java              string            `json:"java"`
-	JavaAuto          string            `json:"javaAuto"` // what "Automatic" picks, e.g. "Java 21"
+	JavaAuto          string            `json:"javaAuto"`      // what "Automatic" picks, e.g. "Java 21"
+	SandboxPreset     string            `json:"sandboxPreset"` // standard | strict | custom
 	MemoryMB          MemoryRange       `json:"memoryMB"`
 	Created           int64             `json:"created"`
 	Folder            string            `json:"folder"`
@@ -162,7 +163,7 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 	}
 	return InstanceView{
 		InstanceSummary: s.summary(in),
-		Sandboxed:       in.Sandbox, Java: java, JavaAuto: auto, MemoryMB: MemoryRange{Min: eff.MemoryMinMB, Max: eff.MemoryMaxMB},
+		Sandboxed:       in.Sandbox.On, SandboxPreset: string(in.Sandbox.Preset), Java: java, JavaAuto: auto, MemoryMB: MemoryRange{Min: eff.MemoryMinMB, Max: eff.MemoryMaxMB},
 		Created: in.Created.UnixMilli(), Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),

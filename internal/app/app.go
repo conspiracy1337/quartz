@@ -61,6 +61,7 @@ import (
 	"quartz/internal/modplatform/modrinth"
 	"quartz/internal/network"
 	"quartz/internal/runview"
+	"quartz/internal/sandbox"
 	"quartz/internal/screenshots"
 	"quartz/internal/servers"
 	"quartz/internal/settings"
@@ -105,6 +106,7 @@ type app struct {
 	packs     *modpack.Service
 	loaders   *loader.Registry
 	launcher  *launch.Launcher
+	sandbox   *sandbox.Service
 	host      *host.Service
 	content   *content.Service
 	platforms []modplatform.Platform // Modrinth first, then CurseForge
@@ -181,6 +183,8 @@ func Run(o Options) error {
 			api.NewServers(a.ctx, a.servers),
 			api.NewScreenshots(api.ScreenshotDeps{Service: a.screenshots, Instances: a.instances, Icons: a.icons, Bus: a.bus}),
 			api.NewSync(a.ctx, a.syncing),
+			api.NewSandbox(a.ctx, api.SandboxDeps{Service: a.sandbox, Store: a.instances, Syncing: a.syncing, Java: a.java, Meta: a.meta,
+				Settings: a.settings, Bus: a.bus, Root: a.paths.Root}),
 		},
 	})
 }
@@ -344,6 +348,13 @@ func (a *app) buildTasks() error {
 		LogConfigs: a.paths.LogConfigs(), Natives: a.paths.Natives(),
 	})
 	a.buildGame()
+	a.sandbox = sandbox.New(sandbox.Config{DataRoot: a.paths.Root, Log: a.log})
+	a.instances.OnPurge(func(id string) {
+		if err := a.sandbox.Forget(id); err != nil {
+			a.log.Warn("removing an instance's sandbox failed", "instance", id, "err", err)
+		}
+	})
+	storeRead := []string{a.paths.Libraries(), a.paths.Versions(), a.paths.Assets(), a.paths.Natives(), a.paths.LogConfigs(), a.paths.Bin()}
 	a.launcher = launch.New(launch.Config{
 		Instances: a.instances, Accounts: a.accounts, Installer: a.installer, Loaders: a.loaders, Java: a.java, Tasks: eng,
 		Settings: a.settings, Bus: a.bus, Redactor: a.redactor, BinDir: a.paths.Bin(), Log: a.log,
@@ -353,11 +364,13 @@ func (a *app) buildTasks() error {
 		Syncing:   a.syncing,
 		Views:     runview.New(runview.Config{Retitle: worlds.Retitle, Log: a.log}),
 		Hosted:    func(id, folder string) bool { return a.host.HostedWorld(id) == folder },
+		Sandbox:   a.sandbox, StoreRead: storeRead,
 	})
 	a.host = host.New(host.Deps{
 		Instances: a.instances, Installer: a.installer, Java: a.java, Tasks: eng, Content: a.content, Store: a.store,
 		Worlds: a.worlds, Accounts: a.accounts.Store(), Settings: a.settings, Bus: a.bus, Redactor: a.redactor, Log: a.log,
-		InUse: func(id string) bool { return a.syncing.Busy(id, "saves") },
+		InUse:   func(id string) bool { return a.syncing.Busy(id, "saves") },
+		Sandbox: a.sandbox, StoreRead: storeRead,
 	})
 	a.buildBrowse(dl)
 	return nil
@@ -451,7 +464,8 @@ func (a *app) buildBrowse(dl *download.Downloader) {
 			g := a.settings.Get().Java
 			return instance.JavaSettings{MemoryMinMB: g.MemoryMinMB, MemoryMaxMB: g.MemoryMaxMB, JVMArgs: g.JVMArgs}
 		},
-		GetIcon: modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log,
+		Sandboxed: func() bool { return a.sandbox.Status().Available },
+		GetIcon:   modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log,
 	}, modpack.UpdateDeps{Known: a.content.Known, Record: a.content.Record, Channel: channel})
 }
 
@@ -583,6 +597,10 @@ func (a *app) startup(ctx context.Context) {
 	// Games that ran when the launcher last quit get merged back.
 	go a.launcher.Recover()
 	go a.host.Recover()
+	go func() {
+		st := a.sandbox.Status()
+		a.log.Info("sandbox", "available", st.Available, "backend", st.Name, "version", st.Version, "reason", st.Reason)
+	}()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)

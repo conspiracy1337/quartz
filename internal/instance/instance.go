@@ -22,6 +22,7 @@ import (
 
 	"quartz/internal/core/jsonfile"
 	"quartz/internal/loader"
+	"quartz/internal/sandbox/rules"
 )
 
 // Art is the instance tile.
@@ -104,7 +105,9 @@ type Instance struct {
 	Notes        string   `json:"notes,omitempty"`
 	Tags         []string `json:"tags,omitempty"`
 	Location     string   `json:"location,omitempty"` // a moved game folder; "" is instances/<id>/game
-	Sandbox      bool     `json:"sandbox"`
+	// Sandbox is what the game may reach (instance.json held a bool before
+	// M10, which still reads: true is on with the Standard rules).
+	Sandbox rules.Settings `json:"sandbox"`
 	// Shares is the pre-M8 list of New instance labels, migrated into Sync.
 	Shares      []string   `json:"shares,omitempty"`
 	Sync        Sync       `json:"sync"`
@@ -259,6 +262,7 @@ func normalize(in Instance) Instance {
 		in.Icon = ""
 	}
 	in.Sync, in.Shares = in.Sync.normalize(in.Shares), nil
+	in.Sandbox = in.Sandbox.Normalize()
 	in.Notes = clip(in.Notes, maxNotes)
 	in.Tags = cleanTags(in.Tags)
 	in.Group, _ = cleanGroup(in.Group)
@@ -333,8 +337,13 @@ type Store struct {
 	mu    sync.Mutex
 	files map[string]*jsonfile.Store[Instance]
 
-	locate atomic.Pointer[Locator]
+	locate  atomic.Pointer[Locator]
+	onPurge atomic.Pointer[func(id string)]
 }
+
+// OnPurge sets what runs after an instance is deleted for good (its
+// sandbox's leftovers go too).
+func (s *Store) OnPurge(fn func(id string)) { s.onPurge.Store(&fn) }
 
 // Locator says under which folder an instance-relative path really lives:
 // the game folder, or the shared folder when the instance shares it.
@@ -486,7 +495,7 @@ func (s *Store) Create(req CreateRequest, defaults JavaSettings) (Instance, erro
 	in := Instance{
 		Version: schema, ID: s.newID(name), Name: name, Art: req.Art, Icon: req.Icon, Minecraft: req.Minecraft,
 		Loader: req.Loader, LoaderVersion: req.LoaderVersion, KeepLoaderUpdated: true,
-		Group: group, Sandbox: req.Sandbox, Created: time.Now().UTC(),
+		Group: group, Sandbox: rules.Settings{On: req.Sandbox, Preset: rules.Standard}, Created: time.Now().UTC(),
 		Settings: Settings{Java: defaults},
 	}
 	if in.Art.Initial == "" {

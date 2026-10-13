@@ -174,7 +174,13 @@ func (s *Store) Purge(key string) error {
 			return err
 		}
 	}
-	return os.RemoveAll(filepath.Join(s.trash, key))
+	if err := os.RemoveAll(filepath.Join(s.trash, key)); err != nil {
+		return err
+	}
+	if fn := s.onPurge.Load(); fn != nil {
+		(*fn)(e.ID)
+	}
+	return nil
 }
 
 // PurgeExpired deletes entries trashed more than TrashKeep ago and returns

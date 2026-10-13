@@ -50,23 +50,23 @@ func TestCommandKeepsTokenOffTheCommandLine(t *testing.T) {
 	sess := accounts.Session{Name: "Steve", UUID: "0123456789abcdef0123456789abcdef", AccessToken: "SECRET_TOKEN_eyJhbGciOi", UserType: "msa"}
 	sp := spec{inst: inst, eff: inst.Resolve(st.Get()), sess: sess, res: res, rt: java.Runtime{Path: "/jdk/bin/java"}, mem: MemoryRange{Min: 1024, Max: 4096}, env: env, gameDir: insts.GameDir(inst.ID)}
 	sp.vars = instVars(inst, insts.Dir(inst.ID), sp.gameDir, sp.rt.Path)
-	cmd, script, _, err := l.command(sp)
+	cmd, script, _, err := l.command(&sp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	argv := strings.Join(cmd.Args, " ")
+	argv := strings.Join(cmd.Argv, " ")
 	if strings.Contains(argv, "SECRET_TOKEN") || strings.Contains(argv, "Steve") {
 		t.Fatalf("game arguments leaked onto the command line: %s", argv)
 	}
 	for _, want := range []string{"-Xms1024M", "-Xmx4096M", "-Dfoo=a b", "-XX:+UseZGC", "-Dlog4j2.formatMsgNoLookups=true", "-Dlog4j.configurationFile=/store/logconfigs/client-1.12.xml", "wrapper.Main"} {
-		if !slices.Contains(cmd.Args, want) {
-			t.Errorf("missing %q in %v", want, cmd.Args)
+		if !slices.Contains(cmd.Argv, want) {
+			t.Errorf("missing %q in %v", want, cmd.Argv)
 		}
 	}
-	if cmd.Args[len(cmd.Args)-1] != "wrapper.Main" {
+	if cmd.Argv[len(cmd.Argv)-1] != "wrapper.Main" {
 		t.Fatal("wrapper must be the main class")
 	}
-	cp := cmd.Args[slices.Index(cmd.Args, "-cp")+1]
+	cp := cmd.Argv[slices.Index(cmd.Argv, "-cp")+1]
 	if !strings.HasSuffix(cp, ".jar") || !strings.Contains(cp, "wrapper-") {
 		t.Fatalf("classpath lacks the wrapper jar: %s", cp)
 	}
@@ -93,8 +93,8 @@ func TestCommandKeepsTokenOffTheCommandLine(t *testing.T) {
 	if !slices.Contains(cmd.Env, "MESA_GL_VERSION_OVERRIDE=4.6") || !slices.Contains(cmd.Env, "INST_NAME=T") {
 		t.Fatal("instance environment missing")
 	}
-	if !slices.Equal(cmd.Args[:4], []string{"nice", "-n", "5", "/jdk/bin/java"}) {
-		t.Fatalf("wrapper must come first, expanded per word: %v", cmd.Args[:4])
+	if !slices.Equal(cmd.Argv[:4], []string{"nice", "-n", "5", "/jdk/bin/java"}) {
+		t.Fatalf("wrapper must come first, expanded per word: %v", cmd.Argv[:4])
 	}
 }
 

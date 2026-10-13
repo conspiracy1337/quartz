@@ -52,6 +52,9 @@ type InstallDeps struct {
 	Prepare func(ctx context.Context, t install.Target, gameDir string, meta tasks.Meta) (*tasks.Spec, error)
 	// Defaults are the global Java settings new instances start from.
 	Defaults func() instance.JavaSettings
+	// Sandboxed says whether new instances start sandboxed (when this
+	// system can sandbox games; nil: never).
+	Sandboxed func() bool
 	// GetIcon fetches a pack's icon from its platform CDN.
 	GetIcon func(ctx context.Context, rawURL string) ([]byte, error)
 	Staging string // instances/.staging
@@ -151,7 +154,7 @@ func (s *Service) Install(ctx context.Context, token, name string, art instance.
 		return "", err
 	}
 	packSpec.After("Installing", tasks.Count, tasks.Func("create the instance", func(ctx context.Context) error {
-		err := s.create(ctx, p, files, set, target, game, instance.CreateRequest{Name: orElse(name, p.Name), Art: art})
+		err := s.create(ctx, p, files, set, target, game, instance.CreateRequest{Name: orElse(name, p.Name), Art: art, Sandbox: s.d.Sandboxed != nil && s.d.Sandboxed()})
 		if err != nil {
 			return &netx.PermanentError{Err: err}
 		}

@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +32,8 @@ import (
 	"quartz/internal/java"
 	"quartz/internal/loader"
 	"quartz/internal/mojang"
+	"quartz/internal/sandbox"
+	"quartz/internal/sandbox/rules"
 )
 
 const (
@@ -54,11 +57,13 @@ type server struct {
 	saves           string // where the instance's worlds are (--universe)
 	world           string // the world's folder in saves (--world)
 	uuid            string // the default account's player id, for its inventory
+	rules           rules.Settings
 	cancel          context.CancelFunc
+	jail            *sandbox.Jail
 
 	mu      sync.Mutex
 	st      State
-	cmd     *exec.Cmd
+	cmd     *procx.Child
 	stdin   io.WriteCloser
 	con     *gamelog.Console
 	started time.Time
@@ -128,7 +133,7 @@ func (s *Service) Start(id string, o Options) error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	srv := &server{id: id, runID: time.Now().Format("20060102-150405.000"), name: in.Name, opts: o, dir: s.Dir(id), saves: saves, world: world,
-		cancel: cancel, done: make(chan struct{}), ping: make(chan struct{}, 1)}
+		rules: in.Sandbox, cancel: cancel, done: make(chan struct{}), ping: make(chan struct{}, 1)}
 	srv.st = State{InstanceID: id, RunID: srv.runID, State: "starting", Stage: startStage(o.World, world), Port: o.Port, Max: o.MaxPlayers}
 	if o.LAN {
 		srv.st.LAN = lanAddress()
@@ -404,22 +409,19 @@ func serverArgs(res *install.Server, eff instance.Effective, srv *server) []stri
 
 // spawn starts the server process and follows it until it exits.
 func (s *Service) spawn(ctx context.Context, srv *server, javaPath string, argv []string) error {
-	cmd := exec.Command(javaPath, argv...) //nolint:gosec // argv built by the launcher; no shell
-	cmd.Dir = srv.dir
-	cmd.Env = java.CleanEnv(os.Environ())
-	procx.Detach(cmd)
-	procx.NoConsole(cmd)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
+	spec := procx.Spec{Argv: append([]string{javaPath}, argv...), Dir: srv.dir, Env: java.CleanEnv(os.Environ()), NoConsole: true}
+	if srv.rules.On && s.d.Sandbox != nil && runtime.GOOS != "windows" {
+		spec.Env = java.CleanEnv(sandbox.FilterEnv(os.Environ()))
+		r := sandbox.Run{Instance: srv.id, Rules: srv.rules, GameDir: srv.dir, Headless: true,
+			Scratch: filepath.Join(srv.dir, ".quartz", "sandbox"),
+			Read:    append(slices.Clone(s.d.StoreRead), sandbox.JavaRoot(javaPath)), Write: []string{srv.saves}}
+		if s.d.Instances != nil {
+			r.Data = filepath.Join(s.d.Instances.Dir(srv.id), "sandbox")
+		}
+		var err error
+		if spec, srv.jail, err = s.d.Sandbox.Wrap(r, spec); err != nil {
+			return err
+		}
 	}
 	con := gamelog.NewConsole(consoleLines, s.d.Redactor, logBatch, func(l gamelog.Line) { s.onLine(srv, l) }, func(lines []gamelog.Line) {
 		s.d.Bus.Emit(events.HostLog, LogBatch{InstanceID: srv.id, RunID: srv.runID, Lines: lines})
@@ -427,20 +429,24 @@ func (s *Service) spawn(ctx context.Context, srv *server, javaPath string, argv 
 	srv.mu.Lock()
 	if err := ctx.Err(); err != nil {
 		srv.mu.Unlock()
+		srv.jail.Close()
 		return err
 	}
-	if err := cmd.Start(); err != nil {
+	cmd, err := procx.Start(spec)
+	if err != nil {
 		srv.mu.Unlock()
+		srv.jail.Close()
 		return err
 	}
-	srv.cmd, srv.stdin, srv.con, srv.started = cmd, stdin, con, time.Now()
+	srv.cmd, srv.stdin, srv.con, srv.started = cmd, cmd.Stdin, con, time.Now()
 	srv.mu.Unlock()
+	srv.jail.Started(cmd.Process.Pid)
 	if err := fsx.AtomicWrite(pidFile(srv.dir), []byte(strconv.Itoa(cmd.Process.Pid)), fsx.FilePerm); err != nil {
 		s.d.Log.Warn("host: recording the server process failed", "err", err)
 	}
 	pings, stopPings := context.WithCancel(context.Background())
 	go s.pinger(pings, srv)
-	wait := con.Start(stdout, stderr)
+	wait := con.Start(cmd.Stdout, cmd.Stderr)
 	go func() {
 		wait()
 		err := cmd.Wait()
@@ -568,11 +574,9 @@ func (s *Service) Close(ctx context.Context) {
 
 // exited sorts out how the server ended.
 func (s *Service) exited(srv *server, waitErr error) {
-	code := 0
-	if srv.cmd.ProcessState != nil {
-		code = srv.cmd.ProcessState.ExitCode()
-	}
-	failed := code != 0 || (waitErr != nil && srv.cmd.ProcessState == nil)
+	srv.jail.Close()
+	code, reaped := srv.cmd.Result()
+	failed := (reaped && code != 0) || (waitErr != nil && !reaped)
 	result := "ok"
 	var err error
 	switch {

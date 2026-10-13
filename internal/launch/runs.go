@@ -41,9 +41,10 @@ type Record struct {
 	Result    Result      `json:"result"`
 	Java      string      `json:"java"`
 	Memory    MemoryRange `json:"memory"`
-	Account   string      `json:"account"`   // the player name, as it was at launch
-	AccountID string      `json:"accountId"` // the account it was
-	Mods      int         `json:"mods"`      // enabled mods loaded
+	Account   string      `json:"account"`           // the player name, as it was at launch
+	AccountID string      `json:"accountId"`         // the account it was
+	Mods      int         `json:"mods"`              // enabled mods loaded
+	Sandbox   string      `json:"sandbox,omitempty"` // the sandbox it ran in ("bubblewrap"); "" is none
 	// Filled in after the game exits (see Finisher).
 	World  string `json:"world,omitempty"`  // the world played, by its name
 	Server string `json:"server,omitempty"` // the server joined last, host[:port]
