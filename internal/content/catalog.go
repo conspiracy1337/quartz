@@ -26,13 +26,15 @@ type Ident struct {
 	Game        []string `json:"game,omitempty"`
 	Library     bool     `json:"library,omitempty"`
 	Published   int64    `json:"published,omitempty"` // unix seconds
+	// ServerSide is the project's modplatform.Project ServerSide ("" = not asked).
+	ServerSide string `json:"serverSide,omitempty"`
 }
 
 // identOf records a platform's version and project.
 func identOf(v modplatform.Version, p modplatform.Project) *Ident {
 	return &Ident{Source: string(v.Source), ProjectID: v.ProjectID, VersionID: v.ID, Slug: p.Slug, Title: p.Title, Author: p.Author,
 		Version: v.Number, ReleaseType: v.Type, FileName: v.File.Name, URL: v.File.URL, Loaders: v.Loaders, Game: v.Game,
-		Library: p.Library, Published: v.Published.Unix()}
+		Library: p.Library, Published: v.Published.Unix(), ServerSide: p.ServerSide}
 }
 
 // Known is what the launcher knows about one blob, shared by every
@@ -43,7 +45,13 @@ type Known struct {
 	Modrinth   *Ident     `json:"modrinth,omitempty"`
 	CurseForge *Ident     `json:"curseforge,omitempty"`
 	IdentAt    int64      `json:"identAt,omitempty"` // when platforms were last asked
+	// Rev is the metadata parser revision Info was read with (see metaRev).
+	Rev int `json:"rev,omitempty"`
 }
+
+// metaRev is bumped when parsing learns something new (1: a mod's side), so
+// older catalog entries are read again once when that field is needed.
+const metaRev = 1
 
 // Ref names the blob's project on every platform that knows it.
 func (k Known) Ref() modplatform.Ref {

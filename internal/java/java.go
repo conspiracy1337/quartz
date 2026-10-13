@@ -349,6 +349,21 @@ type Request struct {
 	Override  string // instance setting: a specific java binary, or ""
 }
 
+// Installed finds a runtime for req once it is installed (after a job's Java
+// step), for tools that run during an install such as a loader's processors.
+func (m *Manager) Installed(req Request) func(context.Context) (string, error) {
+	return func(ctx context.Context) (string, error) {
+		rt, plan, err := m.Resolve(ctx, req)
+		if err != nil {
+			return "", err
+		}
+		if plan != nil || rt.Path == "" {
+			return "", fmt.Errorf("java: Java %d is needed to finish installing the mod loader", req.Major)
+		}
+		return rt.Path, nil
+	}
+}
+
 // Resolve picks the runtime for req: the instance override, then a managed
 // runtime of exactly that major, then a detected one of the host's
 // architecture. When none fits it returns an install plan instead.

@@ -88,6 +88,9 @@ type Config struct {
 	Syncing *syncing.Service
 	// Views assembles each run's folders (nil runs in the game folder).
 	Views *runview.Assembler
+	// Hosted reports a world a local server plays now, which the game may
+	// not open too (nil: none ever is).
+	Hosted func(id, folder string) bool
 }
 
 // ModChecker summarises the mods a launch will load. It never blocks a
@@ -199,6 +202,9 @@ func (l *Launcher) Busy(id string) bool {
 // ErrBadTarget is returned for a world or server Play can't open into.
 var ErrBadTarget = errors.New("launch: not a world or server to open")
 
+// ErrHosted means the world is being played by a local server right now.
+var ErrHosted = errors.New("launch: that world is hosted right now; join the server instead")
+
 // Play starts the launch pipeline in the background with an account
 // (accountID "" means the default one; "Launch as" passes another, for this
 // launch only). into opens a world or server straight away; its zero value
@@ -208,6 +214,9 @@ var ErrBadTarget = errors.New("launch: not a world or server to open")
 func (l *Launcher) Play(id, accountID string, into instance.Into) error {
 	if !into.Valid() {
 		return ErrBadTarget
+	}
+	if into.Kind == "world" && l.cfg.Hosted != nil && l.cfg.Hosted(id, into.Target) {
+		return ErrHosted
 	}
 	inst, err := l.cfg.Instances.Get(id)
 	if err != nil {
@@ -240,7 +249,7 @@ func (l *Launcher) Live(id string) []gamelog.Line {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if copies := l.running[id]; len(copies) > 0 {
-		return copies[len(copies)-1].buf.Lines()
+		return copies[len(copies)-1].con.Lines()
 	}
 	if b, ok := l.last[id]; ok {
 		return b.Lines()
@@ -395,7 +404,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	}
 	p.progress(StageFiles, 20)
 
-	if err := p.install(ctx, res, plan, l.processorJava(own)); err != nil {
+	if err := p.install(ctx, res, plan, l.cfg.Java.Installed(own)); err != nil {
 		return StageFiles, err
 	}
 	if plan != nil {
@@ -429,7 +438,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 		return StageStart, err
 	}
 	select {
-	case <-r.firstOutput:
+	case <-r.con.First():
 	case <-r.done:
 	case <-ctx.Done():
 		// The game is already starting; cancelling now would only orphan it.
@@ -487,21 +496,6 @@ func (p *pipeline) updateLoader(ctx context.Context) string {
 		}
 	}
 	return loader.Label(k, in.Minecraft, p.inst.LoaderVersion)
-}
-
-// processorJava finds the Java a loader's installer runs with, after the
-// install job's own Java download (if any) has finished.
-func (l *Launcher) processorJava(req java.Request) func(context.Context) (string, error) {
-	return func(ctx context.Context) (string, error) {
-		rt, plan, err := l.cfg.Java.Resolve(ctx, req)
-		if err != nil {
-			return "", err
-		}
-		if plan != nil || rt.Path == "" {
-			return "", fmt.Errorf("launch: Java %d is needed to finish installing the mod loader", req.Major)
-		}
-		return rt.Path, nil
-	}
 }
 
 // install runs the install job (if anything is missing) and mirrors its
@@ -622,5 +616,5 @@ func (l *Launcher) Prepare(ctx context.Context, t install.Target, gameDir string
 	if err != nil {
 		return nil, err
 	}
-	return l.cfg.Installer.Plan(install.Request{Resolved: res, Java: plan, Force: force, ProcessorJava: l.processorJava(own), Meta: meta})
+	return l.cfg.Installer.Plan(install.Request{Resolved: res, Java: plan, Force: force, ProcessorJava: l.cfg.Java.Installed(own), Meta: meta})
 }

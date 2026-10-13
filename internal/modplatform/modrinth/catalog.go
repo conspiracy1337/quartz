@@ -110,8 +110,6 @@ type detail struct {
 	Body        string    `json:"body"`
 	Downloads   int64     `json:"downloads"`
 	Updated     time.Time `json:"updated"`
-	ClientSide  string    `json:"client_side"`
-	ServerSide  string    `json:"server_side"`
 	Loaders     []string  `json:"loaders"`
 	GameVers    []string  `json:"game_versions"`
 	Versions    []string  `json:"versions"`
@@ -181,6 +179,15 @@ func side(s string) string {
 		return s
 	}
 	return ""
+}
+
+// serverSide keeps Modrinth's server_side answer; "unknown" (and anything
+// unexpected) is recorded as SideUnknown, so "" still means "never asked".
+func serverSide(s string) string {
+	if v := side(s); v != "" {
+		return v
+	}
+	return modplatform.SideUnknown
 }
 
 // Slug resolves a website slug; Modrinth answers /v2/project/{slug} directly.

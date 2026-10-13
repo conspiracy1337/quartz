@@ -110,6 +110,8 @@ export interface ContentItem {
   project?: string;
   /** Its reference for the launcher's own project page (identified items). */
   ref?: string;
+  /** A mod a local server leaves out. */
+  clientOnly?: boolean;
 }
 
 /** What a content tab shows besides its rows. */

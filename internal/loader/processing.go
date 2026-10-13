@@ -1,8 +1,6 @@
 package loader
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -13,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"quartz/internal/core/archive"
 	"quartz/internal/core/download"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/hashx"
@@ -44,13 +41,18 @@ type step struct {
 
 var hexSum = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
-// processing turns the profile's processors into steps for the client side.
-// DOWNLOAD_MOJMAPS is not run: its output is Mojang's client_mappings file,
-// which becomes a verified download in prof.Extra instead (XMCL's approach).
+// processing turns the profile's processors into steps for the request's
+// side. DOWNLOAD_MOJMAPS is not run: its output is Mojang's client_mappings
+// (or server_mappings) file, which becomes a verified download in prof.Extra
+// instead (XMCL's approach). EXTRACT_FILES only copies Forge's run scripts
+// next to a server, which the launcher starts itself, so it is skipped.
 func (in *installer) processing(req Request, vars dataVars, ps []processor, prof *Profile, marker, stamp string) (*Processing, error) {
 	proc := &Processing{root: filepath.Dir(in.dirs.Libraries), marker: marker, stamp: stamp, verified: in.verified, Timeout: 10 * time.Minute}
 	for _, p := range ps {
-		if len(p.Sides) > 0 && !slices.Contains(p.Sides, "client") {
+		if len(p.Sides) > 0 && !slices.Contains(p.Sides, req.side()) {
+			continue
+		}
+		if argAfter(p.Args, "--task") == "EXTRACT_FILES" {
 			continue
 		}
 		args := make([]string, len(p.Args))
@@ -108,15 +110,15 @@ func (in *installer) processing(req Request, vars dataVars, ps []processor, prof
 
 // mojmaps is the download that replaces DOWNLOAD_MOJMAPS.
 func (in *installer) mojmaps(req Request, dest string) (mojang.ResolvedLibrary, error) {
-	m, ok := req.Parent.Downloads["client_mappings"]
+	m, ok := req.Parent.Downloads[req.side()+"_mappings"]
 	if !ok {
-		return mojang.ResolvedLibrary{}, fmt.Errorf("loader: Minecraft %s publishes no client mappings", req.Minecraft)
+		return mojang.ResolvedLibrary{}, fmt.Errorf("loader: Minecraft %s publishes no %s mappings", req.Minecraft, req.side())
 	}
 	rel, err := filepath.Rel(in.dirs.Libraries, dest)
 	if err != nil || !filepath.IsLocal(rel) {
 		return mojang.ResolvedLibrary{}, fmt.Errorf("loader: mappings output %q is outside the libraries folder", dest)
 	}
-	return mojang.ResolvedLibrary{Name: "client mappings " + req.Minecraft, Path: filepath.ToSlash(rel), URL: m.URL, SHA1: m.SHA1, Size: m.Size}, nil
+	return mojang.ResolvedLibrary{Name: req.side() + " mappings " + req.Minecraft, Path: filepath.ToSlash(rel), URL: m.URL, SHA1: m.SHA1, Size: m.Size}, nil
 }
 
 func argAfter(args []string, flag string) string {
@@ -223,17 +225,9 @@ func (p *Processing) run(ctx context.Context, javaPath, work string, s step) err
 
 // mainClass reads Main-Class from a jar's manifest.
 func mainClass(jar string) (string, error) {
-	mf, err := archive.ReadFile(jar, "META-INF/MANIFEST.MF", 1<<20)
-	if err != nil {
-		return "", err
+	name, err := manifestAttr(jar, "Main-Class")
+	if err == nil && name == "" {
+		err = fmt.Errorf("%s names no Main-Class", filepath.Base(jar))
 	}
-	sc := bufio.NewScanner(bytes.NewReader(mf))
-	for sc.Scan() {
-		if v, ok := strings.CutPrefix(sc.Text(), "Main-Class:"); ok {
-			if name := strings.TrimSpace(v); name != "" {
-				return name, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("%s names no Main-Class", filepath.Base(jar))
+	return name, err
 }

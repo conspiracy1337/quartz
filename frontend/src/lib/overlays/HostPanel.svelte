@@ -1,35 +1,71 @@
 <script lang="ts">
+  import { api } from '../api';
+  import type { HostState } from '../api/host';
+  import type { LogLine } from '../api/types';
+  import { onEvent } from '../bridge';
   import { copyText } from '../clipboard';
   import { href } from '../router.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
 
-  /** Bottom-right panel while a local server starts or runs. */
-  interface Props { instanceId: string; state: 'starting' | 'running' }
-  let { instanceId, state }: Props = $props();
+  /** Bottom-right panel while the local server starts or runs (DlgHost.dc.html). */
+  interface Props { host: HostState }
+  let { host }: Props = $props();
+  const id = $derived(host.instanceId);
+  const local = $derived(`localhost:${host.port}`);
+  const network = $derived(host.lan ? `${host.lan}:${host.port}` : '');
   const copy = (t: string) => void copyText(t);
+
+  // The panel shows the newest console lines; the Logs tab has them all.
+  const SHOWN = 4;
+  let lines = $state.raw<LogLine[]>([]);
+  $effect(() => {
+    const inst = id;
+    let alive = true;
+    void api.host.live(inst).then((l) => {
+      if (alive) lines = (l ?? []).slice(-SHOWN);
+    });
+    const off = onEvent<{ instanceId: string; lines: LogLine[] }>('host:log', (b) => {
+      if (b.instanceId === inst) lines = lines.concat(b.lines).slice(-SHOWN);
+    });
+    return () => {
+      alive = false;
+      off();
+    };
+  });
+
+  let command = $state('');
+  async function send(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || !command.trim()) return;
+    try {
+      await api.host.command(id, command);
+      command = '';
+    } catch (err) {
+      session.fail('Command', err);
+    }
+  }
 </script>
 
-{#if state === 'starting'}
+{#if host.state === 'starting'}
   <section class="panel" role="status" aria-label="Starting server" style="padding: 14px; display: grid; grid-template-columns: 18px minmax(0,1fr); gap: 12px; align-items: center">
     <Icon name="spinner" size={16} sw={2.4} class="spin" color="var(--text)" />
-    <span><span style="display: block; font-weight: 500">Starting server</span><span class="small faint">Backing up Northwatch, preparing spawn area</span></span>
+    <span><span style="display: block; font-weight: 500">Starting server</span><span class="small faint">{host.stage ?? ''}</span></span>
   </section>
 {:else}
   <section class="panel" aria-label="Server running">
-    <div style="display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px"><span class="dot live" aria-hidden="true"></span><span style="font-weight: 500; margin-right: auto">Server running</span><span class="small faint tnum">1 of 10 players</span></div>
+    <div style="display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px"><span class="dot live" aria-hidden="true"></span><span style="font-weight: 500; margin-right: auto">Server running</span><span class="small faint tnum">{host.players} of {host.max} players</span></div>
     <div style="padding: 0 14px; display: flex; flex-direction: column; gap: 6px">
-      <div class="addr"><span class="mono trunc">localhost:25565</span><button class="btn btn-sm btn-ghost" onclick={() => copy('localhost:25565')}>Copy</button></div>
-      <div class="addr"><span class="mono trunc">192.168.1.24:25565 <span class="faint">on your network</span></span><button class="btn btn-sm btn-ghost" onclick={() => copy('192.168.1.24:25565')}>Copy</button></div>
+      <div class="addr"><span class="mono trunc">{local}</span><button class="btn btn-sm btn-ghost" onclick={() => copy(local)}>Copy</button></div>
+      {#if network}<div class="addr"><span class="mono trunc">{network} <span class="faint">on your network</span></span><button class="btn btn-sm btn-ghost" onclick={() => copy(network)}>Copy</button></div>{/if}
     </div>
     <div style="padding: 10px 14px 0">
-      <div class="con" aria-label="Server console">[21:40:02] Done (4.218s)! For help, type "help"<br />[21:40:19] Kestrel_Vane joined the game<br />[21:40:31] Saved the game</div>
-      <label class="input" style="margin-top: 6px; height: 30px"><span class="mono faint">/</span><span class="sr">Server command</span><input class="mono" placeholder="op Kestrel_Vane" /></label>
+      <div class="con" aria-label="Server console">{#each lines as l, i (i)}{#if i > 0}<br />{/if}[{l.time}] {l.message}{/each}</div>
+      <label class="input" style="margin-top: 6px; height: 30px"><span class="mono faint">/</span><span class="sr">Server command</span><input class="mono" placeholder="op Kestrel_Vane" bind:value={command} onkeydown={send} /></label>
     </div>
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 12px 14px 14px">
-      <button class="btn btn-sm btn-accent" onclick={() => session.play(instanceId)}>Join</button>
-      <a href={href({ name: 'instance', id: instanceId, tab: 'logs' })} class="btn btn-sm">Console</a>
-      <button class="btn btn-sm btn-danger" onclick={() => session.stopHost(instanceId)}>Stop</button>
+      <button class="btn btn-sm btn-accent" onclick={() => session.play(id, '', { kind: 'server', target: local })}>Join</button>
+      <a href={href({ name: 'instance', id, tab: 'logs' })} class="btn btn-sm">Console</a>
+      <button class="btn btn-sm btn-danger" onclick={() => session.stopHost(id)}>Stop</button>
     </div>
   </section>
 {/if}

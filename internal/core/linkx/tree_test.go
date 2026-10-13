@@ -51,3 +51,34 @@ func TestCloneTree(t *testing.T) {
 		t.Fatalf("existing dst: %v", err)
 	}
 }
+
+func TestUpdateTree(t *testing.T) {
+	src, dst := t.TempDir(), t.TempDir()
+	old := time.Now().Add(-time.Hour)
+	write := func(p, body string, at time.Time) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(p, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(src, "a.toml"), "new", time.Now())
+	write(filepath.Join(dst, "a.toml"), "old", old)
+	write(filepath.Join(src, "sub", "b.json"), "src", old)
+	write(filepath.Join(dst, "sub", "b.json"), "server edit", time.Now())
+	write(filepath.Join(src, "c.txt"), "added", old)
+	write(filepath.Join(dst, "server-only.txt"), "kept", old)
+	if err := UpdateTree(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"a.toml": "new", "sub/b.json": "server edit", "c.txt": "added", "server-only.txt": "kept"} {
+		if got, _ := os.ReadFile(filepath.Join(dst, filepath.FromSlash(name))); string(got) != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+}

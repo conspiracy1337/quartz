@@ -23,6 +23,7 @@ import { contentApi } from './content';
 import { bytes } from '../format';
 import { homeApi, logFilesApi, screenshotsApi, serversApi, worldsApi } from './game';
 import { downloadsApi } from './downloads';
+import { hostApi } from './host';
 import { app, settingsApi } from './system';
 
 export type { AppInfo, CustomCSSState, Settings } from './system';
@@ -114,6 +115,7 @@ export const api = {
     /** Re-verifies an instance's files; resolves with the job id ("" when all fine). */
     repair: bridged(LaunchGo.Repair, (_id: string) => ''),
   },
+  host: hostApi,
   logs: {
     live: bridged(LogsGo.Live, (_instanceId: string) => logs.liveLog),
     runs,

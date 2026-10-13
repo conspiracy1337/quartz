@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { api } from '$lib/api';
   import type { LogLevel, LogLine } from '$lib/api/types';
   import { onEvent } from '$lib/bridge';
@@ -25,29 +25,38 @@
   let height = $state(600);
   let follow = true;
 
-  // With several copies running, the console follows the newest one.
+  // With several copies running (or the instance hosted as a server), the console
+  // follows the newest run: the one that started last, or the first one it hears from.
   $effect(() => {
     const id = instanceId;
     let alive = true;
     let run = '';
-    void api.logs.live(id).then((l) => {
+    const hosted = untrack(() => session.hosting?.instanceId === id);
+    void (hosted ? api.host.live(id) : api.logs.live(id)).then((l) => {
       if (alive) void append(l ?? [], true);
     });
-    const offLog = onEvent<{ instanceId: string; runId: string; lines: LogLine[] }>('game:log', (b) => {
+    const onLines = (b: { instanceId: string; runId: string; lines: LogLine[] }) => {
       if (b.instanceId !== id || !follows(run, b.runId)) return;
       run = b.runId;
       void append(b.lines, false);
-    });
-    const offState = onEvent<{ instanceId: string; runId: string; state: string }>('game:state', (s) => {
-      if (s.instanceId === id && s.state === 'running') {
+    };
+    const onStart = (s: { instanceId: string; runId: string; state: string }, started: string) => {
+      if (s.instanceId === id && s.state === started) {
         all = [];
         run = s.runId;
       }
-    });
+    };
+    const offs = [
+      onEvent('game:log', onLines),
+      onEvent('host:log', onLines),
+      onEvent<{ instanceId: string; runId: string; state: string }>('game:state', (s) => onStart(s, 'running')),
+      onEvent<{ instanceId: string; runId: string; state: string }>('host:state', (s) => {
+        if (s.runId !== run) onStart(s, 'starting');
+      }),
+    ];
     return () => {
       alive = false;
-      offLog();
-      offState();
+      offs.forEach((off) => off());
     };
   });
 

@@ -19,6 +19,8 @@ const (
 	LaunchFailed     Topic = "launch:failed"
 	GameState        Topic = "game:state"
 	GameLog          Topic = "game:log"
+	HostState        Topic = "host:state"
+	HostLog          Topic = "host:log"
 	ContentChanged   Topic = "content:changed"
 	ContentDropped   Topic = "content:dropped"
 	ManualChanged    Topic = "manual:changed"

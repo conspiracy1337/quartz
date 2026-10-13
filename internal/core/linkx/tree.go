@@ -57,3 +57,42 @@ func CloneTree(src, dst string) error {
 	}
 	return err
 }
+
+// UpdateTree brings dst up to date with src one way: every regular file
+// under src that dst lacks, or has an older copy of, gets a private copy
+// (times kept); files only dst has stay. A link or special file on either
+// side is skipped, so nothing is written through one.
+func UpdateTree(src, dst string) error {
+	root, err := os.OpenRoot(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	return fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, filepath.FromSlash(p))
+		cur, statErr := os.Lstat(target)
+		if d.IsDir() {
+			if statErr == nil && !cur.IsDir() {
+				return fs.SkipDir
+			}
+			return os.MkdirAll(target, 0o700)
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if statErr == nil && (!cur.Mode().IsRegular() || !info.ModTime().After(cur.ModTime())) {
+			return nil
+		}
+		if _, err := Place(filepath.Join(src, filepath.FromSlash(p)), target, Options{NoHardlink: true}); err != nil {
+			return err
+		}
+		return os.Chtimes(target, info.ModTime(), info.ModTime())
+	})
+}

@@ -1120,6 +1120,7 @@ export namespace content {
 	    status?: Status;
 	    project?: string;
 	    ref?: string;
+	    clientOnly?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Row(source);
@@ -1140,6 +1141,7 @@ export namespace content {
 	        this.status = this.convertValues(source["status"], Status);
 	        this.project = source["project"];
 	        this.ref = source["ref"];
+	        this.clientOnly = source["clientOnly"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1444,6 +1446,91 @@ export namespace home {
 
 }
 
+export namespace host {
+	
+	export class Mods {
+	    total: number;
+	    server: number;
+	    clientOnly: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Mods(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.server = source["server"];
+	        this.clientOnly = source["clientOnly"];
+	    }
+	}
+	export class Setup {
+	    worlds: worlds.World[];
+	    options: instance.Host;
+	    maxMemoryMB: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Setup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.worlds = this.convertValues(source["worlds"], worlds.World);
+	        this.options = this.convertValues(source["options"], instance.Host);
+	        this.maxMemoryMB = source["maxMemoryMB"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class State {
+	    instanceId: string;
+	    runId: string;
+	    state: string;
+	    stage?: string;
+	    port: number;
+	    lan?: string;
+	    players: number;
+	    max: number;
+	    result?: string;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.instanceId = source["instanceId"];
+	        this.runId = source["runId"];
+	        this.state = source["state"];
+	        this.stage = source["stage"];
+	        this.port = source["port"];
+	        this.lan = source["lan"];
+	        this.players = source["players"];
+	        this.max = source["max"];
+	        this.result = source["result"];
+	        this.message = source["message"];
+	    }
+	}
+
+}
+
 export namespace instance {
 	
 	export class Art {
@@ -1573,6 +1660,28 @@ export namespace instance {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.collapsed = source["collapsed"];
+	    }
+	}
+	export class Host {
+	    world: string;
+	    port: number;
+	    maxPlayers: number;
+	    memoryMB: number;
+	    lan: boolean;
+	    offline: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Host(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.world = source["world"];
+	        this.port = source["port"];
+	        this.maxPlayers = source["maxPlayers"];
+	        this.memoryMB = source["memoryMB"];
+	        this.lan = source["lan"];
+	        this.offline = source["offline"];
 	    }
 	}
 	export class Into {

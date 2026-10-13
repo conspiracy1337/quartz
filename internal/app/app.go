@@ -44,6 +44,7 @@ import (
 	"quartz/internal/crash"
 	"quartz/internal/gamewatch"
 	"quartz/internal/home"
+	"quartz/internal/host"
 	"quartz/internal/icons"
 	"quartz/internal/imagesrv"
 	"quartz/internal/install"
@@ -104,6 +105,7 @@ type app struct {
 	packs     *modpack.Service
 	loaders   *loader.Registry
 	launcher  *launch.Launcher
+	host      *host.Service
 	content   *content.Service
 	platforms []modplatform.Platform // Modrinth first, then CurseForge
 	manual    *manual.Service        // files only the CurseForge website serves
@@ -163,7 +165,7 @@ func Run(o Options) error {
 			api.NewAccounts(a.ctx, a.accounts, a.skins, a.bus),
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
-				Running: a.launcher.Running, Busy: a.launcher.Busy, Content: a.content, Worlds: a.worlds, Servers: a.servers,
+				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Worlds: a.worlds, Servers: a.servers,
 				Syncing: a.syncing,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
@@ -172,6 +174,7 @@ func Run(o Options) error {
 			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
 			api.NewManual(api.ManualDeps{Service: a.manual, Drops: a.drops, App: appFacade}),
 			api.NewLaunch(a.ctx, a.launcher),
+			api.NewHost(a.ctx, a.host),
 			api.NewLogs(a.ctx, a.launcher, a.logFiles, a.crash),
 			api.NewHome(a.ctx, api.HomeDeps{Home: a.home, Servers: a.servers, Screenshots: a.screenshots}),
 			api.NewWorlds(a.ctx, a.worlds, a.drops),
@@ -319,7 +322,7 @@ func (a *app) buildTasks() error {
 	}
 	a.syncing = syncing.New(syncing.Config{
 		Root: a.paths.Shared(), Trash: a.paths.Trash(), Settings: a.settings, Instances: a.instances, Bus: a.bus,
-		Running: func(id string) bool { return a.launcher.Busy(id) }, HasMod: a.content.AnyHasMod,
+		Running: a.inUse, HasMod: a.content.AnyHasMod,
 		Retitle: worlds.Retitle, Tasks: eng, Log: a.log,
 		ClientJar: func(mc string) string { return filepath.Join(a.paths.Versions(), mc, mc+".jar") },
 		ModJars: func(id string) []syncing.ModJar {
@@ -349,10 +352,19 @@ func (a *app) buildTasks() error {
 		Finishers: []launch.Finisher{a.worlds, a.screenshots, a.servers, a.crash},
 		Syncing:   a.syncing,
 		Views:     runview.New(runview.Config{Retitle: worlds.Retitle, Log: a.log}),
+		Hosted:    func(id, folder string) bool { return a.host.HostedWorld(id) == folder },
+	})
+	a.host = host.New(host.Deps{
+		Instances: a.instances, Installer: a.installer, Java: a.java, Tasks: eng, Content: a.content, Store: a.store,
+		Worlds: a.worlds, Accounts: a.accounts.Store(), Settings: a.settings, Bus: a.bus, Redactor: a.redactor, Log: a.log,
+		InUse: func(id string) bool { return a.syncing.Busy(id, "saves") },
 	})
 	a.buildBrowse(dl)
 	return nil
 }
+
+// inUse reports whether a game or a hosted server uses the instance's files.
+func (a *app) inUse(id string) bool { return a.launcher.Busy(id) || a.host.Running(id) }
 
 // buildGame wires worlds, servers, screenshots, crashes, game logs and Home.
 // The launcher is built after them, so they look it up when called.
@@ -570,10 +582,14 @@ func (a *app) startup(ctx context.Context) {
 	a.accounts.Start()
 	// Games that ran when the launcher last quit get merged back.
 	go a.launcher.Recover()
+	go a.host.Recover()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
 }
+
+// hostStopTimeout bounds how long quitting waits for a hosted server to save.
+const hostStopTimeout = 35 * time.Second
 
 // storeGrace is how long a stored file must be unused before it is deleted.
 const storeGrace = 7 * 24 * time.Hour
@@ -614,6 +630,10 @@ func (a *app) shutdown(context.Context) {
 		a.stopPacks()
 	}
 	a.accounts.Close()
+	// A hosted server saves its world and stops with the launcher.
+	stopCtx, cancel := context.WithTimeout(context.Background(), hostStopTimeout)
+	a.host.Close(stopCtx)
+	cancel()
 	a.launcher.Close()
 	a.bus.SetSink(nil)
 	a.css.Close()

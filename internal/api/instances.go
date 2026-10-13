@@ -33,6 +33,8 @@ type InstanceDeps struct {
 	Bus      *events.Bus
 	Running  func(id string) bool // the game is running
 	Busy     func(id string) bool // starting or running: files must stay put
+	// Hosting reports a local server running the instance; nil in tests.
+	Hosting func(id string) bool
 	// Content counts items and moves mods along with version changes; nil in tests.
 	Content *content.Service
 	// Worlds and Servers count an instance's worlds and servers; nil in tests.
@@ -110,7 +112,19 @@ type InstanceView struct {
 var (
 	ErrBadInstanceID = errors.New("api: invalid instance id")
 	ErrBusy          = errors.New("api: close the game first")
+	ErrHosting       = errors.New("api: stop the server first")
 )
+
+// guard refuses changes to files a game or a hosted server is using.
+func (s *Instances) guard(id string) error {
+	if s.d.Hosting != nil && s.d.Hosting(id) {
+		return ErrHosting
+	}
+	if s.d.Busy(id) {
+		return ErrBusy
+	}
+	return nil
+}
 
 func (s *Instances) summary(in instance.Instance) InstanceSummary {
 	v := InstanceSummary{
@@ -435,8 +449,8 @@ func (s *Instances) SetVersion(id, minecraft, kind, loaderVersion string) (Insta
 	if err := checkInstanceID(id); err != nil {
 		return InstanceView{}, err
 	}
-	if s.d.Busy(id) {
-		return InstanceView{}, ErrBusy
+	if err := s.guard(id); err != nil {
+		return InstanceView{}, err
 	}
 	ctx := s.ctx.Get()
 	if _, err := s.d.Meta.Entry(ctx, minecraft); err != nil {
@@ -489,8 +503,8 @@ func (s *Instances) Trash(id string) (instance.TrashEntry, error) {
 	if err := checkInstanceID(id); err != nil {
 		return instance.TrashEntry{}, err
 	}
-	if s.d.Busy(id) {
-		return instance.TrashEntry{}, ErrBusy
+	if err := s.guard(id); err != nil {
+		return instance.TrashEntry{}, err
 	}
 	if s.d.Content != nil {
 		s.d.Content.Forget(id)
@@ -542,8 +556,8 @@ func (s *Instances) MoveDefault(id string) (string, error) {
 }
 
 func (s *Instances) move(id, parent string) (string, error) {
-	if s.d.Busy(id) {
-		return "", ErrBusy
+	if err := s.guard(id); err != nil {
+		return "", err
 	}
 	in, err := s.d.Store.Get(id)
 	if err != nil {
@@ -555,8 +569,8 @@ func (s *Instances) move(id, parent string) (string, error) {
 	}
 	spec := tasks.NewJob(tasks.Meta{Title: "Moving " + in.Name, Subtitle: plan.To, Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "move"}).
 		Step("Game folder", tasks.Count, tasks.Func("move the game folder", func(ctx context.Context) error {
-			if s.d.Busy(id) {
-				return ErrBusy
+			if err := s.guard(id); err != nil {
+				return err
 			}
 			_, err := s.d.Store.Move(ctx, plan, nil)
 			if err == nil {

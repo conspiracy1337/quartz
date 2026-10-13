@@ -114,6 +114,18 @@ type Instance struct {
 	Settings    Settings   `json:"settings"`
 	// Pack is the modpack the instance was installed from (nil for none).
 	Pack *PackRef `json:"pack,omitempty"`
+	// Host is how the instance was last hosted as a local server (nil: never).
+	Host *Host `json:"host,omitempty"`
+}
+
+// Host is how to run an instance as a local server.
+type Host struct {
+	World      string `json:"world"` // a saves folder; "" makes a new world
+	Port       int    `json:"port"`
+	MaxPlayers int    `json:"maxPlayers"`
+	MemoryMB   int    `json:"memoryMB"`
+	LAN        bool   `json:"lan"`     // reachable from the network and announced there
+	Offline    bool   `json:"offline"` // players without a Microsoft account may join
 }
 
 // Sync is which shared targets the instance joins (see package syncing).

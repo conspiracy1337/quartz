@@ -23,16 +23,18 @@ type fabricLike struct {
 	base string // e.g. https://meta.fabricmc.net/v2
 	// profileID is the id the profile JSON must carry for build ver on mc.
 	profileID func(ver, mc string) string
-	meta      *meta.Service
+	// gameJar is the property naming the vanilla jar to a dedicated server.
+	gameJar string
+	meta    *meta.Service
 }
 
 func newFabric(d Deps) *fabricLike {
-	return &fabricLike{kind: Fabric, base: "https://meta.fabricmc.net/v2", meta: d.Meta,
+	return &fabricLike{kind: Fabric, base: "https://meta.fabricmc.net/v2", meta: d.Meta, gameJar: "fabric.gameJarPath",
 		profileID: func(ver, mc string) string { return "fabric-loader-" + ver + "-" + mc }}
 }
 
 func newQuilt(d Deps) *fabricLike {
-	return &fabricLike{kind: Quilt, base: "https://meta.quiltmc.org/v3", meta: d.Meta,
+	return &fabricLike{kind: Quilt, base: "https://meta.quiltmc.org/v3", meta: d.Meta, gameJar: "loader.gameJarPath",
 		profileID: func(ver, mc string) string { return "quilt-loader-" + ver + "-" + mc }}
 }
 
@@ -64,8 +66,14 @@ func (f *fabricLike) Versions(ctx context.Context, mc string) ([]Version, error)
 	return out, nil
 }
 
+// Profile reads the client profile, or the server one: the same shape with
+// the server's main class and libraries.
 func (f *fabricLike) Profile(ctx context.Context, req Request, id string) (*Profile, error) {
-	u := f.base + "/versions/loader/" + url.PathEscape(req.Minecraft) + "/" + url.PathEscape(id) + "/profile/json"
+	which := "/profile/json"
+	if req.Server {
+		which = "/server/json"
+	}
+	u := f.base + "/versions/loader/" + url.PathEscape(req.Minecraft) + "/" + url.PathEscape(id) + which
 	data, err := f.meta.Bytes(ctx, u, httpcache.Policy{TTL: profileTTL, MaxSize: 1 << 20})
 	if err != nil {
 		return nil, err
@@ -77,5 +85,9 @@ func (f *fabricLike) Profile(ctx context.Context, req Request, id string) (*Prof
 	if want := f.profileID(id, req.Minecraft); v.ID != want || v.InheritsFrom != req.Minecraft {
 		return nil, fmt.Errorf("loader: %s profile is for %q on %q, expected %q on %q", f.kind.Name(), v.ID, v.InheritsFrom, want, req.Minecraft)
 	}
-	return &Profile{Version: v}, nil
+	prof := &Profile{Version: v}
+	if req.Server {
+		prof.Server = &ServerStart{GameJarProperty: f.gameJar}
+	}
+	return prof, nil
 }

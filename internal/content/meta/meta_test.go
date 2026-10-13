@@ -294,3 +294,30 @@ func TestCleanText(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestSide(t *testing.T) {
+	cases := []struct {
+		name  string
+		files map[string]string
+		want  string
+	}{
+		{"fabric client", map[string]string{"fabric.mod.json": `{"id":"a","environment":"client"}`}, SideClient},
+		{"fabric server", map[string]string{"fabric.mod.json": `{"id":"a","environment":"server"}`}, SideServer},
+		{"fabric both", map[string]string{"fabric.mod.json": `{"id":"a","environment":"*"}`}, ""},
+		{"fabric unset", map[string]string{"fabric.mod.json": `{"id":"a"}`}, ""},
+		{"quilt client", map[string]string{"quilt.mod.json": `{"quilt_loader":{"id":"a","version":"1"},"minecraft":{"environment":"client"}}`}, SideClient},
+		{"quilt server", map[string]string{"quilt.mod.json": `{"quilt_loader":{"id":"a","version":"1"},"minecraft":{"environment":"dedicated_server"}}`}, SideServer},
+		{"forge root", map[string]string{"META-INF/mods.toml": "clientSideOnly=true\n[[mods]]\nmodId=\"a\"\n"}, SideClient},
+		{"forge mod", map[string]string{"META-INF/mods.toml": "[[mods]]\nmodId=\"a\"\nclientSideOnly=true\n"}, SideClient},
+		{"forge false", map[string]string{"META-INF/mods.toml": "clientSideOnly=false\n[[mods]]\nmodId=\"a\"\n"}, ""},
+	}
+	for _, c := range cases {
+		info, err := Mod(jar(t, c.files), nil)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if info.Side != c.want {
+			t.Errorf("%s: side %q, want %q", c.name, info.Side, c.want)
+		}
+	}
+}
