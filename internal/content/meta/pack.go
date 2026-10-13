@@ -157,23 +157,39 @@ type ClientFormats struct {
 	WorldVersion int `json:"worldVersion"`
 }
 
-// ClientPack reads the formats from a client jar's version.json. Versions
-// before 1.14 have none and report ok=false.
-func ClientPack(clientJar string) (ClientFormats, bool) {
+// clientVersion is the version.json inside client jars from 1.14 on.
+type clientVersion struct {
+	PackVersion     json.RawMessage `json:"pack_version"`
+	WorldVersion    int             `json:"world_version"`
+	ProtocolVersion int             `json:"protocol_version"`
+}
+
+func readClientVersion(clientJar string) (clientVersion, bool) {
+	var v clientVersion
 	r, err := archive.Open(clientJar)
 	if err != nil {
-		return ClientFormats{}, false
+		return v, false
 	}
 	defer func() { _ = r.Close() }()
 	data, err := r.Read("version.json", maxText)
-	if err != nil {
-		return ClientFormats{}, false
+	if err != nil || json.Unmarshal(data, &v) != nil {
+		return v, false
 	}
-	var v struct {
-		PackVersion  json.RawMessage `json:"pack_version"`
-		WorldVersion int             `json:"world_version"`
-	}
-	if json.Unmarshal(data, &v) != nil {
+	return v, true
+}
+
+// ClientProtocol is the network protocol a client jar speaks, or 0 when the
+// jar doesn't say (before 1.14).
+func ClientProtocol(clientJar string) int {
+	v, _ := readClientVersion(clientJar)
+	return v.ProtocolVersion
+}
+
+// ClientPack reads the formats from a client jar's version.json. Versions
+// before 1.14 have none and report ok=false.
+func ClientPack(clientJar string) (ClientFormats, bool) {
+	v, ok := readClientVersion(clientJar)
+	if !ok {
 		return ClientFormats{}, false
 	}
 	cf, ok := clientFormats(v.PackVersion)

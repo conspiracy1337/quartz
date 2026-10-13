@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -159,4 +160,37 @@ func tempName(dst string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+"."+hex.EncodeToString(b[:])+".tmp"), nil
+}
+
+// CopyTree copies the folders and regular files under src into dst (which
+// must not exist yet), each file by Place with o. Links and other special
+// files are skipped, so a copy never reaches outside src. On failure the
+// partial copy is removed.
+func CopyTree(src, dst string, o Options) error {
+	root, err := os.OpenRoot(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	if _, err := os.Lstat(dst); err == nil {
+		return os.ErrExist
+	}
+	err = fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, filepath.FromSlash(p))
+		switch {
+		case d.IsDir():
+			return os.MkdirAll(target, 0o700)
+		case d.Type().IsRegular():
+			_, err := Place(filepath.Join(src, filepath.FromSlash(p)), target, o)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		_ = os.RemoveAll(dst)
+	}
+	return err
 }

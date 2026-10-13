@@ -23,6 +23,10 @@ const (
 	ContentDropped   Topic = "content:dropped"
 	ManualChanged    Topic = "manual:changed"
 	ModpacksChanged  Topic = "modpacks:changed"
+	// Worlds, servers and screenshots of one instance changed ({instanceId}).
+	WorldsChanged      Topic = "worlds:changed"
+	ServersChanged     Topic = "servers:changed"
+	ScreenshotsChanged Topic = "screenshots:changed"
 )
 
 // Sink receives every emitted event, used to bridge events to the UI.

@@ -235,7 +235,7 @@ func (f *File) Bytes() []byte {
 
 // WriteFile writes the file atomically.
 func WriteFile(path string, f *File) error {
-	return fsx.AtomicWrite(path, f.Bytes(), 0o644)
+	return fsx.AtomicWrite(path, f.Bytes(), fsx.FilePerm)
 }
 
 // ---- decoding ----
