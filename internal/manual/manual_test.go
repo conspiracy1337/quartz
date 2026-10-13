@@ -74,7 +74,7 @@ func newEnv(t *testing.T, files cdn, mr map[string]modplatform.File) *env {
 	if err := os.MkdirAll(folder, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	svc := New(Deps{Store: st, Download: download.New(files, ver), Modrinth: twins{files: mr}, Folder: folder, Log: log})
+	svc := New(Deps{Store: st, Download: download.New(files, ver), Modrinth: twins{files: mr}, Folder: folder, Watch: true, Log: log})
 	return &env{t: t, svc: svc, folder: folder}
 }
 
@@ -147,6 +147,33 @@ func TestWatchedDownloadsFolderMatchesBySizeAndHash(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(e.folder, "balm.jar")); err != nil {
 		t.Fatal("the player's file was moved")
+	}
+}
+
+func TestWatchingFollowsTheSetting(t *testing.T) {
+	e := newEnv(t, nil, nil)
+	e.svc.SetWatch(false)
+	jar := []byte("sodium jar bytes")
+	set := e.svc.Register([]Need{{Name: "Sodium", FileName: "sodium.jar", Size: int64(len(jar)), SHA1: sum(jar)}})
+	set.Bind("job3")
+	if err := os.WriteFile(filepath.Join(e.folder, "sodium.jar"), jar, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	done, cancel := e.run(set)
+	defer cancel()
+	time.Sleep(2 * settle)
+	if v, _ := e.svc.View("job3"); v.Watching || v.Items[0].State != Waiting {
+		t.Fatalf("read the folder with watching off: %+v", v)
+	}
+	e.svc.mu.Lock()
+	watcher := e.svc.watcher
+	e.svc.mu.Unlock()
+	if watcher != nil {
+		t.Fatal("a watcher runs with the setting off")
+	}
+	e.svc.SetWatch(true) // turning it on looks at what is there already
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 

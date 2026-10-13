@@ -541,7 +541,7 @@ func (a *app) buildContent() error {
 	}
 	a.manual = manual.New(manual.Deps{
 		Store: a.store, Download: download.New(a.http, a.verified), Modrinth: a.platforms[0], Bus: a.bus, Tasks: a.tasks,
-		Folder: manual.DownloadsFolder(), Log: a.log,
+		Folder: manual.DownloadsFolder(), Watch: a.settings.Get().Downloads.WatchDownloads, Log: a.log,
 	})
 	a.content, err = content.New(content.Deps{
 		Instances: a.instances, Store: a.store, Icons: a.modIcons, Bus: a.bus, Tasks: a.tasks, Log: a.log,
@@ -596,13 +596,14 @@ func (a *app) gamesExited() {
 	}
 }
 
-// watchDownloads keeps the HTTP client's proxy and the worker pool in step
-// with the settings.
+// watchDownloads keeps the HTTP client's proxy, the worker pool and the
+// Downloads folder watcher in step with the settings.
 func (a *app) watchDownloads() {
 	a.bus.Subscribe(events.SettingsChanged, func(p any) {
 		d := p.(settings.Settings).Downloads
 		a.network.Apply(d)
 		a.tasks.SetParallel(d.Parallel)
+		a.manual.SetWatch(d.WatchDownloads)
 	})
 }
 

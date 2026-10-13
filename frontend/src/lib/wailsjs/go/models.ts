@@ -2166,6 +2166,7 @@ export namespace manual {
 	export class View {
 	    jobId: string;
 	    folder: string;
+	    watching: boolean;
 	    items: Item[];
 	    done: boolean;
 	
@@ -2177,6 +2178,7 @@ export namespace manual {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.jobId = source["jobId"];
 	        this.folder = source["folder"];
+	        this.watching = source["watching"];
 	        this.items = this.convertValues(source["items"], Item);
 	        this.done = source["done"];
 	    }

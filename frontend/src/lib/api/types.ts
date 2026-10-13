@@ -323,7 +323,7 @@ export interface ImportPreview {
 export interface PackUpdate { instanceId: string; name: string; version: string }
 export interface ManualItem { id: string; name: string; fileName: string; size: number; state: 'waiting' | 'fetching' | 'found' | 'skipped'; twin: boolean; page?: string; art?: Art }
 /** The blocked-downloads dialog of one job. */
-export interface ManualView { jobId: string; folder: string; items: ManualItem[]; done: boolean }
+export interface ManualView { jobId: string; folder: string; watching?: boolean; items: ManualItem[]; done: boolean }
 
 // ---- downloads (mirrors Go's tasks.JobView and tasks.Snapshot) ----
 export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled';

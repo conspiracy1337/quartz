@@ -72,9 +72,10 @@ type Item struct {
 // View is the dialog for one job.
 type View struct {
 	JobID  string `json:"jobId"`
-	Folder string `json:"folder"` // the watched folder, with ~ for home
-	Items  []Item `json:"items"`
-	Done   bool   `json:"done"`
+	Folder   string `json:"folder"`   // the watched folder, with ~ for home
+	Watching bool   `json:"watching"` // off in Settings: files only come by drop
+	Items    []Item `json:"items"`
+	Done     bool   `json:"done"`
 }
 
 // Changed is the manual:changed payload.
@@ -90,6 +91,7 @@ type Deps struct {
 	Bus      *events.Bus
 	Tasks    *tasks.Engine // a set is forgotten when its job ends
 	Folder   string        // the Downloads folder; "" disables watching
+	Watch    bool          // Settings, Downloads: watch the folder (see SetWatch)
 	Log      *slog.Logger
 }
 
@@ -100,6 +102,7 @@ type Service struct {
 	mu      sync.Mutex
 	sets    map[string]*Set // by set id
 	byJob   map[string]*Set
+	watch   bool // the setting; the folder is read only while it is on
 	watcher *fsnotify.Watcher
 	pending map[string]*time.Timer // debounced paths
 }
@@ -109,7 +112,7 @@ func New(d Deps) *Service {
 	if d.Log == nil {
 		d.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{d: d, sets: map[string]*Set{}, byJob: map[string]*Set{}, pending: map[string]*time.Timer{}}
+	return &Service{d: d, watch: d.Watch, sets: map[string]*Set{}, byJob: map[string]*Set{}, pending: map[string]*time.Timer{}}
 }
 
 // Set is the needed files of one job.
@@ -302,7 +305,7 @@ func (s *Service) View(jobID string) (View, error) {
 	if !ok {
 		return View{}, ErrUnknown
 	}
-	v := View{JobID: jobID, Folder: display(s.d.Folder), Items: make([]Item, 0, len(set.needs)), Done: !set.open()}
+	v := View{JobID: jobID, Folder: display(s.d.Folder), Watching: s.watching(), Items: make([]Item, 0, len(set.needs)), Done: !set.open()}
 	for _, n := range set.needs {
 		v.Items = append(v.Items, Item{ID: n.id, Name: n.Name, FileName: n.FileName, Size: n.Size, State: n.state, Twin: n.twin != nil, Page: n.Page})
 	}
@@ -499,11 +502,42 @@ func (s *Service) waiting() bool {
 	return false
 }
 
-// rewatch watches the Downloads folder while anything waits.
+// SetWatch follows the "Watch the Downloads folder" setting. Turning it on
+// while files wait looks at what is in the folder already.
+func (s *Service) SetWatch(on bool) {
+	s.mu.Lock()
+	changed := s.watch != on
+	s.watch = on
+	s.mu.Unlock()
+	if !changed {
+		return
+	}
+	s.rewatch()
+	if on {
+		go s.sweep()
+	}
+	s.mu.Lock()
+	jobs := make([]string, 0, len(s.byJob))
+	for job := range s.byJob {
+		jobs = append(jobs, job)
+	}
+	s.mu.Unlock()
+	for _, job := range jobs {
+		if s.d.Bus != nil {
+			s.d.Bus.Emit(events.ManualChanged, Changed{JobID: job})
+		}
+	}
+}
+
+// watching reports whether the folder may be read (s.mu held).
+func (s *Service) watching() bool { return s.watch && s.d.Folder != "" }
+
+// rewatch watches the Downloads folder while anything waits and the setting
+// allows it.
 func (s *Service) rewatch() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	want := s.waiting() && s.d.Folder != ""
+	want := s.waiting() && s.watching()
 	switch {
 	case want && s.watcher == nil:
 		w, err := fsnotify.NewWatcher()
@@ -566,7 +600,10 @@ func (s *Service) later(path string) {
 // sweep checks what is in the Downloads folder already (files downloaded
 // before the job asked).
 func (s *Service) sweep() {
-	if s.d.Folder == "" {
+	s.mu.Lock()
+	on := s.watching()
+	s.mu.Unlock()
+	if !on {
 		return
 	}
 	entries, err := os.ReadDir(s.d.Folder)
