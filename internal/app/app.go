@@ -41,6 +41,7 @@ import (
 	"quartz/internal/core/logging"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/paths"
+	"quartz/internal/core/procx"
 	"quartz/internal/core/remoteimg"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
@@ -126,6 +127,7 @@ type app struct {
 	drops     *api.Drops
 	opens     *api.Opens // things asked for from outside, waiting for the UI
 	args      intent.Args
+	flagDir   string      // --dir, passed on when the launcher restarts itself
 	hidden    atomic.Bool // the window was hidden because a game started
 	ctx       *api.Ctx
 	// Worlds, servers, screenshots, crashes, logs and Home (M7).
@@ -154,8 +156,9 @@ func Run(o Options) error {
 	defer func() { _ = a.logFile.Close() }()
 	a.log.Info("starting", "version", brand.Version, "data", a.paths.Root, "portable", a.paths.Portable)
 
-	a.args = o.Args
-	appFacade := api.NewApp(a.ctx, a.paths, a.opens, a.presence.Ready())
+	a.args, a.flagDir = o.Args, o.DataDir
+	appFacade := api.NewApp(a.ctx, a.paths, api.AppDeps{Opens: a.opens, Discord: a.presence.Ready(),
+		Pristine: func() bool { return len(a.instances.List()) == 0 }, Restart: a.restart})
 	return wails.Run(&options.App{
 		Title:            brand.Name,
 		Width:            1200,
@@ -236,6 +239,7 @@ func build(o Options) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
+	moveErr := paths.ApplyMove(p) // a data folder chosen in setup, before anything opens
 	if err := p.Ensure(); err != nil {
 		return nil, fmt.Errorf("creating data folder: %w", err)
 	}
@@ -247,6 +251,9 @@ func build(o Options) (*app, error) {
 	log, logFile, err := logging.New(p.Logs(), slog.LevelInfo, redactor)
 	if err != nil {
 		return nil, fmt.Errorf("opening log: %w", err)
+	}
+	if moveErr != nil {
+		log.Error("moving the data folder failed", "err", moveErr)
 	}
 	bus := events.NewBus()
 	store, err := settings.Open(p.Settings(), bus, log)
@@ -646,6 +653,20 @@ func startState(minimized bool) options.WindowStartState {
 		return options.Minimised
 	}
 	return options.Normal
+}
+
+// restart starts the launcher again and quits this one; the new process
+// waits for this one to exit before it opens its window.
+func (a *app) restart() error {
+	exe, err := desktop.Executable()
+	if err != nil {
+		return err
+	}
+	if err := procx.Relaunch(exe, intent.WaitArgs(os.Getpid(), a.flagDir)); err != nil {
+		return err
+	}
+	wruntime.Quit(a.ctx.Get())
+	return nil
 }
 
 // lockID is the single-instance id: one running launcher per data folder,

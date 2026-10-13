@@ -31,6 +31,8 @@ type General struct {
 	OnGameStart       string `json:"onGameStart"` // keep-open | hide | close
 	StartPage         string `json:"startPage"`   // home | library | last-instance
 	StartWithComputer bool   `json:"startWithComputer"`
+	// SetupDone is set when first-run setup finishes (or is skipped).
+	SetupDone bool `json:"setupDone"`
 	// HiddenNews is the news article Home's strip was dismissed for.
 	HiddenNews string `json:"hiddenNews,omitempty"`
 }
@@ -97,7 +99,8 @@ type Updates struct {
 func Defaults() Settings {
 	return Settings{
 		Version: SchemaVersion,
-		General: General{Language: "system", OnGameStart: "hide", StartPage: "home"},
+		// A settings file from before first-run setup existed reads as done.
+		General: General{Language: "system", OnGameStart: "hide", StartPage: "home", SetupDone: true},
 		Downloads: Downloads{
 			Parallel: 8, WatchDownloads: true, Proxy: "system",
 			ProxyCustom: ProxyCustom{Type: "http", Port: 8080},

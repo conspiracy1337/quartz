@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"quartz/internal/brand"
+	"quartz/internal/core/fsx"
 )
 
 const (
@@ -18,7 +19,22 @@ const (
 type Paths struct {
 	Root     string
 	Portable bool
+	// Chosen is how Root was picked; Default is the OS location, where the
+	// pointer to a folder chosen in setup lives.
+	Chosen  Chosen
+	Default string
 }
+
+// Chosen is what picked the data root.
+type Chosen string
+
+const (
+	ByFlag     Chosen = "flag"     // --dir
+	ByEnv      Chosen = "env"      // QUARTZ_DIR
+	ByPortable Chosen = "portable" // portable.txt next to the program
+	ByPointer  Chosen = "pointer"  // a folder chosen in first-run setup
+	ByDefault  Chosen = "default"  // the OS's per-user data folder
+)
 
 // Env is the subset of the process environment that resolution depends on.
 // It is injected so resolution is testable without touching the real system.
@@ -28,6 +44,7 @@ type Env struct {
 	HomeDir    string
 	ExePath    string
 	FileExists func(string) bool
+	ReadFile   func(string) ([]byte, error)
 }
 
 // SystemEnv returns the Env of the running process.
@@ -46,6 +63,7 @@ func SystemEnv(goos string) Env {
 			_, err := os.Stat(p)
 			return err == nil
 		},
+		ReadFile: func(p string) ([]byte, error) { return fsx.ReadCapped(p, 64<<10) },
 	}
 }
 
@@ -54,24 +72,39 @@ var ErrNoDataDir = errors.New("paths: no data directory available")
 
 // Resolve picks the data root. Priority: explicit flag, environment variable,
 // portable marker next to the executable, then the OS data directory.
+// A pointer at the OS location, written when a folder is chosen in setup,
+// comes before the OS location itself.
 func Resolve(flagDir string, env Env) (Paths, error) {
+	def := ""
+	if base := osDataDir(env); base != "" {
+		def = filepath.Join(base, brand.DirName)
+	}
+	pick := func(dir string, by Chosen) (Paths, error) {
+		p, err := absolute(dir, by == ByPortable)
+		p.Chosen, p.Default = by, def
+		return p, err
+	}
 	if flagDir != "" {
-		return absolute(flagDir, false)
+		return pick(flagDir, ByFlag)
 	}
 	if v := env.Getenv(brand.EnvDir); v != "" {
-		return absolute(v, false)
+		return pick(v, ByEnv)
 	}
 	if env.ExePath != "" {
 		exeDir := filepath.Dir(env.ExePath)
 		if env.FileExists(filepath.Join(exeDir, brand.PortableMarker)) {
-			return absolute(filepath.Join(exeDir, "data"), true)
+			return pick(filepath.Join(exeDir, "data"), ByPortable)
 		}
 	}
-	base := osDataDir(env)
-	if base == "" {
+	if def == "" {
 		return Paths{}, ErrNoDataDir
 	}
-	return absolute(filepath.Join(base, brand.DirName), false)
+	if env.ReadFile != nil {
+		if ptr, ok := readPointer(env.ReadFile, def); ok {
+			return pick(ptr.Root, ByPointer)
+		}
+	}
+	return pick(def, ByDefault)
 }
 
 // osDataDir follows each platform's convention for large per-user app data.

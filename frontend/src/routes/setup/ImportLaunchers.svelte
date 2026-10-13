@@ -2,6 +2,7 @@
   import { api } from '$lib/api';
   import type { JavaNeed } from '$lib/api/types';
   import { bytes } from '$lib/format';
+  import { prefs } from '$lib/prefs.svelte';
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
@@ -39,6 +40,7 @@
     busy = true;
     try {
       if (importing && picked.length) await api.launchers.import(picked.map((l) => l.id), mode === 'in-place');
+      await prefs.update((s) => (s.general.setupDone = true));
       go({ name: 'home' });
     } catch (e) {
       session.fail('Import', e);

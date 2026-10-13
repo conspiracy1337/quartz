@@ -22,7 +22,9 @@
   import UpdateBanner from '$lib/overlays/UpdateBanner.svelte';
   import WorldEdit from '$lib/overlays/WorldEdit.svelte';
   import { applyAppearance, prefs } from '$lib/prefs.svelte';
-  import { router, type Route } from '$lib/router.svelte';
+  import { api } from '$lib/api';
+  import { startRoute } from '$lib/boot';
+  import { go, router, type Route } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
   import Accounts from './routes/Accounts.svelte';
   import Browse from './routes/Browse.svelte';
@@ -57,7 +59,14 @@
   $effect(() => applyAppearance());
   $effect(() => installShortcuts());
   $effect(() => listenOpens());
-  void prefs.load();
+  // Read before the router rewrites the hash: a fresh window has none.
+  const fresh = typeof location === 'undefined' || location.hash === '' || location.hash === '#' || location.hash === '#/';
+  void prefs.load().then(async () => {
+    if (!prefs.value) return;
+    const last = prefs.value.general.startPage === 'last-instance' ? (await api.instances.recent())[0]?.id : undefined;
+    const r = startRoute(prefs.value, router.route, fresh, last);
+    if (r) go(r, { replace: true });
+  });
   void tasks.load();
   void session.load();
 

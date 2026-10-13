@@ -18,13 +18,15 @@ export const app = {
   info: (): Promise<AppInfo> =>
     hasBridge()
       ? AppGo.Info()
-      : Promise.resolve({ name: 'Quartz Client', shortName: 'Quartz', version: 'preview', dataDir: '~/.local/share/Quartz', portable: false, os: 'linux', memoryMb: 32768, discord: true }),
+      : Promise.resolve({ name: 'Quartz Client', shortName: 'Quartz', version: 'preview', dataDir: '~/.local/share/Quartz', portable: false, os: 'linux', memoryMb: 32768, discord: true, dataDirFixed: false }),
   /** Opens an https link in the system browser (Go refuses any other scheme). */
   openUrl: (url: string): Promise<void> => (hasBridge() ? AppGo.OpenURL(url) : (window.open(url, '_blank', 'noopener'), Promise.resolve())),
   /** Shows the launcher's data folder in the file manager. */
   openDataFolder: bridged(AppGo.OpenDataFolder, () => undefined),
   /** What the launcher was asked to open from outside since the last call (links, files, the command line). */
   pending: bridged(AppGo.Pending, (): OpenTarget[] => []),
+  /** Asks for a new data folder; the launcher restarts to move there ('' when cancelled). */
+  changeDataFolder: bridged(AppGo.ChangeDataFolder, () => ''),
 };
 
 export const settingsApi = {

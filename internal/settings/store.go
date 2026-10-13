@@ -1,7 +1,10 @@
 package settings
 
 import (
+	"errors"
+	"io/fs"
 	"log/slog"
+	"os"
 
 	"quartz/internal/core/events"
 	"quartz/internal/core/jsonfile"
@@ -16,12 +19,19 @@ type Store struct {
 
 // Open loads settings from path. A missing file yields defaults; a corrupt file is
 // kept aside as path.corrupt and replaced with defaults instead of failing startup.
+// A new data folder (no settings file yet) starts with first-run setup.
 func Open(path string, bus *events.Bus, log *slog.Logger) (*Store, error) {
+	_, statErr := os.Stat(path)
 	f, err := jsonfile.Open(jsonfile.Options[Settings]{
 		Path: path, Default: Defaults, Normalize: Settings.Normalize, Log: log,
 	})
 	if err != nil {
 		return nil, err
+	}
+	if errors.Is(statErr, fs.ErrNotExist) {
+		s := f.Get()
+		s.General.SetupDone = false
+		f.Set(s)
 	}
 	return &Store{file: f, bus: bus}, nil
 }

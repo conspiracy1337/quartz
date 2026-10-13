@@ -11,9 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
-	"strings"
 
+	"quartz/internal/core/fsx"
 	"quartz/internal/core/procx"
 	"quartz/internal/sandbox/rules"
 )
@@ -147,9 +146,6 @@ func (s *Service) Wrap(r Run, spec procx.Spec) (procx.Spec, *Jail, error) {
 var ErrFolder = errors.New("that folder can't be allowed")
 
 // systemRoots can never be allowed: the system itself.
-var systemRoots = []string{"/", "/proc", "/sys", "/dev", "/etc", "/run", "/boot", "/usr", "/var", "/tmp", "/bin", "/sbin", "/lib", "/lib64",
-	"/System", "/Library", "/private", "/Applications", "/Volumes"}
-
 // CheckFolder refuses a folder the player may not allow: missing, not a
 // folder, the system, or one that is or holds the launcher's data or the
 // home folder (the home folder has its own rule).
@@ -166,46 +162,17 @@ func (s *Service) CheckFolder(p string) error {
 	}
 	for _, q := range []string{p, real} {
 		clean := filepath.Clean(q)
-		if isSystemRoot(clean) {
+		if fsx.IsSystemRoot(clean) {
 			return fmt.Errorf("%w: it's part of the system", ErrFolder)
 		}
-		if s.c.DataRoot != "" && (within(clean, s.c.DataRoot) || within(s.c.DataRoot, clean)) {
+		if s.c.DataRoot != "" && (fsx.Within(clean, s.c.DataRoot) || fsx.Within(s.c.DataRoot, clean)) {
 			return fmt.Errorf("%w: it holds Quartz's data", ErrFolder)
 		}
-		if s.home != "" && within(s.home, clean) {
+		if s.home != "" && fsx.Within(s.home, clean) {
 			return fmt.Errorf("%w: it holds your home folder (use the home folder row)", ErrFolder)
 		}
 	}
 	return nil
-}
-
-func isSystemRoot(p string) bool {
-	if runtime.GOOS == "windows" {
-		vol := filepath.VolumeName(p)
-		if p == vol || p == vol+`\` {
-			return true
-		}
-		win := os.Getenv("SystemRoot")
-		for _, r := range []string{win, os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("ProgramData")} {
-			if r != "" && strings.EqualFold(filepath.Clean(r), p) {
-				return true
-			}
-		}
-		return false
-	}
-	return slices.Contains(systemRoots, p)
-}
-
-// within reports whether p is root or inside it.
-func within(p, root string) bool {
-	if root == "" {
-		return false
-	}
-	rel, err := filepath.Rel(root, p)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
 }
 
 // Forget drops what an instance's sandbox keeps between runs (its Windows

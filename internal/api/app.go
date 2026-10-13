@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/url"
+	"path/filepath"
 	"runtime"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,31 +16,67 @@ import (
 
 // App exposes product and environment information.
 type App struct {
-	ctx     *Ctx
-	paths   paths.Paths
-	opens   *Opens
-	discord bool
+	ctx   *Ctx
+	paths paths.Paths
+	d     AppDeps
 }
 
-// NewApp returns the facade; discord tells whether this build can show a
-// Discord status.
-func NewApp(ctx *Ctx, p paths.Paths, opens *Opens, discord bool) *App {
-	return &App{ctx: ctx, paths: p, opens: opens, discord: discord}
+// AppDeps are what the App facade works with.
+type AppDeps struct {
+	Opens   *Opens
+	Discord bool // this build can show a Discord status
+	// Pristine reports that no instance exists yet (the data folder can
+	// only move before there are any).
+	Pristine func() bool
+	// Restart starts the launcher again and quits this one.
+	Restart func() error
 }
+
+// NewApp returns the facade.
+func NewApp(ctx *Ctx, p paths.Paths, d AppDeps) *App { return &App{ctx: ctx, paths: p, d: d} }
 
 // Pending returns what the launcher was asked to open from outside since the
 // last call (see Opens).
-func (a *App) Pending() []OpenTarget { return a.opens.Pending() }
+func (a *App) Pending() []OpenTarget { return a.d.Opens.Pending() }
+
+// ErrNotPristine means instances exist, so the data folder stays put.
+var ErrNotPristine = errors.New("api: the data folder can only change before you have instances")
+
+// ChangeDataFolder asks for a folder (native dialog) and makes it the data
+// folder: the launcher restarts and moves what it has so far there. It
+// returns "" when cancelled.
+func (a *App) ChangeDataFolder() (string, error) {
+	if a.paths.Chosen != paths.ByDefault && a.paths.Chosen != paths.ByPointer {
+		return "", paths.ErrFixedRoot
+	}
+	if a.d.Pristine != nil && !a.d.Pristine() {
+		return "", ErrNotPristine
+	}
+	dir, err := wruntime.OpenDirectoryDialog(a.ctx.Get(), wruntime.OpenDialogOptions{Title: "Where to keep instances", DefaultDirectory: filepath.Dir(a.paths.Root)})
+	if err != nil || dir == "" {
+		return "", err
+	}
+	target := paths.Target(dir)
+	if filepath.Clean(target) == a.paths.Root {
+		return "", nil
+	}
+	if err := a.paths.MoveTo(target); err != nil {
+		return "", err
+	}
+	return target, a.d.Restart()
+}
 
 type AppInfo struct {
 	Name      string `json:"name"`
 	ShortName string `json:"shortName"`
 	Version   string `json:"version"`
 	DataDir   string `json:"dataDir"`
-	Portable  bool   `json:"portable"`
-	OS        string `json:"os"`
-	MemoryMB  int    `json:"memoryMb"` // installed RAM, 0 if unknown
-	Discord   bool   `json:"discord"`  // Discord status is set up in this build
+	// DataDirFixed: --dir, QUARTZ_DIR or portable mode set it, so it can't change here.
+	DataDirFixed bool   `json:"dataDirFixed"`
+	Portable     bool   `json:"portable"`
+	OS           string `json:"os"`
+	MemoryMB     int    `json:"memoryMb"` // installed RAM, 0 if unknown
+	Discord      bool   `json:"discord"`  // Discord status is set up in this build
 }
 
 func (a *App) Info() AppInfo {
@@ -47,7 +84,7 @@ func (a *App) Info() AppInfo {
 	return AppInfo{
 		Name: brand.Name, ShortName: brand.ShortName, Version: brand.Version,
 		DataDir: a.paths.Root, Portable: a.paths.Portable, OS: runtime.GOOS, MemoryMB: int(mem.Total >> 20), //nolint:gosec // RAM in MB fits an int
-		Discord: a.discord,
+		Discord: a.d.Discord, DataDirFixed: a.paths.Chosen != paths.ByDefault && a.paths.Chosen != paths.ByPointer,
 	}
 }
 

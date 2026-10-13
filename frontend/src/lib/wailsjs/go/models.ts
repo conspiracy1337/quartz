@@ -84,6 +84,7 @@ export namespace api {
 	    shortName: string;
 	    version: string;
 	    dataDir: string;
+	    dataDirFixed: boolean;
 	    portable: boolean;
 	    os: string;
 	    memoryMb: number;
@@ -99,6 +100,7 @@ export namespace api {
 	        this.shortName = source["shortName"];
 	        this.version = source["version"];
 	        this.dataDir = source["dataDir"];
+	        this.dataDirFixed = source["dataDirFixed"];
 	        this.portable = source["portable"];
 	        this.os = source["os"];
 	        this.memoryMb = source["memoryMb"];
@@ -2660,6 +2662,7 @@ export namespace settings {
 	    onGameStart: string;
 	    startPage: string;
 	    startWithComputer: boolean;
+	    setupDone: boolean;
 	    hiddenNews?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -2672,6 +2675,7 @@ export namespace settings {
 	        this.onGameStart = source["onGameStart"];
 	        this.startPage = source["startPage"];
 	        this.startWithComputer = source["startWithComputer"];
+	        this.setupDone = source["setupDone"];
 	        this.hiddenNews = source["hiddenNews"];
 	    }
 	}

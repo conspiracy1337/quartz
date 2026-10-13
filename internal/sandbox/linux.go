@@ -191,14 +191,16 @@ func bindResolved(a *bwrap.Args, p string) {
 // Java runtime, a wrapper program) unless a bound folder already holds it.
 // A Java root's linked parts (Arch keeps lib/ elsewhere) come along.
 func bindRead(a *bwrap.Args, p string, bound *[]string) {
-	covered := func(q string) bool { return slices.ContainsFunc(*bound, func(b string) bool { return within(q, b) }) }
+	covered := func(q string) bool {
+		return slices.ContainsFunc(*bound, func(b string) bool { return fsx.Within(q, b) })
+	}
 	add := func(q string) {
 		if !covered(q) {
 			a.RoBind(q, q)
 			*bound = append(*bound, q)
 		}
 	}
-	if _, err := os.Stat(p); err != nil || isSystemRoot(filepath.Clean(p)) {
+	if _, err := os.Stat(p); err != nil || fsx.IsSystemRoot(filepath.Clean(p)) {
 		return // the system is bound already, never as a whole
 	}
 	add(p)

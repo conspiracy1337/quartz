@@ -1,9 +1,22 @@
 <script lang="ts">
-  import { href } from '$lib/router.svelte';
+  import { api } from '$lib/api';
+  import { onEvent } from '$lib/bridge';
+  import { go, href } from '$lib/router.svelte';
   import { session, type AddAccountMode } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import type { IconName } from '$lib/ui/icons';
   import SetupLayout from './SetupLayout.svelte';
+
+  // Once an account is added (any of the three ways), setup moves on.
+  $effect(() => {
+    let before = -1;
+    void api.accounts.list().then((l) => (before = l.length));
+    return onEvent('accounts:changed', () => {
+      void api.accounts.list().then((l) => {
+        if (before >= 0 && l.length > before) go({ name: 'setup', step: 4 });
+      });
+    });
+  });
 
   const OPTIONS: { mode: AddAccountMode; title: string; sub: string; icon: IconName; strong?: boolean }[] = [
     { mode: 'browser', title: 'Sign in with Microsoft', sub: 'Opens your browser', icon: 'microsoft', strong: true },

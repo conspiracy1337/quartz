@@ -3,6 +3,7 @@
   import { prefs } from '$lib/prefs.svelte';
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
+  import { session } from '$lib/session.svelte';
   import { registry } from '$lib/settings/registry';
   import SettingControl from '$lib/settings/SettingControl.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -20,6 +21,19 @@
     ? { ...base, options: base.options.map((o) => (o.value === 'system' ? { ...o, label: 'English (from your system)' } : o)) }
     : base;
   const theme = $derived(prefs.value?.appearance.theme);
+
+  // The launcher restarts to move its data, then comes back to this step.
+  let moving = $state(false);
+  async function changeFolder() {
+    moving = true;
+    try {
+      await api.app.changeDataFolder();
+    } catch (e) {
+      session.fail('Change the data folder', e);
+    } finally {
+      moving = false;
+    }
+  }
 </script>
 
 <SetupLayout step={1}>
@@ -29,7 +43,7 @@
     <p class="muted" style="margin: 0">Four quick steps. You can change all of this later in Settings.</p>
   </div>
   <div class="field"><span class="field-label">Language</span><span class="tall"><SettingControl control={language} label="Language" /></span></div>
-  <label class="field"><span class="field-label">Where to keep instances</span><span style="display: flex; gap: 6px"><span class="input" style="flex: 1 1 auto; height: 36px"><input class="mono" value={info.data?.dataDir ?? ''} readonly /></span><button class="btn" style="height: 36px">Change</button></span><span class="field-help">About 200 MB per vanilla instance. Modpacks can need several GB.</span></label>
+  <label class="field"><span class="field-label">Where to keep instances</span><span style="display: flex; gap: 6px"><span class="input" style="flex: 1 1 auto; height: 36px"><input class="mono" value={info.data?.dataDir ?? ''} readonly /></span><button class="btn" style="height: 36px" onclick={changeFolder} disabled={moving || !info.data || info.data.dataDirFixed}>Change</button></span><span class="field-help">About 200 MB per vanilla instance. Modpacks can need several GB.</span></label>
   <div class="field"><span class="field-label">Look</span>
     <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px" role="radiogroup" aria-label="Look">
       {#each LOOKS as l (l.theme)}<button class="tp" class:on={theme === l.theme} onclick={() => prefs.update((s) => (s.appearance.theme = l.theme))} role="radio" aria-checked={theme === l.theme}><span style="background: {l.bg}; display: block"></span><span class="lb">{l.name}</span></button>{/each}
