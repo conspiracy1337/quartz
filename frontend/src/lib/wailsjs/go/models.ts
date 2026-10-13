@@ -84,9 +84,11 @@ export namespace api {
 	    shortName: string;
 	    version: string;
 	    dataDir: string;
+	    dataDirFixed: boolean;
 	    portable: boolean;
 	    os: string;
 	    memoryMb: number;
+	    discord: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -98,9 +100,11 @@ export namespace api {
 	        this.shortName = source["shortName"];
 	        this.version = source["version"];
 	        this.dataDir = source["dataDir"];
+	        this.dataDirFixed = source["dataDirFixed"];
 	        this.portable = source["portable"];
 	        this.os = source["os"];
 	        this.memoryMb = source["memoryMb"];
+	        this.discord = source["discord"];
 	    }
 	}
 	export class CapeView {
@@ -371,6 +375,20 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class JavaNeed {
+	    majors: number[];
+	    bytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new JavaNeed(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.majors = source["majors"];
+	        this.bytes = source["bytes"];
+	    }
+	}
 	export class JavaRuntime {
 	    major: number;
 	    name: string;
@@ -448,6 +466,66 @@ export namespace api {
 	
 	
 	
+	export class OpenTarget {
+	    kind: string;
+	    openId?: string;
+	    project?: string;
+	    instance?: string;
+	    subject?: string;
+	    text?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenTarget(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.openId = source["openId"];
+	        this.project = source["project"];
+	        this.instance = source["instance"];
+	        this.subject = source["subject"];
+	        this.text = source["text"];
+	    }
+	}
+	export class OtherLauncher {
+	    id: string;
+	    name: string;
+	    art: instance.Art;
+	    summary: string;
+	    instances: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new OtherLauncher(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.art = this.convertValues(source["art"], instance.Art);
+	        this.summary = source["summary"];
+	        this.instances = source["instances"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SandboxRow {
 	    id: string;
 	    folder: boolean;
@@ -2584,6 +2662,8 @@ export namespace settings {
 	    onGameStart: string;
 	    startPage: string;
 	    startWithComputer: boolean;
+	    setupDone: boolean;
+	    keys?: Record<string, string>;
 	    hiddenNews?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -2596,6 +2676,8 @@ export namespace settings {
 	        this.onGameStart = source["onGameStart"];
 	        this.startPage = source["startPage"];
 	        this.startWithComputer = source["startWithComputer"];
+	        this.setupDone = source["setupDone"];
+	        this.keys = source["keys"];
 	        this.hiddenNews = source["hiddenNews"];
 	    }
 	}
@@ -3074,6 +3156,37 @@ export namespace theme {
 	        this.path = source["path"];
 	        this.css = source["css"];
 	        this.error = source["error"];
+	    }
+	}
+
+}
+
+export namespace update {
+	
+	export class State {
+	    status: string;
+	    current: string;
+	    version?: string;
+	    date?: string;
+	    notes: string[];
+	    error?: string;
+	    checked?: number;
+	    job?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.status = source["status"];
+	        this.current = source["current"];
+	        this.version = source["version"];
+	        this.date = source["date"];
+	        this.notes = source["notes"];
+	        this.error = source["error"];
+	        this.checked = source["checked"];
+	        this.job = source["job"];
 	    }
 	}
 

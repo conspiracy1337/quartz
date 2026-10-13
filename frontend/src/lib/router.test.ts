@@ -8,6 +8,7 @@ describe('router', () => {
     { name: 'new-instance' },
     { name: 'import' },
     { name: 'project', id: 'iris' },
+    { name: 'import', open: '0123abcd' },
     { name: 'project', id: 'mr:AANobbMI+cf:394468', tab: 'versions' },
     { name: 'browse' },
     { name: 'browse', type: 'shader' },

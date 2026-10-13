@@ -1,21 +1,18 @@
 <script lang="ts">
+  import { prefs } from '../prefs.svelte';
   import { session } from '../session.svelte';
+  import { chords, sheet } from '../shortcuts';
   import Dialog from '../ui/Dialog.svelte';
 
-  const SHORTCUTS = [
-    { name: 'Anywhere', items: [['Command palette', ['Ctrl', 'K']], ['Switch instance', ['Ctrl', 'P']], ['Settings', ['Ctrl', ',']], ['Show shortcuts', ['?']]] },
-    { name: 'Go to', items: [['Home', ['G', 'H']], ['Library', ['G', 'L']], ['Browse', ['G', 'B']], ['Downloads', ['G', 'D']]] },
-    { name: 'Instance', items: [['Play', ['Ctrl', 'Enter']], ['Stop game', ['Ctrl', '.']], ['Open folder', ['Ctrl', 'O']], ['Next tab', ['Ctrl', 'Tab']]] },
-    { name: 'Lists', items: [['Move', ['J', 'K']], ['Toggle selected', ['Space']], ['Search', ['/']], ['Select all', ['Ctrl', 'A']]] },
-  ] as const;
+  const groups = $derived(sheet(chords(prefs.value?.general.keys)));
 </script>
 
 <Dialog title="Keyboard shortcuts" width={680} onclose={() => session.close()}>
   <div class="cols">
-    {#each SHORTCUTS as g (g.name)}
+    {#each groups as g (g.name)}
       <section aria-label={g.name}>
         <h3 class="h3" style="margin-bottom: 4px">{g.name}</h3>
-        {#each g.items as [label, keys] (label)}<div class="sc" style="border-top: 1px solid var(--line)"><span class="muted trunc">{label}</span><span class="k">{#each keys as k (k)}<span class="kbd">{k}</span>{/each}</span></div>{/each}
+        {#each g.items as { label, keys } (label)}<div class="sc" style="border-top: 1px solid var(--line)"><span class="muted trunc">{label}</span><span class="k">{#each keys as k, ki (ki)}<span class="kbd">{k}</span>{/each}</span></div>{/each}
       </section>
     {/each}
   </div>

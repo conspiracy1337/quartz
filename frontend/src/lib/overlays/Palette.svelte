@@ -3,7 +3,7 @@
   import { ago } from '../format';
   import { SETTINGS_TAB_LABELS, instanceMeta } from '../labels';
   import { query } from '../query.svelte';
-  import { go, type Route } from '../router.svelte';
+  import { go, router, type Route } from '../router.svelte';
   import { registry } from '../settings/registry';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -39,7 +39,13 @@
   });
   const COMMANDS = $derived<Item[]>([
     ...updateItems,
-    { key: 'self', group: 'Actions', label: 'Install launcher update 1.4.0', icon: 'shield', run: () => {} },
+    ...(session.update?.status === 'ready' ? [{ key: 'self', group: 'Actions', label: `Install launcher update ${session.update.version}`, icon: 'shield' as const, run: () => void api.updates.restart().catch((e) => session.fail('Restart', e)) }] : []),
+    ...(session.update && session.update.status !== 'off' && session.update.status !== 'ready'
+      ? [{ key: 'self-check', group: 'Actions', label: 'Check for launcher updates', icon: 'refresh' as const, run: () => void api.updates.check().then((u) => (session.update = u)).catch((e) => session.fail('Check for updates', e)) }]
+      : []),
+    ...(router.route.name === 'instance' ? [{ key: 'shortcut', group: 'Actions', label: 'Create shortcut…', icon: 'link' as const, run: () => session.open({ kind: 'shortcut', instanceId: (router.route as { id: string }).id }) }] : []),
+    { key: 'import-launchers', group: 'Actions', label: 'Import from other launchers', icon: 'download', run: nav({ name: 'setup', step: 4 }) },
+    { key: 'data-folder', group: 'Actions', label: 'Open data folder', icon: 'folder', run: () => void api.app.openDataFolder() },
     { key: 'new', group: 'Actions', label: 'Create a new instance', icon: 'plus', run: nav({ name: 'new-instance' }) },
     { key: 'shortcuts', group: 'Actions', label: 'Show keyboard shortcuts', icon: 'settings-simple', run: () => session.open({ kind: 'shortcuts' }) },
     ...registry.map((d) => ({ key: d.id, group: 'Settings', label: d.title, icon: 'settings-simple' as const, hint: `Settings, ${SETTINGS_TAB_LABELS[d.tab]}`, run: nav({ name: 'settings', tab: d.tab }) })),

@@ -384,4 +384,7 @@ export interface ModpackDiffRow { name: string; version: string; kind: DiffKind 
 export interface ModpackDiff { from: string; to: string; summary: string; keptEdits: string[]; rows: ModpackDiffRow[]; game?: string }
 
 // ---- importing ----
-export interface OtherLauncher { name: string; art: Art; summary: string; instances: number }
+/** Another launcher on this computer; instances counts those not brought over yet. */
+export interface OtherLauncher { id: string; name: string; art: Art; summary: string; instances: number }
+/** The Java versions an import would download first, and their size in bytes. */
+export interface JavaNeed { majors: number[]; bytes: number }

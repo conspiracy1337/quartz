@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"os"
 	"strings"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -17,6 +18,7 @@ type ImportsDeps struct {
 	Reader  *modpack.Reader
 	Packs   *modpack.Service
 	Drops   *Drops
+	Opens   *Opens
 	Picture func(url string) string // same-origin address of a platform picture
 }
 
@@ -101,6 +103,33 @@ func (im *Imports) InspectDropped(dropID string) (*ImportPreview, error) {
 		return nil, modpack.ErrNotPack
 	}
 	return im.preview(im.d.Reader.File(im.ctx.Get(), paths[0]))
+}
+
+// maxPackFile caps a pack file opened from outside.
+const maxPackFile = 2 << 30
+
+// InspectOpened reads a pack the launcher was asked to open from outside (a
+// file, a link, or a platform project; see Opens).
+func (im *Imports) InspectOpened(openID string) (*ImportPreview, error) {
+	p, err := im.d.Opens.Take(openID)
+	if err != nil {
+		return nil, err
+	}
+	ctx := im.ctx.Get()
+	switch {
+	case p.Path != "":
+		info, err := os.Lstat(p.Path)
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() || info.Size() > maxPackFile {
+			return nil, modpack.ErrNotPack
+		}
+		return im.preview(im.d.Reader.File(ctx, p.Path))
+	case p.URL != "":
+		return im.InspectLink(p.URL)
+	}
+	return im.preview(im.d.Reader.Project(ctx, p.Source, p.Project, p.Version))
 }
 
 // InspectProject reads a pack from Browse.

@@ -20,10 +20,10 @@
       {@const c = d.control}
       <div style="padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 6px"><span class="setting-title">{d.title}</span><textarea class="textarea" rows={c.rows} aria-label={d.title} value={prefs.value ? c.get(prefs.value) : ''} onchange={(e) => prefs.update((s) => c.set(s, e.currentTarget.value))}></textarea></div>
     {:else if mark}
-      <div class="setting"><span><span class="small faint" style="display: block">{d.group}</span><span class="setting-title" style="display: block">{@render highlighted(d.title)}</span></span><SettingControl control={d.control} label={d.title} /></div>
+      <div class="setting"><span><span class="small faint" style="display: block">{d.group}</span><span class="setting-title" style="display: block">{@render highlighted(d.title)}</span></span><SettingControl control={d.control} label={d.title} info={info.data} /></div>
     {:else}
       {@const desc = descText(d, info.data)}
-      <Setting title={d.title} {...(desc ? { desc } : {})}><SettingControl control={d.control} label={d.title} /></Setting>
+      <Setting title={d.title} {...(desc ? { desc } : {})}><SettingControl control={d.control} label={d.title} info={info.data} /></Setting>
     {/if}
   {/each}
 {/snippet}

@@ -60,7 +60,7 @@ func (s *Service) scan(ctx context.Context, id string, k Kind) error {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	for _, e := range s.read(ctx, game, k, sp, jobs) {
+	for _, e := range s.read(ctx, game, k, sp, jobs, !s.inPlace(id)) {
 		next[itemID(k, e.Rel)] = e
 	}
 	changed := false
@@ -154,7 +154,7 @@ func partial(name string) bool {
 }
 
 // read processes jobs on a few workers; a file that fails is left out.
-func (s *Service) read(ctx context.Context, game string, k Kind, sp spec, jobs []job) []Entry {
+func (s *Service) read(ctx context.Context, game string, k Kind, sp spec, jobs []job, adopt bool) []Entry {
 	if len(jobs) == 0 {
 		return nil
 	}
@@ -165,7 +165,7 @@ func (s *Service) read(ctx context.Context, game string, k Kind, sp spec, jobs [
 	for range min(runtime.GOMAXPROCS(0), 8, len(jobs)) {
 		wg.Go(func() {
 			for j := range work {
-				e, err := s.readOne(game, k, sp, j)
+				e, err := s.readOne(game, k, sp, j, adopt)
 				if err != nil {
 					s.d.Log.Debug("content: skipping an item", "item", j.rel, "err", err)
 					continue
@@ -187,7 +187,7 @@ func (s *Service) read(ctx context.Context, game string, k Kind, sp spec, jobs [
 	return out
 }
 
-func (s *Service) readOne(game string, k Kind, sp spec, j job) (Entry, error) {
+func (s *Service) readOne(game string, k Kind, sp spec, j job, adopt bool) (Entry, error) {
 	e := Entry{Kind: k, Rel: j.rel, Group: j.group, Dir: j.dir, Size: j.size, ModNS: j.mod, Added: s.now().Unix()}
 	if j.had {
 		e.Added = j.old.Added
@@ -212,6 +212,9 @@ func (s *Service) readOne(game string, k Kind, sp spec, j job) (Entry, error) {
 	}
 	e.SHA1 = h.SHA1
 	s.ensureKnown(abs, h.SHA1, sp)
+	if !adopt {
+		return e, nil
+	}
 	if _, err := s.d.Store.Adopt(abs, h); err != nil {
 		s.d.Log.Warn("content: could not adopt a file into the store", "item", j.rel, "err", err)
 	}
@@ -220,6 +223,25 @@ func (s *Service) readOne(game string, k Kind, sp spec, j job) (Entry, error) {
 		e.Size, e.ModNS = info.Size(), info.ModTime().UnixNano()
 	}
 	return e, nil
+}
+
+// inPlace reports whether an instance plays in another launcher's folder,
+// whose files are left exactly as they are (no adopting, no shared links).
+func (s *Service) inPlace(id string) bool {
+	in, err := s.d.Instances.Get(id)
+	return err == nil && in.InPlace
+}
+
+// place puts a stored file into an instance: a shared placement, or a
+// private copy in another launcher's folder.
+func (s *Service) place(id, sha1, abs string) error {
+	var err error
+	if s.inPlace(id) {
+		_, err = s.d.Store.PlacePrivate(sha1, abs)
+	} else {
+		_, err = s.d.Store.Place(sha1, abs)
+	}
+	return err
 }
 
 // hashStable hashes a file and makes sure it didn't change meanwhile (a

@@ -47,16 +47,8 @@ type Store[T any] struct {
 // Open loads the document. A missing file yields Default(); a corrupt one is
 // kept aside as <path>.corrupt and replaced by Default() instead of failing.
 func Open[T any](o Options[T]) (*Store[T], error) {
-	if o.MaxSize == 0 {
-		o.MaxSize = defaultMaxSize
-	}
-	if o.Delay == 0 {
-		o.Delay = defaultDelay
-	}
-	if o.Log == nil {
-		o.Log = slog.New(slog.DiscardHandler)
-	}
-	s := &Store[T]{o: o}
+	s := newStore(o)
+	o = s.o
 	data, err := fsx.ReadCapped(o.Path, o.MaxSize)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
@@ -73,6 +65,35 @@ func Open[T any](o Options[T]) (*Store[T], error) {
 	}
 	s.cur = cur
 	return s, nil
+}
+
+func newStore[T any](o Options[T]) *Store[T] {
+	if o.MaxSize == 0 {
+		o.MaxSize = defaultMaxSize
+	}
+	if o.Delay == 0 {
+		o.Delay = defaultDelay
+	}
+	if o.Log == nil {
+		o.Log = slog.New(slog.DiscardHandler)
+	}
+	return &Store[T]{o: o}
+}
+
+// Read decodes the document without keeping a store and without touching the
+// file, for readers outside the running launcher (the command line). A
+// missing file yields Default(); a corrupt one is an error.
+func Read[T any](o Options[T]) (T, error) {
+	s := newStore(o)
+	data, err := fsx.ReadCapped(o.Path, s.o.MaxSize)
+	if errors.Is(err, fs.ErrNotExist) {
+		return s.normalize(o.Default()), nil
+	}
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return s.decode(data)
 }
 
 // decode starts from the defaults, so missing fields keep default values and

@@ -8,9 +8,12 @@ import "sync"
 type Topic string
 
 const (
-	SettingsChanged  Topic = "settings:changed"
-	CustomCSS        Topic = "theme:custom-css"
-	SecondInstance   Topic = "app:second-instance"
+	SettingsChanged Topic = "settings:changed"
+	CustomCSS       Topic = "theme:custom-css"
+	// AppOpen says App.Pending has something new (a link, a file, an error).
+	AppOpen          Topic = "app:open"
+	// UpdateState carries the launcher updater's state (update.State).
+	UpdateState Topic = "update:state"
 	TasksChanged     Topic = "tasks:changed"
 	AccountsChanged  Topic = "accounts:changed"
 	AccountsSignIn   Topic = "accounts:signin"

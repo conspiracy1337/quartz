@@ -31,6 +31,11 @@ type General struct {
 	OnGameStart       string `json:"onGameStart"` // keep-open | hide | close
 	StartPage         string `json:"startPage"`   // home | library | last-instance
 	StartWithComputer bool   `json:"startWithComputer"`
+	// SetupDone is set when first-run setup finishes (or is skipped).
+	SetupDone bool `json:"setupDone"`
+	// Keys are the keyboard shortcuts changed from their defaults, by action
+	// ("palette": "Ctrl+J"); the UI defines the actions.
+	Keys map[string]string `json:"keys,omitempty"`
 	// HiddenNews is the news article Home's strip was dismissed for.
 	HiddenNews string `json:"hiddenNews,omitempty"`
 }
@@ -97,7 +102,8 @@ type Updates struct {
 func Defaults() Settings {
 	return Settings{
 		Version: SchemaVersion,
-		General: General{Language: "system", OnGameStart: "hide", StartPage: "home"},
+		// A settings file from before first-run setup existed reads as done.
+		General: General{Language: "system", OnGameStart: "hide", StartPage: "home", SetupDone: true},
 		Downloads: Downloads{
 			Parallel: 8, WatchDownloads: true, Proxy: "system",
 			ProxyCustom: ProxyCustom{Type: "http", Port: 8080},
@@ -144,6 +150,7 @@ func (s Settings) Normalize() Settings {
 	if len(s.General.HiddenNews) > 128 {
 		s.General.HiddenNews = ""
 	}
+	s.General.Keys = cleanKeys(s.General.Keys)
 
 	s.Downloads.Parallel = clamp(s.Downloads.Parallel, 1, 16, d.Downloads.Parallel)
 	s.Downloads.Proxy = oneOf(s.Downloads.Proxy, d.Downloads.Proxy, "system", "none", "custom")
@@ -215,4 +222,23 @@ func Resolve[T any](override *T, global T) T {
 		return *override
 	}
 	return global
+}
+
+var (
+	keyAction = regexp.MustCompile(`^[a-zA-Z]{1,24}$`)
+	keyChord  = regexp.MustCompile(`^(Ctrl\+|Alt\+|Shift\+){1,3}[^\s+]{1,12}$|^(Ctrl\+|Alt\+|Shift\+){1,3}\+$`)
+)
+
+// cleanKeys keeps well-formed shortcut entries, at most 16.
+func cleanKeys(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for k, v := range in {
+		if keyAction.MatchString(k) && keyChord.MatchString(v) && len(out) < 16 {
+			out[k] = v
+		}
+	}
+	return out
 }

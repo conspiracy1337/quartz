@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import Sidebar, { type SideKey } from '$lib/components/Sidebar.svelte';
   import StatusBar from '$lib/components/StatusBar.svelte';
+  import { listenOpens } from '$lib/intents';
   import { installShortcuts } from '$lib/keys';
   import AddAccount from '$lib/overlays/AddAccount.svelte';
   import InstanceEdit from '$lib/overlays/InstanceEdit.svelte';
@@ -15,12 +16,15 @@
   import LaunchPanel from '$lib/overlays/LaunchPanel.svelte';
   import Palette from '$lib/overlays/Palette.svelte';
   import ServerDialog from '$lib/overlays/ServerDialog.svelte';
+  import ShortcutDialog from '$lib/overlays/ShortcutDialog.svelte';
   import Shortcuts from '$lib/overlays/Shortcuts.svelte';
   import Toast from '$lib/overlays/Toast.svelte';
   import UpdateBanner from '$lib/overlays/UpdateBanner.svelte';
   import WorldEdit from '$lib/overlays/WorldEdit.svelte';
   import { applyAppearance, prefs } from '$lib/prefs.svelte';
-  import { router, type Route } from '$lib/router.svelte';
+  import { api } from '$lib/api';
+  import { startRoute } from '$lib/boot';
+  import { go, router, type Route } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
   import Accounts from './routes/Accounts.svelte';
   import Browse from './routes/Browse.svelte';
@@ -54,7 +58,15 @@
   $effect(() => session.listen());
   $effect(() => applyAppearance());
   $effect(() => installShortcuts());
-  void prefs.load();
+  $effect(() => listenOpens());
+  // Read before the router rewrites the hash: a fresh window has none.
+  const fresh = typeof location === 'undefined' || location.hash === '' || location.hash === '#' || location.hash === '#/';
+  void prefs.load().then(async () => {
+    if (!prefs.value) return;
+    const last = prefs.value.general.startPage === 'last-instance' ? (await api.instances.recent())[0]?.id : undefined;
+    const r = startRoute(prefs.value, router.route, fresh, last);
+    if (r) go(r, { replace: true });
+  });
   void tasks.load();
   void session.load();
 
@@ -84,7 +96,7 @@
   {#if r.name === 'home'}<Home />
   {:else if r.name === 'library'}<Library />
   {:else if r.name === 'new-instance'}<NewInstance />
-  {:else if r.name === 'import'}{#key r.ref}<Import ref={r.ref} source={r.source} />{/key}
+  {:else if r.name === 'import'}{#key r.open ?? r.ref}<Import ref={r.ref} source={r.source} open={r.open} />{/key}
   {:else if r.name === 'browse'}{#key `${r.type}/${r.instance}`}<Browse type={r.type} instance={r.instance} />{/key}
   {:else if r.name === 'project'}{#key r.id}<Project id={r.id} tab={r.tab} />{/key}
   {:else if r.name === 'skins'}<Skins />
@@ -134,6 +146,7 @@
   {:else if overlay?.kind === 'host'}<Host instanceId={overlay.instanceId} />
   {:else if overlay?.kind === 'palette'}{#key overlay.mode}<Palette mode={overlay.mode} />{/key}
   {:else if overlay?.kind === 'shortcuts'}<Shortcuts />
+  {:else if overlay?.kind === 'shortcut'}<ShortcutDialog instanceId={overlay.instanceId} />
   {:else if overlay?.kind === 'rename' || overlay?.kind === 'icon'}{#key overlay}<InstanceEdit kind={overlay.kind} instanceId={overlay.instanceId} />{/key}
   {/if}
 </div>

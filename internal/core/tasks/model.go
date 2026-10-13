@@ -165,3 +165,15 @@ type Snapshot struct {
 	EtaSec     int64     `json:"etaSec"`
 	HistoryRev int       `json:"historyRev"` // bumps when History() changed
 }
+
+// Bytes is the size of a download (its estimate when the size is unknown),
+// 0 for other work.
+func (w Work) Bytes() int64 {
+	if w.item == nil {
+		return 0
+	}
+	if w.item.Size > 0 {
+		return w.item.Size
+	}
+	return w.item.Estimate
+}

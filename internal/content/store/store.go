@@ -222,6 +222,16 @@ func (s *Store) Place(sha1, dst string) (linkx.Method, error) {
 	return linkx.Place(s.Path(sha1), dst, linkx.Options{Perm: 0o600})
 }
 
+// PlacePrivate puts a blob at dst as a private clone or copy, never a
+// hardlink: for folders other programs own, which must not get read-only
+// files.
+func (s *Store) PlacePrivate(sha1, dst string) (linkx.Method, error) {
+	if !ValidSHA1(sha1) {
+		return linkx.Copy, fmt.Errorf("store: bad sha1 %q", sha1)
+	}
+	return linkx.Place(s.Path(sha1), dst, linkx.Options{Perm: 0o600, NoHardlink: true})
+}
+
 // Unlink deletes an instance's file. On Windows deleting a read-only file
 // clears the attribute every hardlink shares, so the blob is sealed again.
 func (s *Store) Unlink(path, sha1 string) error {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { listKeys } from '../listkeys';
   import { api } from '../api';
   import { managed } from '../api/content';
   import type { AddResult, ContentItem, ContentKind, ContentStatus, Source } from '../api/types';
@@ -315,7 +316,7 @@
     {/if}
   </div>
   {#if hint}<p class="small faint" style="margin: 0">{hint}</p>{/if}
-  <div class="list">
+  <div class="list" use:listKeys>
     {#if items.data && !checking}
       {#each shown as c (c.id)}
         {@const on = isOn(c)}

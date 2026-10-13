@@ -1,11 +1,14 @@
 package manual
 
-import "os"
+import (
+	"os"
+	"quartz/internal/core/xdg"
+)
 
 func osDownloads() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return xdgDownloads(home, os.Getenv("XDG_CONFIG_HOME"))
+	return xdg.UserDir(home, os.Getenv("XDG_CONFIG_HOME"), "DOWNLOAD")
 }

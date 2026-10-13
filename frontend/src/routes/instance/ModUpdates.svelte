@@ -1,15 +1,16 @@
 <script lang="ts">
+  import { listKeys } from '$lib/listkeys';
   import { api } from '$lib/api';
   import type { ContentKind, Instance, ModUpdate, UpdateReview } from '$lib/api/types';
   import { hasBridge } from '$lib/bridge';
-  import { bytes, shortDate } from '$lib/format';
+  import { bytes } from '$lib/format';
   import { prefs } from '$lib/prefs.svelte';
   import { go, href } from '$lib/router.svelte';
   import { CHANNELS } from '$lib/settings/registry';
   import { session } from '$lib/session.svelte';
   import { tasks } from '$lib/tasks.svelte';
+  import ChangelogDialog from '$lib/components/ChangelogDialog.svelte';
   import Check from '$lib/ui/Check.svelte';
-  import Dialog from '$lib/ui/Dialog.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Seg from '$lib/ui/Seg.svelte';
   import Tile from '$lib/ui/Tile.svelte';
@@ -102,7 +103,7 @@
 </div>
 <div class="scroll">
   <div class="page" style="gap: 12px; padding-top: 16px">
-    <div class="list">
+    <div class="list" use:listKeys>
       {#each list as u, k (u.id)}
         <div class="row ur">
           <Check on={!!picked[u.id] && !u.blocked} label="Update {u.name}" onchange={(v) => (picked[u.id] = v)} />
@@ -127,20 +128,12 @@
   </div>
 </div>
 {#if cur}
-  <Dialog title={cur.name} onclose={() => (open = -1)}>
-    {#snippet head()}<span><span class="h2" style="display: block">{cur.name}</span><span class="mono small faint">{cur.from} to {cur.to}</span></span>{/snippet}
-    {#each cur.versions as v (v.id)}
-      <section aria-label={v.id} style="display: flex; flex-direction: column; gap: 6px">
-        <div style="display: flex; justify-content: space-between; align-items: baseline"><span class="mono" style="font-weight: 500">{v.id}</span><span class="small faint">{shortDate(v.date)}</span></div>
-        <ul class="cl">{#each v.items as t (t)}<li>{t}</li>{/each}</ul>
-      </section>
-    {/each}
+  <ChangelogDialog title={cur.name} meta="{cur.from} to {cur.to}" versions={cur.versions} onclose={() => (open = -1)}>
     {#snippet foot()}<button class="btn" style="margin-right: auto" disabled={!cur.ref && !cur.versionsUrl} onclick={() => allVersions(cur)}>All versions</button><button class="btn" onclick={() => (open = -1)}>Close</button><button class="btn btn-accent" onclick={() => ((picked[cur.id] = true), (open = -1))}>Keep selected</button>{/snippet}
-  </Dialog>
+  </ChangelogDialog>
 {/if}
 
 <style>
   .ur{grid-template-columns:16px 32px minmax(0,1fr) 200px 96px;height:56px}
   @media (max-width:1100px){.ur{grid-template-columns:16px 32px minmax(0,1fr) 96px}.ur .opt{display:none}}
-  .cl{margin:0;padding-left:18px;color:var(--muted);line-height:22px}
 </style>

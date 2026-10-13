@@ -1,6 +1,7 @@
 <script lang="ts">
   import { groupsFor } from '$lib/settings/registry';
   import SettingsGroup from '$lib/settings/SettingsGroup.svelte';
+  import ShortcutsGroup from '$lib/settings/ShortcutsGroup.svelte';
   import SettingsTab from './SettingsTab.svelte';
 
   // General shows the launcher basics plus the download and integration settings, as designed.
@@ -9,4 +10,5 @@
 
 <SettingsTab tab="general">
   {#each groups as g (g.group)}<SettingsGroup title={g.group} defs={g.defs} />{/each}
+  <ShortcutsGroup />
 </SettingsTab>

@@ -162,6 +162,27 @@ func TestScanAdoptsIntoTheStoreAndReusesStats(t *testing.T) {
 	}
 }
 
+func TestInPlaceFilesAreLeftAlone(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.insts.Update(e.id, func(in *instance.Instance) error { in.InPlace = true; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	e.mod("a.jar", "a", "A", "")
+	rows := e.list(Mods)
+	if len(rows) != 1 {
+		t.Fatalf("%+v", rows)
+	}
+	ix, _ := e.svc.idx.get(e.id)
+	blob := e.svc.d.Store.Path(ix.Get().Entries[rows[0].ID].SHA1)
+	a, _ := os.Stat(filepath.Join(e.game, "mods", "a.jar"))
+	if b, err := os.Stat(blob); err == nil && os.SameFile(a, b) {
+		t.Fatal("another launcher's file was linked into the store")
+	}
+	if a.Mode().Perm()&0o200 == 0 {
+		t.Fatal("another launcher's file was made read-only")
+	}
+}
+
 func TestToggleModBySuffix(t *testing.T) {
 	e := newEnv(t)
 	e.mod("a.jar", "a", "A", "")

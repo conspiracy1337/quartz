@@ -5,18 +5,19 @@
   import Seg from '../ui/Seg.svelte';
   import Toggle from '../ui/Toggle.svelte';
   import SecretControl from './SecretControl.svelte';
+  import type { AppInfo } from '../api/system';
   import type { Control } from './registry';
 
   /** The control for one registry setting, bound to the live settings. */
-  interface Props { control: Control; label: string }
-  let { control: c, label }: Props = $props();
+  interface Props { control: Control; label: string; info?: AppInfo | undefined }
+  let { control: c, label, info }: Props = $props();
   const s = $derived(prefs.value);
   const set = <V,>(fn: (st: NonNullable<typeof s>, v: V) => void) => (v: V) => prefs.update((st) => fn(st, v));
 </script>
 
 {#if s}
   {#if c.kind === 'toggle'}
-    <Toggle on={c.get(s)} {label} onchange={set(c.set)} />
+    <Toggle on={c.get(s)} {label} disabled={c.disabled?.(info) ?? false} onchange={set(c.set)} />
   {:else if c.kind === 'seg'}
     <Seg options={c.options} value={c.get(s)} {label} onchange={set(c.set)} />
   {:else if c.kind === 'select'}

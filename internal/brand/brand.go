@@ -74,3 +74,39 @@ func CurseForgeKey() string {
 	}
 	return ""
 }
+
+// EnvDiscordClientID overrides DiscordClientID.
+const EnvDiscordClientID = "QUARTZ_DISCORD_CLIENT_ID"
+
+// DiscordClientID is the Discord application that Rich Presence shows ("Playing
+// Quartz Client"), set at build time with
+// -ldflags "-X quartz/internal/brand.DiscordClientID=…". It is public.
+var DiscordClientID = ""
+
+var snowflake = regexp.MustCompile(`^[0-9]{17,20}$`)
+
+// DiscordID returns the Discord application ID ($QUARTZ_DISCORD_CLIENT_ID
+// first, then the build value), or "" when neither is well-formed: Rich
+// Presence is then not set up in this build.
+func DiscordID() string {
+	for _, id := range []string{os.Getenv(EnvDiscordClientID), DiscordClientID} {
+		if snowflake.MatchString(id) {
+			return id
+		}
+	}
+	return ""
+}
+
+// UpdateRepo is the GitHub repository whose releases update the launcher.
+const UpdateRepo = "conspiracy1337/quartz"
+
+// UpdatePublicKey is the minisign public key releases are signed with, set
+// at build time with -ldflags "-X quartz/internal/brand.UpdatePublicKey=…"
+// (the base64 line of the .pub file). Without it the launcher never
+// updates itself.
+var UpdatePublicKey = ""
+
+// EnvUpdateBase points update checks at another release server (testing a
+// release before it is published). Downloads are still verified against
+// UpdatePublicKey.
+const EnvUpdateBase = "QUARTZ_UPDATE_BASE"

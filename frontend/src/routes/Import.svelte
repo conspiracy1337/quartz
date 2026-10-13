@@ -11,8 +11,8 @@
   import Tile from '$lib/ui/Tile.svelte';
 
   /** Opened with a pack from Browse, or empty to drop a file or paste a link. */
-  interface Props { ref?: string | undefined; source?: Src | undefined }
-  let { ref, source }: Props = $props();
+  interface Props { ref?: string | undefined; source?: Src | undefined; open?: string | undefined }
+  let { ref, source, open }: Props = $props();
 
   // The preview shows the design's filled-in state.
   const START = hasBridge() ? '' : 'https://modrinth.com/modpack/cobblemon-fabric';
@@ -41,7 +41,8 @@
   }
 
   // svelte-ignore state_referenced_locally
-  if (ref && source) void inspect(() => api.imports.inspectProject(ref!, source!));
+  if (open) void inspect(() => api.imports.inspectOpened(open!));
+  else if (ref && source) void inspect(() => api.imports.inspectProject(ref!, source!));
   else if (!hasBridge()) void inspect(() => api.imports.inspectLink(link));
 
   // A pasted link is read once typing pauses.

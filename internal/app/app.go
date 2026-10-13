@@ -4,6 +4,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -20,6 +22,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"quartz/internal/accounts"
@@ -38,10 +41,13 @@ import (
 	"quartz/internal/core/logging"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/paths"
+	"quartz/internal/core/procx"
 	"quartz/internal/core/remoteimg"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
 	"quartz/internal/crash"
+	"quartz/internal/desktop"
+	"quartz/internal/discord"
 	"quartz/internal/gamewatch"
 	"quartz/internal/home"
 	"quartz/internal/host"
@@ -49,8 +55,10 @@ import (
 	"quartz/internal/imagesrv"
 	"quartz/internal/install"
 	"quartz/internal/instance"
+	"quartz/internal/intent"
 	"quartz/internal/java"
 	"quartz/internal/launch"
+	"quartz/internal/launchers"
 	"quartz/internal/loader"
 	"quartz/internal/logfiles"
 	"quartz/internal/manual"
@@ -65,16 +73,19 @@ import (
 	"quartz/internal/screenshots"
 	"quartz/internal/servers"
 	"quartz/internal/settings"
+	"quartz/internal/shortcuts"
 	"quartz/internal/skins"
 	"quartz/internal/syncing"
 	"quartz/internal/theme"
+	"quartz/internal/update"
 	"quartz/internal/worlds"
 )
 
 // Options are the inputs main passes in.
 type Options struct {
-	DataDir string // --dir flag; empty means automatic
-	Assets  fs.FS  // the built frontend
+	DataDir string      // --dir flag; empty means automatic
+	Assets  fs.FS       // the built frontend
+	Args    intent.Args // what the command line asked for (a launch, a link or file to open)
 }
 
 type app struct {
@@ -115,6 +126,9 @@ type app struct {
 	modIcons  *icons.Library
 	pictures  *remoteimg.Cache // project pictures from the platform CDNs
 	drops     *api.Drops
+	opens     *api.Opens // things asked for from outside, waiting for the UI
+	args      intent.Args
+	flagDir   string      // --dir, passed on when the launcher restarts itself
 	hidden    atomic.Bool // the window was hidden because a game started
 	ctx       *api.Ctx
 	// Worlds, servers, screenshots, crashes, logs and Home (M7).
@@ -129,6 +143,11 @@ type app struct {
 	gameWatch   *gamewatch.Watcher
 	// The shared layer (M8).
 	syncing *syncing.Service
+	// Desktop and menu shortcuts and Discord status (M11).
+	shortcuts *shortcuts.Service
+	presence  *discord.Presence
+	updater   *update.Updater
+	stopCheck func()
 }
 
 // Run builds the app and blocks until the window closes.
@@ -140,11 +159,14 @@ func Run(o Options) error {
 	defer func() { _ = a.logFile.Close() }()
 	a.log.Info("starting", "version", brand.Version, "data", a.paths.Root, "portable", a.paths.Portable)
 
-	appFacade := api.NewApp(a.ctx, a.paths)
+	a.args, a.flagDir = o.Args, o.DataDir
+	appFacade := api.NewApp(a.ctx, a.paths, api.AppDeps{Opens: a.opens, Discord: a.presence.Ready(),
+		Pristine: func() bool { return len(a.instances.List()) == 0 }, Restart: a.restart})
 	return wails.Run(&options.App{
 		Title:            brand.Name,
 		Width:            1200,
 		Height:           760,
+		WindowStartState: startState(o.Args.Minimized),
 		MinWidth:         960,
 		MinHeight:        600,
 		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0b, A: 0xff},
@@ -154,10 +176,15 @@ func Run(o Options) error {
 		OnStartup:   a.startup,
 		OnShutdown:  a.shutdown,
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               brand.AppID,
+			UniqueId:               lockID(a.paths.Root),
 			OnSecondInstanceLaunch: a.secondInstance,
 		},
 		Linux: &linux.Options{ProgramName: brand.Slug},
+		// macOS hands links and opened files to the app bundle, not argv.
+		Mac: &mac.Options{
+			OnUrlOpen:  func(u string) { a.act(intent.Args{Open: u}) },
+			OnFileOpen: func(p string) { a.act(intent.Args{Open: p}) },
+		},
 		Bind: []any{
 			appFacade,
 			api.NewSettings(a.ctx, a.settings, a.css, a.network),
@@ -168,14 +195,17 @@ func Run(o Options) error {
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
 				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Worlds: a.worlds, Servers: a.servers,
-				Syncing: a.syncing,
+				Syncing: a.syncing, Shortcuts: a.shortcuts,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
 			api.NewBrowse(a.ctx, a.browse),
-			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Picture: a.pictures.Src}),
+			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Opens: a.opens, Picture: a.pictures.Src}),
 			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
+			api.NewLaunchers(a.ctx, api.LaunchersDeps{Instances: a.instances, Packs: a.packs, Meta: a.meta, Java: a.java, Tasks: a.tasks,
+				Opens: a.opens, Log: a.log, Env: launchers.SystemEnv()}),
 			api.NewManual(api.ManualDeps{Service: a.manual, Drops: a.drops, App: appFacade}),
 			api.NewLaunch(a.ctx, a.launcher),
+			api.NewUpdates(a.ctx, a.updater, a.restart),
 			api.NewHost(a.ctx, a.host),
 			api.NewLogs(a.ctx, a.launcher, a.logFiles, a.crash),
 			api.NewHome(a.ctx, api.HomeDeps{Home: a.home, Servers: a.servers, Screenshots: a.screenshots}),
@@ -213,6 +243,7 @@ func build(o Options) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
+	moveErr := paths.ApplyMove(p) // a data folder chosen in setup, before anything opens
 	if err := p.Ensure(); err != nil {
 		return nil, fmt.Errorf("creating data folder: %w", err)
 	}
@@ -224,6 +255,9 @@ func build(o Options) (*app, error) {
 	log, logFile, err := logging.New(p.Logs(), slog.LevelInfo, redactor)
 	if err != nil {
 		return nil, fmt.Errorf("opening log: %w", err)
+	}
+	if moveErr != nil {
+		log.Error("moving the data folder failed", "err", moveErr)
 	}
 	bus := events.NewBus()
 	store, err := settings.Open(p.Settings(), bus, log)
@@ -520,7 +554,15 @@ func (a *app) buildContent() error {
 	if err != nil {
 		return fmt.Errorf("loading content: %w", err)
 	}
+	exe, err := desktop.Executable()
+	if err != nil {
+		a.log.Warn("can't find the launcher's program file: no shortcuts", "err", err)
+	}
+	a.shortcuts = shortcuts.New(a.paths.Shortcuts(), a.instances, a.icons, exe, a.log)
+	a.watchDiscord()
+	a.buildUpdater()
 	a.drops = api.NewDrops(a.bus)
+	a.opens = api.NewOpens(a.bus)
 	// Edits to files the game owns wait for it to exit.
 	a.bus.Subscribe(events.GameState, func(p any) {
 		if st, ok := p.(launch.State); ok && st.State == "exited" {
@@ -601,9 +643,44 @@ func (a *app) startup(ctx context.Context) {
 		st := a.sandbox.Status()
 		a.log.Info("sandbox", "available", st.Available, "backend", st.Name, "version", st.Version, "reason", st.Reason)
 	}()
+	a.watchDesktop()
+	go a.shortcuts.Refresh()
+	a.finishUpdate()
+	a.stopCheck = a.scheduleUpdates()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
+	a.act(a.args)
+}
+
+// startState starts the window minimized when the computer started the
+// launcher ("Start with the computer").
+func startState(minimized bool) options.WindowStartState {
+	if minimized {
+		return options.Minimised
+	}
+	return options.Normal
+}
+
+// restart starts the launcher again and quits this one; the new process
+// waits for this one to exit before it opens its window.
+func (a *app) restart() error {
+	exe, err := desktop.Executable()
+	if err != nil {
+		return err
+	}
+	if err := procx.Relaunch(exe, intent.WaitArgs(os.Getpid(), a.flagDir)); err != nil {
+		return err
+	}
+	wruntime.Quit(a.ctx.Get())
+	return nil
+}
+
+// lockID is the single-instance id: one running launcher per data folder,
+// so a portable copy or --dir runs beside the installed one.
+func lockID(root string) string {
+	sum := sha256.Sum256([]byte(filepath.Clean(root)))
+	return brand.AppID + "." + hex.EncodeToString(sum[:4])
 }
 
 // hostStopTimeout bounds how long quitting waits for a hosted server to save.
@@ -647,6 +724,9 @@ func (a *app) shutdown(context.Context) {
 	if a.stopPacks != nil {
 		a.stopPacks()
 	}
+	if a.stopCheck != nil {
+		a.stopCheck()
+	}
 	a.accounts.Close()
 	// A hosted server saves its world and stops with the launcher.
 	stopCtx, cancel := context.WithTimeout(context.Background(), hostStopTimeout)
@@ -685,15 +765,8 @@ func (a *app) shutdown(context.Context) {
 	if err := a.settings.Flush(); err != nil {
 		a.log.Error("saving settings on exit failed", "err", err)
 	}
+	a.installOnQuit()
 	a.log.Info("stopped")
-}
-
-// secondInstance focuses the window. Forwarded arguments are untrusted: they are
-// only logged here; M11 parses them with a strict flag set.
-func (a *app) secondInstance(data options.SecondInstanceData) {
-	a.log.Info("second instance", "args", len(data.Args))
-	a.focus()
-	a.bus.Emit(events.SecondInstance, nil)
 }
 
 // focus brings the launcher window forward.

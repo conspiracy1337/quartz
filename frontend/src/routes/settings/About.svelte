@@ -13,7 +13,7 @@
       <div class="kv">
         <span>Version</span><span class="mono">{info.data?.version ?? ''}</span>
         <span>System</span><span>{info.data?.os ?? ''}</span>
-        <span>Data folder</span><span class="mono trunc muted">{info.data?.dataDir ?? ''}</span>
+        <span>Data folder</span><span class="mono trunc muted">{info.data?.dataDir ?? ''}{info.data?.portable ? ' (portable)' : ''}</span>
         <span>Telemetry</span><span>None. The launcher never sends usage data.</span>
       </div>
     </div>

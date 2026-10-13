@@ -51,7 +51,7 @@ func (s *Service) Add(ctx context.Context, id string, k Kind, world string, path
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
-		if err := s.addOne(game, dir, k, p); err != nil {
+		if err := s.addOne(id, game, dir, k, p); err != nil {
 			res.Rejected = append(res.Rejected, Rejected{Name: name, Reason: reason(err)})
 			continue
 		}
@@ -103,7 +103,7 @@ func (s *Service) targetFolder(id string, k Kind, world string) (string, error) 
 	return path.Join("saves", world, "datapacks"), nil
 }
 
-func (s *Service) addOne(game, dir string, k Kind, src string) error {
+func (s *Service) addOne(id, game, dir string, k Kind, src string) error {
 	if !filepath.IsAbs(src) {
 		return ErrNotThisKind
 	}
@@ -127,7 +127,7 @@ func (s *Service) addOne(game, dir string, k Kind, src string) error {
 		if info.Size() > maxContentFile {
 			return ErrTooBig
 		}
-		return s.addFile(game, dir, k, src, name)
+		return s.addFile(id, game, dir, k, src, name)
 	case info.IsDir() && sp.dirs:
 		return s.addFolder(game, dir, k, src, name)
 	}
@@ -136,7 +136,7 @@ func (s *Service) addOne(game, dir string, k Kind, src string) error {
 
 // addFile checks that a file is a zip of the right kind, stores it and
 // places it.
-func (s *Service) addFile(game, dir string, k Kind, src, name string) error {
+func (s *Service) addFile(id, game, dir string, k Kind, src, name string) error {
 	if err := zipMagic(src); err != nil {
 		return err
 	}
@@ -155,8 +155,7 @@ func (s *Service) addFile(game, dir string, k Kind, src, name string) error {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
 		return err
 	}
-	_, err = s.d.Store.Place(h.SHA1, abs)
-	return err
+	return s.place(id, h.SHA1, abs)
 }
 
 func zipMagic(p string) error {

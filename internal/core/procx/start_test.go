@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStartStreamsAndResult(t *testing.T) {
@@ -51,5 +52,14 @@ func TestStartExtraFiles(t *testing.T) {
 func TestContainedRefusedOutsideWindows(t *testing.T) {
 	if _, err := Start(Spec{Argv: []string{"/bin/true"}, Contain: &Container{SID: "S-1-15-2-1"}}); err == nil {
 		t.Fatal("a contained child must never run uncontained")
+	}
+}
+
+func TestWaitExit(t *testing.T) {
+	if !WaitExit(1<<30, time.Second) {
+		t.Fatal("a process id that doesn't exist has exited")
+	}
+	if WaitExit(os.Getpid(), time.Second) {
+		t.Fatal("never wait for ourselves")
 	}
 }

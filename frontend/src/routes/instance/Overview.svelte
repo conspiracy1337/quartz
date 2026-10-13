@@ -5,6 +5,7 @@
   import { loaderLabel } from '$lib/labels';
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
+  import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Seg from '$lib/ui/Seg.svelte';
   import Setting from '$lib/ui/Setting.svelte';
@@ -18,7 +19,14 @@
   const activity = query(() => api.instances.activity(i.id));
   const updates = query(() => api.instances.pendingUpdates(i.id));
   let filter = $state<'all' | ActivityKind>('all');
-  let discord = $state(true);
+  // The instance's own Discord switch (Integrations holds the global one).
+  async function setDiscord(on: boolean) {
+    try {
+      await api.instances.setDiscord(i.id, on);
+    } catch (e) {
+      session.fail('Discord status', e);
+    }
+  }
   const FILTERS = [{ value: 'all', label: 'All' }, { value: 'session', label: 'Sessions' }, { value: 'change', label: 'Changes' }] as const;
   const TONES = { muted: 'var(--muted)', accent: 'var(--accent)', danger: 'var(--danger)' } as const;
   const events = $derived((activity.data ?? []).filter((e) => filter === 'all' || e.kind === filter));
@@ -73,7 +81,7 @@
         <div class="divider"></div>
         <Setting title="Syncing" desc="Keybinds, servers and shaders." oneLine href={href({ name: 'syncing' })}><span class="badge">{i.syncTargets} targets</span></Setting>
         <div class="divider"></div>
-        <Setting title="Discord status" desc="Show this instance while you play." oneLine><Toggle bind:on={discord} label="Discord status" /></Setting>
+        <Setting title="Discord status" desc="Show this instance while you play." oneLine><Toggle on={i.discordStatus} label="Discord status" onchange={setDiscord} /></Setting>
       </div>
     </section>
   </div>

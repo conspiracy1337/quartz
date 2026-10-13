@@ -62,7 +62,7 @@ for (const [b, [route, act]] of boards) {
   // Preview-only state that the design boards don't show: the update banner and the mock download queue.
   const keepDl = ['DlB', 'DlC', 'DlgBlocked'].includes(b);
   await page.evaluate(`Promise.all([import('/src/lib/session.svelte.ts'), import('/src/lib/tasks.svelte.ts')]).then(([{ session }, { tasks }]) => {
-    session.updateReady = ${b === 'DlgDelete'};
+    session.updateLater = ${b !== 'DlgDelete'};
     if (!${keepDl}) tasks.active = [];
   })`);
   await page.waitForTimeout(200);

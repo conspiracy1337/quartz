@@ -16,7 +16,7 @@ export type Field = {
   grow?: number;
 };
 export type Control =
-  | { kind: 'toggle'; get: (s: Settings) => boolean; set: (s: Settings, v: boolean) => void }
+  | { kind: 'toggle'; get: (s: Settings) => boolean; set: (s: Settings, v: boolean) => void; disabled?: (info: AppInfo | undefined) => boolean }
   | { kind: 'seg'; options: readonly Opt[]; get: (s: Settings) => string; set: (s: Settings, v: string) => void }
   | { kind: 'select'; options: readonly Opt[]; get: (s: Settings) => string; set: (s: Settings, v: string) => void }
   | { kind: 'range'; min: number; max: number; get: (s: Settings) => number; set: (s: Settings, v: number) => void }
@@ -47,7 +47,7 @@ const customProxy = (s: Settings) => s.downloads.proxy === 'custom';
 export const CHANNELS = [{ value: 'release', label: 'Release' }, { value: 'beta', label: 'Beta' }, { value: 'alpha', label: 'Alpha' }] as const;
 
 export const registry: SettingDef[] = [
-  { id: 'language', tab: 'general', group: 'Launcher', title: 'Language', control: { kind: 'select', options: [{ value: 'system', label: 'English (system)' }, { value: 'en', label: 'English' }, { value: 'de', label: 'Deutsch' }], get: (s) => s.general.language, set: (s, v) => (s.general.language = v) } },
+  { id: 'language', tab: 'general', group: 'Launcher', title: 'Language', control: { kind: 'select', options: [{ value: 'system', label: 'English' }], get: () => 'system', set: (s) => (s.general.language = 'system') } },
   { id: 'onGameStart', tab: 'general', group: 'Launcher', title: 'When a game starts', desc: 'Instances can override this.', control: { kind: 'seg', options: ON_GAME_START, get: (s) => s.general.onGameStart, set: (s, v) => (s.general.onGameStart = v) } },
   { id: 'startPage', tab: 'general', group: 'Launcher', title: 'Open on startup', control: { kind: 'seg', options: [{ value: 'home', label: 'Home' }, { value: 'library', label: 'Library' }, { value: 'last-instance', label: 'Last instance' }], get: (s) => s.general.startPage, set: (s, v) => (s.general.startPage = v) } },
   { id: 'startWithComputer', tab: 'general', group: 'Launcher', title: 'Start with the computer', desc: 'Starts minimized so updates are ready.', control: { kind: 'toggle', get: (s) => s.general.startWithComputer, set: (s, v) => (s.general.startWithComputer = v) } },
@@ -67,7 +67,7 @@ export const registry: SettingDef[] = [
   { id: 'proxyPassword', tab: 'downloads', group: 'Downloads', title: 'Proxy password', desc: 'Kept in your system keychain, never in a file.', when: customProxy, control: { kind: 'secret', has: () => settingsApi.hasProxyPassword(), save: (v) => settingsApi.setProxyPassword(v) } },
   { id: 'modChannel', tab: 'downloads', group: 'Mod updates', title: 'Mod update channel', desc: 'The least stable versions to offer when checking for mod updates.', control: { kind: 'seg', options: CHANNELS, get: (s) => s.updates.modChannel, set: (s, v) => (s.updates.modChannel = v) } },
 
-  { id: 'discord', tab: 'integrations', group: 'Integrations', title: 'Discord status', desc: 'Shows the instance and Minecraft version you are playing.', control: { kind: 'toggle', get: (s) => s.integrations.discordStatus, set: (s, v) => (s.integrations.discordStatus = v) } },
+  { id: 'discord', tab: 'integrations', group: 'Integrations', title: 'Discord status', desc: (info) => (info && !info.discord ? 'Not set up in this build.' : 'Shows the instance and Minecraft version you are playing.'), control: { kind: 'toggle', get: (s) => s.integrations.discordStatus, set: (s, v) => (s.integrations.discordStatus = v), disabled: (info) => !!info && !info.discord } },
   { id: 'links', tab: 'integrations', group: 'Integrations', title: 'Open Modrinth and CurseForge links', desc: 'Handles modrinth:// and curseforge:// install buttons on the web.', control: { kind: 'toggle', get: (s) => s.integrations.handleLinks, set: (s, v) => (s.integrations.handleLinks = v) } },
 
   { id: 'density', tab: 'appearance', group: 'Layout', title: 'Density', control: { kind: 'seg', options: [{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }], get: (s) => s.appearance.density, set: (s, v) => (s.appearance.density = v) } },

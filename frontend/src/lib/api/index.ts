@@ -7,13 +7,14 @@ import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
-import type { Alert, Instance, InstanceSummary } from './types';
+import type { Alert, Instance, InstanceSummary, JavaNeed } from './types';
 import { activityFeed } from '../activity';
 import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
 import * as InstancesGo from '../wailsjs/go/api/Instances';
 import * as JavaGo from '../wailsjs/go/api/Java';
 import * as LaunchGo from '../wailsjs/go/api/Launch';
+import * as LaunchersGo from '../wailsjs/go/api/Launchers';
 import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as SyncGo from '../wailsjs/go/api/Sync';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
@@ -25,17 +26,11 @@ import { homeApi, logFilesApi, screenshotsApi, serversApi, worldsApi } from './g
 import { downloadsApi } from './downloads';
 import { hostApi } from './host';
 import { sandboxApi } from './sandbox';
-import { app, settingsApi } from './system';
+import { app, settingsApi, updatesApi } from './system';
 
 export type { AppInfo, CustomCSSState, Settings } from './system';
 
 const serve = preview;
-
-/**
- * A domain whose Go service arrives in a later milestone: the browser preview shows the
- * design's fixtures, the app shows nothing rather than fake data.
- */
-const unbuilt = <A extends unknown[], T>(mock: (...a: A) => T, empty: T) => (...a: A): Promise<T> => (hasBridge() ? Promise.resolve(empty) : serve(mock(...a)));
 
 const summary = ({ id, name, art, icon, minecraft, loader, kind, group, tags, hasServers, lastPlayed, playtimeMin, running }: Instance): InstanceSummary =>
   ({ id, name, art, minecraft, kind, tags, hasServers, playtimeMin, running, ...(icon ? { icon } : {}), ...(group ? { group } : {}), ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
@@ -47,6 +42,7 @@ const runs = bridged(LogsGo.Runs, (_instanceId: string) => logs.runs);
 export const api = {
   app,
   settings: settingsApi,
+  updates: updatesApi,
   instances: {
     list: () => revs.load('instances', bridged(InstancesGo.List, () => inst.instances.map(summary))),
     get: (id: string) => revs.load('instances', bridged(() => InstancesGo.Get(id), () => byId(id))),
@@ -60,6 +56,9 @@ export const api = {
     create: bridged(InstancesGo.Create, inst.mockInstances.create),
     updateSettings: bridged(InstancesGo.UpdateSettings, inst.mockInstances.updateSettings),
     openFolder: bridged(InstancesGo.OpenFolder, (_id: string) => undefined),
+    setDiscord: bridged(InstancesGo.SetDiscord, (id: string, on: boolean) => ({ ...byId(id), discordStatus: on })),
+    /** Puts the instance on the desktop and/or in the app menu; kind and target pick a world or server (both '' for none). */
+    createShortcut: bridged(InstancesGo.CreateShortcut, (_id: string, _where: string, _accountId: string, _kind: string, _target: string) => undefined),
     rename: bridged(InstancesGo.Rename, inst.mockInstances.rename),
     setArt: bridged(InstancesGo.SetArt, inst.mockInstances.setArt),
     /** Opens a native picture picker; resolves unchanged when cancelled. */
@@ -156,8 +155,14 @@ export const api = {
     /** Starts a download job for the Java the newest release needs; resolves with its id. */
     download: bridged(JavaGo.Download, () => ''),
   },
-  /** Other launchers to import from (first-run setup, M11). */
-  launchers: unbuilt(() => misc.otherLaunchers, []),
+  /** Other launchers on this computer and bringing their instances over (first-run setup). */
+  launchers: {
+    list: bridged(LaunchersGo.List, () => misc.otherLaunchers),
+    /** The Java versions importing these launchers would download, and their size. */
+    java: bridged(LaunchersGo.Java, (_ids: string[]): JavaNeed => ({ majors: [21], bytes: 186_000_000 })),
+    /** Starts the import in the background: copies, or with inPlace plays in their folders. */
+    import: bridged(LaunchersGo.Import, (_ids: string[], _inPlace: boolean) => undefined),
+  },
 };
 
 export type Api = typeof api;
