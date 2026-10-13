@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +25,8 @@ import (
 	"quartz/internal/icons"
 	"quartz/internal/instance"
 	"quartz/internal/loader"
+	"quartz/internal/sandbox"
+	"quartz/internal/sandbox/rules"
 	"quartz/internal/settings"
 	"quartz/internal/worlds"
 )
@@ -67,8 +70,11 @@ func TestHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws := worlds.New(worlds.Deps{Instances: insts, Images: localimg.New(filepath.Join(h.root, "thumbs")), Busy: func(string) bool { return false }, Bus: bus, Log: h.log})
+	// QUARTZ_IT_SANDBOX=standard|strict hosts each server in its sandbox.
+	preset := os.Getenv("QUARTZ_IT_SANDBOX")
 	svc := host.New(host.Deps{Instances: insts, Installer: h.installer(), Java: h.java, Tasks: h.tasks, Content: cs, Store: blobs, Worlds: ws,
-		Accounts: accs, Settings: st, Bus: bus, Redactor: logging.NewRedactor(""), Log: h.log})
+		Accounts: accs, Settings: st, Bus: bus, Redactor: logging.NewRedactor(""), Log: h.log,
+		Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log}), StoreRead: h.storeRead()})
 
 	var mu sync.Mutex
 	var lines []string
@@ -113,9 +119,15 @@ func TestHost(t *testing.T) {
 				}
 				req.Loader, req.LoaderVersion = c.loader, build
 			}
+			req.Sandbox = preset != ""
 			in, err := insts.Create(req, instance.JavaSettings{})
 			if err != nil {
 				t.Fatal(err)
+			}
+			if preset != "" {
+				if in, err = insts.EditSandbox(in.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset), runtime.GOOS); return nil }); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if c.loader == "fabric" {
 				mods := filepath.Join(insts.GameDir(in.ID), "mods")
@@ -133,6 +145,14 @@ func TestHost(t *testing.T) {
 				svc.Close(ctx)
 			})
 			wait(t, states, "running", 15*time.Minute)
+			if preset != "" && runtime.GOOS == "linux" {
+				// The recorded server process is the sandbox around java.
+				pid, _ := os.ReadFile(filepath.Join(svc.Dir(in.ID), ".quartz", "pid"))
+				comm, _ := os.ReadFile(filepath.Join("/proc", strings.TrimSpace(string(pid)), "comm"))
+				if strings.TrimSpace(string(comm)) != "bwrap" {
+					t.Fatalf("the server runs as %q, not in its sandbox", comm)
+				}
+			}
 
 			// Old servers fill in players on their first status refresh after Done.
 			var ping *slp.Status

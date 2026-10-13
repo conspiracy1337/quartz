@@ -117,12 +117,16 @@ func (l *Launcher) command(sp *spec) (procx.Spec, []byte, string, error) {
 	}
 	sess, res, eff := sp.sess, sp.res, sp.eff
 	v := res.Version
+	natives, err := l.natives(sp)
+	if err != nil {
+		return procx.Spec{}, nil, "", err
+	}
 	vars := mojang.Vars{
 		"auth_player_name": sess.Name, "auth_uuid": sess.UUID, "auth_access_token": sess.AccessToken,
 		"auth_session": sess.LegacySession(), "auth_xuid": sess.XUID, "clientid": sess.ClientID, "user_type": sess.UserType,
 		"user_properties": "{}", "version_name": v.ID, "version_type": v.Type,
 		"game_directory": sp.gameDir, "assets_root": res.AssetsRoot, "assets_index_name": v.AssetsID(),
-		"game_assets": res.GameAssets, "natives_directory": res.NativesDir, "library_directory": res.LibrariesDir,
+		"game_assets": res.GameAssets, "natives_directory": natives, "library_directory": res.LibrariesDir,
 		"classpath":           strings.Join(append(append([]string(nil), res.Classpath...), jar), string(os.PathListSeparator)),
 		"classpath_separator": string(os.PathListSeparator),
 		"launcher_name":       brand.Slug, "launcher_version": brand.Version,

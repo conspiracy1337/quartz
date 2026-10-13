@@ -5,6 +5,7 @@ package integration
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -22,6 +23,8 @@ import (
 	"quartz/internal/loader"
 	"quartz/internal/mojang"
 	"quartz/internal/runview"
+	"quartz/internal/sandbox"
+	"quartz/internal/sandbox/rules"
 	"quartz/internal/settings"
 	"quartz/internal/syncing"
 )
@@ -30,6 +33,16 @@ func (h *harness) loaders() *loader.Registry {
 	s := filepath.Join(h.root, "store")
 	return loader.New(loader.Deps{Meta: h.meta, Downloader: h.dl, Verified: h.ver, Log: h.log,
 		Dirs: loader.Dirs{Libraries: filepath.Join(s, "libraries"), Versions: filepath.Join(s, "versions")}})
+}
+
+// storeRead are the store folders a sandboxed game or server reads.
+func (h *harness) storeRead() []string {
+	s := filepath.Join(h.root, "store")
+	var out []string
+	for _, d := range []string{"libraries", "versions", "assets", "natives", "logconfigs", "bin"} {
+		out = append(out, filepath.Join(s, d))
+	}
+	return out
 }
 
 func (h *harness) installer() *install.Installer {
@@ -118,23 +131,43 @@ func TestLaunchOffline(t *testing.T) {
 		}
 		req.Loader, req.LoaderVersion, req.Name = k, v.ID, req.Name+" "+k
 	}
-	inst, err := insts.Create(req, instance.JavaSettings{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	red := logging.NewRedactor("")
-	mgr := accounts.NewManager(accounts.Config{Store: accs, Bus: bus, Redactor: red, Settings: func() settings.Accounts { return st.Get().Accounts }})
-	l := launch.New(launch.Config{
-		Instances: insts, Accounts: mgr, Installer: h.installer(), Loaders: h.loaders(), Java: h.java, Tasks: h.tasks,
-		Settings: st, Bus: bus, Redactor: red, BinDir: filepath.Join(h.root, "store", "bin"), Log: h.log,
-	})
-
 	var (
 		mu     sync.Mutex
 		lines  []string
 		states = make(chan launch.State, 4)
 		failed = make(chan launch.Failure, 1)
 	)
+	// QUARTZ_IT_SANDBOX=standard|strict runs the game in its sandbox.
+	preset := os.Getenv("QUARTZ_IT_SANDBOX")
+	req.Sandbox = preset != ""
+	inst, err := insts.Create(req, instance.JavaSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preset != "" {
+		if inst, err = insts.EditSandbox(inst.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset), runtime.GOOS); return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	red := logging.NewRedactor("")
+	mgr := accounts.NewManager(accounts.Config{Store: accs, Bus: bus, Redactor: red, Settings: func() settings.Accounts { return st.Get().Accounts }})
+	l := launch.New(launch.Config{
+		Instances: insts, Accounts: mgr, Installer: h.installer(), Loaders: h.loaders(), Java: h.java, Tasks: h.tasks,
+		Settings: st, Bus: bus, Redactor: red, BinDir: filepath.Join(h.root, "store", "bin"), Log: h.log,
+		Views: runview.New(runview.Config{Log: h.log}), Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log}), StoreRead: h.storeRead(),
+	})
+	progress := map[int]string{}
+	bus.Subscribe(events.LaunchProgress, func(p any) {
+		pr := p.(launch.Progress)
+		mu.Lock()
+		for i, d := range pr.Details {
+			if d != "" {
+				progress[i] = d
+			}
+		}
+		mu.Unlock()
+	})
+
 	bus.Subscribe(events.GameLog, func(p any) {
 		mu.Lock()
 		for _, ln := range p.(launch.LogBatch).Lines {
@@ -185,11 +218,20 @@ func TestLaunchOffline(t *testing.T) {
 		t.Fatal("game did not stop")
 	}
 	runs := l.Runs(inst.ID)
-	if len(runs) != 1 || runs[0].Account != "Quartz_Test" {
+	if len(runs) != 1 || runs[0].Account != "Quartz_Test" || (preset != "") != (runs[0].Sandbox != "") {
 		t.Fatalf("runs = %+v", runs)
 	}
 	mu.Lock()
+	t.Logf("sandbox step: %q", progress[launch.StageSandbox])
+	t.Logf("last lines:\n%s", strings.Join(lines[max(0, len(lines)-12):], "\n"))
 	t.Logf("first lines:\n%s", strings.Join(lines[:min(len(lines), 15)], "\n"))
+	var problems []string
+	for _, ln := range lines {
+		if strings.HasPrefix(ln, "WARN") || strings.HasPrefix(ln, "ERROR") {
+			problems = append(problems, ln)
+		}
+	}
+	t.Logf("warnings and errors (%d):\n%s", len(problems), strings.Join(problems[:min(len(problems), 40)], "\n"))
 	mu.Unlock()
 	if got, _ := insts.Get(inst.ID); got.LastPlayed == nil {
 		t.Fatal("last played not recorded")

@@ -55,7 +55,11 @@ var sysDirs = []string{"/sys/block", "/sys/bus", "/sys/class", "/sys/dev", "/sys
 func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Jail, error) {
 	sup := bwrap.Detect()
 	var a bwrap.Args
-	a.Add(sup.Bin, "--unshare-user", "--unshare-pid", "--unshare-uts", "--unshare-cgroup-try")
+	// --as-pid-1: the game is the sandbox's first process, so whatever it
+	// leaves running (a mod's daemon, a bus it autolaunched) ends with it
+	// instead of keeping the run alive. The JVM handles SIGTERM, so Stop
+	// still lets it save and quit.
+	a.Add(sup.Bin, "--unshare-user", "--unshare-pid", "--as-pid-1", "--unshare-uts", "--unshare-cgroup-try")
 	if sup.DisableUserns {
 		a.Add("--disable-userns")
 	}
@@ -131,6 +135,9 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 	if s.home != "" {
 		env = setEnv(env, "HOME="+s.home)
 	}
+	// There is no session bus inside; naming one that doesn't exist stops
+	// libdbus from autolaunching its own (dbus-launch) in the sandbox.
+	env = setEnv(env, "DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/quartz-sandbox-bus")
 
 	filter, err := seccomp.File()
 	if err != nil {
