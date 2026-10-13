@@ -40,7 +40,7 @@
   const groups = query(() => api.instances.groups());
   const javaOptions = $derived([{ value: '', label: `Automatic (${i.javaAuto})` }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
   const suggestGb = $derived(prefs.value?.java.suggestMemory ? suggestMemoryGb(i.counts.mods, info.data?.memoryMb ?? 0) : 0);
-  const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${Math.round(info.data.memoryMb / 1024)} GB.${suggestGb ? ` ${suggestGb} GB suits ${i.counts.mods} mods.` : ''}` : undefined);
+  const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${Math.round(info.data.memoryMb / 1024)} GB.${suggestGb ? ` ${suggestGb} GB suits ${plural(i.counts.mods, 'mod')}.` : ''}` : undefined);
   const groupOptions = $derived([{ value: '', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
   let naming = $state(false);
   const onStart = $derived(st.window.onGameStart || prefs.value?.general.onGameStart || 'hide');
