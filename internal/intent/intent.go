@@ -38,6 +38,8 @@ type Args struct {
 	JSON    bool   // print one JSON line instead of a table
 	Dir     string // --dir: the data folder
 	WaitPID int    // --wait-pid: a restart waits for the old process to exit
+	// Minimized starts the window minimized (starting with the computer).
+	Minimized bool
 	Launch  *Launch
 	// Open is a link (https, modrinth://, curseforge://, quartz://) or an
 	// absolute file path to show in the launcher. Package links reads it.
@@ -58,6 +60,9 @@ const (
 	maxValue = 256  // ids, names, server addresses, world folders
 	maxOpen  = 4096 // links and file paths
 )
+
+// MinimizedFlag starts the window minimized; autostart entries pass it.
+const MinimizedFlag = "--minimized"
 
 // Usage is the help text.
 const Usage = `Usage:
@@ -99,6 +104,7 @@ func parse(args []string, wd string) (Args, error) {
 	fs.StringVar(&a.Dir, "dir", "", "")
 	fs.IntVar(&a.WaitPID, "wait-pid", 0, "")
 	fs.BoolVar(&a.JSON, "json", false, "")
+	fs.BoolVar(&a.Minimized, MinimizedFlag[2:], false, "")
 	for _, n := range []string{"launch", "l"} {
 		fs.StringVar(&launch, n, "", "")
 	}

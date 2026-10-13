@@ -119,6 +119,9 @@ type Instance struct {
 	Pack *PackRef `json:"pack,omitempty"`
 	// Host is how the instance was last hosted as a local server (nil: never).
 	Host *Host `json:"host,omitempty"`
+	// HideDiscord keeps the instance out of Discord's "Playing" status (the
+	// Overview switch; the global one is in Integrations).
+	HideDiscord bool `json:"hideDiscord,omitempty"`
 	// Shortcuts are its desktop and app-menu shortcuts.
 	Shortcuts []Shortcut `json:"shortcuts,omitempty"`
 }

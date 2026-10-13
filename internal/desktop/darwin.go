@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"quartz/internal/brand"
+	"quartz/internal/intent"
 )
 
 // darwin: the link schemes and .mrpack are declared in the app bundle's
@@ -41,7 +42,7 @@ func launchAgent(exe string) []byte {
 <plist version="1.0">
 <dict>
   <key>Label</key><string>` + id.String() + `</string>
-  <key>ProgramArguments</key><array><string>` + esc.String() + `</string></array>
+  <key>ProgramArguments</key><array><string>` + esc.String() + `</string><string>` + intent.MinimizedFlag + `</string></array>
   <key>RunAtLoad</key><true/>
 </dict>
 </plist>

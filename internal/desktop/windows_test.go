@@ -29,7 +29,7 @@ func TestWindowsRegisterAndUnregister(t *testing.T) {
 	if got := w.get(w.classes+`\modrinth\shell\open\command`, ""); got != `"`+exe+`" "%1"` {
 		t.Fatalf("command %q", got)
 	}
-	if w.get(w.classes+`\.mrpack`, "") != mrpackProgID || w.get(w.run, "Quartz Client") != `"`+exe+`"` {
+	if w.get(w.classes+`\.mrpack`, "") != mrpackProgID || w.get(w.run, "Quartz Client") != `"`+exe+`" --minimized` {
 		t.Fatal("mrpack or autostart missing")
 	}
 	// Another app took curseforge://: it stays when we unregister.

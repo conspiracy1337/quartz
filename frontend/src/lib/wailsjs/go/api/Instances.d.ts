@@ -37,6 +37,8 @@ export function Restore(arg1:string):Promise<api.InstanceView>;
 
 export function SetArt(arg1:string,arg2:instance.Art):Promise<api.InstanceView>;
 
+export function SetDiscord(arg1:string,arg2:boolean):Promise<api.InstanceView>;
+
 export function SetGroup(arg1:string,arg2:string):Promise<api.InstanceView>;
 
 export function SetGroupCollapsed(arg1:string,arg2:boolean):Promise<void>;

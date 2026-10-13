@@ -70,6 +70,10 @@ export function SetArt(arg1, arg2) {
   return window['go']['api']['Instances']['SetArt'](arg1, arg2);
 }
 
+export function SetDiscord(arg1, arg2) {
+  return window['go']['api']['Instances']['SetDiscord'](arg1, arg2);
+}
+
 export function SetGroup(arg1, arg2) {
   return window['go']['api']['Instances']['SetGroup'](arg1, arg2);
 }

@@ -15,13 +15,16 @@ import (
 
 // App exposes product and environment information.
 type App struct {
-	ctx   *Ctx
-	paths paths.Paths
-	opens *Opens
+	ctx     *Ctx
+	paths   paths.Paths
+	opens   *Opens
+	discord bool
 }
 
-func NewApp(ctx *Ctx, p paths.Paths, opens *Opens) *App {
-	return &App{ctx: ctx, paths: p, opens: opens}
+// NewApp returns the facade; discord tells whether this build can show a
+// Discord status.
+func NewApp(ctx *Ctx, p paths.Paths, opens *Opens, discord bool) *App {
+	return &App{ctx: ctx, paths: p, opens: opens, discord: discord}
 }
 
 // Pending returns what the launcher was asked to open from outside since the
@@ -36,6 +39,7 @@ type AppInfo struct {
 	Portable  bool   `json:"portable"`
 	OS        string `json:"os"`
 	MemoryMB  int    `json:"memoryMb"` // installed RAM, 0 if unknown
+	Discord   bool   `json:"discord"`  // Discord status is set up in this build
 }
 
 func (a *App) Info() AppInfo {
@@ -43,6 +47,7 @@ func (a *App) Info() AppInfo {
 	return AppInfo{
 		Name: brand.Name, ShortName: brand.ShortName, Version: brand.Version,
 		DataDir: a.paths.Root, Portable: a.paths.Portable, OS: runtime.GOOS, MemoryMB: int(mem.Total >> 20), //nolint:gosec // RAM in MB fits an int
+		Discord: a.discord,
 	}
 }
 

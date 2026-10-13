@@ -60,6 +60,7 @@ export const api = {
     create: bridged(InstancesGo.Create, inst.mockInstances.create),
     updateSettings: bridged(InstancesGo.UpdateSettings, inst.mockInstances.updateSettings),
     openFolder: bridged(InstancesGo.OpenFolder, (_id: string) => undefined),
+    setDiscord: bridged(InstancesGo.SetDiscord, (id: string, on: boolean) => ({ ...byId(id), discordStatus: on })),
     /** Puts the instance on the desktop and/or in the app menu; kind and target pick a world or server (both '' for none). */
     createShortcut: bridged(InstancesGo.CreateShortcut, (_id: string, _where: string, _accountId: string, _kind: string, _target: string) => undefined),
     rename: bridged(InstancesGo.Rename, inst.mockInstances.rename),

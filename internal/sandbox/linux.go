@@ -15,6 +15,7 @@ import (
 	"quartz/internal/core/bwrap"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/procx"
+	discordipc "quartz/internal/discord"
 	"quartz/internal/sandbox/rules"
 	"quartz/internal/sandbox/seccomp"
 )
@@ -316,20 +317,14 @@ func desktop(a *bwrap.Args, r Run, home string, env []string) []string {
 	return env
 }
 
-// discord binds the Discord client's IPC sockets (native, Flatpak and Snap
-// installs) where Rich Presence libraries look: $XDG_RUNTIME_DIR.
+// discord binds the Discord client's IPC sockets (native, Flatpak, Snap and
+// Vesktop installs) where Rich Presence libraries look: $XDG_RUNTIME_DIR.
 func discord(a *bwrap.Args, run string) {
-	dirs := []string{run, filepath.Join(run, "app", "com.discordapp.Discord"), filepath.Join(run, "snap.discord"),
-		filepath.Join(run, ".flatpak", "dev.vencord.Vesktop", "xdg-run"), "/tmp"}
-	n := 0
-	for _, d := range dirs {
-		for i := range 10 {
-			src := filepath.Join(d, "discord-ipc-"+strconv.Itoa(i))
-			if n < 10 && exists(src) {
-				a.RoBind(src, filepath.Join(run, "discord-ipc-"+strconv.Itoa(n)))
-				n++
-			}
+	for n, src := range discordipc.Sockets(run, "/tmp") {
+		if n == 10 {
+			break
 		}
+		a.RoBind(src, filepath.Join(run, "discord-ipc-"+strconv.Itoa(n)))
 	}
 }
 

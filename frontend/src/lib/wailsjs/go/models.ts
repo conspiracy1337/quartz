@@ -87,6 +87,7 @@ export namespace api {
 	    portable: boolean;
 	    os: string;
 	    memoryMb: number;
+	    discord: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -101,6 +102,7 @@ export namespace api {
 	        this.portable = source["portable"];
 	        this.os = source["os"];
 	        this.memoryMb = source["memoryMb"];
+	        this.discord = source["discord"];
 	    }
 	}
 	export class CapeView {

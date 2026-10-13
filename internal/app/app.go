@@ -46,6 +46,7 @@ import (
 	"quartz/internal/core/tasks"
 	"quartz/internal/crash"
 	"quartz/internal/desktop"
+	"quartz/internal/discord"
 	"quartz/internal/gamewatch"
 	"quartz/internal/home"
 	"quartz/internal/host"
@@ -138,8 +139,9 @@ type app struct {
 	gameWatch   *gamewatch.Watcher
 	// The shared layer (M8).
 	syncing *syncing.Service
-	// Desktop and menu shortcuts (M11).
+	// Desktop and menu shortcuts and Discord status (M11).
 	shortcuts *shortcuts.Service
+	presence  *discord.Presence
 }
 
 // Run builds the app and blocks until the window closes.
@@ -152,11 +154,12 @@ func Run(o Options) error {
 	a.log.Info("starting", "version", brand.Version, "data", a.paths.Root, "portable", a.paths.Portable)
 
 	a.args = o.Args
-	appFacade := api.NewApp(a.ctx, a.paths, a.opens)
+	appFacade := api.NewApp(a.ctx, a.paths, a.opens, a.presence.Ready())
 	return wails.Run(&options.App{
 		Title:            brand.Name,
 		Width:            1200,
 		Height:           760,
+		WindowStartState: startState(o.Args.Minimized),
 		MinWidth:         960,
 		MinHeight:        600,
 		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0b, A: 0xff},
@@ -542,6 +545,7 @@ func (a *app) buildContent() error {
 		a.log.Warn("can't find the launcher's program file: no shortcuts", "err", err)
 	}
 	a.shortcuts = shortcuts.New(a.paths.Shortcuts(), a.instances, a.icons, exe, a.log)
+	a.watchDiscord()
 	a.drops = api.NewDrops(a.bus)
 	a.opens = api.NewOpens(a.bus)
 	// Edits to files the game owns wait for it to exit.
@@ -630,6 +634,15 @@ func (a *app) startup(ctx context.Context) {
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
 	a.act(a.args)
+}
+
+// startState starts the window minimized when the computer started the
+// launcher ("Start with the computer").
+func startState(minimized bool) options.WindowStartState {
+	if minimized {
+		return options.Minimised
+	}
+	return options.Normal
 }
 
 // lockID is the single-instance id: one running launcher per data folder,

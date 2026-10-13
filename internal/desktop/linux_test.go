@@ -53,7 +53,7 @@ func TestLinuxRegisterAndUnregister(t *testing.T) {
 	if _, err := os.Stat(l.iconPath()); err != nil {
 		t.Error(err)
 	}
-	if !strings.Contains(read(t, l.autostartPath()), `Exec="/opt/q uartz/quartz"`) {
+	if !strings.Contains(read(t, l.autostartPath()), `Exec="/opt/q uartz/quartz" "--minimized"`) {
 		t.Error("autostart missing")
 	}
 	if !strings.Contains(strings.Join(*calls, "\n"), "xdg-mime default "+desktopID+" application/x-modrinth-modpack+zip") {

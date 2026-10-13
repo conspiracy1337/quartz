@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 
 	"quartz/internal/brand"
+	"quartz/internal/intent"
 )
 
 // winSys registers under HKEY_CURRENT_USER only (no administrator rights):
@@ -128,12 +129,15 @@ func (w winSys) unregister(ours func(cmd string) bool) error {
 	return w.deleteTree(w.software + `\Capabilities`)
 }
 
+// runValue is the Run entry: the launcher, started minimized.
+func runValue(exe string) string { return quoteArg(exe) + " " + intent.MinimizedFlag }
+
 func (w winSys) autostart(was, want Want) error {
 	if want.Autostart {
-		return w.set(w.run, map[string]string{brand.Name: quoteArg(want.Exe)})
+		return w.set(w.run, map[string]string{brand.Name: runValue(want.Exe)})
 	}
 	cur := w.get(w.run, brand.Name)
-	if cur != "" && (cur == quoteArg(want.Exe) || cur == quoteArg(was.Exe)) {
+	if cur != "" && (cur == runValue(want.Exe) || cur == runValue(was.Exe)) {
 		return w.deleteValue(w.run, brand.Name)
 	}
 	return nil

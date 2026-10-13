@@ -105,7 +105,7 @@ type InstanceView struct {
 	FollowLatest      bool              `json:"followLatest"`
 	SyncTargets       int               `json:"syncTargets"` // shared targets it joins that are on
 	Sync              instance.Sync     `json:"sync"`
-	DiscordStatus     bool              `json:"discordStatus"`
+	DiscordStatus     bool              `json:"discordStatus"` // the instance's own switch
 	Settings          instance.Settings `json:"settings"`
 	GPU               string            `json:"gpu"` // the dedicated GPU's name, Linux only
 	// Switch reports a version change's mod job (SetVersion only).
@@ -170,7 +170,7 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 		Created: in.Created.UnixMilli(), Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),
-		DiscordStatus: g.Integrations.DiscordStatus, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),
+		DiscordStatus: !in.HideDiscord, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),
 		SyncTargets: s.syncTargets(in.ID), Sync: in.Sync,
 	}
 }
@@ -492,6 +492,14 @@ func (s *Instances) SetVersion(id, minecraft, kind, loaderVersion string) (Insta
 		v.Switch = &res
 	}
 	return v, err
+}
+
+// SetDiscord turns the instance's Discord status on or off (Overview).
+func (s *Instances) SetDiscord(id string, on bool) (InstanceView, error) {
+	if err := checkInstanceID(id); err != nil {
+		return InstanceView{}, err
+	}
+	return s.changed(s.d.Store.SetDiscord(id, on))
 }
 
 // SetVersionOptions stores the Version tab's two switches.

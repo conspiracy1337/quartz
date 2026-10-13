@@ -69,6 +69,14 @@ func (s *Store) SetVersionOptions(id string, keepLoaderUpdated, followLatest boo
 	})
 }
 
+// SetDiscord turns the instance's Discord status on or off.
+func (s *Store) SetDiscord(id string, on bool) (Instance, error) {
+	return s.Update(id, func(in *Instance) error {
+		in.HideDiscord = !on
+		return nil
+	})
+}
+
 // TotalPlaytime is the minutes played across every instance.
 func (s *Store) TotalPlaytime() int {
 	n := 0

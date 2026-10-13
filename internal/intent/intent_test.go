@@ -32,6 +32,7 @@ func TestParse(t *testing.T) {
 		{[]string{"pack.mrpack"}, Args{Open: abs}},
 		{[]string{"pack.mrpack", "--dir", "/d"}, Args{Open: abs, Dir: "/d"}},
 		{[]string{"--wait-pid", "42"}, Args{WaitPID: 42}},
+		{[]string{"--minimized"}, Args{Minimized: true}},
 	}
 	for _, c := range cases {
 		got, err := Parse(c.args, wd)

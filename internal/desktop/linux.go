@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"quartz/internal/brand"
+	"quartz/internal/intent"
 	"quartz/internal/core/fsx"
 )
 
@@ -125,7 +126,7 @@ func (l linux) apply(was, want Want) error {
 	}
 	_ = l.run("update-desktop-database", l.applications())
 	if want.Autostart {
-		a := Entry{Name: brand.Name, Exec: []string{want.Exe}, Icon: brand.AppID, NoDisplay: true,
+		a := Entry{Name: brand.Name, Exec: []string{want.Exe, intent.MinimizedFlag}, Icon: brand.AppID, NoDisplay: true,
 			Extra: []string{"X-GNOME-Autostart-enabled=true"}}
 		return writeFile(l.autostartPath(), a.Marshal(), 0o644)
 	}
