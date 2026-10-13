@@ -78,7 +78,7 @@
   {#if javaText}
     <div class="card" style="padding: 12px 14px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: center"><span class="small muted">{javaText}</span><span class="mono small faint">{bytes(java?.bytes ?? 0)}</span></div>
   {/if}
-  <div style="display: flex; justify-content: space-between; align-items: center"><a href={href({ name: 'setup', step: 2 })} class="btn btn-ghost">Back</a><span style="display: flex; gap: 8px; align-items: center">{#if count > 0}<button class="btn btn-ghost" onclick={() => finish(false)} disabled={busy}>Skip</button><button class="btn btn-accent btn-lg" onclick={() => finish(true)} disabled={busy}>Import {count} and finish</button>{:else}<button class="btn btn-accent btn-lg" onclick={() => finish(false)} disabled={busy || !launchers.data}>Finish</button>{/if}</span></div>
+  <div style="display: flex; justify-content: space-between; align-items: center"><a href={href({ name: 'setup', step: 2 })} class="btn btn-ghost">Back</a><span style="display: flex; gap: 8px">{#if count > 0}<button class="btn btn-ghost" onclick={() => finish(false)} disabled={busy}>Skip</button><button class="btn btn-accent btn-lg" onclick={() => finish(true)} disabled={busy}>Import {count} and finish</button>{:else}<button class="btn btn-accent btn-lg" onclick={() => finish(false)} disabled={busy || !launchers.data}>Finish</button>{/if}</span></div>
 </SetupLayout>
 
 <style>
