@@ -55,7 +55,7 @@
         <div class="row ar">
           {#if hasTexture(a.skinHash)}<span class="head" aria-hidden="true" style="background: {avatar(a, 40)}"></span>{:else}<span class="head" aria-hidden="true"><span style="background: {a.skin.hair}"></span><span style="background: {a.skin.skin}"></span></span>{/if}
           <span style="min-width: 0"><span style="display: flex; gap: 8px; align-items: center"><span class="trunc" style="font-weight: 500">{a.name}</span>{#if a.isDefault}<span class="badge badge-accent">Default</span>{/if}</span><span class="trunc small faint" style="display: block">{detail(a)}</span></span>
-          <span class="small opt" style="display: flex; gap: 6px; align-items: center; color: {st.color}"><span class="dot" style="background: {st.color}" aria-hidden="true"></span>{st.label}</span>
+          <span class="small opt" style="gap: 6px; align-items: center; color: {st.color}"><span class="dot" style="background: {st.color}" aria-hidden="true"></span>{st.label}</span>
           <span style="display: flex; gap: 6px">
             {#if !a.isDefault}<button class="btn btn-sm" onclick={() => makeDefault(a.id)}>Make default</button>{/if}
             {#if a.status === 'expired'}<button class="btn btn-sm btn-accent" onclick={() => session.open({ kind: 'add-account', mode: 'browser', accountId: a.id })}>Sign in again</button>{/if}
@@ -97,6 +97,7 @@
 
 <style>
   .ar{grid-template-columns:40px minmax(0,1fr) 150px auto;height:68px}
+  .ar .opt{display:flex}
   @media (max-width:1100px){.ar{grid-template-columns:40px minmax(0,1fr) auto}.ar .opt{display:none}}
   .head{width:40px;height:40px;border-radius:8px;display:grid;grid-template-rows:30% 70%;overflow:hidden;image-rendering:pixelated}
 </style>

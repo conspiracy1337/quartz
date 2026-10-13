@@ -40,7 +40,7 @@
 </script>
 
 <Dialog title="{plural(items.length, 'file')} {items.length === 1 ? 'needs' : 'need'} a manual download" sub="Their authors only allow downloads from the CurseForge website." width={580}>
-  <div class="card" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px"><span class="dot live pulse" aria-hidden="true"></span><span class="small">Watching <span class="mono">{view.data?.folder ?? '~/Downloads'}</span>. Files are picked up as soon as they finish.</span></div>
+  <div class="card" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px">{#if view.data?.watching === false}<span class="dot" aria-hidden="true"></span><span class="small">Not watching your Downloads folder. Turn it on in Settings, Downloads.</span>{:else}<span class="dot live pulse" aria-hidden="true"></span><span class="small">Watching <span class="mono">{view.data?.folder ?? '~/Downloads'}</span>. Files are picked up as soon as they finish.</span>{/if}</div>
   <div class="list">
     {#each items as it (it.id)}
       <div class="bf">

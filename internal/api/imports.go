@@ -83,7 +83,7 @@ func (im *Imports) InspectLink(link string) (*ImportPreview, error) {
 
 // InspectFile asks for a pack file and reads it (nil when cancelled).
 func (im *Imports) InspectFile() (*ImportPreview, error) {
-	path, err := wruntime.OpenFileDialog(im.ctx.Get(), wruntime.OpenDialogOptions{
+	path, err := openFileDialog(im.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a modpack",
 		Filters: []wruntime.FileFilter{{DisplayName: "Modpacks (*.mrpack, *.zip)", Pattern: "*.mrpack;*.zip"}},
 	})

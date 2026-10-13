@@ -3,7 +3,7 @@
   import type { HostState } from '../api/host';
   import type { LogLine } from '../api/types';
   import { onEvent } from '../bridge';
-  import { copyText } from '../clipboard';
+  import { query } from '../query.svelte';
   import { href } from '../router.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -14,7 +14,10 @@
   const id = $derived(host.instanceId);
   const local = $derived(`localhost:${host.port}`);
   const network = $derived(host.lan ? `${host.lan}:${host.port}` : '');
-  const copy = (t: string) => void copyText(t);
+  const copy = (t: string) => void session.copy(t, 'Address');
+  // The command box suggests opping yourself (the design's example, with your name).
+  const accounts = query(() => api.accounts.list());
+  const me = $derived(accounts.data?.find((a) => a.isDefault)?.name ?? '');
 
   // The panel shows the newest console lines; the Logs tab has them all.
   const SHOWN = 4;
@@ -60,7 +63,7 @@
     </div>
     <div style="padding: 10px 14px 0">
       <div class="con" aria-label="Server console">{#each lines as l, i (i)}{#if i > 0}<br />{/if}[{l.time}] {l.message}{/each}</div>
-      <label class="input" style="margin-top: 6px; height: 30px"><span class="mono faint">/</span><span class="sr">Server command</span><input class="mono" placeholder="op Kestrel_Vane" bind:value={command} onkeydown={send} /></label>
+      <label class="input" style="margin-top: 6px; height: 30px"><span class="mono faint">/</span><span class="sr">Server command</span><input class="mono" placeholder={me ? `op ${me}` : ''} bind:value={command} onkeydown={send} /></label>
     </div>
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 12px 14px 14px">
       <button class="btn btn-sm btn-accent" onclick={() => session.play(id, '', { kind: 'server', target: local })}>Join</button>

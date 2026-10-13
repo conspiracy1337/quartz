@@ -21,10 +21,14 @@
   const chips = $derived([
     { key: 'all', label: 'All' },
     { key: 'week', label: 'This week' },
-    ...worlds.slice(0, 1).map((w) => ({ key: w, label: w })),
+    ...worlds.map((w) => ({ key: `world:${w}`, label: w })),
   ]);
-  const match = (s: (typeof list)[number], key: string) => key === 'all' || (key === 'week' ? Date.now() - s.takenAt < WEEK : s.world === key);
-  const shown = $derived(list.filter((s) => match(s, filter) && (!search.trim() || Day(s.takenAt).toLowerCase().includes(search.trim().toLowerCase()))));
+  const match = (s: (typeof list)[number], key: string) => key === 'all' || (key === 'week' ? Date.now() - s.takenAt < WEEK : `world:${s.world}` === key);
+  const q = $derived(search.trim().toLowerCase());
+  const found = (s: (typeof list)[number]) => !q || Day(s.takenAt).toLowerCase().includes(q) || s.world.toLowerCase().includes(q);
+  const shown = $derived(list.filter((s) => match(s, filter) && found(s)));
+  // The empty line names what hides the screenshots.
+  const emptyText = $derived(!list.length ? 'No screenshots yet. Press F2 in the game to take one.' : q ? 'No screenshots match this search.' : filter === 'week' ? 'No screenshots this week.' : 'No screenshots from this world.');
   const when = (t: number) => `${Day(t)} ${clock(t)}`;
 
   // Select: tiles toggle instead of opening, then the picked ones go to the trash together.
@@ -76,7 +80,7 @@
         {#each shown as s (s.id)}
           <a href={href({ name: 'instance', id: instanceId, tab: 'screenshots', sub: s.id })} class="sh" class:on={picked.includes(s.id)} style="background: {s.art.background}" aria-label="{selecting ? (picked.includes(s.id) ? 'Unselect' : 'Select') : 'Open'} {when(s.takenAt)}" onclick={(e) => toggle(e, s.id)}><span class="cap tnum">{when(s.takenAt)}</span></a>
         {:else}
-          <Empty text={shots.data.length ? 'No screenshots from this world.' : 'No screenshots yet. Press F2 in the game to take one.'} style="grid-column: 1 / -1" />
+          <Empty text={emptyText} style="grid-column: 1 / -1" />
         {/each}
       {:else}
         {#each { length: 12 } as _, k (k)}<div class="sk" style="aspect-ratio: 16/9; border-radius: 8px" aria-hidden="true"></div>{/each}

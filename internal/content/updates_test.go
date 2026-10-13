@@ -18,6 +18,7 @@ import (
 	"quartz/internal/content/packwiz"
 	"quartz/internal/core/download"
 	"quartz/internal/core/tasks"
+	"quartz/internal/instance"
 	"quartz/internal/modplatform"
 )
 
@@ -217,5 +218,29 @@ func TestFileNameIsSafe(t *testing.T) {
 		if got := fileName(in, ".jar"); got != want {
 			t.Errorf("fileName(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestCheckAllSkipsInstancesWithoutMods(t *testing.T) {
+	e := newEnv(t)
+	e.mod("alpha.jar", "alpha", "Alpha", "")
+	rows := e.list(Mods)
+	ix, _ := e.svc.idx.get(e.id)
+	oldSHA := ix.Get().Entries[rows[0].ID].SHA1
+	newAlpha := jarBytes(t, "alpha")
+	a1 := modplatform.Version{Source: modplatform.Modrinth, ProjectID: "PA", ID: "a1", Number: "1.0", Type: "release", Published: day}
+	a2 := modplatform.Version{Source: modplatform.Modrinth, ProjectID: "PA", ID: "a2", Number: "2.0", Type: "release", Published: day.AddDate(0, 0, 2),
+		File: fileOf("alpha-2.0.jar", "https://cdn.modrinth.com/data/PA/alpha-2.0.jar", newAlpha)}
+	e.svc.d.Platforms = []modplatform.Provider{&fakePlatform{src: modplatform.Modrinth,
+		byHash:   map[string]modplatform.Version{oldSHA: a1},
+		projects: map[string]modplatform.Project{"PA": {Slug: "alpha", Title: "Alpha"}},
+		latest:   map[string]modplatform.Version{"PA": a2},
+		versions: map[string][]modplatform.Version{"PA": {a2, a1}}}}
+	if _, err := e.svc.d.Instances.Create(instance.CreateRequest{Name: "Empty", Minecraft: "1.21.1"}, instance.JavaSettings{}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.svc.CheckAll(context.Background(), modplatform.Release)
+	if err != nil || len(got) != 1 || got[0].InstanceID != e.id || got[0].Updates != 1 {
+		t.Fatalf("check all = %+v, %v", got, err)
 	}
 }

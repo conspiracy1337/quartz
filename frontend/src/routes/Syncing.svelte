@@ -129,6 +129,8 @@
                   <button class="btn btn-sm" style="justify-content: space-between; font-family: var(--mono)" aria-label="Key for {k.name}" aria-pressed={capturing?.id === k.id} onclick={() => capture(k.id)}><span class="trunc">{capturing?.id === k.id ? 'Press a key…' : k.key}</span></button>
                   <button class="btn btn-icon btn-sm btn-ghost" aria-label="Stop sharing {k.name}" onclick={() => edit(k.name, () => api.sync.removeKey(k.id))}><Icon name="x" size={10} sw={2.2} /></button>
                 </div>
+              {:else}
+                {#if keys.data}<Empty text="No shared keybinds yet. Add the keys you want the same everywhere." />{/if}
               {/each}
             </div>
             <p class="small faint" style="margin: 0">Only these keys are written into options.txt on launch. Keys a version doesn't have are skipped.</p>

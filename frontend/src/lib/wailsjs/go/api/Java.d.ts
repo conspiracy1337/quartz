@@ -4,8 +4,18 @@ import {api} from '../models';
 
 export function AddFromFolder():Promise<Array<api.JavaRuntime>>;
 
-export function Download():Promise<string>;
+export function Download(arg1:number):Promise<string>;
+
+export function Forget(arg1:string):Promise<Array<api.JavaRuntime>>;
+
+export function Majors():Promise<Array<number>>;
+
+export function Remove(arg1:string):Promise<Array<api.JavaRuntime>>;
 
 export function Runtimes():Promise<Array<api.JavaRuntime>>;
 
 export function Scan():Promise<Array<api.JavaRuntime>>;
+
+export function SetDefault(arg1:string):Promise<Array<api.JavaRuntime>>;
+
+export function ShowInFolder(arg1:string):Promise<void>;

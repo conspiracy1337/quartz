@@ -133,7 +133,7 @@ export interface ContentChange { at: number; kind: 'added' | 'updated' | 'remove
 export interface Alert { tone: 'warn' | 'info'; subject: string; text: string; action: string; target: AlertTarget }
 export type AlertTarget =
   | { kind: 'sign-in'; accountId: string }
-  | { kind: 'instance'; id: string; tab: 'mods' }
+  | { kind: 'instance'; id: string; tab: 'mods' | 'version' }
   | { kind: 'modpack-update'; id: string }
   | { kind: 'settings'; tab: 'storage' };
 /** The latest minecraft.net article; `image` is its picture on Go's image route. */
@@ -323,7 +323,7 @@ export interface ImportPreview {
 export interface PackUpdate { instanceId: string; name: string; version: string }
 export interface ManualItem { id: string; name: string; fileName: string; size: number; state: 'waiting' | 'fetching' | 'found' | 'skipped'; twin: boolean; page?: string; art?: Art }
 /** The blocked-downloads dialog of one job. */
-export interface ManualView { jobId: string; folder: string; items: ManualItem[]; done: boolean }
+export interface ManualView { jobId: string; folder: string; watching?: boolean; items: ManualItem[]; done: boolean }
 
 // ---- downloads (mirrors Go's tasks.JobView and tasks.Snapshot) ----
 export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled';
@@ -361,7 +361,25 @@ export interface KeyChoice { id: string; name: string; category: string; key: st
 export interface InstanceSync { join: string[]; keys: boolean }
 
 // ---- java ----
-export interface JavaRuntime { major: number; name: string; source: 'Managed' | 'System' | 'SDKMAN' | 'Found'; path: string; usedBy: number }
+/** An instance that follows the latest release and whose mods all support it. */
+export interface FollowOffer { instanceId: string; name: string; minecraft: string }
+/** One instance with updates, from a check across every instance. */
+export interface BulkCheck { instanceId: string; name: string; updates: number }
+
+// ---- export ----
+export type ExportFormat = 'mrpack' | 'zip' | 'list';
+export type ExportListFormat = 'md' | 'csv';
+export interface ExportInclude { worlds: boolean; screenshots: boolean; options: boolean; servers: boolean; config: boolean }
+export interface ExportPlan { format: ExportFormat; list: ExportListFormat; include: ExportInclude }
+export interface ExportPreview { linked: number; bundled: number; bytes: number }
+/** A pack export's job, or a mod list's saved file name; empty when the save dialog was cancelled. */
+export interface ExportResult { job?: string; file?: string }
+
+export interface JavaRuntime {
+  id: string; major: number; name: string; source: 'Managed' | 'System' | 'SDKMAN' | 'Found'; path: string; usedBy: number;
+  /** Downloaded by Quartz (Remove), added from a folder (Forget), or every instance's Java while automatic picking is off. */
+  removable: boolean; forgettable: boolean; default: boolean;
+}
 
 // ---- review screens ----
 export interface ChangelogVersion { id: string; date: number; items: string[] }

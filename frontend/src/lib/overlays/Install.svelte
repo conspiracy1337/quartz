@@ -89,7 +89,7 @@
   {#if short}
     <div class="card" style="padding: 10px 12px; display: grid; grid-template-columns: 16px minmax(0,1fr); gap: 10px; border-color: color-mix(in srgb, var(--info) 30%, var(--line))">
       <Icon name="info" size={16} sw={1.8} color="var(--info)" />
-      <span class="small muted">{suggest} GB suits {p!.mods + count} mods. This instance is set to {setGb} GB.</span>
+      <span class="small muted">{suggest} GB suits {plural(p!.mods + count, 'mod')}. This instance is set to {setGb} GB.</span>
     </div>
   {/if}
   {#if plan.error}<p class="small" style="margin: 0; color: var(--danger)">{errorText(plan.error)}</p>{/if}

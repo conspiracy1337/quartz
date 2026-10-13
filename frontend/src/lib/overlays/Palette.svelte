@@ -33,17 +33,36 @@
     const to = nav({ name: 'instance', id: r.id, tab: 'mods', sub: 'updates' });
     const n = pending.data?.length ?? 0;
     return [
-      { key: 'check', group: 'Actions', label: `Check for mod updates in ${r.name}`, icon: 'refresh', run: to },
+      { key: 'check', group: 'Actions', label: 'Check for updates in all instances', icon: 'refresh', run: () => void checkAll() },
       ...(n ? [{ key: 'update', group: 'Actions', label: `Update ${n} ${n === 1 ? 'mod' : 'mods'} in ${r.name}`, icon: 'arrow-up' as const, run: to }] : []),
     ];
   });
+  // Checks every instance's mods; the result toast opens the first one's review.
+  async function checkAll() {
+    session.notify({ tone: 'info', subject: 'Checking for updates', text: 'in every instance…' });
+    try {
+      const found = await api.content.checkAll();
+      const total = found.reduce((n, f) => n + f.updates, 0);
+      if (!found.length) return session.notify({ subject: 'Everything is up to date', text: '' });
+      const first = found[0]!;
+      session.notify({
+        subject: `${total} ${total === 1 ? 'update' : 'updates'}`, text: found.length === 1 ? `in ${first.name}` : `in ${found.length} instances`,
+        action: { label: 'Review', run: () => go({ name: 'instance', id: first.instanceId, tab: 'mods', sub: 'updates' }) },
+      });
+    } catch (e) {
+      session.fail('Check for updates', e);
+    }
+  }
   const COMMANDS = $derived<Item[]>([
     ...updateItems,
     ...(session.update?.status === 'ready' ? [{ key: 'self', group: 'Actions', label: `Install launcher update ${session.update.version}`, icon: 'shield' as const, run: () => void api.updates.restart().catch((e) => session.fail('Restart', e)) }] : []),
     ...(session.update && session.update.status !== 'off' && session.update.status !== 'ready'
       ? [{ key: 'self-check', group: 'Actions', label: 'Check for launcher updates', icon: 'refresh' as const, run: () => void api.updates.check().then((u) => (session.update = u)).catch((e) => session.fail('Check for updates', e)) }]
       : []),
-    ...(router.route.name === 'instance' ? [{ key: 'shortcut', group: 'Actions', label: 'Create shortcut…', icon: 'link' as const, run: () => session.open({ kind: 'shortcut', instanceId: (router.route as { id: string }).id }) }] : []),
+    ...(router.route.name === 'instance' ? [
+      { key: 'shortcut', group: 'Actions', label: 'Create shortcut…', icon: 'link' as const, run: () => session.open({ kind: 'shortcut', instanceId: (router.route as { id: string }).id }) },
+      { key: 'export', group: 'Actions', label: 'Export instance…', icon: 'upload' as const, run: () => session.open({ kind: 'export', instanceId: (router.route as { id: string }).id }) },
+    ] : []),
     { key: 'import-launchers', group: 'Actions', label: 'Import from other launchers', icon: 'download', run: nav({ name: 'setup', step: 4 }) },
     { key: 'data-folder', group: 'Actions', label: 'Open data folder', icon: 'folder', run: () => void api.app.openDataFolder() },
     { key: 'new', group: 'Actions', label: 'Create a new instance', icon: 'plus', run: nav({ name: 'new-instance' }) },
@@ -63,10 +82,13 @@
   const count = $derived(mode === 'commands' ? commands.length : Math.min(insts.length, SHOWN));
   const groups = $derived([...new Set(commands.map((c) => c.group))]);
 
+  // Read the row before closing: closing unmounts the palette and drops its props.
   function runAt(i: number, open = false) {
+    const cmd = mode === 'commands' ? commands[i] : undefined;
+    const inst = mode === 'commands' ? undefined : insts[i];
     session.close();
-    if (mode === 'commands') commands[i]?.run();
-    else if (insts[i]) open ? go({ name: 'instance', id: insts[i].id, tab: 'overview' }) : session.play(insts[i].id);
+    if (cmd) cmd.run();
+    else if (inst) open ? go({ name: 'instance', id: inst.id, tab: 'overview' }) : session.play(inst.id);
   }
   function keys(e: KeyboardEvent) {
     if (e.key === 'Escape') session.close();

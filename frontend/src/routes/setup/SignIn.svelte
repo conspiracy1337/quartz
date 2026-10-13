@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { api } from '$lib/api';
   import { onEvent } from '$lib/bridge';
   import { go, href } from '$lib/router.svelte';
@@ -7,10 +8,11 @@
   import type { IconName } from '$lib/ui/icons';
   import SetupLayout from './SetupLayout.svelte';
 
-  // Once an account is added (any of the three ways), setup moves on.
+  // Once an account is added (any of the three ways), setup moves on. The count is
+  // read untracked: the accounts:changed bump must not re-run this and reset it.
   $effect(() => {
     let before = -1;
-    void api.accounts.list().then((l) => (before = l.length));
+    void untrack(() => api.accounts.list()).then((l) => (before = l.length));
     return onEvent('accounts:changed', () => {
       void api.accounts.list().then((l) => {
         if (before >= 0 && l.length > before) go({ name: 'setup', step: 4 });

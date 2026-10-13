@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
-  import type { ActivityKind, Instance } from '$lib/api/types';
-  import { Day, fullDate } from '$lib/format';
+  import type { ActivityKind, Instance, SyncEntry } from '$lib/api/types';
+  import { Day, fullDate, sentenceList } from '$lib/format';
   import { loaderLabel } from '$lib/labels';
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
@@ -32,6 +32,17 @@
   const events = $derived((activity.data ?? []).filter((e) => filter === 'all' || e.kind === filter));
   const gb = (mb: number) => Math.round(mb / 1024);
   const contentLine = $derived(`${i.counts.mods} mods, ${i.counts.resourcepacks} packs, ${i.counts.worlds} worlds`);
+  // What this instance shares, by the Syncing page's names (the shared keybinds first).
+  const sync = query(() => api.sync.groups());
+  const syncText = $derived.by(() => {
+    const g = sync.data;
+    if (!g) return '';
+    // Built-in targets read as words ("server list"); mod names and custom paths keep their case.
+    const joined = (l: SyncEntry[], lower: boolean) => l.filter((t) => t.enabled && i.sync.join.includes(t.id)).map((t) => (lower ? t.name.toLowerCase() : t.name || t.path));
+    const names = [...joined(g.files, true), ...joined(g.folders, true), ...joined(g.mods, false), ...joined(g.custom, false)];
+    if (i.sync.keys) names.unshift('keybinds');
+    return names.length ? `${sentenceList(names)}.` : 'Nothing shared.';
+  });
 </script>
 
 <div class="ov-wrap">
@@ -46,7 +57,8 @@
             <span class="small faint tnum" style="white-space: nowrap">{Day(e.at)}</span>
           </div>
         {:else}
-          {#if activity.data}<Empty text="No activity yet. Sessions and changes show up here." />{/if}
+          {#if activity.data}<Empty text="No activity yet. Sessions and changes show up here." />
+          {:else}{#each { length: 5 } as _, k (k)}<div class="ev" aria-hidden="true"><div class="sk" style="width: 28px; height: 28px; border-radius: 7px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {[48, 36, 56, 40, 30][k]}%"></div><div class="sk" style="height: 10px; width: 28%"></div></div><div class="sk" style="height: 10px; width: 48px"></div></div>{/each}{/if}
         {/each}
       </div>
     </section>
@@ -70,16 +82,17 @@
         {#each updates.data ?? [] as u (u.name)}
           <div class="up"><Tile art={u.art} size="sm" /><span class="trunc">{u.name}</span><span class="mono muted">{u.from} to {u.to}</span></div>
         {:else}
-          {#if updates.data}<Empty text="Everything is up to date." />{/if}
+          {#if updates.data}<Empty text="Everything is up to date." />
+          {:else}{#each { length: 3 } as _, k (k)}<div class="up" aria-hidden="true"><div class="sk" style="width: 24px; height: 24px; border-radius: 6px"></div><div class="sk" style="height: 12px; width: {[44, 32, 52][k]}%"></div><div class="sk" style="height: 10px; width: 90px"></div></div>{/each}{/if}
         {/each}
       </div>
     </section>
     <section class="card ov-card ov-fixed" aria-label="Protection and sync" style="grid-area: protect">
       <div class="card-head"><h2 class="h3">Protection and sync</h2></div>
       <div class="ov-body">
-        <Setting title="Sandbox" desc="Mods only reach this instance's folder." oneLine href={href({ name: 'instance', id: i.id, tab: 'settings', sub: 'sandbox' })}><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
+        <Setting title="Sandbox" desc={i.sandboxed ? "Mods only reach this instance's folder." : 'Off. Mods can reach your files.'} oneLine href={href({ name: 'instance', id: i.id, tab: 'settings', sub: 'sandbox' })}><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
         <div class="divider"></div>
-        <Setting title="Syncing" desc="Keybinds, servers and shaders." oneLine href={href({ name: 'syncing' })}><span class="badge">{i.syncTargets} targets</span></Setting>
+        <Setting title="Syncing" desc={syncText} oneLine href={href({ name: 'syncing' })}><span class="badge">{i.syncTargets} targets</span></Setting>
         <div class="divider"></div>
         <Setting title="Discord status" desc="Show this instance while you play." oneLine><Toggle on={i.discordStatus} label="Discord status" onchange={setDiscord} /></Setting>
       </div>

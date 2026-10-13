@@ -104,5 +104,5 @@ func (v *Versions) Loaders(minecraft string) []LoaderOption {
 		})
 	}
 	wg.Wait()
-	return out
+	return asList(out)
 }

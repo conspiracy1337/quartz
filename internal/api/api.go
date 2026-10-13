@@ -20,3 +20,15 @@ func (c *Ctx) Get() context.Context {
 	}
 	return context.Background()
 }
+
+// asList keeps an empty result a list for the UI: Wails sends a nil slice as
+// null, which screens would take for "still loading".
+func asList[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
+
+// asListErr is asList for a (slice, error) result.
+func asListErr[T any](s []T, err error) ([]T, error) { return asList(s), err }

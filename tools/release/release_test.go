@@ -66,3 +66,14 @@ func TestLdflags(t *testing.T) {
 		}
 	}
 }
+
+func TestReleaseBuildsCarryNoDevTags(t *testing.T) {
+	for w := range targets {
+		args := strings.Join(wailsArgs(w, "", "out", false), " ")
+		for _, dev := range []string{"e2e", "fakeauth"} {
+			if strings.Contains(args, dev) {
+				t.Fatalf("%s builds with the development tag %q: %s", w, dev, args)
+			}
+		}
+	}
+}

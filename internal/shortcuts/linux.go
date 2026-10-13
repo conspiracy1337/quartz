@@ -62,7 +62,7 @@ func (l linux) create(s Spec, iconDir string) (string, error) {
 	var dir, base string
 	switch s.Where {
 	case Desktop:
-		dir, base = l.desktopDir, fileName(s.Name, s.ID)
+		dir, base = l.desktopDir, fsx.FileName(s.Name, s.ID)
 	case Menu:
 		if err := os.MkdirAll(l.menuDir, 0o750); err != nil {
 			return "", err

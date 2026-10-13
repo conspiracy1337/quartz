@@ -64,7 +64,7 @@ func (b *Browse) More(searchID string) (browse.Results, error) {
 
 // Categories lists a project type's categories.
 func (b *Browse) Categories(t string) []string {
-	return browse.Categories(modplatform.ProjectType(t))
+	return asList(browse.Categories(modplatform.ProjectType(t)))
 }
 
 // Project reads a project page; instance (optional) is the target.
@@ -92,7 +92,7 @@ func (b *Browse) Versions(ref, source, instance string, compatible bool) ([]brow
 	if err := checkOptionalInstance(instance); err != nil {
 		return nil, err
 	}
-	return b.svc.Versions(b.ctx.Get(), r, src, instance, compatible)
+	return asListErr(b.svc.Versions(b.ctx.Get(), r, src, instance, compatible))
 }
 
 // Changelog reads versions' changes (the newest five when ids is empty).
@@ -113,5 +113,5 @@ func (b *Browse) Changelog(ref, source string, ids []string) ([]browse.Notes, er
 			return nil, ErrBadSearch
 		}
 	}
-	return b.svc.Changelog(b.ctx.Get(), r, src, ids)
+	return asListErr(b.svc.Changelog(b.ctx.Get(), r, src, ids))
 }

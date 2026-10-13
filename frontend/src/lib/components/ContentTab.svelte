@@ -37,13 +37,13 @@
     datapacks: { noun: 'data packs', secondary: 'Check updates', primary: 'Add data packs', toggles: true, projects: true,
       chips: (items) => [{ label: 'All worlds', test: () => true }, ...[...new Set(items.map((c) => c.group).filter((g) => g !== undefined))].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
     worlds: { noun: 'worlds', secondary: 'Open folder', primary: 'Import world', toggles: false, projects: false,
-      chips: () => [all, { label: 'Survival', test: (c) => c.group === 'Survival' }, { label: 'Creative', test: (c) => c.group === 'Creative' }] },
+      // Survival and Creative always (as designed), then any other mode a world here has.
+      chips: (items) => [all, ...[...new Set(['Survival', 'Creative', ...items.map((c) => c.group).filter((g): g is string => !!g)])].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
     servers: { noun: 'servers', secondary: 'Refresh', primary: 'Add server', toggles: false, projects: false,
       chips: () => [all, { label: 'Online', test: (c) => c.online === true }] },
   };
   const SOURCES: Record<Source, [string, string]> = { modrinth: ['M', 'Modrinth'], curseforge: ['C', 'CurseForge'], file: ['F', 'Added from file'] };
   const SKELETON: [string, string][] = [['42%', '22%'], ['30%', '24%'], ['48%', '18%'], ['36%', '20%'], ['56%', '30%'], ['40%', '16%'], ['44%', '26%'], ['32%', '20%']];
-  const CHECK_MS = 1400;
 
   const cfg = $derived(CONFIG[kind]);
   const isManaged = $derived(managed(kind));
@@ -51,7 +51,8 @@
   const hasMenu = $derived(isManaged || kind === 'worlds' || kind === 'servers');
   const info = query(() => (managed(kind) ? api.content.info(instanceId) : Promise.resolve(null)));
   // The shader hint names the shader mod the instance has (Iris or Oculus).
-  const hint = $derived(kind === 'shaders' && info.data ? `Only one shader pack runs at a time. ${info.data.shaderMod ? `Uses ${info.data.shaderMod}.` : 'Shaders need Iris or Oculus.'}` : cfg.hint);
+  // Until its info loads, the app names no mod (the preview keeps the design's sample).
+  const hint = $derived(kind === 'shaders' && info.data ? `Only one shader pack runs at a time. ${info.data.shaderMod ? `Uses ${info.data.shaderMod}.` : 'Shaders need Iris or Oculus.'}` : kind === 'shaders' && hasBridge() ? 'Only one shader pack runs at a time.' : cfg.hint);
   const EMPTY: Record<ContentKind, string> = {
     mods: 'No mods yet.', resourcepacks: 'No resource packs yet.', shaders: 'No shader packs yet.',
     datapacks: 'No data packs yet.', worlds: 'No worlds yet. They show up here after you play.', servers: 'No servers yet.',
@@ -117,11 +118,7 @@
       }
       return;
     }
-    if (!isManaged) {
-      checking = true;
-      setTimeout(() => (checking = false), CHECK_MS);
-      return;
-    }
+    if (!isManaged) return;
     if (pending > 0) return review();
     checking = true;
     try {
@@ -379,6 +376,10 @@
     {#if kind === 'resourcepacks' && c.enabled}
       <button class="mi" role="menuitem" onclick={() => act(() => move(c, -1), 'Move up')}><Icon name="chevron-up" size={14} /><span>Move up</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => move(c, 1), 'Move down')}><Icon name="chevron-down" size={14} /><span>Move down</span><span></span></button>
+    {/if}
+    {#if cfg.projects && c.ref}
+      {@const ref = c.ref}
+      <button class="mi" role="menuitem" onclick={() => act(async () => { session.browseTarget = instanceId; go({ name: 'project', id: ref, tab: 'versions' }); }, 'Change version')}><Icon name="refresh" size={14} /><span>Change version…</span><span></span></button>
     {/if}
     {#if c.source && c.source !== 'file'}
       <button class="mi" role="menuitem" onclick={() => act(() => api.content.setLocked(instanceId, c.id, !c.locked), 'Lock version')}><Icon name="lock" size={14} /><span>{c.locked ? 'Unlock version' : 'Lock version'}</span><span></span></button>

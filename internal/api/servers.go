@@ -31,7 +31,7 @@ func (a *Servers) List(id string, force bool) ([]servers.Server, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
 	}
-	return a.s.List(a.ctx.Get(), id, force)
+	return asListErr(a.s.List(a.ctx.Get(), id, force))
 }
 
 // Check pings an address for the Add server dialog.

@@ -79,6 +79,18 @@
         <button class="btn btn-accent btn-block" disabled={busy || session.running[i.id]} onclick={update}>Update to {d.to}</button>
       </aside>
     </div>
+  {:else}
+    <!-- The same layout as skeletons while the pack's files are compared. -->
+    <div class="page rb" style="padding-top: 16px" aria-hidden="true">
+      <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+        <div class="sum">{#each TABS as t (t)}<div style="background: var(--panel); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px"><div class="sk" style="height: 10px; width: 60%"></div><div class="sk" style="height: 16px; width: 28px"></div></div>{/each}</div>
+        <div class="list">{#each { length: 10 } as _, k (k)}<div class="row dr"><div class="sk" style="width: 20px; height: 20px; border-radius: 4px"></div><div class="sk" style="height: 12px; width: {[38, 52, 30, 44, 36, 48, 28, 40, 34, 46][k]}%"></div><div class="sk" style="height: 10px; width: 60px"></div></div>{/each}</div>
+      </div>
+      <aside style="display: flex; flex-direction: column; gap: 14px">
+        <div class="card card-pad" style="display: flex; flex-direction: column; gap: 8px"><div class="sk" style="height: 14px; width: 40%"></div><div class="sk" style="height: 10px; width: 90%"></div><div class="sk" style="height: 10px; width: 70%"></div></div>
+        <div class="card card-pad" style="display: flex; flex-direction: column; gap: 8px"><div class="sk" style="height: 14px; width: 35%"></div><div class="sk" style="height: 10px; width: 80%"></div></div>
+      </aside>
+    </div>
   {/if}
 </div>
 

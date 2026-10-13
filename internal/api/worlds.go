@@ -51,7 +51,7 @@ func (a *Worlds) List(id string) ([]worlds.World, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
 	}
-	return a.w.List(a.ctx.Get(), id)
+	return asListErr(a.w.List(a.ctx.Get(), id))
 }
 
 // Import asks for a world .zip and adds it; "" when cancelled.
@@ -59,7 +59,7 @@ func (a *Worlds) Import(id string) (string, error) {
 	if err := checkInstanceID(id); err != nil {
 		return "", err
 	}
-	path, err := wruntime.OpenFileDialog(a.ctx.Get(), wruntime.OpenDialogOptions{
+	path, err := openFileDialog(a.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a world",
 		Filters: []wruntime.FileFilter{{DisplayName: "Worlds (*.zip)", Pattern: "*.zip"}},
 	})
@@ -92,7 +92,7 @@ func (a *Worlds) ImportDropped(dropID, id string) ([]string, error) {
 	if len(added) == 0 {
 		return nil, errors.Join(errs...)
 	}
-	return added, nil
+	return asListErr(added, nil)
 }
 
 // Export asks where to save a world as a .zip; false when cancelled.
@@ -100,7 +100,7 @@ func (a *Worlds) Export(id, folder string) (bool, error) {
 	if err := checkWorld(id, folder); err != nil {
 		return false, err
 	}
-	dest, err := wruntime.SaveFileDialog(a.ctx.Get(), wruntime.SaveDialogOptions{
+	dest, err := saveFileDialog(a.ctx.Get(), wruntime.SaveDialogOptions{
 		Title:           "Export world",
 		DefaultFilename: folder + ".zip",
 		Filters:         []wruntime.FileFilter{{DisplayName: "Zip files (*.zip)", Pattern: "*.zip"}},

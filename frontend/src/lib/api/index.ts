@@ -7,7 +7,7 @@ import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
-import type { Alert, Instance, InstanceSummary, JavaNeed } from './types';
+import type { Alert, ExportPlan, FollowOffer, ExportPreview, ExportResult, Instance, InstanceSummary, JavaNeed } from './types';
 import { activityFeed } from '../activity';
 import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
@@ -15,6 +15,7 @@ import * as InstancesGo from '../wailsjs/go/api/Instances';
 import * as JavaGo from '../wailsjs/go/api/Java';
 import * as LaunchGo from '../wailsjs/go/api/Launch';
 import * as LaunchersGo from '../wailsjs/go/api/Launchers';
+import * as ExportsGo from '../wailsjs/go/api/Exports';
 import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as SyncGo from '../wailsjs/go/api/Sync';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
@@ -92,12 +93,15 @@ export const api = {
       ? revs.load('content', () => Promise.all([runs(id), contentApi.changes(id)]).then(([r, changes]) => activityFeed(r, changes)))
       : serve(inst.activity)),
     pendingUpdates: (id: string) => contentApi.pending(id),
+    /** Minutes played across every instance. */
+    totalPlaytime: bridged(InstancesGo.TotalPlaytime, () => 18_720),
+    followOffers: () => revs.load('instances', bridged(InstancesGo.FollowOffers, (): FollowOffer[] => [])),
   },
   content: contentApi,
   home: {
     /** Sign-in alerts, missing mod dependencies, modpack updates and low disk space. */
     alerts: () => (hasBridge()
-      ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts(), packAlerts(), diskAlerts()]).then((lists) => lists.flat())
+      ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts(), packAlerts(), followAlerts(), diskAlerts()]).then((lists) => lists.flat())
       : serve(home.alerts)),
     ...homeApi,
   },
@@ -148,12 +152,23 @@ export const api = {
     setKey: bridged(SyncGo.SetKey, misc.mockSync.setKey),
     removeKey: bridged(SyncGo.RemoveKey, misc.mockSync.removeKey),
   },
+  /** Writes an instance out as a pack or a mod list (the save dialog is Go's). */
+  exports: {
+    preview: bridged(ExportsGo.Preview, (_id: string, _plan: ExportPlan): ExportPreview => ({ linked: 41, bundled: 7, bytes: 2_400_000 })),
+    run: bridged(ExportsGo.Export, (_id: string, plan: ExportPlan): ExportResult => ({ file: plan.format === 'list' ? `Survival-mods.${plan.list}` : `Survival.${plan.format}` })),
+  },
   java: {
     runtimes: bridged(JavaGo.Runtimes, () => misc.runtimes),
     scan: bridged(JavaGo.Scan, () => misc.runtimes),
     addFromFolder: bridged(JavaGo.AddFromFolder, () => misc.runtimes),
-    /** Starts a download job for the Java the newest release needs; resolves with its id. */
-    download: bridged(JavaGo.Download, () => ''),
+    showInFolder: bridged(JavaGo.ShowInFolder, (_id: string) => undefined),
+    remove: bridged(JavaGo.Remove, misc.mockJava.without),
+    forget: bridged(JavaGo.Forget, misc.mockJava.without),
+    /** Makes a runtime every instance's Java while automatic picking is off. */
+    setDefault: bridged(JavaGo.SetDefault, misc.mockJava.setDefault),
+    majors: bridged(JavaGo.Majors, () => [25, 21, 17, 16, 8]),
+    /** Starts a download job for that Java version; resolves with its id. */
+    download: bridged(JavaGo.Download, (_major: number) => ''),
   },
   /** Other launchers on this computer and bringing their instances over (first-run setup). */
   launchers: {
@@ -176,6 +191,12 @@ async function missingAlerts(): Promise<Alert[]> {
     const more = m.more ? ` and ${m.more} more` : '';
     return [{ tone: 'warn', subject: name, text: `is missing ${m.dep}${more}`, action: 'Fix', target: { kind: 'instance', id: m.instanceId, tab: 'mods' } }];
   });
+}
+
+/** "Survival: every mod supports 1.21.5", for instances that follow the latest release. */
+async function followAlerts(): Promise<Alert[]> {
+  const offers = await api.instances.followOffers();
+  return offers.map((o): Alert => ({ tone: 'info', subject: o.name, text: `every mod supports ${o.minecraft}`, action: 'Switch', target: { kind: 'instance', id: o.instanceId, tab: 'version' } }));
 }
 
 /** "Low disk space 3.2 GB left", when the data folder's drive has under 5 GB free. */

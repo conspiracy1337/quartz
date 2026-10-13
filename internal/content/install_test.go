@@ -116,7 +116,7 @@ func TestBlockedFileWaitsForTheDownloadsFolder(t *testing.T) {
 		versions: map[string][]modplatform.Version{"531761": {bv}}}}
 	eng := e.withTasks(cdn{})
 	folder := t.TempDir()
-	e.svc.d.Manual = manual.New(manual.Deps{Store: e.svc.d.Store, Tasks: eng, Folder: folder})
+	e.svc.d.Manual = manual.New(manual.Deps{Store: e.svc.d.Store, Tasks: eng, Folder: folder, Watch: true})
 
 	ctx := context.Background()
 	pl, err := e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.CurseForge, Project: "531761"})

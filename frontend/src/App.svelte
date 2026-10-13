@@ -17,6 +17,7 @@
   import Palette from '$lib/overlays/Palette.svelte';
   import ServerDialog from '$lib/overlays/ServerDialog.svelte';
   import ShortcutDialog from '$lib/overlays/ShortcutDialog.svelte';
+  import ExportDialog from '$lib/overlays/ExportDialog.svelte';
   import Shortcuts from '$lib/overlays/Shortcuts.svelte';
   import Toast from '$lib/overlays/Toast.svelte';
   import UpdateBanner from '$lib/overlays/UpdateBanner.svelte';
@@ -147,6 +148,7 @@
   {:else if overlay?.kind === 'palette'}{#key overlay.mode}<Palette mode={overlay.mode} />{/key}
   {:else if overlay?.kind === 'shortcuts'}<Shortcuts />
   {:else if overlay?.kind === 'shortcut'}<ShortcutDialog instanceId={overlay.instanceId} />
+  {:else if overlay?.kind === 'export'}<ExportDialog instanceId={overlay.instanceId} />
   {:else if overlay?.kind === 'rename' || overlay?.kind === 'icon'}{#key overlay}<InstanceEdit kind={overlay.kind} instanceId={overlay.instanceId} />{/key}
   {/if}
 </div>

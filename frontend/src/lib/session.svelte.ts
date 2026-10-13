@@ -27,7 +27,8 @@ export type Overlay =
   | { kind: 'shortcuts' }
   | { kind: 'rename'; instanceId: string }
   | { kind: 'icon'; instanceId: string }
-  | { kind: 'shortcut'; instanceId: string };
+  | { kind: 'shortcut'; instanceId: string }
+  | { kind: 'export'; instanceId: string };
 
 export type AddAccountMode = 'browser' | 'code' | 'offline';
 
@@ -159,7 +160,7 @@ class Session {
         if (this.launch?.instanceId === f.instanceId) this.launch = null;
         if (f.code === 'no-account') this.open({ kind: 'add-account', mode: 'offline' });
         else if (f.code === 'sign-in-expired') this.open({ kind: 'add-account', mode: 'browser', ...(f.accountId ? { accountId: f.accountId } : {}) });
-        else if (f.code !== 'cancelled') this.notify({ tone: 'error', subject: "Couldn't start the game", text: f.message });
+        else if (f.code !== 'cancelled') this.notify({ tone: 'error', subject: "Couldn't start the game", text: errorText(f.message) });
       }),
       onEvent<GameState>('game:state', (g) => {
         if (g.state === 'running') {

@@ -30,6 +30,13 @@
   let search = $state('');
   let text = $state('');
   let sort = $state<BrowseSort>('relevance');
+  // Below 1100px the filter sidebar opens over the results; Escape or a click outside closes it.
+  let filtersOpen = $state(false);
+  let filtersEl = $state<HTMLElement>();
+  function closeFilters(e: Event) {
+    if (!filtersOpen) return;
+    if (e instanceof KeyboardEvent ? e.key === 'Escape' : !filtersEl?.contains(e.target as Node) && !(e.target as Element).closest?.('.fbtn')) filtersOpen = false;
+  }
   // The design's board shows its first category ticked; the preview keeps that demo state.
   let cats = $state<Record<string, boolean>>(hasBridge() ? {} : { Optimization: true });
   let useVersion = $state(true);
@@ -126,6 +133,8 @@
   }
 </script>
 
+<svelte:window onkeydown={closeFilters} onpointerdown={closeFilters} />
+
 <PageHeader title="Browse" style="padding-bottom: 16px; border-bottom: 1px solid var(--line)">
   {#snippet actions()}
     {#if showTarget && target}
@@ -143,7 +152,7 @@
       <Tabs items={PROJECT_TYPES.map((t) => ({ key: t.kind, label: t.label }))} active={type} label="Content type" onselect={pickType} />
       <div style="display: flex; gap: 8px">
         <SearchField bind:value={search} label="Search" placeholder="Search {projectType(type).label.toLowerCase()}" style="flex: 1 1 auto" height={36} />
-        <button class="btn fbtn" style="height: 36px">Filters</button>
+        <button class="btn fbtn" style="height: 36px" aria-expanded={filtersOpen} aria-controls="browse-filters" onclick={() => (filtersOpen = !filtersOpen)}>Filters</button>
         <Select bind:value={sort} options={SORTS} label="Sort results" style="width: 150px; height: 36px" />
       </div>
       <div class="list">
@@ -153,7 +162,7 @@
             <div class="row res">
               <Tile art={r.art ?? artOf(r.name, r.icon)} size="lg" />
               <a href={href({ name: 'project', id: r.ref })} style="min-width: 0; text-decoration: none"><span style="display: flex; gap: 8px; align-items: baseline; min-width: 0"><span class="trunc" style="font-weight: 600">{r.name}</span><span class="small faint trunc" style="flex: 0 1 auto">by {r.author}</span></span><span class="muted clamp2" style="display: -webkit-box; margin-top: 2px; height: 40px">{r.summary}</span></a>
-              <span class="opt" style="display: flex; flex-direction: column; gap: 2px"><span class="tnum muted small">{compact(m.downloads)} downloads</span><span class="small faint">Updated {ago(m.updated)}</span></span>
+              <span class="opt" style="flex-direction: column; gap: 2px"><span class="tnum muted small">{compact(m.downloads)} downloads</span><span class="small faint">Updated {ago(m.updated)}</span></span>
               <span style="display: flex; justify-content: flex-end"><button class="btn btn-sm" disabled={showTarget && !target} onclick={() => install(r)}>Install</button></span>
             </div>
           {:else}
@@ -169,7 +178,7 @@
       </div>
     </div>
   </section>
-  <aside class="filters scroll" aria-label="Filters" style="border-left: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 18px">
+  <aside id="browse-filters" class="filters scroll" class:open={filtersOpen} aria-label="Filters" bind:this={filtersEl} style="border-left: 1px solid var(--line); padding: 16px; flex-direction: column; gap: 18px">
     <div class="fg"><span class="field-label">Version and loader</span><div style="display: flex; gap: 6px">{#if target}<button class="chip" class:on={useVersion} aria-pressed={useVersion} onclick={() => (useVersion = !useVersion)}>{target.minecraft}</button>{#if showTarget && target.loader}<button class="chip" class:on={useLoader} aria-pressed={useLoader} onclick={() => (useLoader = !useLoader)}>{LOADER_NAMES[target.loader.kind]}</button>{/if}{/if}</div></div>
     <div class="fg"><span class="field-label">Categories</span>
       {#each categories.data ?? [] as c (c)}
@@ -186,12 +195,16 @@
 
 <style>
   /* Content-type tabs, search and results on the left; the filter sidebar sits to their right. */
-  .bw{display:grid;grid-template-columns:minmax(0,1fr) 220px;flex:1 1 auto;min-height:0}
-  @media (max-width:1100px){.bw{grid-template-columns:minmax(0,1fr)}.bw .filters{display:none}.fbtn{display:inline-flex !important}}
+  .bw{display:grid;grid-template-columns:minmax(0,1fr) 220px;flex:1 1 auto;min-height:0;position:relative}
+  .bw .filters{display:flex}
   .fbtn{display:none !important}
+  /* Narrow windows: the sidebar hides behind the Filters button and opens over the results, on the menu surface. */
+  @media (max-width:1100px){.bw{grid-template-columns:minmax(0,1fr)}.bw .filters{display:none}.fbtn{display:inline-flex !important}
+    .bw .filters.open{display:flex;position:absolute;top:0;right:0;bottom:0;width:220px;z-index:20;background:var(--raise);border-left-color:var(--line-2) !important;box-shadow:0 16px 40px -12px rgba(0,0,0,.7)}}
   .fg{display:flex;flex-direction:column;gap:6px}
   .fl{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:8px;align-items:center;height:26px;border:0;background:transparent;padding:0;color:var(--muted);text-align:left;width:100%}
   .fl:hover{color:var(--text)}
   .res{grid-template-columns:48px minmax(0,1fr) 136px 84px;height:84px;column-gap:16px}
+  .res .opt{display:flex}
   @media (max-width:1100px){.res{grid-template-columns:48px minmax(0,1fr) 84px}.res .opt{display:none}}
 </style>

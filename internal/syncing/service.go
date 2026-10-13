@@ -214,7 +214,7 @@ type Groups struct {
 func (s *Service) Groups() Groups {
 	y := s.settings()
 	all := s.c.Instances.List()
-	g := Groups{Total: len(all)}
+	g := Groups{Total: len(all), Files: []Entry{}, Folders: []Entry{}, Mods: []Entry{}, Custom: []Entry{}} // lists, never null, for the UI
 	for _, t := range catalog(y) {
 		e := Entry{ID: t.ID, Name: t.Name, Path: t.Path, Enabled: s.enabled(y, t.ID), Available: true}
 		if t.Dir {

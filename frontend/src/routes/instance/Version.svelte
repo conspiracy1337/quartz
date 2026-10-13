@@ -2,7 +2,9 @@
   import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
   import { fullDate } from '$lib/format';
-  import { LOADER_PRODUCTS } from '$lib/labels';
+  import { switchVersion } from '$lib/instanceActions';
+  import { LOADER_NAMES, LOADER_PRODUCTS } from '$lib/labels';
+  import { prefs } from '$lib/prefs.svelte';
   import { query } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { href } from '$lib/router.svelte';
@@ -46,12 +48,15 @@
   const java = $derived.by(() => {
     const list = runtimes.data ?? [];
     const own = i.settings.java.override && i.settings.java.javaPath ? list.find((r) => r.path === i.settings.java.javaPath) : undefined;
-    const rt = own ?? list.find((r) => r.major === release?.java && r.source === 'Managed') ?? list.find((r) => r.major === release?.java);
-    if (!rt) return { title: release ? `Java ${release.java}` : 'Java', line: 'Downloads automatically the first time you play.' };
+    // With automatic picking off, Settings → Java names one runtime for every instance.
+    const manual = prefs.value?.java.autoPick === false;
+    const fixed = own ? undefined : manual ? list.find((r) => r.default) : undefined;
+    const rt = own ?? fixed ?? (manual ? undefined : list.find((r) => r.major === release?.java && r.source === 'Managed') ?? list.find((r) => r.major === release?.java));
+    if (!rt) return manual ? { title: 'Java', line: 'Not chosen. Pick one in Settings, Java.' } : { title: release ? `Java ${release.java}` : 'Java', line: 'Downloads automatically the first time you play.' };
     const parts = rt.name.split(' ');
     const version = parts.length > 1 ? parts.pop()! : rt.name;
     const vendor = parts.join(' ') || rt.name;
-    return { title: `Java ${version}`, line: `${VENDORS[vendor] ?? vendor}, ${own ? 'set in this instance' : 'chosen automatically'}.` };
+    return { title: `Java ${version}`, line: `${VENDORS[vendor] ?? vendor}, ${own ? 'set in this instance' : fixed ? 'set in Settings, Java' : 'chosen automatically'}.` };
   });
 
   async function edit(fn: () => Promise<unknown>, what: string) {
@@ -70,9 +75,9 @@
       <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="brand" size={20} /></span><span><span class="h3" style="display: block">Minecraft {i.minecraft}</span><span class="small faint" style="display: block">{mcLine}</span></span><a href={to('minecraft')} class="btn btn-sm">Change</a></div>
       <div class="divider"></div>
       {#if i.loader}
-        <div class="comp"><span class="cbox" style="background: #dbc18e; color: #0a0a0b" aria-hidden="true"><Icon name="fabric" size={20} sw={1.8} /></span><span><span class="h3" style="display: block">{LOADER_PRODUCTS[i.loader.kind]} {i.loader.version}</span><span class="small faint" style="display: block">{loaderLine}</span></span><span style="display: flex; gap: 6px"><button class="btn btn-sm btn-ghost" onclick={() => edit(() => api.instances.setVersion(i.id, i.minecraft, '', ''), 'Remove loader')}>Remove</button><a href={to('loader')} class="btn btn-sm">Change</a></span></div>
+        <div class="comp">{#if i.loader.kind === 'fabric'}<span class="cbox" style="background: #dbc18e; color: #0a0a0b" aria-hidden="true"><Icon name="fabric" size={20} sw={1.8} /></span>{:else}<span class="cbox lk" aria-hidden="true">{LOADER_NAMES[i.loader.kind].charAt(0)}</span>{/if}<span><span class="h3" style="display: block">{LOADER_PRODUCTS[i.loader.kind]} {i.loader.version}</span><span class="small faint" style="display: block">{loaderLine}</span></span><span style="display: flex; gap: 6px"><button class="btn btn-sm btn-ghost" onclick={() => switchVersion(i, i.minecraft, '', '', 'Vanilla')}>Remove</button><a href={to('loader')} class="btn btn-sm">Change</a></span></div>
       {:else}
-        <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="fabric" size={20} sw={1.8} /></span><span><span class="h3" style="display: block">No mod loader</span><span class="small faint" style="display: block">Vanilla. Add a loader to use mods.</span></span><a href={to('loader')} class="btn btn-sm">Add</a></div>
+        <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="plus" size={20} sw={1.8} /></span><span><span class="h3" style="display: block">No mod loader</span><span class="small faint" style="display: block">Vanilla. Add a loader to use mods.</span></span><a href={to('loader')} class="btn btn-sm">Add</a></div>
       {/if}
       <div class="divider"></div>
       <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="java" size={20} /></span><span><span class="h3" style="display: block">{java.title}</span><span class="small faint" style="display: block">{java.line}</span></span><a href={href({ name: 'settings', tab: 'java' })} class="btn btn-sm">Manage</a></div>
@@ -94,4 +99,5 @@
 <style>
   .comp{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 16px}
   .cbox{width:44px;height:44px;border-radius:9px;background:var(--raise);display:grid;place-items:center;color:var(--muted)}
+  .lk{font-family:var(--mono);font-weight:600;font-size:16px}
 </style>

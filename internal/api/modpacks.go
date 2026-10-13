@@ -20,7 +20,7 @@ type Modpacks struct {
 func NewModpacks(ctx *Ctx, d ModpacksDeps) *Modpacks { return &Modpacks{ctx: ctx, d: d} }
 
 // Updates lists packs with a newer version (from the last check).
-func (m *Modpacks) Updates() []modpack.Available { return m.d.Packs.Updates() }
+func (m *Modpacks) Updates() []modpack.Available { return asList(m.d.Packs.Updates()) }
 
 // Diff reviews an instance's pack update.
 func (m *Modpacks) Diff(instanceID string) (*modpack.Diff, error) {

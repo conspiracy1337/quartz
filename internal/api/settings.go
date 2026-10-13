@@ -32,6 +32,7 @@ func (s *Settings) Get() settings.Settings { return s.store.Get() }
 // path can only be changed through PickCustomCSS, never set directly by the UI.
 func (s *Settings) Save(next settings.Settings) settings.Settings {
 	next.Appearance.CustomCSS.Path = s.store.Get().Appearance.CustomCSS.Path
+	next.Java.DefaultPath = s.store.Get().Java.DefaultPath // only Java.SetDefault changes it
 	return s.store.Replace(next)
 }
 
@@ -40,7 +41,7 @@ func (s *Settings) CustomCSS() theme.CSSState { return s.css.Current() }
 // PickCustomCSS lets the user choose a CSS file and turns custom CSS on.
 // It returns the stored settings; an empty pick changes nothing.
 func (s *Settings) PickCustomCSS() (settings.Settings, error) {
-	path, err := wruntime.OpenFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
+	path, err := openFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a CSS file",
 		Filters: []wruntime.FileFilter{{DisplayName: "CSS files (*.css)", Pattern: "*.css"}},
 	})
@@ -82,7 +83,7 @@ func (s *Settings) ExportTheme(css string) error {
 	if len(css) > theme.MaxCSSSize {
 		return ErrThemeTooLarge
 	}
-	path, err := wruntime.SaveFileDialog(s.ctx.Get(), wruntime.SaveDialogOptions{
+	path, err := saveFileDialog(s.ctx.Get(), wruntime.SaveDialogOptions{
 		Title:           "Export theme",
 		DefaultFilename: "theme.css",
 		Filters:         []wruntime.FileFilter{{DisplayName: "CSS files (*.css)", Pattern: "*.css"}},

@@ -13,6 +13,7 @@ import (
 	"quartz/internal/core/procx"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
+	"quartz/internal/follow"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
 	"quartz/internal/loader"
@@ -45,6 +46,8 @@ type InstanceDeps struct {
 	Syncing *syncing.Service
 	// Shortcuts writes desktop and menu shortcuts; nil in tests.
 	Shortcuts *shortcuts.Service
+	// Follow offers moves to the newest release; nil in tests.
+	Follow *follow.Checker
 }
 
 // Counter counts one kind of thing an instance has.
@@ -222,7 +225,7 @@ func (s *Instances) List() []InstanceSummary {
 	for i, in := range list {
 		out[i] = s.summary(in)
 	}
-	return out
+	return asList(out)
 }
 
 // Get returns one instance.
@@ -377,7 +380,7 @@ func (s *Instances) SetIcon(id, hash string) (InstanceView, error) {
 func (s *Instances) ChooseIcon() (string, error) { return s.chooseIcon() }
 
 func (s *Instances) chooseIcon() (string, error) {
-	path, err := wruntime.OpenFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
+	path, err := openFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a picture",
 		Filters: []wruntime.FileFilter{{DisplayName: "Pictures (*.png, *.jpg)", Pattern: "*.png;*.jpg;*.jpeg"}},
 	})
@@ -404,7 +407,7 @@ func (s *Instances) SetTags(id string, tags []string) (InstanceView, error) {
 }
 
 // Groups lists the groups in their order.
-func (s *Instances) Groups() []instance.Group { return s.d.Store.Groups() }
+func (s *Instances) Groups() []instance.Group { return asList(s.d.Store.Groups()) }
 
 // SetGroup moves an instance into a group ("" for none).
 func (s *Instances) SetGroup(id, group string) (InstanceView, error) {
@@ -535,7 +538,7 @@ func (s *Instances) Trash(id string) (instance.TrashEntry, error) {
 // TrashList lists the trash, newest first.
 func (s *Instances) TrashList() []instance.TrashEntry {
 	if l := s.d.Store.TrashList(); l != nil {
-		return l
+		return asList(l)
 	}
 	return []instance.TrashEntry{}
 }
@@ -597,7 +600,7 @@ func (s *Instances) Move(id string) (string, error) {
 	if err := checkInstanceID(id); err != nil {
 		return "", err
 	}
-	parent, err := wruntime.OpenDirectoryDialog(s.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose where the game folder goes"})
+	parent, err := openDirDialog(s.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose where the game folder goes"})
 	if err != nil || parent == "" {
 		return "", err
 	}
@@ -645,6 +648,15 @@ func (s *Instances) OpenFolder(id string) error {
 		return err
 	}
 	return procx.OpenFolder(dir)
+}
+
+// FollowOffers lists instances that follow the latest release and whose mods
+// all support it (checked at start and every 6 hours).
+func (s *Instances) FollowOffers() []follow.Offer {
+	if s.d.Follow == nil {
+		return []follow.Offer{}
+	}
+	return asList(s.d.Follow.Offers())
 }
 
 // TotalPlaytime is the minutes played across every instance.

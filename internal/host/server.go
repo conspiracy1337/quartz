@@ -220,6 +220,9 @@ func (s *Service) prepare(ctx context.Context, srv *server, in instance.Instance
 		return "", nil, err
 	}
 	eff := in.Resolve(s.d.Settings.Get())
+	if eff.JavaUnset {
+		return "", nil, instance.ErrJavaNotChosen
+	}
 	own := java.Request{Major: res.Version.JavaMajor(), Component: res.Version.JavaComponent()}
 	req := own
 	req.Override = eff.JavaPath

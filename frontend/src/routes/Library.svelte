@@ -24,7 +24,6 @@
   let search = $state('');
   let filter = $state<Filter>('all');
   let sort = $state<Sort>('last');
-  let view = $state<'grid' | 'list'>('grid');
 
   const matches = (i: InstanceSummary) =>
     filter === 'all' || (filter === 'servers' ? i.hasServers : filter === 'modded' ? i.kind !== 'vanilla' : i.kind === filter);
@@ -52,10 +51,6 @@
       </div>
       <div style="flex: 1 1 0"></div>
       <Select bind:value={sort} options={SORTS} label="Sort instances" style="width: 150px" />
-      <div class="seg" role="group" aria-label="View">
-        <button class:on={view === 'grid'} aria-label="Grid" onclick={() => (view = 'grid')}><Icon name="grid" size={14} sw={1.8} /></button>
-        <button class:on={view === 'list'} aria-label="List" onclick={() => (view = 'list')}><Icon name="list" size={14} sw={1.8} /></button>
-      </div>
     </div>
     <div class="lgrid">
       {#if list.data}

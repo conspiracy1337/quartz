@@ -73,7 +73,7 @@ func (l *Launchers) List() []OtherLauncher {
 		}
 		out = append(out, OtherLauncher{ID: f.ID, Name: f.Name, Art: launcherArt[f.ID], Summary: summary, Instances: len(fresh)})
 	}
-	return out
+	return asList(out)
 }
 
 func plural(n int, noun string) string {

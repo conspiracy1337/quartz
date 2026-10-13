@@ -92,5 +92,5 @@ func (d *Drops) Take(id string) ([]string, error) {
 	if !ok || d.now().Sub(v.at) > dropTTL {
 		return nil, ErrDropExpired
 	}
-	return v.paths, nil
+	return asListErr(v.paths, nil)
 }

@@ -60,7 +60,7 @@ func (w win) create(s Spec, iconDir string) (string, error) {
 	if err := fsx.AtomicWrite(icon, ico, fsx.FilePerm); err != nil {
 		return "", err
 	}
-	path, err := free(dir, fileName(s.Name, s.ID), ".lnk")
+	path, err := free(dir, fsx.FileName(s.Name, s.ID), ".lnk")
 	if err != nil {
 		return "", err
 	}

@@ -39,7 +39,7 @@ func (m mac) create(s Spec, _ string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	app, err := free(dir, fileName(s.Name, s.ID), ".app")
+	app, err := free(dir, fsx.FileName(s.Name, s.ID), ".app")
 	if err != nil {
 		return "", err
 	}

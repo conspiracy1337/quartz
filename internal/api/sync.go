@@ -64,10 +64,10 @@ func (a *Sync) RemoveCustom(id string) error {
 func (a *Sync) OpenFolder() error { return procx.OpenFolder(a.s.Root()) }
 
 // Keybinds lists the shared keybinds.
-func (a *Sync) Keybinds() []syncing.Keybind { return a.s.Keybinds() }
+func (a *Sync) Keybinds() []syncing.Keybind { return asList(a.s.Keybinds()) }
 
 // KeyCatalog lists the keybinds that can be shared.
-func (a *Sync) KeyCatalog() []syncing.KeyChoice { return a.s.KeyCatalog() }
+func (a *Sync) KeyCatalog() []syncing.KeyChoice { return asList(a.s.KeyCatalog()) }
 
 // AddKey shares a keybind.
 func (a *Sync) AddKey(id string) (syncing.Keybind, error) {

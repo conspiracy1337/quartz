@@ -150,3 +150,50 @@ func TestProbeRealJava(t *testing.T) {
 	}
 	t.Logf("probed %+v", rt)
 }
+
+func TestRemoveOnlyManagedAndForget(t *testing.T) {
+	m := newManager(t)
+	m.scanned = true // no system scan in a unit test
+	dir := filepath.Join(m.cfg.Dir, "temurin-17-linux")
+	touch(t, filepath.Join(dir, "bin", exe(m.goos)))
+	if err := writeMarker(dir, marker{Vendor: "temurin", Major: 17, Version: "17.0.9", Java: "bin/" + exe(m.goos)}); err != nil {
+		t.Fatal(err)
+	}
+	rt, ok := m.Pick(context.Background(), 17)
+	if !ok || rt.Source != Managed {
+		t.Fatalf("pick = %+v %v", rt, ok)
+	}
+	if got, ok := m.Find(context.Background(), ID(rt.Path)); !ok || got.Path != rt.Path {
+		t.Fatal("find by id")
+	}
+	outside := Runtime{Path: filepath.Join(t.TempDir(), "bin", "java"), Source: Managed}
+	if err := m.Remove(outside); err == nil {
+		t.Fatal("removed a folder outside the runtimes")
+	}
+	if err := m.Remove(Runtime{Path: rt.Path, Source: System}); err == nil {
+		t.Fatal("removed a runtime the launcher didn't install")
+	}
+	if err := m.Remove(rt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatal("the runtime folder is still there")
+	}
+	if _, err := os.Stat(m.cfg.Dir); err != nil {
+		t.Fatal("the runtimes folder itself was removed")
+	}
+
+	added := filepath.Join(t.TempDir(), "jdk", "bin", "java")
+	_, _ = m.state.Update(func(d *stateDoc) error { d.Extra = append(d.Extra, added); return nil })
+	m.detected = append(m.detected, Runtime{Path: added, Major: 21, Source: Found})
+	if !m.Added(added) {
+		t.Fatal("added")
+	}
+	m.Forget(added)
+	if m.Added(added) || len(m.Runtimes(context.Background())) != 0 {
+		t.Fatal("forget kept the runtime")
+	}
+	if majors := Majors(); majors[0] != 25 || majors[len(majors)-1] != 8 {
+		t.Fatalf("majors %v", majors)
+	}
+}
