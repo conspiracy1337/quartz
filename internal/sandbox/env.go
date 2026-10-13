@@ -64,13 +64,3 @@ func setEnv(env []string, add ...string) []string {
 	}
 	return env
 }
-
-// getEnv reads a variable from env.
-func getEnv(env []string, name string) string {
-	for i := len(env) - 1; i >= 0; i-- {
-		if n, v, _ := strings.Cut(env[i], "="); n == name {
-			return v
-		}
-	}
-	return ""
-}

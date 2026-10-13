@@ -337,3 +337,13 @@ func displayNumber(d string) (string, bool) {
 }
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+// getEnv reads a variable from env.
+func getEnv(env []string, name string) string {
+	for i := len(env) - 1; i >= 0; i-- {
+		if n, v, _ := strings.Cut(env[i], "="); n == name {
+			return v
+		}
+	}
+	return ""
+}
