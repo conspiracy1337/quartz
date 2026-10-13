@@ -9,3 +9,5 @@ frontend/node_modules/
 # Local tooling
 *.log
 .DS_Store
+# Release files (tools/release)
+dist/

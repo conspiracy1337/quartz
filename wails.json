@@ -22,7 +22,7 @@
         "ext": "mrpack",
         "name": "Modrinth modpack",
         "description": "Modrinth modpack",
-        "iconName": "iconfile",
+        "iconName": "appicon",
         "role": "Viewer"
       }
     ],

@@ -13,10 +13,12 @@ require (
 	github.com/wailsapp/wails/v2 v2.16.0
 	github.com/yuin/goldmark v1.8.6
 	github.com/zalando/go-keyring v0.2.8
+	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.60.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/sys v0.49.0
+	golang.org/x/term v0.46.0
 	rsc.io/qr v0.2.0
 )
 
@@ -44,6 +46,5 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )
