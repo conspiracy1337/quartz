@@ -43,6 +43,10 @@ export function SetIcon(arg1:string,arg2:string):Promise<api.InstanceView>;
 
 export function SetNotes(arg1:string,arg2:string):Promise<api.InstanceView>;
 
+export function SetSharedKeys(arg1:string,arg2:boolean):Promise<api.InstanceView>;
+
+export function SetSync(arg1:string,arg2:string,arg3:boolean):Promise<api.InstanceView>;
+
 export function SetTags(arg1:string,arg2:Array<string>):Promise<api.InstanceView>;
 
 export function SetVersion(arg1:string,arg2:string,arg3:string,arg4:string):Promise<api.InstanceView>;

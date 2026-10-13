@@ -291,7 +291,6 @@ func (c *Content) CleanUp() (store.Usage, error) {
 	return c.Usage()
 }
 
-
 // cleanGrace spares files stored in the last few minutes: an update job may
 // be about to place them. (Removed items stay referenced until purged.)
 const cleanGrace = 10 * time.Minute
