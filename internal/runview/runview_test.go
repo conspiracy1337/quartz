@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"quartz/internal/core/bwrap"
 	"slices"
 	"testing"
 	"time"
@@ -185,7 +186,7 @@ func TestRecover(t *testing.T) {
 
 func bwrapOrSkip(t *testing.T) {
 	t.Helper()
-	if s := bwrapSupport(); s.bwrap == "" || !s.overlay {
+	if s := bwrap.Detect(); s.Bin == "" || !s.Overlay {
 		t.Skip("bubblewrap with overlays isn't available here")
 	}
 }
@@ -234,4 +235,51 @@ func TestBwrapBindAndOverlay(t *testing.T) {
 		t.Fatal("latest.log")
 	}
 	closeView(t, first)
+}
+
+// A sandbox's "Read only" and "Blocked" shared folders: the run may write,
+// nothing reaches the shared copy, and the game folder is empty afterwards.
+func TestThrowawayFolders(t *testing.T) {
+	for _, backend := range []string{"clone", "bwrap"} {
+		t.Run(backend, func(t *testing.T) {
+			if backend == "bwrap" {
+				bwrapOrSkip(t)
+			}
+			f := newFixture(t, backend)
+			_ = os.RemoveAll(filepath.Join(f.game, "saves"))
+			other := filepath.Join(filepath.Dir(f.shared), "config")
+			put(t, filepath.Join(other, "mod.toml"), "shared config")
+			r := Request{Game: f.game, Scratch: filepath.Join(f.runs, "1.view"), Folders: []Folder{
+				{Rel: "saves", Shared: f.shared, Mode: Private},
+				{Rel: "config", Shared: other, Mode: Empty},
+			}}
+			v, err := f.a.Assemble(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			script := `test "$(cat saves/Shared/level.dat)" = "shared v1" && echo -n changed > saves/Shared/level.dat && test ! -e config/mod.toml && echo -n x > config/new.toml`
+			if backend == "bwrap" {
+				f.run(t, v, script)
+			} else {
+				cmd := exec.Command("/bin/sh", "-c", script)
+				cmd.Dir = v.GameDir()
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("%v: %s", err, out)
+				}
+			}
+			closeView(t, v)
+			if body(t, filepath.Join(f.shared, "Shared", "level.dat")) != "shared v1" || body(t, filepath.Join(other, "mod.toml")) != "shared config" || !gone(filepath.Join(other, "new.toml")) {
+				t.Fatal("a throwaway folder wrote the shared copy")
+			}
+			for _, rel := range []string{"saves", "config"} {
+				if entries, _ := os.ReadDir(filepath.Join(f.game, rel)); len(entries) != 0 {
+					t.Fatalf("%s kept the run's files", rel)
+				}
+			}
+			// Throwaway folders don't hold the shared copy: a second run gets it directly.
+			if only := f.a.lease([]string{f.shared}); !only[f.shared] {
+				t.Fatal("a throwaway folder leased the shared copy")
+			}
+		})
+	}
 }
