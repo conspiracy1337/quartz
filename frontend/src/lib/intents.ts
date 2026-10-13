@@ -18,6 +18,9 @@ export function show(t: OpenTarget) {
     case 'instance':
       if (t.instance) go({ name: 'instance', id: t.instance, tab: 'overview' });
       break;
+    case 'notice':
+      session.notify({ subject: t.subject ?? '', text: t.text ?? '' });
+      break;
     case 'error':
       session.notify({ tone: 'error', subject: t.subject ?? "Couldn't open that", text: t.text ?? '' });
       break;

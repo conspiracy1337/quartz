@@ -4,6 +4,7 @@
 
 import { api } from './api';
 import type { HostOptions, HostState } from './api/host';
+import type { UpdateState } from './api/system';
 import type { ContentKind, PlayInto, ServerEntry, Src } from './api/types';
 import { copyText } from './clipboard';
 import { errorText } from './format';
@@ -70,8 +71,13 @@ class Session {
   browseHide = $state({ ai: true, ads: false, installed: true });
   /** A file a launch saved, for the Log files viewer to show (set by Launch history's Open). */
   runFile = $state<{ instanceId: string; runId: string; kind: 'log' | 'cmd'; title: string } | null>(null);
-  /** Self-update arrives in M11; until then only the preview shows the design's banner. */
-  updateReady = $state(!hasBridge());
+  /** The launcher updater's state (Go's update:state). */
+  update = $state<UpdateState | null>(null);
+  /** "Later" hides the banner until the next start; the update installs when the launcher quits. */
+  updateLater = $state(false);
+  get updateReady() {
+    return this.update?.status === 'ready' && !this.updateLater;
+  }
 
   #launchTimer: ReturnType<typeof setInterval> | undefined;
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -139,7 +145,8 @@ class Session {
 
   /** Reads which games are running (after the window reloads). */
   async load() {
-    const [s, hosts] = await Promise.all([api.launch.status(), api.host.status()]);
+    const [s, hosts, update] = await Promise.all([api.launch.status(), api.host.status(), api.updates.state()]);
+    this.update = update;
     this.running = Object.fromEntries((s.running ?? []).map((id) => [id, true]));
     this.hosting = hosts[0] ?? null;
   }
@@ -167,6 +174,7 @@ class Session {
         if (g.result === 'crash' || g.result === 'failed') this.open({ kind: 'crash', instanceId: g.instanceId, runId: g.runId });
       }),
       onEvent<HostState>('host:state', (h) => this.hostChanged(h)),
+      onEvent<UpdateState>('update:state', (u) => (this.update = u)),
     ];
     return () => offs.forEach((off) => off());
   }

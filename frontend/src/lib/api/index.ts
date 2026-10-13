@@ -26,7 +26,7 @@ import { homeApi, logFilesApi, screenshotsApi, serversApi, worldsApi } from './g
 import { downloadsApi } from './downloads';
 import { hostApi } from './host';
 import { sandboxApi } from './sandbox';
-import { app, settingsApi } from './system';
+import { app, settingsApi, updatesApi } from './system';
 
 export type { AppInfo, CustomCSSState, Settings } from './system';
 
@@ -42,6 +42,7 @@ const runs = bridged(LogsGo.Runs, (_instanceId: string) => logs.runs);
 export const api = {
   app,
   settings: settingsApi,
+  updates: updatesApi,
   instances: {
     list: () => revs.load('instances', bridged(InstancesGo.List, () => inst.instances.map(summary))),
     get: (id: string) => revs.load('instances', bridged(() => InstancesGo.Get(id), () => byId(id))),

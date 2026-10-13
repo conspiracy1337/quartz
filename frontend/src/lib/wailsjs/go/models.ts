@@ -3159,6 +3159,37 @@ export namespace theme {
 
 }
 
+export namespace update {
+	
+	export class State {
+	    status: string;
+	    current: string;
+	    version?: string;
+	    date?: string;
+	    notes: string[];
+	    error?: string;
+	    checked?: number;
+	    job?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.status = source["status"];
+	        this.current = source["current"];
+	        this.version = source["version"];
+	        this.date = source["date"];
+	        this.notes = source["notes"];
+	        this.error = source["error"];
+	        this.checked = source["checked"];
+	        this.job = source["job"];
+	    }
+	}
+
+}
+
 export namespace worlds {
 	
 	export class World {

@@ -77,6 +77,7 @@ import (
 	"quartz/internal/skins"
 	"quartz/internal/syncing"
 	"quartz/internal/theme"
+	"quartz/internal/update"
 	"quartz/internal/worlds"
 )
 
@@ -145,6 +146,8 @@ type app struct {
 	// Desktop and menu shortcuts and Discord status (M11).
 	shortcuts *shortcuts.Service
 	presence  *discord.Presence
+	updater   *update.Updater
+	stopCheck func()
 }
 
 // Run builds the app and blocks until the window closes.
@@ -202,6 +205,7 @@ func Run(o Options) error {
 				Opens: a.opens, Log: a.log, Env: launchers.SystemEnv()}),
 			api.NewManual(api.ManualDeps{Service: a.manual, Drops: a.drops, App: appFacade}),
 			api.NewLaunch(a.ctx, a.launcher),
+			api.NewUpdates(a.ctx, a.updater, a.restart),
 			api.NewHost(a.ctx, a.host),
 			api.NewLogs(a.ctx, a.launcher, a.logFiles, a.crash),
 			api.NewHome(a.ctx, api.HomeDeps{Home: a.home, Servers: a.servers, Screenshots: a.screenshots}),
@@ -556,6 +560,7 @@ func (a *app) buildContent() error {
 	}
 	a.shortcuts = shortcuts.New(a.paths.Shortcuts(), a.instances, a.icons, exe, a.log)
 	a.watchDiscord()
+	a.buildUpdater()
 	a.drops = api.NewDrops(a.bus)
 	a.opens = api.NewOpens(a.bus)
 	// Edits to files the game owns wait for it to exit.
@@ -640,6 +645,8 @@ func (a *app) startup(ctx context.Context) {
 	}()
 	a.watchDesktop()
 	go a.shortcuts.Refresh()
+	a.finishUpdate()
+	a.stopCheck = a.scheduleUpdates()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
@@ -717,6 +724,9 @@ func (a *app) shutdown(context.Context) {
 	if a.stopPacks != nil {
 		a.stopPacks()
 	}
+	if a.stopCheck != nil {
+		a.stopCheck()
+	}
 	a.accounts.Close()
 	// A hosted server saves its world and stops with the launcher.
 	stopCtx, cancel := context.WithTimeout(context.Background(), hostStopTimeout)
@@ -755,6 +765,7 @@ func (a *app) shutdown(context.Context) {
 	if err := a.settings.Flush(); err != nil {
 		a.log.Error("saving settings on exit failed", "err", err)
 	}
+	a.installOnQuit()
 	a.log.Info("stopped")
 }
 

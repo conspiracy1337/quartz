@@ -3,11 +3,13 @@
 import { bridged, hasBridge } from '../bridge';
 import * as AppGo from '../wailsjs/go/api/App';
 import * as SettingsGo from '../wailsjs/go/api/Settings';
-import type { api as goapi, settings, theme } from '../wailsjs/go/models';
+import * as UpdatesGo from '../wailsjs/go/api/Updates';
+import type { api as goapi, settings, theme, update } from '../wailsjs/go/models';
 import { defaultSettings } from './mock/settings';
 
 export type Settings = settings.Settings;
 export type OpenTarget = goapi.OpenTarget;
+export type UpdateState = update.State;
 export type AppInfo = goapi.AppInfo;
 export type CustomCSSState = theme.CSSState;
 
@@ -27,6 +29,18 @@ export const app = {
   pending: bridged(AppGo.Pending, (): OpenTarget[] => []),
   /** Asks for a new data folder; the launcher restarts to move there ('' when cancelled). */
   changeDataFolder: bridged(AppGo.ChangeDataFolder, () => ''),
+};
+
+// The browser preview shows the design's ready banner (Launcher 1.4.0).
+const previewUpdate: UpdateState = { status: 'ready', current: 'preview', version: '1.4.0', date: '2026-10-01', notes: ['Faster start on large libraries', 'Shortcuts can open a world or server', 'Fixes for imports from other launchers'] };
+
+/** The launcher's own updates. */
+export const updatesApi = {
+  state: bridged(UpdatesGo.State, () => previewUpdate),
+  /** Looks for a newer release now; a newer one downloads in the background. */
+  check: bridged(UpdatesGo.Check, () => previewUpdate),
+  /** Installs the downloaded update and restarts into it. */
+  restart: bridged(UpdatesGo.Restart, () => undefined),
 };
 
 export const settingsApi = {

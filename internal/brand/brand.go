@@ -96,3 +96,17 @@ func DiscordID() string {
 	}
 	return ""
 }
+
+// UpdateRepo is the GitHub repository whose releases update the launcher.
+const UpdateRepo = "conspiracy1337/quartz"
+
+// UpdatePublicKey is the minisign public key releases are signed with, set
+// at build time with -ldflags "-X quartz/internal/brand.UpdatePublicKey=…"
+// (the base64 line of the .pub file). Without it the launcher never
+// updates itself.
+var UpdatePublicKey = ""
+
+// EnvUpdateBase points update checks at another release server (testing a
+// release before it is published). Downloads are still verified against
+// UpdatePublicKey.
+const EnvUpdateBase = "QUARTZ_UPDATE_BASE"

@@ -30,7 +30,8 @@ const (
 	OpenImport   = "import"   // the Import preview of OpenID
 	OpenProject  = "project"  // a project page (Project is a ref such as "mr:sodium")
 	OpenInstance = "instance" // an instance's page
-	OpenError    = "error"    // a toast
+	OpenError    = "error"    // an error toast
+	OpenNotice   = "notice"   // a plain toast
 )
 
 // OpenTarget is one thing for the UI to show.

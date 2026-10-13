@@ -154,6 +154,9 @@ func (p Paths) Store() string     { return filepath.Join(p.Root, "store") }
 func (p Paths) Cache() string     { return filepath.Join(p.Root, "cache") }
 func (p Paths) Themes() string    { return filepath.Join(p.Root, "themes") }
 
+// Update holds a downloaded launcher update and its marker files.
+func (p Paths) Update() string { return filepath.Join(p.Root, "update") }
+
 // Shortcuts holds the icons desktop shortcuts refer to.
 func (p Paths) Shortcuts() string { return filepath.Join(p.Root, "shortcuts") }
 
