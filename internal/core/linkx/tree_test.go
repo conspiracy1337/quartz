@@ -45,7 +45,7 @@ func TestCloneTree(t *testing.T) {
 	a, _ := os.Stat(filepath.Join(src, "mod.jar"))
 	b, _ := os.Stat(filepath.Join(dst, "mod.jar"))
 	if !os.SameFile(a, b) {
-		t.Fatal("read-only file wasn't hardlinked")
+		t.Fatal("the read-only file got its own copy instead of a hard link")
 	}
 	if err := CloneTree(src, dst); !os.IsExist(err) {
 		t.Fatalf("existing dst: %v", err)

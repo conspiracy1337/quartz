@@ -1,6 +1,7 @@
 package syncing
 
 import (
+	"context"
 	"path/filepath"
 	"time"
 
@@ -35,6 +36,13 @@ func (s *Service) Prepare(id string) (*Session, error) {
 	unlock := s.Lock(id)
 	defer unlock()
 	se := &Session{s: s, id: id, game: s.c.Instances.GameDir(id), stamps: map[string]time.Time{}}
+	// A shared folder's place in the instance must be empty for the run to
+	// assemble it; anything that appeared there joins the shared copy.
+	for _, t := range s.Folders(id) {
+		if err := s.move(context.Background(), in, t, se.path(t), s.SharedPath(t), false); err != nil {
+			return nil, err
+		}
+	}
 	for _, t := range s.Joined(id) {
 		switch {
 		case t.Dir:
@@ -158,4 +166,19 @@ func seedOptions(game, shared string) error {
 		}
 	}
 	return out.Write(shared)
+}
+
+// RunFolder is a shared folder a run assembles (see package runview).
+type RunFolder struct {
+	Rel    string
+	Shared string
+}
+
+// RunFolders lists the shared folders an instance's run assembles.
+func (s *Service) RunFolders(id string) []RunFolder {
+	var out []RunFolder
+	for _, t := range s.Folders(id) {
+		out = append(out, RunFolder{Rel: t.Path, Shared: s.SharedPath(t)})
+	}
+	return out
 }

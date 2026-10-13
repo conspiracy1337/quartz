@@ -10,8 +10,6 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
-
-	"quartz/internal/core/fsx"
 )
 
 // upperChanges reads what a run wrote into an overlay's upper folder: files
@@ -51,9 +49,8 @@ func upperChanges(upper, lower string) ([]change, error) {
 			}
 		case info.Mode().IsRegular():
 			out = append(out, change{Rel: rel, Src: p})
-		case fsx.IsLink(info.Mode()):
-			// links never travel back
 		}
+		// Links and other special files never travel back.
 		return nil
 	})
 	return out, err

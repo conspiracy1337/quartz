@@ -59,6 +59,7 @@ import (
 	"quartz/internal/modplatform/curseforge"
 	"quartz/internal/modplatform/modrinth"
 	"quartz/internal/network"
+	"quartz/internal/runview"
 	"quartz/internal/screenshots"
 	"quartz/internal/servers"
 	"quartz/internal/settings"
@@ -344,6 +345,8 @@ func (a *app) buildTasks() error {
 		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited}, Mods: a.content,
 		// In order: the world played names the screenshots it took; the crash goes last.
 		Finishers: []launch.Finisher{a.worlds, a.screenshots, a.servers, a.crash},
+		Syncing:   a.syncing,
+		Views:     runview.New(runview.Config{Retitle: worlds.Retitle, Log: a.log}),
 	})
 	a.buildBrowse(dl)
 	return nil
@@ -563,6 +566,8 @@ func (a *app) startup(ctx context.Context) {
 		wruntime.EventsEmit(ctx, string(t), payload)
 	})
 	a.accounts.Start()
+	// Games that ran when the launcher last quit get merged back.
+	go a.launcher.Recover()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
