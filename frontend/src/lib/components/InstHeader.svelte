@@ -21,7 +21,7 @@
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     menu = { x: r.right - 220, y: r.bottom + 6 };
   }
-  const hosting = $derived(session.hosting[i.id] === 'running');
+  const host = $derived(session.hosting?.instanceId === i.id ? session.hosting : null);
   const to = (t: InstanceTab) => href({ name: 'instance', id: i.id, tab: t });
   const tabs = $derived([
     { key: 'overview', label: 'Overview', href: to('overview') },
@@ -56,10 +56,11 @@
     <div style="display: flex; gap: 8px; align-items: center">
       <button class="btn btn-icon" aria-label="Open folder" onclick={() => api.instances.openFolder(i.id)}><Icon name="folder" /></button>
       <button class="btn btn-icon" aria-label="More actions" aria-haspopup="menu" aria-expanded={!!menu} onclick={openMenu}><Icon name="more" /></button>
-      {#if hosting}
-        <span class="btn" style="height: 40px; border-color: color-mix(in srgb, var(--accent) 45%, transparent); cursor: default" title="Server running"><span class="dot live" aria-hidden="true"></span><span class="mono" style="font-size: 12px">localhost:25565</span></span>
+      {#if host?.state === 'running'}
+        <button class="btn" style="height: 40px; border-color: color-mix(in srgb, var(--accent) 45%, transparent)" title="Server running" aria-pressed={session.hostPanel} onclick={() => (session.hostPanel = !session.hostPanel)}><span class="dot live" aria-hidden="true"></span><span class="mono" style="font-size: 12px">localhost:{host.port}</span></button>
       {:else}
-        <button class="btn" style="height: 40px" title="Run this instance as a server on your computer" onclick={() => session.open({ kind: 'host', instanceId: i.id })}><Icon name="server" />Host</button>
+        <!-- While its server starts, Host brings the starting panel back instead of a second dialog. -->
+        <button class="btn" style="height: 40px" title="Run this instance as a server on your computer" onclick={() => (host ? (session.hostPanel = true) : session.open({ kind: 'host', instanceId: i.id }))}><Icon name="server" />Host</button>
       {/if}
       {#if running}
         <button class="btn btn-stop" onclick={() => session.stop(i.id)}><Icon name="stop" size={12} />Stop</button>

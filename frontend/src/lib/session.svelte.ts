@@ -1,13 +1,15 @@
 // UI session state that outlives a single screen: the open overlay, game launches,
-// local servers, the undo toast and the self-update banner. In M0 the long-running
-// parts (launch steps, server start) are simulated; M2 and M9 drive them from Go.
+// the local server, the undo toast and the self-update banner. Go drives launches and
+// the server through events; the browser preview walks through them on timers.
 
 import { api } from './api';
+import type { HostOptions, HostState } from './api/host';
 import type { ContentKind, PlayInto, ServerEntry, Src } from './api/types';
 import { copyText } from './clipboard';
 import { errorText } from './format';
 import { hasBridge, onEvent } from './bridge';
 import { revs } from './revs.svelte';
+import { go } from './router.svelte';
 
 export type Overlay =
   | { kind: 'add-account'; mode?: AddAccountMode; accountId?: string }
@@ -54,7 +56,10 @@ class Session {
   overlay = $state<Overlay | null>(null);
   launch = $state<Launch | null>(null);
   running = $state<Record<string, boolean>>({});
-  hosting = $state<Record<string, 'starting' | 'running'>>({});
+  /** The one local server, while it starts or runs. */
+  hosting = $state<HostState | null>(null);
+  /** Whether its panel shows (the header's address chip toggles it). */
+  hostPanel = $state(true);
   toast = $state<Toast | null>(null);
   /** The right-click "Play as" menu of an instance, at a window position. */
   launchAs = $state<{ instanceId: string; x: number; y: number } | null>(null);
@@ -133,8 +138,9 @@ class Session {
 
   /** Reads which games are running (after the window reloads). */
   async load() {
-    const s = await api.launch.status();
+    const [s, hosts] = await Promise.all([api.launch.status(), api.host.status()]);
     this.running = Object.fromEntries((s.running ?? []).map((id) => [id, true]));
+    this.hosting = hosts[0] ?? null;
   }
 
   /** Follows Go's launch and game events; returns the unsubscribe function. */
@@ -159,20 +165,48 @@ class Session {
         // A crash (or a game that never started) opens the crash dialog with its likely cause.
         if (g.result === 'crash' || g.result === 'failed') this.open({ kind: 'crash', instanceId: g.instanceId, runId: g.runId });
       }),
+      onEvent<HostState>('host:state', (h) => this.hostChanged(h)),
     ];
     return () => offs.forEach((off) => off());
   }
 
-  startHost(instanceId: string) {
+  /** Starts hosting an instance. Inside the app Go reports on host:state; the preview
+      goes from starting to running on a timer. */
+  startHost(instanceId: string, o: HostOptions) {
     this.overlay = null;
-    this.hosting[instanceId] = 'starting';
+    this.hostPanel = true;
+    if (hasBridge()) {
+      api.host.start(instanceId, o).catch((e) => this.fail("Couldn't start the server", e));
+      return;
+    }
+    const base: HostState = { instanceId, runId: 'preview', state: 'starting', stage: 'Backing up Northwatch, preparing spawn area', port: o.port, players: 0, max: o.maxPlayers, ...(o.lan ? { lan: '192.168.1.24' } : {}) };
+    this.hosting = base;
     setTimeout(() => {
-      if (this.hosting[instanceId]) this.hosting[instanceId] = 'running';
+      if (this.hosting?.runId === 'preview') this.hosting = { ...base, state: 'running', players: 1 };
     }, HOST_START_MS);
   }
 
+  /** Asks the server to save and stop; a second click forces it. */
   stopHost(instanceId: string) {
-    delete this.hosting[instanceId];
+    if (hasBridge()) {
+      api.host.stop(instanceId).catch((e) => this.fail('Stop', e));
+      return;
+    }
+    this.hosting = null;
+  }
+
+  /** Follows the server's state; a server that ends badly says so. */
+  hostChanged(h: HostState) {
+    if (h.state !== 'stopped') {
+      this.hosting = h;
+      return;
+    }
+    if (this.hosting?.runId === h.runId) this.hosting = null;
+    revs.bump('worlds');
+    if (h.result === 'failed') this.notify({ tone: 'error', subject: "Couldn't start the server", text: h.message ?? '' });
+    else if (h.result === 'crash') {
+      this.notify({ tone: 'error', subject: 'The server', text: 'stopped unexpectedly', action: { label: 'Console', run: () => go({ name: 'instance', id: h.instanceId, tab: 'logs' }) } });
+    }
   }
 
   notify(t: Toast) {

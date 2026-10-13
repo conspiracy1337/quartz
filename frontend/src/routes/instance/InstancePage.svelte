@@ -44,7 +44,7 @@
     {#if tab === 'overview'}
       <Overview instance={i} />
     {:else if CONTENT.includes(tab)}
-      <div class="scroll">{#key tab}<ContentTab instanceId={i.id} kind={tab as ContentKind} />{/key}</div>
+      <div class="scroll">{#key tab}<ContentTab instanceId={i.id} kind={tab as ContentKind} chip={tab === 'mods' && sub === 'client-only' ? 'Client only' : undefined} />{/key}</div>
     {:else if tab === 'screenshots'}
       {#if sub}<ScreenshotViewer instanceId={i.id} shotId={sub} />{:else}<Screenshots instanceId={i.id} />{/if}
     {:else if tab === 'logs'}

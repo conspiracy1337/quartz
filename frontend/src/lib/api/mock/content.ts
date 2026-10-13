@@ -13,12 +13,12 @@ const R = (name: string, sub: string, meta: string, art: Art, s: string, extra: 
 
 export const content: Record<ContentKind, ContentItem[]> = {
   mods: [
-    R('Sodium', 'CaffeineMC', '0.6.5', tile('#e8e8e8', 'S'), 'M'),
+    R('Sodium', 'CaffeineMC', '0.6.5', tile('#e8e8e8', 'S'), 'M', { clientOnly: true }),
     R('Lithium', 'CaffeineMC', '0.14.3', tile('#9be37a', 'L'), 'M'),
-    R('Iris Shaders', 'IrisShaders', '1.8.1', tile('#b48cf2', 'I'), 'M', { status: { kind: 'update', version: '1.8.3' } }),
+    R('Iris Shaders', 'IrisShaders', '1.8.1', tile('#b48cf2', 'I'), 'M', { status: { kind: 'update', version: '1.8.3' }, clientOnly: true }),
     R('Fabric API', 'FabricMC', '0.114.0', tile('#dbc18e', 'F'), 'M'),
-    R('Not Enough Animations: Extended Compatibility Edition', 'tr7zw and contributors', '1.9.2', tile('#f2a25c', 'N'), 'C', { status: { kind: 'update', version: '1.9.4' } }),
-    R('Entity Culling', 'tr7zw', '1.7.2', tile('#7cc7e8', 'E'), 'M', { enabled: false }),
+    R('Not Enough Animations: Extended Compatibility Edition', 'tr7zw and contributors', '1.9.2', tile('#f2a25c', 'N'), 'C', { status: { kind: 'update', version: '1.9.4' }, clientOnly: true }),
+    R('Entity Culling', 'tr7zw', '1.7.2', tile('#7cc7e8', 'E'), 'M', { enabled: false, clientOnly: true }),
     R('Distant Horizons', 'James Seibel', '2.3.0-b', tile('#5bc0be', 'D'), 'M', { status: { kind: 'locked' } }),
     R('my-local-tweaks', 'Not identified', '1.0', tile('#5a5a63', '?'), 'F', { status: { kind: 'unknown' } }),
   ],

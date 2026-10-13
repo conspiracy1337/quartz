@@ -40,7 +40,7 @@ export function toItem(r: GoRow): ContentItem {
   const status = toStatus(r.status);
   return {
     id: r.id, name: r.name, sub: r.sub, meta: r.version, art: contentArt(r.name, r.icon), source: r.source as Source, enabled: r.enabled,
-    ...(r.locked ? { locked: true } : {}), ...(status ? { status } : {}), ...(r.group ? { group: r.group } : {}), ...(r.project ? { project: r.project } : {}), ...(r.ref ? { ref: r.ref } : {}),
+    ...(r.locked ? { locked: true } : {}), ...(status ? { status } : {}), ...(r.group ? { group: r.group } : {}), ...(r.project ? { project: r.project } : {}), ...(r.ref ? { ref: r.ref } : {}), ...(r.clientOnly ? { clientOnly: true } : {}),
   };
 }
 

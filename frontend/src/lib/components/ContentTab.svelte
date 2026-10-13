@@ -16,15 +16,18 @@
   import Empty from '../ui/Empty.svelte';
 
   /** The one list used by Mods, Resource packs, Shaders, Data packs, Worlds and Servers. */
-  interface Props { instanceId: string; kind: ContentKind }
-  let { instanceId, kind }: Props = $props();
+  /** chip names the filter chip to start on (Host's Review opens "Client only"). */
+  interface Props { instanceId: string; kind: ContentKind; chip?: string | undefined }
+  let { instanceId, kind, chip: startChip }: Props = $props();
 
   type Chip = { label: string; test: (c: ContentItem) => boolean };
   interface Config { noun: string; secondary: string; primary: string; toggles: boolean; exclusive?: boolean; hint?: string; projects: boolean; chips: (items: ContentItem[]) => Chip[] }
   const all: Chip = { label: 'All', test: () => true };
   const CONFIG: Record<ContentKind, Config> = {
     mods: { noun: 'mods', secondary: 'Check updates', primary: 'Add mods', toggles: true, projects: true,
-      chips: () => [all, { label: 'Updates', test: (c) => c.status?.kind === 'update' }, { label: 'Disabled', test: (c) => !c.enabled }] },
+      // "Client only" (mods a local server leaves out) appears only when there are some.
+      chips: (items) => [all, { label: 'Updates', test: (c) => c.status?.kind === 'update' }, { label: 'Disabled', test: (c) => !c.enabled },
+        ...(items.some((c) => c.clientOnly) ? [{ label: 'Client only', test: (c: ContentItem) => !!c.clientOnly }] : [])] },
     resourcepacks: { noun: 'resource packs', secondary: 'Check updates', primary: 'Add resource packs', toggles: true, projects: true,
       hint: 'Enabled packs higher in the list override the ones below. Drag a row to reorder.',
       chips: () => [all, { label: 'Enabled', test: (c) => c.enabled }, { label: 'Disabled', test: (c) => !c.enabled }] },
@@ -67,6 +70,16 @@
   });
 
   const chips = $derived(cfg.chips(rows));
+  // The chip to start on is picked once the rows that make it appear are in.
+  let started = false;
+  $effect(() => {
+    if (started || !startChip) return;
+    const at = chips.findIndex((c) => c.label === startChip);
+    if (at >= 0) {
+      chip = at;
+      started = true;
+    }
+  });
   const shown = $derived(rows.filter((c) => (chips[chip] ?? all).test(c) && c.name.toLowerCase().includes(search.trim().toLowerCase())));
   const isOn = (c: ContentItem) => (cfg.exclusive ? active === c.id : c.enabled);
 
