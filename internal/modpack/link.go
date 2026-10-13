@@ -283,8 +283,8 @@ func (r *Reader) ftb(ctx context.Context, id, version string) (*Pack, error) {
 			ServerOnly bool   `json:"serveronly"`
 			Optional   bool   `json:"optional"`
 			Curse      *struct {
-				Project int64 `json:"project"`
-				File    int64 `json:"file"`
+				Project flexInt `json:"project"`
+				File    flexInt `json:"file"`
 			} `json:"curseforge"`
 		} `json:"files"`
 	}
@@ -323,7 +323,7 @@ func (r *Reader) ftb(ctx context.Context, id, version string) (*Pack, error) {
 			return nil, err
 		}
 		if f.URL == "" && f.Curse != nil {
-			curse = append(curse, cfRef{project: f.Curse.Project, file: f.Curse.File, optional: f.Optional})
+			curse = append(curse, cfRef{project: int64(f.Curse.Project), file: int64(f.Curse.File), optional: f.Optional})
 			continue
 		}
 		sha1 := strings.ToLower(f.SHA1)
@@ -339,6 +339,18 @@ func (r *Reader) ftb(ctx context.Context, id, version string) (*Pack, error) {
 		return nil, err
 	}
 	return p, nil
+}
+
+// flexInt reads a number FTB sends as either a JSON number or a string.
+type flexInt int64
+
+func (n *flexInt) UnmarshalJSON(b []byte) error {
+	v, err := strconv.ParseInt(strings.Trim(string(b), `"`), 10, 64)
+	if err != nil {
+		return err
+	}
+	*n = flexInt(v)
+	return nil
 }
 
 // mmcLoaderNames are the loader names FTB targets use.

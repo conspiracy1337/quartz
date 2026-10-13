@@ -277,3 +277,10 @@ func TestCleanPath(t *testing.T) {
 		}
 	}
 }
+
+func TestFlexInt(t *testing.T) {
+	var v struct{ A, B flexInt }
+	if err := json.Unmarshal([]byte(`{"A":12,"B":"34"}`), &v); err != nil || v.A != 12 || v.B != 34 {
+		t.Fatalf("%+v %v", v, err)
+	}
+}

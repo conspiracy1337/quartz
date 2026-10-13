@@ -384,39 +384,43 @@ func (p *Pack) layerSums() (map[string]string, error) {
 }
 
 // modInfo names a mod for the review.
-type modInfo struct{ key, title, version, sha1 string }
+type modInfo struct{ key, title, version, sha1, stem string }
+
+// modFile is a mod file of either version, as the review identifies it.
+type modFile struct{ rel, sha1, sha512, project, version string }
 
 // rows pairs the old and new versions' mods by project (else by file name)
 // into added, updated and removed rows.
 func (s *Service) rows(ctx context.Context, old Manifest, next *Pack) []DiffRow {
-	oldMods := map[string]modInfo{}
-	var oldSums []string
+	var oldFiles, newFiles []modFile
 	for rel, f := range old.Files {
 		if isMod(rel) {
-			oldSums = append(oldSums, f.SHA1)
+			oldFiles = append(oldFiles, modFile{rel: rel, sha1: f.SHA1})
 		}
 	}
-	var known map[string]content.Known
-	if s.u.Known != nil {
-		known = s.u.Known(oldSums)
-	}
-	for rel, f := range old.Files {
-		if !isMod(rel) {
-			continue
+	for _, f := range next.Files {
+		if isMod(f.Path) {
+			newFiles = append(newFiles, modFile{rel: f.Path, sha1: f.SHA1, sha512: f.SHA512, project: f.Project, version: f.Version})
 		}
-		mi := modInfo{key: "file:" + stem(rel), title: stem(rel), sha1: f.SHA1}
-		if k, ok := known[f.SHA1]; ok {
-			if id := k.Ident(); id != nil {
-				mi.key, mi.title, mi.version = modplatform.Key(modplatform.Source(id.Source), id.ProjectID), orElse(id.Title, mi.title), id.Version
-			} else if k.Info != nil {
-				mi.title, mi.version = orElse(k.Info.Name, mi.title), k.Info.Version
+	}
+	names := s.name(ctx, append(append([]modFile{}, oldFiles...), newFiles...))
+	oldMods := map[string]modInfo{}
+	byStem := map[string]string{} // stem → old key, for files no platform knows
+	for _, f := range oldFiles {
+		mi := names[f.sha1]
+		oldMods[mi.key] = mi
+		byStem[mi.stem] = mi.key
+	}
+	var out []DiffRow
+	matched := map[string]bool{}
+	for _, f := range newFiles {
+		n := names[f.sha1]
+		key := n.key
+		if _, ok := oldMods[key]; !ok {
+			if k, ok := byStem[n.stem]; ok && !matched[k] {
+				key = k
 			}
 		}
-		oldMods[mi.key] = mi
-	}
-	newMods := s.identify(ctx, next)
-	var out []DiffRow
-	for key, n := range newMods {
 		o, ok := oldMods[key]
 		switch {
 		case !ok:
@@ -424,9 +428,12 @@ func (s *Service) rows(ctx context.Context, old Manifest, next *Pack) []DiffRow 
 		case o.sha1 != n.sha1:
 			out = append(out, DiffRow{Name: orElse(n.title, o.title), Version: fromTo(o.version, n.version), Kind: "updated"})
 		}
+		if ok {
+			matched[key] = true
+		}
 	}
 	for key, o := range oldMods {
-		if _, ok := newMods[key]; !ok {
+		if !matched[key] {
 			out = append(out, DiffRow{Name: o.title, Version: o.version, Kind: "removed"})
 		}
 	}
@@ -440,62 +447,83 @@ func (s *Service) rows(ctx context.Context, old Manifest, next *Pack) []DiffRow 
 	return out
 }
 
-// identify names the new version's mods: the project CurseForge listed, or
-// what Modrinth finds by hash, else the file name.
-func (s *Service) identify(ctx context.Context, p *Pack) map[string]modInfo {
+// name identifies mod files by sha1: the content catalog first, then the
+// project a CurseForge list names, then Modrinth by hash, else the file name.
+func (s *Service) name(ctx context.Context, files []modFile) map[string]modInfo {
 	out := map[string]modInfo{}
-	var hashes []modplatform.Hashes
-	for _, f := range p.Files {
-		if isMod(f.Path) && f.Project == "" {
-			hashes = append(hashes, modplatform.Hashes{SHA1: f.SHA1, SHA512: f.SHA512})
-		}
+	var sums []string
+	for _, f := range files {
+		sums = append(sums, f.sha1)
 	}
-	found := map[string]modplatform.Version{}
-	titles := map[string]string{}
-	if mr := s.d.Reader.d.Modrinth; mr != nil && len(hashes) > 0 {
-		if vs, err := mr.Identify(ctx, hashes); err == nil {
-			found = vs
-			var ids []string
-			for _, v := range vs {
-				ids = append(ids, v.ProjectID)
+	var known map[string]content.Known
+	if s.u.Known != nil {
+		known = s.u.Known(sums)
+	}
+	var ask []modplatform.Hashes
+	for _, f := range files {
+		mi := modInfo{key: "file:" + stem(f.rel), title: stem(f.rel), sha1: f.sha1, stem: stem(f.rel)}
+		k := known[f.sha1]
+		switch id := k.Ident(); {
+		case id != nil:
+			mi.key, mi.title, mi.version = modplatform.Key(modplatform.Source(id.Source), id.ProjectID), orElse(id.Title, mi.title), id.Version
+		case f.project != "":
+			mi.key, mi.version = f.project, f.version
+		default:
+			if k.Info != nil {
+				mi.title, mi.version = orElse(k.Info.Name, mi.title), k.Info.Version
 			}
-			if len(ids) > 0 {
-				if ps, err := mr.Projects(ctx, ids); err == nil {
-					for id, pr := range ps {
-						titles[modplatform.Key(modplatform.Modrinth, id)] = pr.Title
-					}
-				}
-			}
+			ask = append(ask, modplatform.Hashes{SHA1: f.sha1, SHA512: f.sha512})
 		}
+		out[f.sha1] = mi
 	}
-	var cfIDs []string
-	for _, f := range p.Files {
-		if strings.HasPrefix(f.Project, "curseforge:") {
-			cfIDs = append(cfIDs, strings.TrimPrefix(f.Project, "curseforge:"))
-		}
-	}
-	if cf := s.d.Reader.d.CurseForge; cf != nil && cf.Ready() && len(cfIDs) > 0 {
-		if ps, err := cf.Projects(ctx, cfIDs); err == nil {
-			for id, pr := range ps {
-				titles[modplatform.Key(modplatform.CurseForge, id)] = pr.Title
+	if mr := s.d.Reader.d.Modrinth; mr != nil && len(ask) > 0 {
+		if vs, err := mr.Identify(ctx, ask); err == nil {
+			for sha1, v := range vs {
+				mi := out[sha1]
+				mi.key, mi.version = modplatform.Key(modplatform.Modrinth, v.ProjectID), orElse(v.Number, mi.version)
+				mi.title = "" // named from the project below
+				out[sha1] = mi
 			}
 		}
 	}
-	for _, f := range p.Files {
-		if !isMod(f.Path) {
-			continue
-		}
-		mi := modInfo{key: "file:" + stem(f.Path), title: stem(f.Path), sha1: f.SHA1}
-		switch v, ok := found[f.SHA1]; {
-		case f.Project != "":
-			mi.key, mi.version = f.Project, f.Version
-		case ok:
-			mi.key, mi.version = modplatform.Key(modplatform.Modrinth, v.ProjectID), v.Number
-		}
+	titles := s.titles(ctx, out)
+	for sha1, mi := range out {
 		if t := titles[mi.key]; t != "" {
 			mi.title = t
+		} else if mi.title == "" {
+			mi.title = mi.stem
 		}
-		out[mi.key] = mi
+		out[sha1] = mi
+	}
+	return out
+}
+
+// titles looks up the project names of identified mods.
+func (s *Service) titles(ctx context.Context, mods map[string]modInfo) map[string]string {
+	out := map[string]string{}
+	ids := map[modplatform.Source][]string{}
+	for _, mi := range mods {
+		src, id, ok := strings.Cut(mi.key, ":")
+		if ok && (mi.title == "" || src == string(modplatform.CurseForge)) {
+			ids[modplatform.Source(src)] = append(ids[modplatform.Source(src)], id)
+		}
+	}
+	for src, list := range ids {
+		var plat modplatform.Platform
+		switch src {
+		case modplatform.Modrinth:
+			plat = s.d.Reader.d.Modrinth
+		case modplatform.CurseForge:
+			plat = s.d.Reader.d.CurseForge
+		}
+		if plat == nil || !plat.Ready() {
+			continue
+		}
+		if ps, err := plat.Projects(ctx, list); err == nil {
+			for id, p := range ps {
+				out[modplatform.Key(src, id)] = p.Title
+			}
+		}
 	}
 	return out
 }
