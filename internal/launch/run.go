@@ -8,7 +8,6 @@ import (
 	"maps"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -45,7 +44,7 @@ const (
 type run struct {
 	id         string
 	instanceID string
-	cmd        *exec.Cmd
+	child      *procx.Child
 	started    time.Time
 	con        *gamelog.Console
 	logFile    *os.File
@@ -101,10 +100,10 @@ var moduleExports = map[string]string{ //nolint:gosec // module names, not crede
 // goes on the command line: the account's token is a game argument and game
 // arguments only travel through the script. It also returns both as text for
 // the run's cmd.txt (the caller redacts it).
-func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, string, error) {
+func (l *Launcher) command(sp spec) (procx.Spec, []byte, string, error) {
 	jar, err := wrapperjar.Install(l.cfg.BinDir)
 	if err != nil {
-		return nil, nil, "", err
+		return procx.Spec{}, nil, "", err
 	}
 	sess, res, eff := sp.sess, sp.res, sp.eff
 	v := res.Version
@@ -129,7 +128,7 @@ func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, string, error) {
 	args = append(args, fmt.Sprintf("-Xms%dM", sp.mem.Min), fmt.Sprintf("-Xmx%dM", sp.mem.Max))
 	user, err := shlex.Split(eff.JVMArgs)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("JVM arguments: %w", err)
+		return procx.Spec{}, nil, "", fmt.Errorf("JVM arguments: %w", err)
 	}
 	args = append(args, user...)
 	args = append(args, nativeLibraryArgs(eff)...)
@@ -156,17 +155,14 @@ func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, string, error) {
 
 	argv, err := wrappers(eff, sp.vars)
 	if err != nil {
-		return nil, nil, "", err
+		return procx.Spec{}, nil, "", err
 	}
 	argv = append(argv, java.LaunchBinary(sp.rt.Path))
 	argv = append(argv, args...)
 	if sp.view != nil {
 		argv = sp.view.Wrap(argv)
 	}
-	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // argv slice from validated metadata and the player's own wrapper; no shell
-	cmd.Dir = sp.gameDir
-	cmd.Env = gameEnv(sp.vars, eff)
-	procx.Detach(cmd)
+	cmd := procx.Spec{Argv: argv, Dir: sp.gameDir, Env: gameEnv(sp.vars, eff)}
 	shown := strings.Join(argv, " ") + "\n\nGame arguments (sent to the game over stdin, never on the command line):\n" + strings.Join(game, " ") + "\n"
 	return cmd, script.Bytes(), shown, nil
 }
@@ -207,24 +203,12 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	if err != nil {
 		return nil, err
 	}
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, err
-	}
 	now := time.Now()
 	r := &run{
-		id: sp.runID, instanceID: inst.ID, cmd: cmd, started: now, accountID: acc.ID, done: make(chan struct{}),
+		id: sp.runID, instanceID: inst.ID, started: now, accountID: acc.ID, done: make(chan struct{}),
 		record:   Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID, Mods: sp.mods},
 		server:   serverOf(sp.into),
-		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: cmd.Env, sp: sp,
+		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: gameEnv(sp.vars, sp.eff), sp: sp,
 	}
 	r.record.ID = r.id
 	r.con = gamelog.NewConsole(consoleLines, l.cfg.Redactor, logBatch, r.add, func(lines []gamelog.Line) {
@@ -243,15 +227,17 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	if err := fsx.AtomicWrite(filepath.Join(runsDir, r.id+evidenceExt[EvidenceCommand]), []byte(l.cfg.Redactor.Redact(shown)), fsx.FilePerm); err != nil {
 		l.cfg.Log.Warn("saving the launch command failed", "err", err)
 	}
-	if err := cmd.Start(); err != nil {
+	child, err := procx.Start(cmd)
+	if err != nil {
 		_ = r.logFile.Close()
 		return nil, err
 	}
+	r.child = child
 	if sp.view != nil {
-		sp.view.Started(cmd.Process.Pid)
+		sp.view.Started(child.Process.Pid)
 	}
-	_, werr := stdin.Write(script)
-	_ = stdin.Close()
+	_, werr := child.Stdin.Write(script)
+	_ = child.Stdin.Close()
 	if werr != nil {
 		l.cfg.Log.Warn("writing launch arguments failed", "err", werr)
 	}
@@ -265,10 +251,10 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		l.cfg.Hooks.GameStarted(sp.eff.OnGameStart)
 	}
 
-	wait := r.con.Start(stdout, stderr)
+	wait := r.con.Start(child.Stdout, child.Stderr)
 	go func() {
 		wait()
-		l.exited(r, cmd.Wait())
+		l.exited(r, child.Wait())
 	}()
 	return r, nil
 }
@@ -343,18 +329,18 @@ func (l *Launcher) Stop(id string) error {
 func (l *Launcher) stop(r *run) error {
 	if r.stopping.Swap(true) {
 		r.killed.Store(true)
-		return procx.Kill(r.cmd.Process)
+		return procx.Kill(r.child.Process)
 	}
-	if err := procx.Terminate(r.cmd.Process); err != nil {
+	if err := procx.Terminate(r.child.Process); err != nil {
 		r.killed.Store(true)
-		return procx.Kill(r.cmd.Process)
+		return procx.Kill(r.child.Process)
 	}
 	go func() {
 		select {
 		case <-r.done:
 		case <-time.After(stopGrace):
 			r.killed.Store(true)
-			_ = procx.Kill(r.cmd.Process)
+			_ = procx.Kill(r.child.Process)
 		}
 	}()
 	return nil
@@ -366,18 +352,19 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	r.con.Done()
 	_ = r.logFile.Close()
 
-	code := 0
-	if r.cmd.ProcessState != nil {
-		code = r.cmd.ProcessState.ExitCode()
+	code, reaped := r.child.Result()
+	if !reaped {
+		code = 0
 	}
+	failed := code != 0 || (waitErr != nil && !reaped)
 	result := ResultOK
 	switch {
 	case r.killed.Load():
 		result = ResultKilled
 	case r.stopping.Load():
-	case (code != 0 || (waitErr != nil && r.cmd.ProcessState == nil)) && !r.loaded.Load():
+	case failed && !r.loaded.Load():
 		result = ResultFailed
-	case code != 0 || (waitErr != nil && r.cmd.ProcessState == nil):
+	case failed:
 		result = ResultCrash
 	}
 	ended := time.Now()

@@ -162,7 +162,7 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 	}
 	return InstanceView{
 		InstanceSummary: s.summary(in),
-		Sandboxed:       in.Sandbox, Java: java, JavaAuto: auto, MemoryMB: MemoryRange{Min: eff.MemoryMinMB, Max: eff.MemoryMaxMB},
+		Sandboxed:       in.Sandbox.On, Java: java, JavaAuto: auto, MemoryMB: MemoryRange{Min: eff.MemoryMinMB, Max: eff.MemoryMaxMB},
 		Created: in.Created.UnixMilli(), Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -58,7 +57,7 @@ type server struct {
 
 	mu      sync.Mutex
 	st      State
-	cmd     *exec.Cmd
+	cmd     *procx.Child
 	stdin   io.WriteCloser
 	con     *gamelog.Console
 	started time.Time
@@ -404,23 +403,7 @@ func serverArgs(res *install.Server, eff instance.Effective, srv *server) []stri
 
 // spawn starts the server process and follows it until it exits.
 func (s *Service) spawn(ctx context.Context, srv *server, javaPath string, argv []string) error {
-	cmd := exec.Command(javaPath, argv...) //nolint:gosec // argv built by the launcher; no shell
-	cmd.Dir = srv.dir
-	cmd.Env = java.CleanEnv(os.Environ())
-	procx.Detach(cmd)
-	procx.NoConsole(cmd)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
+	spec := procx.Spec{Argv: append([]string{javaPath}, argv...), Dir: srv.dir, Env: java.CleanEnv(os.Environ()), NoConsole: true}
 	con := gamelog.NewConsole(consoleLines, s.d.Redactor, logBatch, func(l gamelog.Line) { s.onLine(srv, l) }, func(lines []gamelog.Line) {
 		s.d.Bus.Emit(events.HostLog, LogBatch{InstanceID: srv.id, RunID: srv.runID, Lines: lines})
 	})
@@ -429,18 +412,19 @@ func (s *Service) spawn(ctx context.Context, srv *server, javaPath string, argv 
 		srv.mu.Unlock()
 		return err
 	}
-	if err := cmd.Start(); err != nil {
+	cmd, err := procx.Start(spec)
+	if err != nil {
 		srv.mu.Unlock()
 		return err
 	}
-	srv.cmd, srv.stdin, srv.con, srv.started = cmd, stdin, con, time.Now()
+	srv.cmd, srv.stdin, srv.con, srv.started = cmd, cmd.Stdin, con, time.Now()
 	srv.mu.Unlock()
 	if err := fsx.AtomicWrite(pidFile(srv.dir), []byte(strconv.Itoa(cmd.Process.Pid)), fsx.FilePerm); err != nil {
 		s.d.Log.Warn("host: recording the server process failed", "err", err)
 	}
 	pings, stopPings := context.WithCancel(context.Background())
 	go s.pinger(pings, srv)
-	wait := con.Start(stdout, stderr)
+	wait := con.Start(cmd.Stdout, cmd.Stderr)
 	go func() {
 		wait()
 		err := cmd.Wait()
@@ -568,11 +552,8 @@ func (s *Service) Close(ctx context.Context) {
 
 // exited sorts out how the server ended.
 func (s *Service) exited(srv *server, waitErr error) {
-	code := 0
-	if srv.cmd.ProcessState != nil {
-		code = srv.cmd.ProcessState.ExitCode()
-	}
-	failed := code != 0 || (waitErr != nil && srv.cmd.ProcessState == nil)
+	code, reaped := srv.cmd.Result()
+	failed := (reaped && code != 0) || (waitErr != nil && !reaped)
 	result := "ok"
 	var err error
 	switch {

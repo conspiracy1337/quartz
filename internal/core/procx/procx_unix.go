@@ -3,6 +3,7 @@
 package procx
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"syscall"
@@ -15,7 +16,16 @@ func NoConsole(*exec.Cmd) {}
 // launcher (Ctrl+C in a terminal) does not reach it, and Stop can signal the
 // whole group.
 func Detach(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
+}
+
+// startContained refuses: app containers exist only on Windows, and a
+// child asked to be contained must never run uncontained.
+func startContained(Spec) (*Child, error) {
+	return nil, errors.New("procx: app containers are Windows-only")
 }
 
 // Terminate asks the game to quit (SIGTERM to its process group).

@@ -151,7 +151,7 @@ func (s *Service) Install(ctx context.Context, token, name string, art instance.
 		return "", err
 	}
 	packSpec.After("Installing", tasks.Count, tasks.Func("create the instance", func(ctx context.Context) error {
-		err := s.create(ctx, p, files, set, target, game, instance.CreateRequest{Name: orElse(name, p.Name), Art: art})
+		err := s.create(ctx, p, files, set, target, game, instance.CreateRequest{Name: orElse(name, p.Name), Art: art, Sandbox: true})
 		if err != nil {
 			return &netx.PermanentError{Err: err}
 		}
