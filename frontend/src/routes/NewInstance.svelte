@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { NEW_INSTANCE_SHARES } from '$lib/shares';
   import { api } from '$lib/api';
   import { bytes } from '$lib/format';
   import { query } from '$lib/query.svelte';
@@ -27,7 +28,6 @@
     { value: 3, kind: 'neoforge', label: 'NeoForge', short: 'NeoForge' },
     { value: 4, kind: 'forge', label: 'Forge', short: 'Forge' },
   ] as const;
-  const SHARES = ['Keybinds', 'Game options', 'Servers', 'Worlds', 'Resource packs', 'Shaders', 'Screenshots', 'Hotbars'];
 
   // The name follows the picked version until the user types their own.
   let typed = $state<string | null>(null);
@@ -75,9 +75,10 @@
       const n = name.trim();
       const made = await api.instances.create({
         name: n, art: { background: art.background, initial }, icon, minecraft: version,
-        loader: l.kind === 'none' ? '' : l.kind, loaderVersion, group: group === 'none' ? '' : group, sandbox, shares: SHARES.filter((_, i) => shares[i]),
+        loader: l.kind === 'none' ? '' : l.kind, loaderVersion, group: group === 'none' ? '' : group, sandbox, shares: NEW_INSTANCE_SHARES.filter((_, i) => shares[i]).map((s) => s.id),
       });
       revs.bump('instances');
+      revs.bump('sync');
       go({ name: 'instance', id: made.id, tab: 'overview' });
     } catch (e) {
       session.fail('New instance', e);
@@ -102,7 +103,7 @@
     <section class="field" aria-label="Share with other instances">
       <span class="field-label">Share with other instances</span>
       <div class="card tgl-grid">
-        {#each SHARES as s, i (s)}<ToggleRow name={s} on={!!shares[i]} onchange={(v) => (shares[i] = v)} />{/each}
+        {#each NEW_INSTANCE_SHARES as s, i (s.id)}<ToggleRow name={s.label} on={!!shares[i]} onchange={(v) => (shares[i] = v)} />{/each}
       </div>
       <span class="field-help">Shared keybinds only overwrite the keys you picked in Syncing, not the whole options file.</span>
     </section>

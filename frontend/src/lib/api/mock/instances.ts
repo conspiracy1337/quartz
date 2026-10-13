@@ -44,6 +44,7 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   keepLoaderUpdated: true,
   followLatest: false,
   syncTargets: 4,
+  sync: { join: ['options', 'servers', 'hotbar', 'resourcepacks', 'xaero'], keys: true },
   discordStatus: true,
   gpu: 'NVIDIA GeForce RTX 3070 Laptop GPU',
   settings: {
@@ -88,6 +89,8 @@ export const mockInstances = {
   setArt: (id: string, art: Art) => edit(id, (i) => { i.art = art; delete i.icon; }),
   setIcon: (id: string, icon: string) => edit(id, (i) => { if (icon) i.icon = icon; else delete i.icon; }),
   setNotes: (id: string, notes: string) => edit(id, (i) => (i.notes = notes)),
+  setSync: (id: string, target: string, on: boolean) => edit(id, (i) => (i.sync.join = on ? [...new Set([...i.sync.join, target])] : i.sync.join.filter((t) => t !== target))),
+  setSharedKeys: (id: string, on: boolean) => edit(id, (i) => (i.sync.keys = on)),
   setTags: (id: string, tags: string[]) => edit(id, (i) => (i.tags = [...new Set(tags.map((t) => t.trim()).filter(Boolean))].slice(0, 12))),
   setGroup: (id: string, group: string) => edit(id, (i) => {
     if (group) {

@@ -1,20 +1,65 @@
-import type { ImportPreview, InstallPlan, JavaRuntime, Keybind, ManualView, ModUpdate, ModpackDiffRow, OtherLauncher, SyncEntry, SyncGroups } from '../types';
+import type { ImportPreview, InstallPlan, JavaRuntime, KeyChoice, Keybind, ManualView, ModUpdate, ModpackDiffRow, OtherLauncher, SyncEntry, SyncGroups } from '../types';
 import { date } from './time';
 
 const S = (id: string, name: string, path: string, users: number, enabled: boolean, available = true): SyncEntry => ({ id, name, path, users, enabled, available });
 
 export const sync: SyncGroups = {
+  total: 12,
   files: [S('options', 'Game options', 'options.txt', 8, true), S('servers', 'Server list', 'servers.dat', 12, true), S('history', 'Command history', 'command_history.txt', 5, true), S('hotbar', 'Hotbars', 'hotbar.nbt', 12, true)],
   folders: [S('saves', 'Worlds', 'saves/', 2, false), S('config', 'Configs', 'config/', 0, false), S('screenshots', 'Screenshots', 'screenshots/', 6, true), S('resourcepacks', 'Resource packs', 'resourcepacks/', 9, true), S('shaderpacks', 'Shader packs', 'shaderpacks/', 4, true), S('datapacks', 'Data packs', 'datapacks/', 0, false)],
   mods: [S('xaero', "Xaero's Minimap", 'xaero/', 4, true), S('dh', 'Distant Horizons', 'Distant_Horizons_server_data/', 0, false), S('voxy', 'Voxy', '.voxy/', 0, false), S('litematica', 'Litematica', 'schematics/', 3, true), S('flashback', 'Flashback', 'flashback/', 0, false, false), S('bobby', 'Bobby', '.bobby/', 0, false, false)],
   custom: [S('c0', '', 'config/jei/', 3, true), S('c1', '', 'journeymap/data/', 0, false)],
 };
-export const totalInstances = 12;
-
 export const keybinds: Keybind[] = [
-  { name: 'Zoom (Zoomify)', key: 'C' }, { name: 'Sprint', key: 'Left Ctrl' }, { name: 'Sneak', key: 'Left Shift' }, { name: 'Inventory', key: 'E' },
-  { name: 'Toggle perspective', key: 'F5' }, { name: 'Push to talk (Voice Chat)', key: 'V' }, { name: 'Open map (Xaero)', key: 'M' },
+  { id: 'key.zoomify.zoom', name: 'Zoom (Zoomify)', key: 'C' }, { id: 'key.sprint', name: 'Sprint', key: 'Left Ctrl' }, { id: 'key.sneak', name: 'Sneak', key: 'Left Shift' },
+  { id: 'key.inventory', name: 'Inventory', key: 'E' }, { id: 'key.togglePerspective', name: 'Toggle perspective', key: 'F5' },
+  { id: 'key.voice_chat', name: 'Push to talk (Voice Chat)', key: 'V' }, { id: 'key.xaero_open_map', name: 'Open map (Xaero)', key: 'M' },
 ];
+
+const choices: KeyChoice[] = [
+  ['key.attack', 'Attack/Destroy', 'Left Button'], ['key.use', 'Use Item/Place Block', 'Right Button'], ['key.forward', 'Walk Forwards', 'W'],
+  ['key.jump', 'Jump', 'Space'], ['key.drop', 'Drop Selected Item', 'Q'], ['key.chat', 'Open Chat', 'T'], ['key.playerlist', 'List Players', 'Tab'],
+  ['key.screenshot', 'Take Screenshot', 'F2'], ['key.sprint', 'Sprint', 'Left Ctrl'], ['key.sneak', 'Sneak', 'Left Shift'], ['key.inventory', 'Open/Close Inventory', 'E'],
+  ['key.togglePerspective', 'Toggle Perspective', 'F5'],
+].map(([id, name, key]) => ({ id: id!, name: name!, category: 'Minecraft', key: key!, shared: false }));
+choices.push(
+  { id: 'key.zoomify.zoom', name: 'Zoom (Zoomify)', category: 'Zoomify', key: 'C', shared: false },
+  { id: 'key.voice_chat', name: 'Push to talk (Voice Chat)', category: 'Simple Voice Chat', key: 'V', shared: false },
+  { id: 'key.xaero_open_map', name: 'Open map (Xaero)', category: "Xaero's World Map", key: 'M', shared: false },
+);
+
+/** The preview's Syncing page: edits change the fixtures, as Go would. */
+export const mockSync = {
+  groups: (): SyncGroups => sync,
+  setEnabled: (id: string, on: boolean) => {
+    for (const e of [...sync.files, ...sync.folders, ...sync.mods, ...sync.custom]) if (e.id === id) e.enabled = on;
+  },
+  addCustom: (path: string, dir: boolean): SyncEntry => {
+    const e = S(`c-${sync.custom.length}`, '', path.replace(/\\/g, '/').replace(/\/$/, '') + (dir ? '/' : ''), 0, true);
+    sync.custom.push(e);
+    return e;
+  },
+  removeCustom: (id: string) => {
+    sync.custom = sync.custom.filter((e) => e.id !== id);
+  },
+  keybinds: (): Keybind[] => keybinds,
+  keyCatalog: (): KeyChoice[] => choices.map((c) => ({ ...c, shared: keybinds.some((k) => k.id === c.id) })),
+  addKey: (id: string): Keybind => {
+    const c = choices.find((x) => x.id === id)!;
+    const k = { id, name: c.name, key: c.key };
+    if (!keybinds.some((x) => x.id === id)) keybinds.push(k);
+    return k;
+  },
+  setKey: (id: string, code: string): Keybind => {
+    const k = keybinds.find((x) => x.id === id)!;
+    k.key = code.replace(/^Key|^Digit/, '').replace(/^Mouse(\d)$/, (_, b: string) => `Mouse ${Number(b) + 1}`);
+    return k;
+  },
+  removeKey: (id: string) => {
+    const i = keybinds.findIndex((k) => k.id === id);
+    if (i >= 0) keybinds.splice(i, 1);
+  },
+};
 
 export const runtimes: JavaRuntime[] = [
   { major: 21, name: 'Temurin 21.0.5', source: 'Managed', path: 'java/temurin-21.0.5', usedBy: 9 },

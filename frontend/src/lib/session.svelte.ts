@@ -34,7 +34,9 @@ interface Launch { instanceId: string; accountId: string; stage: number; details
 
 interface LaunchProgress { instanceId: string; stage: number; details: string[]; pct: number }
 interface LaunchFailure { instanceId: string; stage: number; message: string; code?: string; accountId?: string }
-interface GameState { instanceId: string; runId: string; state: 'running' | 'exited'; exitCode: number; result?: string }
+/** copies: how many copies of the instance run after this change; kept: worlds this run
+    changed while another copy did too, kept beside them as "W (copy 2)". */
+interface GameState { instanceId: string; runId: string; state: 'running' | 'exited'; exitCode: number; result?: string; copies: number; kept?: { world: string; as: string }[] }
 export interface Toast {
   subject: string;
   text: string;
@@ -151,8 +153,9 @@ class Session {
           if (this.launch?.instanceId === g.instanceId) this.launch = null;
           return;
         }
-        delete this.running[g.instanceId];
+        if (!g.copies) delete this.running[g.instanceId];
         revs.bump('instances');
+        for (const k of g.kept ?? []) this.notify({ subject: k.world, text: `changed in both copies, kept as ${k.as}` });
         // A crash (or a game that never started) opens the crash dialog with its likely cause.
         if (g.result === 'crash' || g.result === 'failed') this.open({ kind: 'crash', instanceId: g.instanceId, runId: g.runId });
       }),
