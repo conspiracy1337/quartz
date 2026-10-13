@@ -17,6 +17,7 @@ import (
 
 	"quartz/internal/content/store"
 	"quartz/internal/core/download"
+	"quartz/internal/core/xdg"
 	"quartz/internal/modplatform"
 )
 
@@ -203,11 +204,11 @@ func TestLabelAndFolder(t *testing.T) {
 	cfg := filepath.Join(home, ".config")
 	_ = os.MkdirAll(cfg, 0o700)
 	_ = os.WriteFile(filepath.Join(cfg, "user-dirs.dirs"), []byte("# x\nXDG_DOWNLOAD_DIR=\"$HOME/Téléchargements\"\n"), 0o600)
-	if got := xdgDownloads(home, ""); got != filepath.Join(home, "Téléchargements") {
+	if got := xdg.UserDir(home, "", "DOWNLOAD"); got != filepath.Join(home, "Téléchargements") {
 		t.Fatalf("xdg %q", got)
 	}
 	_ = os.WriteFile(filepath.Join(cfg, "user-dirs.dirs"), []byte("XDG_DOWNLOAD_DIR=\"$HOME/\"\n"), 0o600)
-	if got := xdgDownloads(home, ""); got != "" {
+	if got := xdg.UserDir(home, "", "DOWNLOAD"); got != "" {
 		t.Fatalf("unset dir read as %q", got)
 	}
 }

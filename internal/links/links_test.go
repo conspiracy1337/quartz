@@ -9,14 +9,14 @@ import (
 func TestParse(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "Pack.MRPACK")
 	cases := map[string]Link{
-		file:                                     {Kind: PackFile, Path: file},
-		"https://modrinth.com/modpack/fo":        {Kind: PackLink, URL: "https://modrinth.com/modpack/fo"},
-		"modrinth://modpack/fabulously-optimized": {Kind: ModrinthPack, Project: "fabulously-optimized"},
-		"modrinth://modpack/1KVo5zza/":            {Kind: ModrinthPack, Project: "1KVo5zza"},
-		"modrinth://mod/sodium":                   {Kind: ModrinthPage, Project: "sodium"},
-		"modrinth://shader/iris":                  {Kind: ModrinthPage, Project: "iris"},
-		"curseforge://install?addonId=394468&fileId=5000000": {Kind: CurseForge, Project: "394468", File: "5000000"},
-		"curseforge://install?addonId=394468":                {Kind: CurseForge, Project: "394468"},
+		file:                              {Kind: PackFile, Path: file},
+		"https://modrinth.com/modpack/fo": {Kind: PackLink, URL: "https://modrinth.com/modpack/fo"},
+		"modrinth://modpack/fabulously-optimized":                  {Kind: ModrinthPack, Project: "fabulously-optimized"},
+		"modrinth://modpack/1KVo5zza/":                             {Kind: ModrinthPack, Project: "1KVo5zza"},
+		"modrinth://mod/sodium":                                    {Kind: ModrinthPage, Project: "sodium"},
+		"modrinth://shader/iris":                                   {Kind: ModrinthPage, Project: "iris"},
+		"curseforge://install?addonId=394468&fileId=5000000":       {Kind: CurseForge, Project: "394468", File: "5000000"},
+		"curseforge://install?addonId=394468":                      {Kind: CurseForge, Project: "394468"},
 		"quartz://import?url=https%3A%2F%2Fexample.org%2Fp.mrpack": {Kind: PackLink, URL: "https://example.org/p.mrpack"},
 	}
 	for raw, want := range cases {

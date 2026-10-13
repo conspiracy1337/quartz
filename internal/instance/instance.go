@@ -119,6 +119,8 @@ type Instance struct {
 	Pack *PackRef `json:"pack,omitempty"`
 	// Host is how the instance was last hosted as a local server (nil: never).
 	Host *Host `json:"host,omitempty"`
+	// Shortcuts are its desktop and app-menu shortcuts.
+	Shortcuts []Shortcut `json:"shortcuts,omitempty"`
 }
 
 // Host is how to run an instance as a local server.
@@ -266,6 +268,7 @@ func normalize(in Instance) Instance {
 	in.Notes = clip(in.Notes, maxNotes)
 	in.Tags = cleanTags(in.Tags)
 	in.Group, _ = cleanGroup(in.Group)
+	in.Shortcuts = cleanShortcuts(in.Shortcuts)
 	if in.Location != "" && !filepath.IsAbs(in.Location) {
 		in.Location = ""
 	}

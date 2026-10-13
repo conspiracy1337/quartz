@@ -20,7 +20,9 @@ type App struct {
 	opens *Opens
 }
 
-func NewApp(ctx *Ctx, p paths.Paths, opens *Opens) *App { return &App{ctx: ctx, paths: p, opens: opens} }
+func NewApp(ctx *Ctx, p paths.Paths, opens *Opens) *App {
+	return &App{ctx: ctx, paths: p, opens: opens}
+}
 
 // Pending returns what the launcher was asked to open from outside since the
 // last call (see Opens).

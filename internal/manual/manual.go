@@ -34,19 +34,19 @@ import (
 
 // Errors for the UI.
 var (
-	ErrUnknown   = errors.New("manual: nothing is waiting for this download")
-	ErrNoTwin    = errors.New("manual: Modrinth doesn't have this file")
-	ErrNoMatch   = errors.New("manual: none of these files is one the download needs")
+	ErrUnknown = errors.New("manual: nothing is waiting for this download")
+	ErrNoTwin  = errors.New("manual: Modrinth doesn't have this file")
+	ErrNoMatch = errors.New("manual: none of these files is one the download needs")
 )
 
 // State of one needed file.
 type State string
 
 const (
-	Waiting State = "waiting"
+	Waiting  State = "waiting"
 	Fetching State = "fetching" // the Modrinth copy is downloading
-	Found   State = "found"
-	Skipped State = "skipped"
+	Found    State = "found"
+	Skipped  State = "skipped"
 )
 
 // Need is a file a job must get by hand.

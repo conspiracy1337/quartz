@@ -7,12 +7,12 @@ import (
 
 func TestExecLine(t *testing.T) {
 	cases := map[string][]string{
-		`"/opt/quartz"`:                         {"/opt/quartz"},
-		`"/home/a b/quartz" "--launch" "x"`:     {"/home/a b/quartz", "--launch", "x"},
-		`"/p/q" "100%%"`:                        {"/p/q", "100%"},
+		`"/opt/quartz"`:                             {"/opt/quartz"},
+		`"/home/a b/quartz" "--launch" "x"`:         {"/home/a b/quartz", "--launch", "x"},
+		`"/p/q" "100%%"`:                            {"/p/q", "100%"},
 		`"/p/q" "a\\"b" "\\$HOME" "\\` + "`" + `x"`: {"/p/q", `a"b`, "$HOME", "`x"},
-		`"/p/q" "C:\\\\x"`:                      {"/p/q", `C:\x`},
-		`"/p/q" "ab"`:                           {"/p/q", "a\nb"},
+		`"/p/q" "C:\\\\x"`:                          {"/p/q", `C:\x`},
+		`"/p/q" "ab"`:                               {"/p/q", "a\nb"},
 	}
 	for want, argv := range cases {
 		if got := ExecLine(argv); got != want {

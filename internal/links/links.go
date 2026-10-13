@@ -21,12 +21,12 @@ import (
 type Kind int
 
 const (
-	PackFile      Kind = iota + 1 // a .mrpack or .zip on disk: the Import preview
-	PackLink                      // an https link: the Import preview
-	ModrinthPack                  // modrinth://modpack/<id>: the Import preview
-	ModrinthPage                  // modrinth://mod/<id> (and other types): the project page
-	CurseForge                    // curseforge://install: a pack's preview or a project page
-	OpenInstance                  // quartz://open/<id>: the instance's page
+	PackFile     Kind = iota + 1 // a .mrpack or .zip on disk: the Import preview
+	PackLink                     // an https link: the Import preview
+	ModrinthPack                 // modrinth://modpack/<id>: the Import preview
+	ModrinthPage                 // modrinth://mod/<id> (and other types): the project page
+	CurseForge                   // curseforge://install: a pack's preview or a project page
+	OpenInstance                 // quartz://open/<id>: the instance's page
 )
 
 // Link is a parsed link.

@@ -19,6 +19,7 @@ import (
 	"quartz/internal/meta"
 	"quartz/internal/modplatform"
 	"quartz/internal/settings"
+	"quartz/internal/shortcuts"
 	"quartz/internal/syncing"
 )
 
@@ -42,6 +43,8 @@ type InstanceDeps struct {
 	Servers Counter
 	// Syncing joins instances to shared targets; nil in tests.
 	Syncing *syncing.Service
+	// Shortcuts writes desktop and menu shortcuts; nil in tests.
+	Shortcuts *shortcuts.Service
 }
 
 // Counter counts one kind of thing an instance has.
@@ -510,8 +513,12 @@ func (s *Instances) Trash(id string) (instance.TrashEntry, error) {
 	if s.d.Content != nil {
 		s.d.Content.Forget(id)
 	}
+	in, _ := s.d.Store.Get(id)
 	e, err := s.d.Store.Trash(id, time.Now())
 	if err == nil {
+		if s.d.Shortcuts != nil {
+			s.d.Shortcuts.Hide(in)
+		}
 		s.d.Bus.Emit(events.InstancesChanged, nil)
 	}
 	return e, err
@@ -525,9 +532,50 @@ func (s *Instances) TrashList() []instance.TrashEntry {
 	return []instance.TrashEntry{}
 }
 
-// Restore brings a trashed instance back and returns it.
+// Restore brings a trashed instance back, with its shortcuts, and returns it.
 func (s *Instances) Restore(key string) (InstanceView, error) {
-	return s.changed(s.d.Store.Restore(key))
+	in, err := s.d.Store.Restore(key)
+	if err == nil && s.d.Shortcuts != nil {
+		go s.d.Shortcuts.Restore(in)
+	}
+	return s.changed(in, err)
+}
+
+// Shortcut places: "desktop", "menu" or "both".
+var shortcutPlaces = map[string][]shortcuts.Where{
+	"desktop": {shortcuts.Desktop}, "menu": {shortcuts.Menu}, "both": {shortcuts.Desktop, shortcuts.Menu},
+}
+
+// ErrBadPlace is returned for an unknown shortcut place.
+var ErrBadPlace = errors.New("api: choose the desktop, the app menu or both")
+
+// CreateShortcut puts the instance on the desktop and/or in the app menu,
+// optionally with a fixed account and a world or server to open.
+func (s *Instances) CreateShortcut(id, where, accountID, kind, target string) error {
+	if err := checkInstanceID(id); err != nil {
+		return err
+	}
+	places, ok := shortcutPlaces[where]
+	if !ok {
+		return ErrBadPlace
+	}
+	if accountID != "" {
+		if err := checkAccount(accountID); err != nil {
+			return err
+		}
+	}
+	into := instance.Into{Kind: kind, Target: target}
+	if !into.Valid() {
+		return instance.ErrInvalidSettings
+	}
+	if s.d.Shortcuts == nil {
+		return shortcuts.ErrUnsupported
+	}
+	_, err := s.d.Shortcuts.Create(id, places, accountID, into)
+	if err == nil {
+		s.d.Bus.Emit(events.InstancesChanged, nil)
+	}
+	return err
 }
 
 // Purge deletes a trashed instance for good.

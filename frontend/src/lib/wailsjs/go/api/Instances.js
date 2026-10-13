@@ -14,6 +14,10 @@ export function CreateGroup(arg1) {
   return window['go']['api']['Instances']['CreateGroup'](arg1);
 }
 
+export function CreateShortcut(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['Instances']['CreateShortcut'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function DeleteGroup(arg1) {
   return window['go']['api']['Instances']['DeleteGroup'](arg1);
 }

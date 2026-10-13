@@ -9,6 +9,8 @@ export function Create(arg1:instance.CreateRequest):Promise<api.InstanceView>;
 
 export function CreateGroup(arg1:string):Promise<instance.Group>;
 
+export function CreateShortcut(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
 export function DeleteGroup(arg1:string):Promise<void>;
 
 export function Get(arg1:string):Promise<api.InstanceView>;

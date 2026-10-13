@@ -121,6 +121,9 @@ func (p Paths) Store() string     { return filepath.Join(p.Root, "store") }
 func (p Paths) Cache() string     { return filepath.Join(p.Root, "cache") }
 func (p Paths) Themes() string    { return filepath.Join(p.Root, "themes") }
 
+// Shortcuts holds the icons desktop shortcuts refer to.
+func (p Paths) Shortcuts() string { return filepath.Join(p.Root, "shortcuts") }
+
 // Shared holds the one real copy of everything instances share (syncing);
 // it mirrors an instance folder's layout.
 func (p Paths) Shared() string { return filepath.Join(p.Root, "shared") }

@@ -45,6 +45,7 @@ import (
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
 	"quartz/internal/crash"
+	"quartz/internal/desktop"
 	"quartz/internal/gamewatch"
 	"quartz/internal/home"
 	"quartz/internal/host"
@@ -69,6 +70,7 @@ import (
 	"quartz/internal/screenshots"
 	"quartz/internal/servers"
 	"quartz/internal/settings"
+	"quartz/internal/shortcuts"
 	"quartz/internal/skins"
 	"quartz/internal/syncing"
 	"quartz/internal/theme"
@@ -136,6 +138,8 @@ type app struct {
 	gameWatch   *gamewatch.Watcher
 	// The shared layer (M8).
 	syncing *syncing.Service
+	// Desktop and menu shortcuts (M11).
+	shortcuts *shortcuts.Service
 }
 
 // Run builds the app and blocks until the window closes.
@@ -181,7 +185,7 @@ func Run(o Options) error {
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
 				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Worlds: a.worlds, Servers: a.servers,
-				Syncing: a.syncing,
+				Syncing: a.syncing, Shortcuts: a.shortcuts,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
 			api.NewBrowse(a.ctx, a.browse),
@@ -533,6 +537,11 @@ func (a *app) buildContent() error {
 	if err != nil {
 		return fmt.Errorf("loading content: %w", err)
 	}
+	exe, err := desktop.Executable()
+	if err != nil {
+		a.log.Warn("can't find the launcher's program file: no shortcuts", "err", err)
+	}
+	a.shortcuts = shortcuts.New(a.paths.Shortcuts(), a.instances, a.icons, exe, a.log)
 	a.drops = api.NewDrops(a.bus)
 	a.opens = api.NewOpens(a.bus)
 	// Edits to files the game owns wait for it to exit.
@@ -616,6 +625,7 @@ func (a *app) startup(ctx context.Context) {
 		a.log.Info("sandbox", "available", st.Available, "backend", st.Name, "version", st.Version, "reason", st.Reason)
 	}()
 	a.watchDesktop()
+	go a.shortcuts.Refresh()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
