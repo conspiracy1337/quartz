@@ -97,7 +97,7 @@ func (a *Logs) Live(id string) ([]gamelog.Line, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
 	}
-	return a.l.Live(id), nil
+	return asListErr(a.l.Live(id), nil)
 }
 
 // Runs returns the launch history, newest first.
@@ -105,7 +105,7 @@ func (a *Logs) Runs(id string) ([]launch.Record, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
 	}
-	return a.l.Runs(id), nil
+	return asListErr(a.l.Runs(id), nil)
 }
 
 // Files lists the logs and crash reports.
@@ -113,7 +113,7 @@ func (a *Logs) Files(id string) ([]logfiles.File, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
 	}
-	return a.files.Files(id), nil
+	return asListErr(a.files.Files(id), nil)
 }
 
 // Text returns a log or crash report, redacted.

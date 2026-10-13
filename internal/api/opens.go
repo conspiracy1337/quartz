@@ -117,7 +117,7 @@ func (o *Opens) Pending() []OpenTarget {
 	if out == nil {
 		out = []OpenTarget{}
 	}
-	return out
+	return asList(out)
 }
 
 // Take returns a stashed pack once.

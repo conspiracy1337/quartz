@@ -25,7 +25,7 @@ func checkJob(id string) error {
 }
 
 func (d *Downloads) Snapshot() tasks.Snapshot { return d.eng.Snapshot() }
-func (d *Downloads) History() []tasks.JobView { return d.eng.History() }
+func (d *Downloads) History() []tasks.JobView { return asList(d.eng.History()) }
 
 func (d *Downloads) Pause(id string) error  { return withJob(id, d.eng.Pause) }
 func (d *Downloads) Resume(id string) error { return withJob(id, d.eng.Resume) }

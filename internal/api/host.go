@@ -58,12 +58,12 @@ func (a *Host) Command(id, line string) error {
 }
 
 // Status lists the running server, if any.
-func (a *Host) Status() []host.State { return a.h.Status() }
+func (a *Host) Status() []host.State { return asList(a.h.Status()) }
 
 // Live returns the server's console (or its last one).
 func (a *Host) Live(id string) ([]gamelog.Line, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
 	}
-	return a.h.Live(id), nil
+	return asListErr(a.h.Live(id), nil)
 }

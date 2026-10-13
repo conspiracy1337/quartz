@@ -225,7 +225,7 @@ func (s *Instances) List() []InstanceSummary {
 	for i, in := range list {
 		out[i] = s.summary(in)
 	}
-	return out
+	return asList(out)
 }
 
 // Get returns one instance.
@@ -407,7 +407,7 @@ func (s *Instances) SetTags(id string, tags []string) (InstanceView, error) {
 }
 
 // Groups lists the groups in their order.
-func (s *Instances) Groups() []instance.Group { return s.d.Store.Groups() }
+func (s *Instances) Groups() []instance.Group { return asList(s.d.Store.Groups()) }
 
 // SetGroup moves an instance into a group ("" for none).
 func (s *Instances) SetGroup(id, group string) (InstanceView, error) {
@@ -538,7 +538,7 @@ func (s *Instances) Trash(id string) (instance.TrashEntry, error) {
 // TrashList lists the trash, newest first.
 func (s *Instances) TrashList() []instance.TrashEntry {
 	if l := s.d.Store.TrashList(); l != nil {
-		return l
+		return asList(l)
 	}
 	return []instance.TrashEntry{}
 }
@@ -656,10 +656,7 @@ func (s *Instances) FollowOffers() []follow.Offer {
 	if s.d.Follow == nil {
 		return []follow.Offer{}
 	}
-	if o := s.d.Follow.Offers(); o != nil {
-		return o
-	}
-	return []follow.Offer{}
+	return asList(s.d.Follow.Offers())
 }
 
 // TotalPlaytime is the minutes played across every instance.

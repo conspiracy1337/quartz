@@ -51,7 +51,7 @@ func (a *Worlds) List(id string) ([]worlds.World, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
 	}
-	return a.w.List(a.ctx.Get(), id)
+	return asListErr(a.w.List(a.ctx.Get(), id))
 }
 
 // Import asks for a world .zip and adds it; "" when cancelled.
@@ -92,7 +92,7 @@ func (a *Worlds) ImportDropped(dropID, id string) ([]string, error) {
 	if len(added) == 0 {
 		return nil, errors.Join(errs...)
 	}
-	return added, nil
+	return asListErr(added, nil)
 }
 
 // Export asks where to save a world as a .zip; false when cancelled.

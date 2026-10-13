@@ -37,7 +37,7 @@ func NewApp(ctx *Ctx, p paths.Paths, d AppDeps) *App { return &App{ctx: ctx, pat
 
 // Pending returns what the launcher was asked to open from outside since the
 // last call (see Opens).
-func (a *App) Pending() []OpenTarget { return a.d.Opens.Pending() }
+func (a *App) Pending() []OpenTarget { return asList(a.d.Opens.Pending()) }
 
 // ErrNotPristine means instances exist, so the data folder stays put.
 var ErrNotPristine = errors.New("api: the data folder can only change before you have instances")

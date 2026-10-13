@@ -105,7 +105,7 @@ func (a *Accounts) List() []AccountView {
 	for i, acc := range list {
 		out[i] = view(acc, def)
 	}
-	return out
+	return asList(out)
 }
 
 // MicrosoftReady reports whether this build can sign in with Microsoft.
@@ -217,7 +217,7 @@ func (a *Accounts) Skins() []SkinView {
 	for i, s := range list {
 		out[i] = skinView(s)
 	}
-	return out
+	return asList(out)
 }
 
 func (a *Accounts) added(s skins.Skin, err error) (SkinView, error) {

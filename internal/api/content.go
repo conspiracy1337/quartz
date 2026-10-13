@@ -74,7 +74,7 @@ func (c *Content) List(instanceID, kind string) ([]content.Row, error) {
 	if err := checkInstanceID(instanceID); err != nil {
 		return nil, err
 	}
-	return c.d.Service.List(c.ctx.Get(), instanceID, k)
+	return asListErr(c.d.Service.List(c.ctx.Get(), instanceID, k))
 }
 
 // Info describes the tabs (shader mod, worlds).
@@ -213,7 +213,7 @@ func (c *Content) CheckAll() ([]content.BulkCheck, error) {
 	if got == nil {
 		got = []content.BulkCheck{}
 	}
-	return got, err
+	return asListErr(got, err)
 }
 
 // ApplyUpdates starts the job that installs the picked updates.
@@ -237,7 +237,7 @@ func (c *Content) Changelog(checkID, updateID string) ([]content.Notes, error) {
 	if !checkIDRe.MatchString(checkID) || !updateRe.MatchString(updateID) {
 		return nil, ErrBadCheck
 	}
-	return c.d.Service.Changelog(c.ctx.Get(), checkID, updateID)
+	return asListErr(c.d.Service.Changelog(c.ctx.Get(), checkID, updateID))
 }
 
 // Compatibility counts the mods with a build for another Minecraft version
@@ -261,7 +261,7 @@ func (c *Content) Pending(instanceID string) ([]content.PendingUpdate, error) {
 	if err := checkInstanceID(instanceID); err != nil {
 		return nil, err
 	}
-	return c.d.Service.Pending(instanceID), nil
+	return asListErr(c.d.Service.Pending(instanceID), nil)
 }
 
 // Activity lists content changes, newest first.
@@ -269,11 +269,11 @@ func (c *Content) Activity(instanceID string) ([]content.Activity, error) {
 	if err := checkInstanceID(instanceID); err != nil {
 		return nil, err
 	}
-	return c.d.Service.Activity(instanceID), nil
+	return asListErr(c.d.Service.Activity(instanceID), nil)
 }
 
 // Missing lists instances whose mods lack a dependency (Home's alerts).
-func (c *Content) Missing() []content.InstanceMissing { return c.d.Service.Missing() }
+func (c *Content) Missing() []content.InstanceMissing { return asList(c.d.Service.Missing()) }
 
 // Watch follows the instance the UI shows ("" stops).
 func (c *Content) Watch(instanceID string) error {

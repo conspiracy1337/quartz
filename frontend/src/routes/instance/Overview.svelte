@@ -38,7 +38,7 @@
     const g = sync.data;
     if (!g) return '';
     // Built-in targets read as words ("server list"); mod names and custom paths keep their case.
-    const joined = (l: SyncEntry[], lower: boolean) => l.filter((t) => t.enabled && i.sync.join.includes(t.id)).map((t) => (lower ? t.name.toLowerCase() : t.name));
+    const joined = (l: SyncEntry[], lower: boolean) => l.filter((t) => t.enabled && i.sync.join.includes(t.id)).map((t) => (lower ? t.name.toLowerCase() : t.name || t.path));
     const names = [...joined(g.files, true), ...joined(g.folders, true), ...joined(g.mods, false), ...joined(g.custom, false)];
     if (i.sync.keys) names.unshift('keybinds');
     return names.length ? `${sentenceList(names)}.` : 'Nothing shared.';
