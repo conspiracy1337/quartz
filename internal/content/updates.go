@@ -679,3 +679,43 @@ func fileName(name, ext string) string {
 	}
 	return name
 }
+
+// BulkCheck is one instance's result in a check across every instance.
+type BulkCheck struct {
+	InstanceID string `json:"instanceId"`
+	Name       string `json:"name"`
+	Updates    int    `json:"updates"`
+}
+
+// CheckAll checks the mods of every instance that has any, one instance at
+// a time (the platforms' rate limits are shared). Instances whose check fails
+// are left out; the error is the first one, when nothing could be checked.
+func (s *Service) CheckAll(ctx context.Context, ch modplatform.Channel) ([]BulkCheck, error) {
+	var out []BulkCheck
+	var first error
+	checked := 0
+	for _, in := range s.d.Instances.List() {
+		if err := s.Scan(ctx, in.ID, Mods); err != nil {
+			continue
+		}
+		v, err := s.view(in.ID)
+		if err != nil || len(entriesOf(v.idx, Mods)) == 0 {
+			continue
+		}
+		r, err := s.CheckUpdates(ctx, in.ID, Mods, ch)
+		if err != nil {
+			if first == nil {
+				first = err
+			}
+			continue
+		}
+		checked++
+		if len(r.Updates) > 0 {
+			out = append(out, BulkCheck{InstanceID: in.ID, Name: in.Name, Updates: len(r.Updates)})
+		}
+	}
+	if checked == 0 && first != nil {
+		return nil, first
+	}
+	return out, nil
+}

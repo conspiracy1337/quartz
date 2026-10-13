@@ -9,6 +9,7 @@ import { serversApi, worldsApi } from './game';
 import * as inst from './mock/instances';
 import * as misc from './mock/misc';
 import type {
+  BulkCheck,
   AddResult, Art, Compat, ContentChange, ContentInfo, ContentItem, ContentKind, ContentStatus, ModUpdate,
   PendingUpdate, Source, StoreUsage, UpdateReview, ChangelogVersion,
 } from './types';
@@ -146,6 +147,8 @@ export const contentApi = {
   /** Forgets a kind's last check (after applying it). */
   forget: (id: string, kind: ContentKind) => reviews.delete(`${id}/${kind}`),
   changelog: bridged(Go.Changelog, mock.changelog),
+  /** Checks the mods of every instance; lists the ones with updates. */
+  checkAll: bridged(Go.CheckAll, (): BulkCheck[] => [{ instanceId: 'fo', name: 'Fabulously Optimized', updates: 2 }]),
   /** Starts the update job; resolves with its id. */
   apply: bridged(Go.ApplyUpdates, (_check: string, _ids: string[]) => ''),
   compatibility: bridged(

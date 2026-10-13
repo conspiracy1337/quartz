@@ -13,6 +13,8 @@ export function ApplyUpdates(arg1:string,arg2:Array<string>):Promise<string>;
 
 export function Changelog(arg1:string,arg2:string):Promise<Array<content.Notes>>;
 
+export function CheckAll():Promise<Array<content.BulkCheck>>;
+
 export function CheckUpdates(arg1:string,arg2:string):Promise<content.Review>;
 
 export function CleanUp():Promise<store.Usage>;

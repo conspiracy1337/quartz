@@ -133,7 +133,7 @@ export interface ContentChange { at: number; kind: 'added' | 'updated' | 'remove
 export interface Alert { tone: 'warn' | 'info'; subject: string; text: string; action: string; target: AlertTarget }
 export type AlertTarget =
   | { kind: 'sign-in'; accountId: string }
-  | { kind: 'instance'; id: string; tab: 'mods' }
+  | { kind: 'instance'; id: string; tab: 'mods' | 'version' }
   | { kind: 'modpack-update'; id: string }
   | { kind: 'settings'; tab: 'storage' };
 /** The latest minecraft.net article; `image` is its picture on Go's image route. */
@@ -361,6 +361,11 @@ export interface KeyChoice { id: string; name: string; category: string; key: st
 export interface InstanceSync { join: string[]; keys: boolean }
 
 // ---- java ----
+/** An instance that follows the latest release and whose mods all support it. */
+export interface FollowOffer { instanceId: string; name: string; minecraft: string }
+/** One instance with updates, from a check across every instance. */
+export interface BulkCheck { instanceId: string; name: string; updates: number }
+
 // ---- export ----
 export type ExportFormat = 'mrpack' | 'zip' | 'list';
 export type ExportListFormat = 'md' | 'csv';

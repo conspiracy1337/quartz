@@ -13,6 +13,7 @@ import (
 	"quartz/internal/core/procx"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
+	"quartz/internal/follow"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
 	"quartz/internal/loader"
@@ -45,6 +46,8 @@ type InstanceDeps struct {
 	Syncing *syncing.Service
 	// Shortcuts writes desktop and menu shortcuts; nil in tests.
 	Shortcuts *shortcuts.Service
+	// Follow offers moves to the newest release; nil in tests.
+	Follow *follow.Checker
 }
 
 // Counter counts one kind of thing an instance has.
@@ -645,6 +648,18 @@ func (s *Instances) OpenFolder(id string) error {
 		return err
 	}
 	return procx.OpenFolder(dir)
+}
+
+// FollowOffers lists instances that follow the latest release and whose mods
+// all support it (checked at start and every 6 hours).
+func (s *Instances) FollowOffers() []follow.Offer {
+	if s.d.Follow == nil {
+		return []follow.Offer{}
+	}
+	if o := s.d.Follow.Offers(); o != nil {
+		return o
+	}
+	return []follow.Offer{}
 }
 
 // TotalPlaytime is the minutes played across every instance.

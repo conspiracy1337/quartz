@@ -49,6 +49,7 @@ import (
 	"quartz/internal/desktop"
 	"quartz/internal/discord"
 	"quartz/internal/exporting"
+	"quartz/internal/follow"
 	"quartz/internal/gamewatch"
 	"quartz/internal/home"
 	"quartz/internal/host"
@@ -116,6 +117,7 @@ type app struct {
 	browse    *browse.Service
 	packRead  *modpack.Reader
 	packs     *modpack.Service
+	follow    *follow.Checker
 	loaders   *loader.Registry
 	launcher  *launch.Launcher
 	sandbox   *sandbox.Service
@@ -196,7 +198,7 @@ func Run(o Options) error {
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
 				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Worlds: a.worlds, Servers: a.servers,
-				Syncing: a.syncing, Shortcuts: a.shortcuts,
+				Syncing: a.syncing, Shortcuts: a.shortcuts, Follow: a.follow,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
 			api.NewBrowse(a.ctx, a.browse),
@@ -506,10 +508,30 @@ func (a *app) buildBrowse(dl *download.Downloader) {
 		Sandboxed: func() bool { return a.sandbox.Status().Available },
 		GetIcon:   modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log,
 	}, modpack.UpdateDeps{Known: a.content.Known, Record: a.content.Record, Channel: channel})
+	a.follow = follow.New(follow.Deps{
+		Instances: a.instances.List, Latest: a.behind, Running: func(id string) bool { return a.launcher.Busy(id) }, Bus: a.bus,
+		Compat: func(ctx context.Context, id, mc string) (content.Compat, error) {
+			return a.content.Compatibility(ctx, id, mc, "", channel())
+		},
+	})
 }
 
-// checkPacks looks for modpack updates now and every 6 hours (a timer, not
-// polling); it returns the stop function.
+// behind names the newest release and whether mc is an older release.
+func (a *app) behind(ctx context.Context, mc string) (string, bool, error) {
+	m, err := a.meta.Manifest(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	cur, ok := m.Find(mc)
+	latest, ok2 := m.Find(m.Latest.Release)
+	if !ok || !ok2 {
+		return m.Latest.Release, false, nil
+	}
+	return latest.ID, cur.Type == "release" && cur.ReleaseTime.Before(latest.ReleaseTime), nil
+}
+
+// checkPacks looks for modpack updates and follow-latest offers now and
+// every 6 hours (a timer, not polling); it returns the stop function.
 func (a *app) checkPacks() func() {
 	done := make(chan struct{})
 	go func() {
@@ -518,6 +540,7 @@ func (a *app) checkPacks() func() {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			a.packs.CheckUpdates(ctx)
+			a.follow.Check(ctx)
 			cancel()
 			select {
 			case <-t.C:

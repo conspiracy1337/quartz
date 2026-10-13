@@ -7,7 +7,7 @@ import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
-import type { Alert, ExportPlan, ExportPreview, ExportResult, Instance, InstanceSummary, JavaNeed } from './types';
+import type { Alert, ExportPlan, FollowOffer, ExportPreview, ExportResult, Instance, InstanceSummary, JavaNeed } from './types';
 import { activityFeed } from '../activity';
 import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
@@ -93,12 +93,13 @@ export const api = {
       ? revs.load('content', () => Promise.all([runs(id), contentApi.changes(id)]).then(([r, changes]) => activityFeed(r, changes)))
       : serve(inst.activity)),
     pendingUpdates: (id: string) => contentApi.pending(id),
+    followOffers: () => revs.load('instances', bridged(InstancesGo.FollowOffers, (): FollowOffer[] => [])),
   },
   content: contentApi,
   home: {
     /** Sign-in alerts, missing mod dependencies, modpack updates and low disk space. */
     alerts: () => (hasBridge()
-      ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts(), packAlerts(), diskAlerts()]).then((lists) => lists.flat())
+      ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts(), packAlerts(), followAlerts(), diskAlerts()]).then((lists) => lists.flat())
       : serve(home.alerts)),
     ...homeApi,
   },
@@ -188,6 +189,12 @@ async function missingAlerts(): Promise<Alert[]> {
     const more = m.more ? ` and ${m.more} more` : '';
     return [{ tone: 'warn', subject: name, text: `is missing ${m.dep}${more}`, action: 'Fix', target: { kind: 'instance', id: m.instanceId, tab: 'mods' } }];
   });
+}
+
+/** "Survival: every mod supports 1.21.5", for instances that follow the latest release. */
+async function followAlerts(): Promise<Alert[]> {
+  const offers = await api.instances.followOffers();
+  return offers.map((o): Alert => ({ tone: 'info', subject: o.name, text: `every mod supports ${o.minecraft}`, action: 'Switch', target: { kind: 'instance', id: o.instanceId, tab: 'version' } }));
 }
 
 /** "Low disk space 3.2 GB left", when the data folder's drive has under 5 GB free. */

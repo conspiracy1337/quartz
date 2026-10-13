@@ -207,6 +207,15 @@ func (c *Content) CheckUpdates(instanceID, kind string) (*content.Review, error)
 	return c.d.Service.CheckUpdates(c.ctx.Get(), instanceID, k, c.channel())
 }
 
+// CheckAll checks the mods of every instance and lists those with updates.
+func (c *Content) CheckAll() ([]content.BulkCheck, error) {
+	got, err := c.d.Service.CheckAll(c.ctx.Get(), c.channel())
+	if got == nil {
+		got = []content.BulkCheck{}
+	}
+	return got, err
+}
+
 // ApplyUpdates starts the job that installs the picked updates.
 func (c *Content) ApplyUpdates(checkID string, ids []string) (string, error) {
 	if !checkIDRe.MatchString(checkID) {

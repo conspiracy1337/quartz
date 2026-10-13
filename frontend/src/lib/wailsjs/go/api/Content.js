@@ -22,6 +22,10 @@ export function Changelog(arg1, arg2) {
   return window['go']['api']['Content']['Changelog'](arg1, arg2);
 }
 
+export function CheckAll() {
+  return window['go']['api']['Content']['CheckAll']();
+}
+
 export function CheckUpdates(arg1, arg2) {
   return window['go']['api']['Content']['CheckUpdates'](arg1, arg2);
 }

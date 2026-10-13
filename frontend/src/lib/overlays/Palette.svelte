@@ -33,10 +33,26 @@
     const to = nav({ name: 'instance', id: r.id, tab: 'mods', sub: 'updates' });
     const n = pending.data?.length ?? 0;
     return [
-      { key: 'check', group: 'Actions', label: `Check for mod updates in ${r.name}`, icon: 'refresh', run: to },
+      { key: 'check', group: 'Actions', label: 'Check for updates in all instances', icon: 'refresh', run: () => void checkAll() },
       ...(n ? [{ key: 'update', group: 'Actions', label: `Update ${n} ${n === 1 ? 'mod' : 'mods'} in ${r.name}`, icon: 'arrow-up' as const, run: to }] : []),
     ];
   });
+  // Checks every instance's mods; the result toast opens the first one's review.
+  async function checkAll() {
+    session.notify({ tone: 'info', subject: 'Checking for updates', text: 'in every instance…' });
+    try {
+      const found = await api.content.checkAll();
+      const total = found.reduce((n, f) => n + f.updates, 0);
+      if (!found.length) return session.notify({ subject: 'Everything is up to date', text: '' });
+      const first = found[0]!;
+      session.notify({
+        subject: `${total} ${total === 1 ? 'update' : 'updates'}`, text: found.length === 1 ? `in ${first.name}` : `in ${found.length} instances`,
+        action: { label: 'Review', run: () => go({ name: 'instance', id: first.instanceId, tab: 'mods', sub: 'updates' }) },
+      });
+    } catch (e) {
+      session.fail('Check for updates', e);
+    }
+  }
   const COMMANDS = $derived<Item[]>([
     ...updateItems,
     ...(session.update?.status === 'ready' ? [{ key: 'self', group: 'Actions', label: `Install launcher update ${session.update.version}`, icon: 'shield' as const, run: () => void api.updates.restart().catch((e) => session.fail('Restart', e)) }] : []),

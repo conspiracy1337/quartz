@@ -1012,6 +1012,22 @@ export namespace content {
 		    return a;
 		}
 	}
+	export class BulkCheck {
+	    instanceId: string;
+	    name: string;
+	    updates: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new BulkCheck(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.instanceId = source["instanceId"];
+	        this.name = source["name"];
+	        this.updates = source["updates"];
+	    }
+	}
 	export class Compat {
 	    matching: number;
 	    total: number;
@@ -1590,6 +1606,27 @@ export namespace exporting {
 	        this.linked = source["linked"];
 	        this.bundled = source["bundled"];
 	        this.bytes = source["bytes"];
+	    }
+	}
+
+}
+
+export namespace follow {
+	
+	export class Offer {
+	    instanceId: string;
+	    name: string;
+	    minecraft: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Offer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.instanceId = source["instanceId"];
+	        this.name = source["name"];
+	        this.minecraft = source["minecraft"];
 	    }
 	}
 

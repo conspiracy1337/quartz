@@ -22,6 +22,10 @@ export function DeleteGroup(arg1) {
   return window['go']['api']['Instances']['DeleteGroup'](arg1);
 }
 
+export function FollowOffers() {
+  return window['go']['api']['Instances']['FollowOffers']();
+}
+
 export function Get(arg1) {
   return window['go']['api']['Instances']['Get'](arg1);
 }
