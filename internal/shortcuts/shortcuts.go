@@ -12,8 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
-	"unicode"
 )
 
 // Where is a place for a shortcut.
@@ -52,26 +50,6 @@ var (
 	// ErrUnsupported means shortcuts don't exist on this OS.
 	ErrUnsupported = errors.New("shortcuts: not supported on this system")
 )
-
-// fileName turns an instance name into a safe file name: no separators,
-// reserved or control characters, no leading dots, at most 64 characters.
-func fileName(name, fallback string) string {
-	name = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || strings.ContainsRune(`/\:*?"<>|`, r) {
-			return -1
-		}
-		return r
-	}, name)
-	name = strings.Trim(name, ". ")
-	if r := []rune(name); len(r) > 64 {
-		name = strings.TrimSpace(string(r[:64]))
-	}
-	switch strings.ToUpper(name) {
-	case "", "CON", "PRN", "AUX", "NUL", "COM1", "LPT1":
-		return fallback
-	}
-	return name
-}
 
 // free returns dir/base+ext, or base (2)+ext and so on when taken.
 func free(dir, base, ext string) (string, error) {

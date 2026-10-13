@@ -48,6 +48,7 @@ import (
 	"quartz/internal/crash"
 	"quartz/internal/desktop"
 	"quartz/internal/discord"
+	"quartz/internal/export"
 	"quartz/internal/gamewatch"
 	"quartz/internal/home"
 	"quartz/internal/host"
@@ -207,6 +208,10 @@ func Run(o Options) error {
 			api.NewLaunch(a.ctx, a.launcher),
 			api.NewUpdates(a.ctx, a.updater, a.restart),
 			api.NewHost(a.ctx, a.host),
+			api.NewExports(a.ctx, api.ExportDeps{
+				Service:   export.New(export.Deps{Instances: a.instances, Content: a.content, Icons: a.icons, Shared: a.sharedFolders}),
+				Instances: a.instances, Tasks: a.tasks, Busy: a.launcher.Busy, Hosting: a.host.Running,
+			}),
 			api.NewLogs(a.ctx, a.launcher, a.logFiles, a.crash),
 			api.NewHome(a.ctx, api.HomeDeps{Home: a.home, Servers: a.servers, Screenshots: a.screenshots}),
 			api.NewWorlds(a.ctx, a.worlds, a.drops),
@@ -594,6 +599,15 @@ func (a *app) gamesExited() {
 		wruntime.WindowShow(ctx)
 		wruntime.WindowUnminimise(ctx)
 	}
+}
+
+// sharedFolders lists the instance-relative folders an instance shares.
+func (a *app) sharedFolders(id string) []string {
+	var out []string
+	for _, t := range a.syncing.Folders(id) {
+		out = append(out, t.Path)
+	}
+	return out
 }
 
 // watchDownloads keeps the HTTP client's proxy, the worker pool and the

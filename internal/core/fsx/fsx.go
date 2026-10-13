@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // FilePerm is the default permission for files the launcher writes: owner only.
@@ -162,4 +163,24 @@ func ReadTail(path string, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	return buf[:n], nil
+}
+
+// FileName turns a display name (an instance's) into a safe file name: no separators,
+// reserved or control characters, no leading dots, at most 64 characters.
+func FileName(name, fallback string) string {
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || strings.ContainsRune(`/\:*?"<>|`, r) {
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.Trim(name, ". ")
+	if r := []rune(name); len(r) > 64 {
+		name = strings.TrimSpace(string(r[:64]))
+	}
+	switch strings.ToUpper(name) {
+	case "", "CON", "PRN", "AUX", "NUL", "COM1", "LPT1":
+		return fallback
+	}
+	return name
 }

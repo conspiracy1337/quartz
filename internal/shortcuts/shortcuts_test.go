@@ -8,22 +8,6 @@ import (
 	"quartz/internal/instance"
 )
 
-func TestFileName(t *testing.T) {
-	for in, want := range map[string]string{
-		"Survival":   "Survival",
-		"a/b\\c:d*?": "abcd",
-		"..hidden. ": "hidden",
-		"CON":        "fallback",
-		"":           "fallback",
-		"x\ny":       "xy",
-		string(make([]rune, 0)) + "Ünïcödé Pack": "Ünïcödé Pack",
-	} {
-		if got := fileName(in, "fallback"); got != want {
-			t.Errorf("%q: got %q want %q", in, got, want)
-		}
-	}
-}
-
 func TestPictureDrawsTheTile(t *testing.T) {
 	data, err := Picture(instance.Instance{Art: instance.Art{Background: "#3ecf8e", Initial: "F"}}, nil)
 	if err != nil {

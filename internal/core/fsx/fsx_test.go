@@ -73,3 +73,19 @@ func TestReadCapped(t *testing.T) {
 		t.Fatal("directory: want error")
 	}
 }
+
+func TestFileName(t *testing.T) {
+	for in, want := range map[string]string{
+		"Survival":   "Survival",
+		"a/b\\c:d*?": "abcd",
+		"..hidden. ": "hidden",
+		"CON":        "fallback",
+		"":           "fallback",
+		"x\ny":       "xy",
+		string(make([]rune, 0)) + "Ünïcödé Pack": "Ünïcödé Pack",
+	} {
+		if got := FileName(in, "fallback"); got != want {
+			t.Errorf("%q: got %q want %q", in, got, want)
+		}
+	}
+}
