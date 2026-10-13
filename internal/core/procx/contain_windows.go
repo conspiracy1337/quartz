@@ -26,6 +26,8 @@ type securityCapabilities struct {
 // startContained starts the child inside an AppContainer. exec.Cmd can't
 // pass the security-capabilities attribute, so this calls CreateProcess
 // itself, inheriting only the three pipe ends the child needs.
+//
+//nolint:gosec // Win32 calls on Go-owned memory and 32-bit results
 func startContained(s Spec) (*Child, error) {
 	if len(s.ExtraFiles) > 0 {
 		return nil, errors.New("procx: extra files can't be passed on Windows")

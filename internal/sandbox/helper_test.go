@@ -111,6 +111,7 @@ func newJailFixture(t *testing.T) *jailFixture {
 	}()
 	f.listen = ln.Addr().String()
 	f.s = New(Config{DataRoot: root})
+	t.Cleanup(func() { _ = f.s.Forget("sandbox-test") })
 	return f
 }
 

@@ -347,3 +347,6 @@ func getEnv(env []string, name string) string {
 	}
 	return ""
 }
+
+// forget is a no-op: nothing outlives a run here.
+func forget(string) error { return nil }

@@ -124,3 +124,6 @@ func (b *darwinBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *J
 	}
 	return spec, &Jail{Name: "Seatbelt"}, nil
 }
+
+// forget is a no-op: nothing outlives a run here.
+func forget(string) error { return nil }

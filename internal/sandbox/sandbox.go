@@ -200,3 +200,7 @@ func within(p, root string) bool {
 	}
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
 }
+
+// Forget drops what an instance's sandbox keeps between runs (its Windows
+// app container); call it when the instance is deleted for good.
+func (s *Service) Forget(instance string) error { return forget(instance) }
