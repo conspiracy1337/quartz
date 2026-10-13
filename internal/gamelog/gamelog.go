@@ -116,7 +116,9 @@ func (p *Parser) flushPlain() {
 // legacyLine matches "[12:34:56] [Render thread/INFO]: message" and older
 // "2013-09-19 12:34:56 [INFO] message" output from versions without log4j XML.
 var (
-	bracketed = regexp.MustCompile(`^\[(\d\d:\d\d:\d\d)\] \[([^\]/]*)/([A-Z]+)\]:? ?(.*)$`)
+	// "[21:40:02] [Server thread/INFO]: …", and (Forge and NeoForge's own
+	// console layout) "[13Oct2026 21:40:02.019] [Server thread/INFO] [logger/]: …".
+	bracketed = regexp.MustCompile(`^\[(?:\d\d[A-Za-z]{3}\d{4} )?(\d\d:\d\d:\d\d)(?:\.\d+)?\] \[([^\]/]*)/([A-Z]+)\](?: \[[^\]]*\])?:? ?(.*)$`)
 	oldStyle  = regexp.MustCompile(`^\d{4}-\d\d-\d\d (\d\d:\d\d:\d\d) \[([A-Z]+)\] ?(.*)$`)
 )
 

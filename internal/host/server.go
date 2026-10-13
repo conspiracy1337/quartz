@@ -1,6 +1,7 @@
 package host
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -497,7 +498,8 @@ func (s *Service) pinger(ctx context.Context, srv *server) {
 			continue
 		}
 		srv.mu.Lock()
-		srv.st.Players, srv.st.Max = st.Online, st.Max
+		// Old servers report no maximum until their first status refresh.
+		srv.st.Players, srv.st.Max = st.Online, cmp.Or(st.Max, srv.opts.MaxPlayers)
 		srv.mu.Unlock()
 		s.emit(srv)
 	}

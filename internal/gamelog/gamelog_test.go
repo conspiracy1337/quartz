@@ -97,3 +97,10 @@ func FuzzParser(f *testing.F) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestForgeConsoleLayout(t *testing.T) {
+	got := collect(false, "[13Oct2026 17:11:47.924] [Server thread/INFO] [net.minecraft.server.dedicated.DedicatedServer/]: Done (3.381s)! For help, type \"help\"")
+	if len(got) != 1 || got[0].Time != "17:11:47" || got[0].Thread != "Server thread" || got[0].Level != Info || got[0].Message != `Done (3.381s)! For help, type "help"` {
+		t.Fatalf("%+v", got)
+	}
+}
