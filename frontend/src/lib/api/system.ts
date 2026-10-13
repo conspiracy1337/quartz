@@ -7,6 +7,7 @@ import type { api as goapi, settings, theme } from '../wailsjs/go/models';
 import { defaultSettings } from './mock/settings';
 
 export type Settings = settings.Settings;
+export type OpenTarget = goapi.OpenTarget;
 export type AppInfo = goapi.AppInfo;
 export type CustomCSSState = theme.CSSState;
 
@@ -22,6 +23,8 @@ export const app = {
   openUrl: (url: string): Promise<void> => (hasBridge() ? AppGo.OpenURL(url) : (window.open(url, '_blank', 'noopener'), Promise.resolve())),
   /** Shows the launcher's data folder in the file manager. */
   openDataFolder: bridged(AppGo.OpenDataFolder, () => undefined),
+  /** What the launcher was asked to open from outside since the last call (links, files, the command line). */
+  pending: bridged(AppGo.Pending, (): OpenTarget[] => []),
 };
 
 export const settingsApi = {

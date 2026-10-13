@@ -448,6 +448,28 @@ export namespace api {
 	
 	
 	
+	export class OpenTarget {
+	    kind: string;
+	    openId?: string;
+	    project?: string;
+	    instance?: string;
+	    subject?: string;
+	    text?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenTarget(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.openId = source["openId"];
+	        this.project = source["project"];
+	        this.instance = source["instance"];
+	        this.subject = source["subject"];
+	        this.text = source["text"];
+	    }
+	}
 	export class SandboxRow {
 	    id: string;
 	    folder: boolean;

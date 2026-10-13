@@ -23,7 +23,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'library' }
   | { name: 'new-instance' }
-  | { name: 'import'; ref?: string; source?: (typeof SOURCES)[number] }
+  | { name: 'import'; ref?: string; source?: (typeof SOURCES)[number]; open?: string }
   | { name: 'browse'; type?: Kind; instance?: string }
   | { name: 'project'; id: string; tab?: 'versions' }
   | { name: 'skins' }
@@ -40,7 +40,7 @@ const simple = ['home', 'library', 'browse', 'skins', 'accounts', 'syncing', 'do
 export function path(r: Route): string {
   switch (r.name) {
     case 'new-instance': return '/library/new';
-    case 'import': return '/library/import' + (r.ref && r.source ? `/${enc(r.ref)}/${r.source}` : '');
+    case 'import': return '/library/import' + (r.open ? `/open/${enc(r.open)}` : r.ref && r.source ? `/${enc(r.ref)}/${r.source}` : '');
     case 'browse': return '/browse' + (r.type ? `/t/${r.type}${r.instance ? '/' + enc(r.instance) : ''}` : '');
     case 'project': return `/browse/${enc(r.id)}${r.tab ? '/' + r.tab : ''}`;
     case 'settings': return `/settings/${r.tab}`;
@@ -72,7 +72,10 @@ export function parse(p: string): Route {
   switch (a) {
     case 'library':
       if (b === 'new') return { name: 'new-instance' };
-      if (b === 'import') return c && isOneOf(SOURCES, d) ? { name: 'import', ref: dec(c), source: d } : { name: 'import' };
+      if (b === 'import') {
+        if (c === 'open' && d) return { name: 'import', open: dec(d) };
+        return c && isOneOf(SOURCES, d) ? { name: 'import', ref: dec(c), source: d } : { name: 'import' };
+      }
       break;
     case 'browse':
       if (b === 't' && isOneOf(PROJECT_KINDS, c)) return { name: 'browse', type: c, ...(d ? { instance: dec(d) } : {}) };

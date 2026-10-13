@@ -117,3 +117,26 @@ func TestDebouncedSaveLands(t *testing.T) {
 	}
 	t.Fatal("debounced save never happened")
 }
+
+func TestReadLeavesTheFileAlone(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x.json")
+	if got, err := Read(opts(path)); err != nil || got.Name != "default" {
+		t.Fatalf("missing: %+v %v", got, err)
+	}
+	if err := os.WriteFile(path, []byte(`{"name":"a","count":-3}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Read(opts(path)); err != nil || got.Name != "a" || got.Count != 0 {
+		t.Fatalf("normalized: %+v %v", got, err)
+	}
+	if err := os.WriteFile(path, []byte(`{`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Read(opts(path)); err == nil {
+		t.Fatal("a corrupt file must be an error")
+	}
+	if _, err := os.Stat(path + ".corrupt"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("Read must not move a corrupt file aside")
+	}
+}

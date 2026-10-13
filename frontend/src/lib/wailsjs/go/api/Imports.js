@@ -14,6 +14,10 @@ export function InspectLink(arg1) {
   return window['go']['api']['Imports']['InspectLink'](arg1);
 }
 
+export function InspectOpened(arg1) {
+  return window['go']['api']['Imports']['InspectOpened'](arg1);
+}
+
 export function InspectProject(arg1, arg2) {
   return window['go']['api']['Imports']['InspectProject'](arg1, arg2);
 }

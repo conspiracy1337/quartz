@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import Sidebar, { type SideKey } from '$lib/components/Sidebar.svelte';
   import StatusBar from '$lib/components/StatusBar.svelte';
+  import { listenOpens } from '$lib/intents';
   import { installShortcuts } from '$lib/keys';
   import AddAccount from '$lib/overlays/AddAccount.svelte';
   import InstanceEdit from '$lib/overlays/InstanceEdit.svelte';
@@ -54,6 +55,7 @@
   $effect(() => session.listen());
   $effect(() => applyAppearance());
   $effect(() => installShortcuts());
+  $effect(() => listenOpens());
   void prefs.load();
   void tasks.load();
   void session.load();
@@ -84,7 +86,7 @@
   {#if r.name === 'home'}<Home />
   {:else if r.name === 'library'}<Library />
   {:else if r.name === 'new-instance'}<NewInstance />
-  {:else if r.name === 'import'}{#key r.ref}<Import ref={r.ref} source={r.source} />{/key}
+  {:else if r.name === 'import'}{#key r.open ?? r.ref}<Import ref={r.ref} source={r.source} open={r.open} />{/key}
   {:else if r.name === 'browse'}{#key `${r.type}/${r.instance}`}<Browse type={r.type} instance={r.instance} />{/key}
   {:else if r.name === 'project'}{#key r.id}<Project id={r.id} tab={r.tab} />{/key}
   {:else if r.name === 'skins'}<Skins />

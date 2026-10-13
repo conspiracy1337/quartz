@@ -4,6 +4,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -20,6 +22,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"quartz/internal/accounts"
@@ -49,6 +52,7 @@ import (
 	"quartz/internal/imagesrv"
 	"quartz/internal/install"
 	"quartz/internal/instance"
+	"quartz/internal/intent"
 	"quartz/internal/java"
 	"quartz/internal/launch"
 	"quartz/internal/loader"
@@ -73,8 +77,9 @@ import (
 
 // Options are the inputs main passes in.
 type Options struct {
-	DataDir string // --dir flag; empty means automatic
-	Assets  fs.FS  // the built frontend
+	DataDir string      // --dir flag; empty means automatic
+	Assets  fs.FS       // the built frontend
+	Args    intent.Args // what the command line asked for (a launch, a link or file to open)
 }
 
 type app struct {
@@ -115,6 +120,8 @@ type app struct {
 	modIcons  *icons.Library
 	pictures  *remoteimg.Cache // project pictures from the platform CDNs
 	drops     *api.Drops
+	opens     *api.Opens // things asked for from outside, waiting for the UI
+	args      intent.Args
 	hidden    atomic.Bool // the window was hidden because a game started
 	ctx       *api.Ctx
 	// Worlds, servers, screenshots, crashes, logs and Home (M7).
@@ -140,7 +147,8 @@ func Run(o Options) error {
 	defer func() { _ = a.logFile.Close() }()
 	a.log.Info("starting", "version", brand.Version, "data", a.paths.Root, "portable", a.paths.Portable)
 
-	appFacade := api.NewApp(a.ctx, a.paths)
+	a.args = o.Args
+	appFacade := api.NewApp(a.ctx, a.paths, a.opens)
 	return wails.Run(&options.App{
 		Title:            brand.Name,
 		Width:            1200,
@@ -154,10 +162,15 @@ func Run(o Options) error {
 		OnStartup:   a.startup,
 		OnShutdown:  a.shutdown,
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               brand.AppID,
+			UniqueId:               lockID(a.paths.Root),
 			OnSecondInstanceLaunch: a.secondInstance,
 		},
 		Linux: &linux.Options{ProgramName: brand.Slug},
+		// macOS hands links and opened files to the app bundle, not argv.
+		Mac: &mac.Options{
+			OnUrlOpen:  func(u string) { a.act(intent.Args{Open: u}) },
+			OnFileOpen: func(p string) { a.act(intent.Args{Open: p}) },
+		},
 		Bind: []any{
 			appFacade,
 			api.NewSettings(a.ctx, a.settings, a.css, a.network),
@@ -172,7 +185,7 @@ func Run(o Options) error {
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
 			api.NewBrowse(a.ctx, a.browse),
-			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Picture: a.pictures.Src}),
+			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Opens: a.opens, Picture: a.pictures.Src}),
 			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
 			api.NewManual(api.ManualDeps{Service: a.manual, Drops: a.drops, App: appFacade}),
 			api.NewLaunch(a.ctx, a.launcher),
@@ -521,6 +534,7 @@ func (a *app) buildContent() error {
 		return fmt.Errorf("loading content: %w", err)
 	}
 	a.drops = api.NewDrops(a.bus)
+	a.opens = api.NewOpens(a.bus)
 	// Edits to files the game owns wait for it to exit.
 	a.bus.Subscribe(events.GameState, func(p any) {
 		if st, ok := p.(launch.State); ok && st.State == "exited" {
@@ -604,6 +618,14 @@ func (a *app) startup(ctx context.Context) {
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
+	a.act(a.args)
+}
+
+// lockID is the single-instance id: one running launcher per data folder,
+// so a portable copy or --dir runs beside the installed one.
+func lockID(root string) string {
+	sum := sha256.Sum256([]byte(filepath.Clean(root)))
+	return brand.AppID + "." + hex.EncodeToString(sum[:4])
 }
 
 // hostStopTimeout bounds how long quitting waits for a hosted server to save.
@@ -686,14 +708,6 @@ func (a *app) shutdown(context.Context) {
 		a.log.Error("saving settings on exit failed", "err", err)
 	}
 	a.log.Info("stopped")
-}
-
-// secondInstance focuses the window. Forwarded arguments are untrusted: they are
-// only logged here; M11 parses them with a strict flag set.
-func (a *app) secondInstance(data options.SecondInstanceData) {
-	a.log.Info("second instance", "args", len(data.Args))
-	a.focus()
-	a.bus.Emit(events.SecondInstance, nil)
 }
 
 // focus brings the launcher window forward.

@@ -13,3 +13,7 @@ export function OpenDataFolder() {
 export function OpenURL(arg1) {
   return window['go']['api']['App']['OpenURL'](arg1);
 }
+
+export function Pending() {
+  return window['go']['api']['App']['Pending']();
+}

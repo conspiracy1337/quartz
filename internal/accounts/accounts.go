@@ -146,11 +146,22 @@ type Store struct {
 
 // Open loads accounts from path.
 func Open(path string, log *slog.Logger) (*Store, error) {
-	f, err := jsonfile.Open(jsonfile.Options[doc]{Path: path, Default: func() doc { return doc{} }, Normalize: normalize, Log: log})
+	f, err := jsonfile.Open(fileOptions(path, log))
 	if err != nil {
 		return nil, err
 	}
 	return &Store{file: f, now: time.Now}, nil
+}
+
+func fileOptions(path string, log *slog.Logger) jsonfile.Options[doc] {
+	return jsonfile.Options[doc]{Path: path, Default: func() doc { return doc{} }, Normalize: normalize, Log: log}
+}
+
+// Read returns every account and the default account's id without opening a
+// Store, for readers outside the running launcher (the command line).
+func Read(path string) ([]Account, string, error) {
+	d, err := jsonfile.Read(fileOptions(path, nil))
+	return d.Accounts, d.Default, err
 }
 
 // Flush saves pending changes.

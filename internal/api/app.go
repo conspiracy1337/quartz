@@ -17,9 +17,14 @@ import (
 type App struct {
 	ctx   *Ctx
 	paths paths.Paths
+	opens *Opens
 }
 
-func NewApp(ctx *Ctx, p paths.Paths) *App { return &App{ctx: ctx, paths: p} }
+func NewApp(ctx *Ctx, p paths.Paths, opens *Opens) *App { return &App{ctx: ctx, paths: p, opens: opens} }
+
+// Pending returns what the launcher was asked to open from outside since the
+// last call (see Opens).
+func (a *App) Pending() []OpenTarget { return a.opens.Pending() }
 
 type AppInfo struct {
 	Name      string `json:"name"`

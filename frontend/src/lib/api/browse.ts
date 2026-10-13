@@ -42,6 +42,8 @@ export const importsApi = {
   inspectFile: bridged(ImportsGo.InspectFile, (): ImportPreview | null => misc.importPreview),
   inspectDropped: bridged(ImportsGo.InspectDropped, (_dropId: string): ImportPreview | null => misc.importPreview),
   inspectProject: bridged(ImportsGo.InspectProject, (_ref: string, _src: Src): ImportPreview | null => misc.importPreview),
+  /** A pack the launcher was asked to open from outside (a link or a file), by its open id. */
+  inspectOpened: bridged(ImportsGo.InspectOpened, (_openId: string): ImportPreview | null => misc.importPreview),
   /** Creates the instance as a job; resolves with its id. */
   install: bridged(ImportsGo.Install, (_token: string, _name: string, _art: Art) => ''),
 };

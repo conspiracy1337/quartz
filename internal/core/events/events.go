@@ -10,7 +10,8 @@ type Topic string
 const (
 	SettingsChanged  Topic = "settings:changed"
 	CustomCSS        Topic = "theme:custom-css"
-	SecondInstance   Topic = "app:second-instance"
+	// AppOpen says App.Pending has something new (a link, a file, an error).
+	AppOpen Topic = "app:open"
 	TasksChanged     Topic = "tasks:changed"
 	AccountsChanged  Topic = "accounts:changed"
 	AccountsSignIn   Topic = "accounts:signin"

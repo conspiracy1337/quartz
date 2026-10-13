@@ -399,10 +399,44 @@ func Open(dir string, log *slog.Logger) (*Store, error) {
 }
 
 func (s *Store) open(id string) (*jsonfile.Store[Instance], error) {
-	return jsonfile.Open(jsonfile.Options[Instance]{
-		Path: filepath.Join(s.dir, id, "instance.json"), Default: func() Instance { return Instance{Version: schema, KeepLoaderUpdated: true} },
-		Normalize: normalize, Log: s.log,
-	})
+	return jsonfile.Open(fileOptions(filepath.Join(s.dir, id, "instance.json"), s.log))
+}
+
+func fileOptions(path string, log *slog.Logger) jsonfile.Options[Instance] {
+	return jsonfile.Options[Instance]{
+		Path: path, Default: func() Instance { return Instance{Version: schema, KeepLoaderUpdated: true} },
+		Normalize: normalize, Log: log,
+	}
+}
+
+// ReadAll reads every instance in dir without opening a Store or writing
+// anything, for readers outside the running launcher (the command line).
+// Instances are ordered as List orders them; unreadable folders are skipped.
+func ReadAll(dir string) ([]Instance, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []Instance
+	for _, e := range entries {
+		if !e.IsDir() || !ValidID(e.Name()) {
+			continue
+		}
+		path := filepath.Join(dir, e.Name(), "instance.json")
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		in, err := jsonfile.Read(fileOptions(path, nil))
+		if err != nil || in.ID != e.Name() {
+			continue
+		}
+		out = append(out, in)
+	}
+	slices.SortFunc(out, func(a, b Instance) int { return lastActive(b).Compare(lastActive(a)) })
+	return out, nil
 }
 
 // Dir is the instance's folder.
