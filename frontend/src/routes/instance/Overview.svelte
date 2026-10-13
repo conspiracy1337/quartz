@@ -55,7 +55,8 @@
             <span class="small faint tnum" style="white-space: nowrap">{Day(e.at)}</span>
           </div>
         {:else}
-          {#if activity.data}<Empty text="No activity yet. Sessions and changes show up here." />{/if}
+          {#if activity.data}<Empty text="No activity yet. Sessions and changes show up here." />
+          {:else}{#each { length: 5 } as _, k (k)}<div class="ev" aria-hidden="true"><div class="sk" style="width: 28px; height: 28px; border-radius: 7px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {[48, 36, 56, 40, 30][k]}%"></div><div class="sk" style="height: 10px; width: 28%"></div></div><div class="sk" style="height: 10px; width: 48px"></div></div>{/each}{/if}
         {/each}
       </div>
     </section>
@@ -79,7 +80,8 @@
         {#each updates.data ?? [] as u (u.name)}
           <div class="up"><Tile art={u.art} size="sm" /><span class="trunc">{u.name}</span><span class="mono muted">{u.from} to {u.to}</span></div>
         {:else}
-          {#if updates.data}<Empty text="Everything is up to date." />{/if}
+          {#if updates.data}<Empty text="Everything is up to date." />
+          {:else}{#each { length: 3 } as _, k (k)}<div class="up" aria-hidden="true"><div class="sk" style="width: 24px; height: 24px; border-radius: 6px"></div><div class="sk" style="height: 12px; width: {[44, 32, 52][k]}%"></div><div class="sk" style="height: 10px; width: 90px"></div></div>{/each}{/if}
         {/each}
       </div>
     </section>

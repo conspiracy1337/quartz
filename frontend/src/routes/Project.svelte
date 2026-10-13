@@ -7,6 +7,7 @@
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Inline from '$lib/ui/Inline.svelte';
   import type { IconName } from '$lib/ui/icons';
@@ -144,7 +145,7 @@
                 </span>
               </div>
               {#if openVersion === i}
-                <div class="cl"><strong style="color: var(--text); font-weight: 500">Changes in {v.number}</strong><ul>{#each notes.data?.[0]?.items ?? [] as n, ni (ni)}<li>{n}</li>{/each}</ul></div>
+                <div class="cl"><strong style="color: var(--text); font-weight: 500">Changes in {v.number}</strong>{#if notes.loading}<div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px" aria-hidden="true"><div class="sk" style="height: 10px; width: 60%"></div><div class="sk" style="height: 10px; width: 45%"></div><div class="sk" style="height: 10px; width: 52%"></div></div>{:else if notes.data?.[0]?.items.length}<ul>{#each notes.data[0].items as n, ni (ni)}<li>{n}</li>{/each}</ul>{:else}<p class="small muted" style="margin: 6px 0 0">This version has no release notes.</p>{/if}</div>
               {/if}
             </div>
           {:else}
@@ -156,12 +157,16 @@
         </div>
       {:else if tab === 2}
         <div class="gal">
-          {#each side.gallery as g, gi (gi)}<figure class="gal-item"><span class="gal-img" style="background: {g.art ?? `url(${g.src}) center/cover no-repeat, var(--raise)`}" role="img" aria-label={g.title}></span><figcaption class="small muted trunc">{g.title}</figcaption></figure>{/each}
+          {#each side.gallery as g, gi (gi)}<figure class="gal-item"><span class="gal-img" style="background: {g.art ?? `url(${g.src}) center/cover no-repeat, var(--raise)`}" role="img" aria-label={g.title}></span><figcaption class="small muted trunc">{g.title}</figcaption></figure>
+          {:else}<Empty text="This project has no pictures." style="grid-column: 1 / -1" />{/each}
         </div>
       {:else}
         <div class="md" style="display: flex; flex-direction: column; gap: 18px">
           {#each changes.data ?? [] as v (v.id)}
             <section><h2 style="margin-top: 0; display: flex; gap: 10px; align-items: baseline"><span class="mono">{v.number}</span><span class="small faint" style="font-weight: 400">{shortDate(v.published)}</span></h2><ul>{#each v.items as n, ni (ni)}<li>{n}</li>{/each}</ul></section>
+          {:else}
+            {#if changes.loading}{#each [0, 1, 2] as k (k)}<section aria-hidden="true" style="display: flex; flex-direction: column; gap: 8px"><div class="sk" style="height: 16px; width: 140px"></div><div class="sk" style="height: 10px; width: 55%"></div><div class="sk" style="height: 10px; width: 42%"></div></section>{/each}
+            {:else}<Empty text="No changelog was published." />{/if}
           {/each}
         </div>
       {/if}

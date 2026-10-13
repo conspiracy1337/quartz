@@ -3,6 +3,7 @@
   import { api } from '../api';
   import { shortDate } from '../format';
   import { query } from '../query.svelte';
+  import Empty from '../ui/Empty.svelte';
   import Toggle from '../ui/Toggle.svelte';
 
   /** Version families on the left, that family's releases on the right. Both lists share one
@@ -10,7 +11,9 @@
   interface Props { current?: string; onpick?: (id: string) => void }
   let { current = '', onpick }: Props = $props();
 
-  const families = query(() => api.versions.minecraft());
+  // Retry reloads after an offline failure (reading tries re-runs the query).
+  let tries = $state(0);
+  const families = query(() => (void tries, api.versions.minecraft()));
   let m = $state(-1);
   let v = $state(0);
   let snapshots = $state(false);
@@ -49,6 +52,9 @@
           <span style="min-width: 0"><span class="mono" style="display: block; font-weight: 500">{f.id}</span><span class="trunc small faint" style="display: block">{f.note}, latest {f.releases[0]?.id}</span></span>
           {#if current !== '' && f.releases.some((r) => r.id === current)}<span class="badge">Current</span>{/if}
         </button>
+      {:else}
+        {#if families.error}<Empty text="Couldn't load versions. Check your connection." action="Retry" onclick={() => tries++} />
+        {:else}{#each { length: 7 } as _, k (k)}<div class="prow" aria-hidden="true"><span style="display: flex; flex-direction: column; gap: 6px"><span class="sk" style="height: 12px; width: 56px"></span><span class="sk" style="height: 10px; width: {[60, 48, 66, 52, 58, 44, 62][k]}%"></span></span></div>{/each}{/if}
       {/each}
     </div>
   </section>
@@ -62,6 +68,8 @@
           <span class="small faint">Java {r.java}</span>
           <span class="small faint tnum vp-date">{shortDate(r.released)}</span>
         </button>
+      {:else}
+        {#if !families.data && !families.error}{#each { length: 8 } as _, k (k)}<div class="prow min" aria-hidden="true"><span class="sk" style="width: 14px; height: 14px; border-radius: 50%"></span><span class="sk" style="height: 12px; width: {[30, 38, 26, 34, 40, 28, 36, 32][k]}%"></span><span class="sk" style="height: 10px; width: 44px"></span><span class="sk vp-date" style="height: 10px; width: 70px"></span></div>{/each}{/if}
       {/each}
     </div>
   </section>

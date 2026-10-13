@@ -6,13 +6,15 @@
   import { switchVersion } from '$lib/instanceActions';
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
+  import Empty from '$lib/ui/Empty.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
 
-  const loaders = query(() => api.versions.loaders(i.minecraft));
+  let tries = $state(0); // Retry after an offline failure
+  const loaders = query(() => (void tries, api.versions.loaders(i.minecraft)));
   let l = $state<number | null>(null);
   let v = $state(0);
   let beta = $state(false);
@@ -48,12 +50,17 @@
         <div class="list" role="radiogroup" aria-label="Loader">
           {#each loaders.data ?? [] as o, k (o.kind)}
             <button class="prow" class:on={li === k} onclick={() => ((l = k), (v = 0))} role="radio" aria-checked={li === k}><span style="min-width: 0"><span style="display: block; font-weight: 500">{o.name}</span><span class="trunc small faint" style="display: block">{o.note}{o.stable[0] ? `, latest ${o.stable[0].name}` : ''}</span></span>{#if k === currentIndex}<span class="badge">Current</span>{/if}</button>
+          {:else}
+            {#if loaders.error}<Empty text="Couldn't load versions. Check your connection." action="Retry" onclick={() => tries++} />
+            {:else}{#each { length: 5 } as _, k (k)}<div class="prow" aria-hidden="true"><span style="display: flex; flex-direction: column; gap: 6px"><span class="sk" style="height: 12px; width: {[30, 24, 36, 28, 32][k]}%"></span><span class="sk" style="height: 10px; width: 55%"></span></span></div>{/each}{/if}
           {/each}
         </div>
       </section>
       <section aria-label="Loader version">
         <div class="plabel"><span>{opt?.name ?? ''} versions</span><span class="tnum">{list.length}</span></div>
-        {#if list.length}
+        {#if !loaders.data}
+          <div class="list" aria-hidden="true">{#each { length: 6 } as _, k (k)}<div class="prow min"><span class="sk" style="width: 14px; height: 14px; border-radius: 50%"></span><span class="sk" style="height: 12px; width: {[34, 28, 40, 30, 36, 26][k]}%"></span><span></span></div>{/each}</div>
+        {:else if list.length}
           <div class="list" role="radiogroup" aria-label="Loader version">
             {#each list as x, k (x.id)}
               <button class="prow min" class:on={vi === k} onclick={() => (v = k)} role="radio" aria-checked={vi === k}><span class="radio" class:on={vi === k} aria-hidden="true"></span><span style="display: flex; gap: 8px; align-items: center; min-width: 0"><span class="mono">{x.name}</span>{#if x.tag}<span class="badge" class:badge-accent={x.tag === 'stable'} class:badge-warn={x.tag === 'beta'}>{x.tag === 'stable' ? 'Latest stable' : 'Beta'}</span>{/if}</span><span class="small faint tnum">{x.released ? shortDate(x.released) : ''}</span></button>
@@ -69,5 +76,5 @@
 <div class="pfoot">
   <span class="muted">{i.loader ? loaderLabel(i.loader) : 'No loader'}</span><Icon name="arrow-right" size={12} sw={2} /><span>{list.length ? `${opt?.name} ${sel?.name}` : 'No loader'}</span>
   {#if compat}<span class="small faint" style="margin-left: 8px">{compat}</span>{/if}
-  <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={isCurrent || busy} onclick={apply}>{action}</button></span>
+  <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={isCurrent || busy || !loaders.data} onclick={apply}>{action}</button></span>
 </div>
