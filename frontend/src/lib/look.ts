@@ -1,6 +1,6 @@
 // How accounts, library skins and capes are drawn: a real texture served by Go when
 // there is one, the flat colour drawing otherwise (default skins and preview fixtures).
-import type { Account, Cape, Skin, SkinColors } from './api/types';
+import type { Account, Art, Cape, Skin, SkinColors } from './api/types';
 import { STEVE, crop, skinURL, textureURL } from './components/skinUV';
 
 /** PlayerModel's skin props. */
@@ -68,3 +68,14 @@ export function tintOf(name: string): string {
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return TINTS[h % TINTS.length]!;
 }
+
+/** A picture served by Go (an item's or project's icon) over its tint, else the tint and an initial. */
+export function artOf(name: string, src?: string): Art {
+  const tint = tintOf(name);
+  if (src && /^\/tex\/[a-z]+\/[0-9a-f]+\.png$/.test(src)) return { background: `url(${src}) center/cover no-repeat, ${tint}` };
+  return { background: tint, initial: (/[\p{L}\p{N}]/u.exec(name)?.[0] ?? '?').toUpperCase() };
+}
+
+/** "6 GB suits 48 mods": about 2 GB plus 85 MB a mod, never more than half the PC's memory (0 when unknown). */
+export const suggestMemoryGb = (mods: number, memoryMb: number) =>
+  mods > 0 && memoryMb > 0 ? Math.min(Math.max(2, Math.round((2048 + mods * 85) / 1024)), Math.floor(memoryMb / 2048)) : 0;

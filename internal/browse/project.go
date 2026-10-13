@@ -306,7 +306,7 @@ type Notes struct {
 }
 
 // Changelog reads the changes of the given versions (at most 5), or of the
-// newest 5 when ids is empty.
+// newest 4 when ids is empty (the Changelog tab).
 func (s *Service) Changelog(ctx context.Context, ref modplatform.Ref, src modplatform.Source, ids []string) ([]Notes, error) {
 	id := ref.ID(src)
 	p := s.platform(src)
@@ -317,12 +317,16 @@ func (s *Service) Changelog(ctx context.Context, ref modplatform.Ref, src modpla
 	if err != nil {
 		return nil, err
 	}
+	limit := 5
+	if len(ids) == 0 {
+		limit = 4
+	}
 	var pick []modplatform.Version
 	for _, v := range all {
 		if len(ids) == 0 || slices.Contains(ids, v.ID) {
 			pick = append(pick, v)
 		}
-		if len(pick) == 5 {
+		if len(pick) == limit {
 			break
 		}
 	}

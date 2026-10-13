@@ -96,7 +96,7 @@
                   <span class="dl-dot" class:done={s.state === 'done'} class:warn={s.state === 'warn'} aria-hidden="true"></span>
                   <span class="trunc small" style="color: {color}">{s.name}</span>
                   <span class="dl-eta" style="color: {color}">{s.state === 'warn' ? 'Waiting' : ''}</span>
-                  <span class="dl-acts">{#if s.state === 'warn'}<button class="dl-link" aria-label="Download the missing mod from CurseForge" onclick={() => session.open({ kind: 'blocked' })}>Download</button>{:else}<span class="dl-detail faint">{stepDetail(s)}</span>{/if}</span>
+                  <span class="dl-acts">{#if s.state === 'warn'}<button class="tlink" aria-label="Download the missing mod from CurseForge" onclick={() => session.open({ kind: 'blocked', jobId: d.id })}>Download</button>{:else}<span class="dl-detail faint">{stepDetail(s)}</span>{/if}</span>
                   <span class="dl-pct">{stepPct(s)}%</span>
                   <Bar pct={stepPct(s)} color={s.state === 'warn' ? 'var(--warn)' : s.state === 'failed' ? 'var(--danger)' : undefined} />
                   <span></span>
@@ -150,9 +150,7 @@
   .dl-chev.open :global(svg){transform:rotate(90deg)}
   .dl-detail,.dl-eta{font-size:12px;line-height:16px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;font-variant-numeric:tabular-nums}
   .dl-acts .btn-fix{width:60px}
-  /* Inline text action: underlined, same size as the step text, in the main text colour. */
-  .dl-link{font-size:12px;line-height:16px;color:var(--text);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;padding:4px 0;border-radius:2px;border:0;background:none}
-  .dl-link:hover{text-decoration-thickness:2px}
+  .dl-acts .tlink{font-size:12px;line-height:16px;padding:4px 0}
   .dl-pct{font-family:var(--mono);font-size:12px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
   .dl-acts{display:flex;justify-content:flex-end;gap:4px}
   .dl-dot{width:6px;height:6px;border-radius:50%;background:var(--line-2);justify-self:center}

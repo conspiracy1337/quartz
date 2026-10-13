@@ -65,7 +65,8 @@ type Item struct {
 	FileName string `json:"fileName"`
 	Size     int64  `json:"size"`
 	State    State  `json:"state"`
-	Twin     bool   `json:"twin"` // Modrinth has the same file
+	Twin     bool   `json:"twin"`           // Modrinth has the same file
+	Page     string `json:"page,omitempty"` // where to download it by hand
 }
 
 // View is the dialog for one job.
@@ -303,7 +304,7 @@ func (s *Service) View(jobID string) (View, error) {
 	}
 	v := View{JobID: jobID, Folder: display(s.d.Folder), Items: make([]Item, 0, len(set.needs)), Done: !set.open()}
 	for _, n := range set.needs {
-		v.Items = append(v.Items, Item{ID: n.id, Name: n.Name, FileName: n.FileName, Size: n.Size, State: n.state, Twin: n.twin != nil})
+		v.Items = append(v.Items, Item{ID: n.id, Name: n.Name, FileName: n.FileName, Size: n.Size, State: n.state, Twin: n.twin != nil, Page: n.Page})
 	}
 	return v, nil
 }

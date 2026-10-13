@@ -1026,6 +1026,7 @@ export namespace content {
 	    blocked?: boolean;
 	    dependency?: boolean;
 	    versions?: string;
+	    ref?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ReviewItem(source);
@@ -1043,6 +1044,7 @@ export namespace content {
 	        this.blocked = source["blocked"];
 	        this.dependency = source["dependency"];
 	        this.versions = source["versions"];
+	        this.ref = source["ref"];
 	    }
 	}
 	export class Review {
@@ -1638,6 +1640,7 @@ export namespace manual {
 	    size: number;
 	    state: string;
 	    twin: boolean;
+	    page?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Item(source);
@@ -1651,6 +1654,7 @@ export namespace manual {
 	        this.size = source["size"];
 	        this.state = source["state"];
 	        this.twin = source["twin"];
+	        this.page = source["page"];
 	    }
 	}
 	export class View {

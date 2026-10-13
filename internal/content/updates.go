@@ -56,6 +56,8 @@ type ReviewItem struct {
 	Dependency bool   `json:"dependency,omitempty"`
 	// Versions is the project's version list on its platform's site.
 	Versions string `json:"versions,omitempty"`
+	// Ref names the project for the launcher's own project page.
+	Ref string `json:"ref,omitempty"`
 }
 
 // LockedItem is an item a check skipped because its version is locked.
@@ -309,7 +311,7 @@ func platformName(src string) string {
 }
 
 func (pi *planned) review(k Kind, known map[string]Known) ReviewItem {
-	r := ReviewItem{ID: pi.id, Name: pi.name, To: pi.v.Number, Size: pi.v.File.Size, Blocked: pi.v.File.URL == "",
+	r := ReviewItem{ID: pi.id, Name: pi.name, To: pi.v.Number, Size: pi.v.File.Size, Blocked: pi.v.File.URL == "", Ref: modplatform.RefOf(pi.v.Source, pi.v.ProjectID).String(),
 		Note: platformName(string(pi.v.Source)) + ", " + orElse(pi.v.Type, "release")}
 	if pi.cur != nil {
 		r.From = pi.cur.Version

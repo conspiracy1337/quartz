@@ -1,8 +1,10 @@
 <script lang="ts">
-  /** Plain text where `backticks` become <code>. Renders text nodes only, never HTML. */
-  interface Props { text: string }
-  let { text }: Props = $props();
-  const parts = $derived(text.split('`'));
+  import { api } from '../api';
+  import type { Span } from '../api/types';
+
+  /** Description text: plain runs, <code>, and links that open the browser. Renders text nodes only, never HTML. */
+  interface Props { spans: Span[] }
+  let { spans }: Props = $props();
 </script>
 
-{#each parts as part, i (i)}{#if i % 2 === 1}<code>{part}</code>{:else}{part}{/if}{/each}
+{#each spans as s, i (i)}{#if s.code}<code>{s.text}</code>{:else if s.href}{@const url = s.href}<button class="tlink" onclick={() => void api.app.openUrl(url)}>{s.text}</button>{:else}{s.text}{/if}{/each}

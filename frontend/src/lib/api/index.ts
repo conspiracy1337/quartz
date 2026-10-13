@@ -1,13 +1,12 @@
 // The one API the UI talks to. In M0 every domain except app and settings is served from
 // mock fixtures; each later milestone replaces one domain with its Go service without
 // touching the screens.
-import * as browse from './mock/browse';
 import * as home from './mock/home';
 import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
-import type { Alert, Instance, InstanceSummary, ProjectHit, ProjectType } from './types';
+import type { Alert, Instance, InstanceSummary } from './types';
 import { activityFeed } from '../activity';
 import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
@@ -17,11 +16,11 @@ import * as LaunchGo from '../wailsjs/go/api/Launch';
 import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { accountsApi, signInAlerts } from './accounts';
+import { browseApi, importsApi, manualApi, packsApi } from './browse';
 import { contentApi } from './content';
 import { downloadsApi } from './downloads';
 import { app, settingsApi } from './system';
 
-export type { ProjectPage } from './mock/browse';
 export type { AppInfo, CustomCSSState, Settings } from './system';
 
 const serve = preview;
@@ -88,8 +87,10 @@ export const api = {
   },
   content: contentApi,
   home: {
-    /** Sign-in alerts and missing mod dependencies; disk space arrives with M7. */
-    alerts: () => (hasBridge() ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts()]).then(([a, b]) => [...a, ...b]) : serve(home.alerts)),
+    /** Sign-in alerts, missing mod dependencies and modpack updates; disk space arrives with M7. */
+    alerts: () => (hasBridge()
+      ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts(), packAlerts()]).then((lists) => lists.flat())
+      : serve(home.alerts)),
     news: unbuilt((): typeof home.news | null => home.news, null),
     week: unbuilt(() => home.week, home.week.map((d) => ({ ...d, minutes: 0 }))),
     servers: unbuilt(() => home.servers, []),
@@ -118,10 +119,10 @@ export const api = {
     loaders: bridged(VersionsGo.Loaders, (_minecraft: string) => versions.loaders),
   },
   accounts: accountsApi,
-  browse: {
-    catalog: unbuilt((type: ProjectType) => browse.catalog[type], { categories: [] as string[], hits: [] as ProjectHit[] }),
-    project: (_id: string) => serve(browse.iris),
-  },
+  browse: browseApi,
+  imports: importsApi,
+  modpacks: packsApi,
+  manual: manualApi,
   downloads: downloadsApi,
   sync: {
     groups: unbuilt(() => ({ ...misc.sync, total: misc.totalInstances }), { files: [], folders: [], mods: [], custom: [], total: 0 }),
@@ -134,10 +135,8 @@ export const api = {
     /** Starts a download job for the Java the newest release needs; resolves with its id. */
     download: bridged(JavaGo.Download, () => ''),
   },
-  review: {
-    modpackDiff: unbuilt((_instanceId: string) => misc.modpackDiff, { ...misc.modpackDiff, summary: '', keptEdits: [], rows: [] }),
-  },
-  imports: { launchers: unbuilt(() => misc.otherLaunchers, []) },
+  /** Other launchers to import from (first-run setup, M11). */
+  launchers: unbuilt(() => misc.otherLaunchers, []),
 };
 
 export type Api = typeof api;
@@ -151,4 +150,10 @@ async function missingAlerts(): Promise<Alert[]> {
     const more = m.more ? ` and ${m.more} more` : '';
     return [{ tone: 'warn', subject: name, text: `is missing ${m.dep}${more}`, action: 'Fix', target: { kind: 'instance', id: m.instanceId, tab: 'mods' } }];
   });
+}
+
+/** "Create: Above and Beyond 1.4.1 is out": one alert per pack with a newer version. */
+async function packAlerts(): Promise<Alert[]> {
+  const updates = await packsApi.updates();
+  return updates.map((u): Alert => ({ tone: 'info', subject: u.name, text: `${u.version} is out`, action: 'Review', target: { kind: 'modpack-update', id: u.instanceId } }));
 }
