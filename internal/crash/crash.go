@@ -280,28 +280,15 @@ func (s *Service) evidence(id, runID, kind string, limit int64, tail bool) strin
 	if err != nil {
 		return ""
 	}
-	if !tail {
-		data, err := fsx.ReadCapped(p, limit)
-		if err != nil {
-			return ""
-		}
-		return string(data)
+	read := fsx.ReadCapped
+	if tail {
+		read = fsx.ReadTail
 	}
-	f, err := os.Open(p) //nolint:gosec // a run's own log, found through Evidence
+	data, err := read(p, limit)
 	if err != nil {
 		return ""
 	}
-	defer func() { _ = f.Close() }()
-	fi, err := f.Stat()
-	if err != nil {
-		return ""
-	}
-	off := max(0, fi.Size()-limit)
-	buf := make([]byte, fi.Size()-off)
-	if _, err := f.ReadAt(buf, off); err != nil {
-		return ""
-	}
-	return string(buf)
+	return string(data)
 }
 
 // newestReport is the crash report the game wrote since a run started.
