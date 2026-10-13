@@ -46,6 +46,10 @@ type Config struct {
 	HasMod func(ids ...string) bool
 	// Retitle renames a world whose folder got a suffix ("(2)").
 	Retitle func(dir, suffix string) error
+	// ClientJar is a Minecraft version's client jar (for keybind names).
+	ClientJar func(mc string) string
+	// ModJars lists an instance's enabled mod jars (for keybind names).
+	ModJars func(id string) []ModJar
 	// Tasks shows long moves on the Downloads page (nil runs them inline).
 	Tasks *tasks.Engine
 	Log   *slog.Logger
@@ -58,6 +62,13 @@ type Service struct {
 	mu    sync.Mutex // settings and instance edits
 	busy  sync.Mutex // guards locks
 	locks map[string]*sync.Mutex
+	lang  langCache
+}
+
+// ModJar is one enabled mod file of an instance.
+type ModJar struct {
+	Path string
+	Name string
 }
 
 // New builds the service, installs its resolver into the instance store and

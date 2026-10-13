@@ -32,8 +32,9 @@ type SyncCustom struct {
 // SharedKey is one shared keybind: the game's id (options.txt key_<ID>) and
 // the 1.13+ name of the key it is bound to.
 type SharedKey struct {
-	ID  string `json:"id"`  // key.attack, key.zoomify.zoom …
-	Key string `json:"key"` // key.keyboard.c, key.mouse.4 …
+	ID   string `json:"id"`   // key.attack, key.zoomify.zoom …
+	Key  string `json:"key"`  // key.keyboard.c, key.mouse.4 …
+	Name string `json:"name"` // "Zoom (Zoomify)", as named when it was added
 }
 
 var (
@@ -98,6 +99,9 @@ func (y Syncing) normalize() Syncing {
 		if _, ok := keycodes.ByName(k.Key); !ok || !KeybindIDRe.MatchString(k.ID) || len(out.Keys) == maxSharedKeys ||
 			slices.ContainsFunc(out.Keys, func(o SharedKey) bool { return o.ID == k.ID }) {
 			continue
+		}
+		if len([]rune(k.Name)) > 128 || strings.ContainsFunc(k.Name, unicode.IsControl) {
+			k.Name = ""
 		}
 		out.Keys = append(out.Keys, k)
 	}

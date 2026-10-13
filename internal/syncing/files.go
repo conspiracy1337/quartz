@@ -46,8 +46,8 @@ func copyOver(src, dst string) error {
 // when there is none yet; the launch merges them key by key from then on.
 func joinFile(t Target, game, shared string) error {
 	if t.ID == OptionsID {
-		if _, err := os.Stat(shared); errors.Is(err, fs.ErrNotExist) && !stamp(game).IsZero() {
-			return copyOver(game, shared)
+		if _, err := os.Stat(shared); errors.Is(err, fs.ErrNotExist) {
+			return seedOptions(game, shared)
 		}
 		return nil
 	}

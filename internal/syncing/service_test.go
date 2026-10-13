@@ -23,6 +23,8 @@ type env struct {
 	running  map[string]bool
 	hasMod   bool
 	retitled []string
+	client   string              // the client jar every version uses
+	modJars  map[string][]ModJar // by instance
 }
 
 func newEnv(t *testing.T) *env {
@@ -47,6 +49,8 @@ func newEnv(t *testing.T) *env {
 			e.retitled = append(e.retitled, filepath.Base(dir)+"|"+suffix)
 			return nil
 		},
+		ClientJar: func(string) string { return e.client },
+		ModJars:   func(id string) []ModJar { return e.modJars[id] },
 	})
 	return e
 }

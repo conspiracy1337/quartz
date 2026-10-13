@@ -318,6 +318,15 @@ func (a *app) buildTasks() error {
 		Root: a.paths.Shared(), Trash: a.paths.Trash(), Settings: a.settings, Instances: a.instances, Bus: a.bus,
 		Running: func(id string) bool { return a.launcher.Busy(id) }, HasMod: a.content.AnyHasMod,
 		Retitle: worlds.Retitle, Tasks: eng, Log: a.log,
+		ClientJar: func(mc string) string { return filepath.Join(a.paths.Versions(), mc, mc+".jar") },
+		ModJars: func(id string) []syncing.ModJar {
+			jars := a.content.ModJars(id)
+			out := make([]syncing.ModJar, len(jars))
+			for i, j := range jars {
+				out[i] = syncing.ModJar{Path: j.Path, Name: j.Name}
+			}
+			return out
+		},
 	})
 	dl := download.New(a.http, ver)
 	a.loaders = loader.New(loader.Deps{

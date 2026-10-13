@@ -60,3 +60,30 @@ func (s *Service) AnyHasMod(modIDs ...string) bool {
 	}
 	return false
 }
+
+// ModJar is one enabled mod file of an instance.
+type ModJar struct {
+	Path string
+	Name string
+}
+
+// ModJars lists an instance's enabled mod jars, from its index (no scan):
+// Syncing names mod keybinds from their lang files.
+func (s *Service) ModJars(id string) []ModJar {
+	v, err := s.view(id)
+	if err != nil {
+		return nil
+	}
+	var out []ModJar
+	for _, e := range entriesOf(v.idx, Mods) {
+		if e.Dir || strings.HasSuffix(e.Rel, Disabled) {
+			continue
+		}
+		name := base(e)
+		if info := v.known[e.SHA1].Info; info != nil && info.Name != "" {
+			name = info.Name
+		}
+		out = append(out, ModJar{Path: s.abs(id, e.Rel), Name: name})
+	}
+	return out
+}
