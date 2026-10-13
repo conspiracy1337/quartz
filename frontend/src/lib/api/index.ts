@@ -93,6 +93,8 @@ export const api = {
       ? revs.load('content', () => Promise.all([runs(id), contentApi.changes(id)]).then(([r, changes]) => activityFeed(r, changes)))
       : serve(inst.activity)),
     pendingUpdates: (id: string) => contentApi.pending(id),
+    /** Minutes played across every instance. */
+    totalPlaytime: bridged(InstancesGo.TotalPlaytime, () => 18_720),
     followOffers: () => revs.load('instances', bridged(InstancesGo.FollowOffers, (): FollowOffer[] => [])),
   },
   content: contentApi,
