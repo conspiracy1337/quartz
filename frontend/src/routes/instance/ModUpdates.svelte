@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { listKeys } from '$lib/listkeys';
   import { api } from '$lib/api';
   import type { ContentKind, Instance, ModUpdate, UpdateReview } from '$lib/api/types';
   import { hasBridge } from '$lib/bridge';
@@ -102,7 +103,7 @@
 </div>
 <div class="scroll">
   <div class="page" style="gap: 12px; padding-top: 16px">
-    <div class="list">
+    <div class="list" use:listKeys>
       {#each list as u, k (u.id)}
         <div class="row ur">
           <Check on={!!picked[u.id] && !u.blocked} label="Update {u.name}" onchange={(v) => (picked[u.id] = v)} />

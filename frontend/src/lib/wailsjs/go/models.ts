@@ -2663,6 +2663,7 @@ export namespace settings {
 	    startPage: string;
 	    startWithComputer: boolean;
 	    setupDone: boolean;
+	    keys?: Record<string, string>;
 	    hiddenNews?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -2676,6 +2677,7 @@ export namespace settings {
 	        this.startPage = source["startPage"];
 	        this.startWithComputer = source["startWithComputer"];
 	        this.setupDone = source["setupDone"];
+	        this.keys = source["keys"];
 	        this.hiddenNews = source["hiddenNews"];
 	    }
 	}

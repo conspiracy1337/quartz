@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"quartz/internal/core/events"
@@ -119,5 +120,14 @@ func TestProxyCustomValidation(t *testing.T) {
 		if got := s.Normalize().Downloads.ProxyCustom; got != c.want {
 			t.Errorf("normalize(%+v) = %+v, want %+v", c.in, got, c.want)
 		}
+	}
+}
+
+func TestKeysAreCleaned(t *testing.T) {
+	s := Defaults()
+	s.General.Keys = map[string]string{"palette": "Ctrl+J", "zoom": "Ctrl++", "bad id": "Ctrl+K", "bare": "K", "long": "Ctrl+" + strings.Repeat("x", 20)}
+	got := s.Normalize().General.Keys
+	if len(got) != 2 || got["palette"] != "Ctrl+J" || got["zoom"] != "Ctrl++" {
+		t.Fatal(got)
 	}
 }
