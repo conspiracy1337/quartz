@@ -88,6 +88,9 @@ type Config struct {
 	Syncing *syncing.Service
 	// Views assembles each run's folders (nil runs in the game folder).
 	Views *runview.Assembler
+	// Hosted reports a world a local server plays now, which the game may
+	// not open too (nil: none ever is).
+	Hosted func(id, folder string) bool
 }
 
 // ModChecker summarises the mods a launch will load. It never blocks a
@@ -199,6 +202,9 @@ func (l *Launcher) Busy(id string) bool {
 // ErrBadTarget is returned for a world or server Play can't open into.
 var ErrBadTarget = errors.New("launch: not a world or server to open")
 
+// ErrHosted means the world is being played by a local server right now.
+var ErrHosted = errors.New("launch: that world is hosted right now; join the server instead")
+
 // Play starts the launch pipeline in the background with an account
 // (accountID "" means the default one; "Launch as" passes another, for this
 // launch only). into opens a world or server straight away; its zero value
@@ -208,6 +214,9 @@ var ErrBadTarget = errors.New("launch: not a world or server to open")
 func (l *Launcher) Play(id, accountID string, into instance.Into) error {
 	if !into.Valid() {
 		return ErrBadTarget
+	}
+	if into.Kind == "world" && l.cfg.Hosted != nil && l.cfg.Hosted(id, into.Target) {
+		return ErrHosted
 	}
 	inst, err := l.cfg.Instances.Get(id)
 	if err != nil {

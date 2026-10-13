@@ -109,15 +109,17 @@ func (s *Service) Start(id string, o Options) error {
 	} else if info, err := os.Stat(filepath.Join(saves, world)); err != nil || !info.IsDir() {
 		return ErrNoWorld
 	}
-	s.mu.Lock()
-	if s.cur != nil {
-		name := s.cur.name
-		s.mu.Unlock()
-		return fmt.Errorf("%w: %s is hosting, stop it first", ErrRunning, name)
+	if err := s.free(); err != nil {
+		return err
 	}
+	// Asked without the lock: InUse may ask Running in turn.
 	if s.d.InUse != nil && s.d.InUse(id) {
-		s.mu.Unlock()
 		return ErrBusy
+	}
+	s.mu.Lock()
+	if err := s.freeLocked(); err != nil {
+		s.mu.Unlock()
+		return err
 	}
 	if !portFree(bindHost(o), o.Port) {
 		s.mu.Unlock()
@@ -138,6 +140,20 @@ func (s *Service) Start(id string, o Options) error {
 	}
 	s.emit(srv)
 	go s.run(ctx, srv, in)
+	return nil
+}
+
+// free fails when a server already runs (one at a time).
+func (s *Service) free() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.freeLocked()
+}
+
+func (s *Service) freeLocked() error {
+	if s.cur != nil {
+		return fmt.Errorf("%w: %s is hosting, stop it first", ErrRunning, s.cur.name)
+	}
 	return nil
 }
 
