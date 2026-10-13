@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -172,13 +171,13 @@ func (s *Service) Refs(yield func(sha1 string)) error {
 // moves (to the trash, or elsewhere).
 func (s *Service) Forget(id string) { s.idx.forget(id) }
 
-// Folder is the folder an item lives in, for "Show in folder".
-func (s *Service) Folder(id, item string) (string, error) {
+// Path is where an item is on disk.
+func (s *Service) Path(id, item string) (string, error) {
 	e, err := s.entry(id, item)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(s.d.Instances.GameDir(id), filepath.FromSlash(path.Dir(e.Rel))), nil
+	return filepath.Join(s.d.Instances.GameDir(id), filepath.FromSlash(e.Rel)), nil
 }
 
 // Installed is an identified item an instance has.

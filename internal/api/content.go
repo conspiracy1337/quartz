@@ -159,7 +159,7 @@ func (c *Content) Undo(instanceID, token string) error {
 	return c.d.Service.Undo(c.ctx.Get(), instanceID, token)
 }
 
-// ShowInFolder opens the folder an item is in.
+// ShowInFolder shows the item selected in the file manager.
 func (c *Content) ShowInFolder(instanceID, item string) error {
 	if err := checkInstanceID(instanceID); err != nil {
 		return err
@@ -167,11 +167,11 @@ func (c *Content) ShowInFolder(instanceID, item string) error {
 	if err := checkItems([]string{item}); err != nil {
 		return err
 	}
-	dir, err := c.d.Service.Folder(instanceID, item)
+	p, err := c.d.Service.Path(instanceID, item)
 	if err != nil {
 		return err
 	}
-	return procx.OpenFolder(dir)
+	return procx.Reveal(p)
 }
 
 // AddDropped adds the files of a drop to a tab (a world for data packs).
