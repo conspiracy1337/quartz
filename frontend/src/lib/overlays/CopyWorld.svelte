@@ -38,7 +38,7 @@
 
 <Dialog title="Copy {name}" {sub} width={520} onclose={close}>
   <div class="field"><span class="field-label">To instance</span>
-    <div class="list" role="radiogroup" aria-label="To instance">
+    <div class="list cw-list" role="radiogroup" aria-label="To instance">
       {#each others as i (i.id)}
         <button class="wr" class:on={target === i.id} role="radio" aria-checked={target === i.id} onclick={() => (target = i.id)}>
           <span class="radio" class:on={target === i.id} aria-hidden="true"></span>
@@ -57,6 +57,8 @@
 </Dialog>
 
 <style>
+  /* Five rows show; more instances scroll inside the list, so the dialog never outgrows the window. */
+  .cw-list{max-height:240px;overflow-y:auto}
   .wr{display:grid;grid-template-columns:16px 32px minmax(0,1fr) auto;gap:12px;align-items:center;height:48px;padding:0 12px;border:0;background:transparent;width:100%;text-align:left;color:var(--text);border-top:1px solid var(--line)}
   .wr:first-child{border-top:0}
   .wr.on{background:var(--raise)}
