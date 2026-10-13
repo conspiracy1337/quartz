@@ -39,6 +39,9 @@
   let group = $state('none');
   let naming = $state(false);
   let sandbox = $state(true);
+  // Starts on only where games can be sandboxed: a sandboxed instance never
+  // launches unsandboxed.
+  void api.sandbox.status().then((st) => { if (!st.available) sandbox = false; });
   let shares = $state<Record<number, boolean>>({ 0: true, 2: true, 4: true, 5: true });
   let art = $state<Art>({ background: '#6b8afd', initial: '' });
   let icon = $state('');

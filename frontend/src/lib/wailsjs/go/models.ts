@@ -299,6 +299,7 @@ export namespace api {
 	    counts: Record<string, number>;
 	    java: string;
 	    javaAuto: string;
+	    sandboxPreset: string;
 	    memoryMB: MemoryRange;
 	    created: number;
 	    folder: string;
@@ -336,6 +337,7 @@ export namespace api {
 	        this.counts = source["counts"];
 	        this.java = source["java"];
 	        this.javaAuto = source["javaAuto"];
+	        this.sandboxPreset = source["sandboxPreset"];
 	        this.memoryMB = this.convertValues(source["memoryMB"], MemoryRange);
 	        this.created = source["created"];
 	        this.folder = source["folder"];

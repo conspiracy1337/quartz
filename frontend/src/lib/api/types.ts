@@ -40,6 +40,8 @@ export interface InstanceSettings {
 export interface CreateInstance { name: string; art: Art; icon: string; minecraft: string; loader: string; loaderVersion: string; group: string; sandbox: boolean; shares: string[] }
 export interface Instance extends InstanceSummary {
   sandboxed: boolean;
+  /** The sandbox's rules: standard | strict | custom. */
+  sandboxPreset: string;
   counts: Record<'mods' | 'resourcepacks' | 'shaders' | 'datapacks' | 'worlds' | 'servers', number>;
   java: string;
   memoryMB: { min: number; max: number };
@@ -202,6 +204,8 @@ export interface Run {
   id: string; startedAt: number; lengthMin: number; exitCode: number; result: RunResult;
   /** What the run used (recorded by Go; absent in older fixtures). */
   java?: string; memory?: { min: number; max: number }; account?: string; mods?: number;
+  /** The sandbox it ran in ("bubblewrap"); absent when it ran unsandboxed. */
+  sandbox?: string;
   /** Filled in after the game exits: the world played, the server joined, screenshots taken, the crash. */
   world?: string; server?: string; shots?: number; crash?: { title: string; detail?: string; report: boolean };
 }

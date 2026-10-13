@@ -24,6 +24,7 @@ import { bytes } from '../format';
 import { homeApi, logFilesApi, screenshotsApi, serversApi, worldsApi } from './game';
 import { downloadsApi } from './downloads';
 import { hostApi } from './host';
+import { sandboxApi } from './sandbox';
 import { app, settingsApi } from './system';
 
 export type { AppInfo, CustomCSSState, Settings } from './system';
@@ -116,6 +117,7 @@ export const api = {
     repair: bridged(LaunchGo.Repair, (_id: string) => ''),
   },
   host: hostApi,
+  sandbox: sandboxApi,
   logs: {
     live: bridged(LogsGo.Live, (_instanceId: string) => logs.liveLog),
     runs,

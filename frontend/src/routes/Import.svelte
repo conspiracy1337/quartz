@@ -61,13 +61,16 @@
   const loaderLine = $derived(pack ? `${pack.version ? `v${pack.version} for ` : 'For '}${pack.loader || 'Minecraft'} ${pack.minecraft}` : '');
   /** Overrides: "config, 212 files". */
   const overrides = $derived(pack?.stats.files ? `${pack.stats.folders.slice(0, 2).join(', ')}, ${plural(pack.stats.files, 'file')}` : 'None');
+  // An imported instance is sandboxed where games can be (Go's import does the same).
+  let sandboxed = $state(false);
+  void api.sandbox.status().then((st) => (sandboxed = st.available));
   const warnings = $derived.by(() => {
     if (!pack) return [];
     const out: { title: string; detail: string }[] = [];
     const inLayers = pack.stats.foreign.filter((f) => f.includes('/'));
     const outside = pack.stats.foreign.filter((f) => !f.includes('/'));
     const list = (l: string[]) => `${l.slice(0, 2).join(', ')}${l.length > 2 ? ` and ${l.length - 2} more` : ''}.`;
-    if (inLayers.length) out.push({ title: `${plural(inLayers.length, 'jar')} in overrides ${inLayers.length === 1 ? 'is' : 'are'} not from ${pack.source}`, detail: list(inLayers) });
+    if (inLayers.length) out.push({ title: `${plural(inLayers.length, 'jar')} in overrides ${inLayers.length === 1 ? 'is' : 'are'} not from ${pack.source}`, detail: list(inLayers) + (sandboxed ? ` ${inLayers.length === 1 ? 'It' : 'They'} will run inside the sandbox.` : '') });
     if (outside.length) out.push({ title: `${plural(outside.length, 'jar')} ${outside.length === 1 ? 'downloads' : 'download'} from outside ${pack.source}`, detail: list(outside) });
     if (pack.stats.blocked) out.push({ title: `${plural(pack.stats.blocked, 'file')} ${pack.stats.blocked === 1 ? 'needs' : 'need'} a manual download`, detail: 'Their authors only allow downloads from the CurseForge website.' });
     for (const w of pack.warnings) out.push({ title: w, detail: '' });

@@ -464,7 +464,8 @@ func (a *app) buildBrowse(dl *download.Downloader) {
 			g := a.settings.Get().Java
 			return instance.JavaSettings{MemoryMinMB: g.MemoryMinMB, MemoryMaxMB: g.MemoryMaxMB, JVMArgs: g.JVMArgs}
 		},
-		GetIcon: modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log,
+		Sandboxed: func() bool { return a.sandbox.Status().Available },
+		GetIcon:   modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log,
 	}, modpack.UpdateDeps{Known: a.content.Known, Record: a.content.Record, Channel: channel})
 }
 
