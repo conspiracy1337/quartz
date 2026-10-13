@@ -2378,6 +2378,7 @@ export namespace settings {
 	    onGameStart: string;
 	    startPage: string;
 	    startWithComputer: boolean;
+	    hiddenNews?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new General(source);
@@ -2389,6 +2390,7 @@ export namespace settings {
 	        this.onGameStart = source["onGameStart"];
 	        this.startPage = source["startPage"];
 	        this.startWithComputer = source["startWithComputer"];
+	        this.hiddenNews = source["hiddenNews"];
 	    }
 	}
 	export class Integrations {

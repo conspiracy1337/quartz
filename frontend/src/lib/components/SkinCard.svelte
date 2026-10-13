@@ -22,7 +22,7 @@
   const total = $derived((week.data ?? []).reduce((n, d) => n + d.minutes, 0));
   const max = $derived(Math.max(1, ...(week.data ?? []).map((d) => d.minutes)));
   const days = $derived((week.data ?? []).map((d, i) => ({
-    letter: DAYS[i]![0], label: `${DAYS[i]![1]}, ${hmLoose(d.minutes)}`, h: Math.round((d.minutes / max) * 100) + '%', today: i === 6,
+    letter: DAYS[i]![0], label: `${DAYS[i]![1]}, ${hmLoose(d.minutes)}`, h: Math.round((d.minutes / max) * 100) + '%', today: d.today ?? i === 6,
   })));
   const summary = $derived(`Played ${hmLoose(total)} this week. ` + days.map((d) => d.label.replace(',', '')).join(', '));
 </script>

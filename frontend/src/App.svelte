@@ -7,15 +7,18 @@
   import InstanceEdit from '$lib/overlays/InstanceEdit.svelte';
   import InstanceMenu from '$lib/overlays/InstanceMenu.svelte';
   import Blocked from '$lib/overlays/Blocked.svelte';
+  import CopyWorld from '$lib/overlays/CopyWorld.svelte';
   import Crash from '$lib/overlays/Crash.svelte';
   import Host from '$lib/overlays/Host.svelte';
   import HostPanel from '$lib/overlays/HostPanel.svelte';
   import Install from '$lib/overlays/Install.svelte';
   import LaunchPanel from '$lib/overlays/LaunchPanel.svelte';
   import Palette from '$lib/overlays/Palette.svelte';
+  import ServerDialog from '$lib/overlays/ServerDialog.svelte';
   import Shortcuts from '$lib/overlays/Shortcuts.svelte';
   import Toast from '$lib/overlays/Toast.svelte';
   import UpdateBanner from '$lib/overlays/UpdateBanner.svelte';
+  import WorldEdit from '$lib/overlays/WorldEdit.svelte';
   import { applyAppearance, prefs } from '$lib/prefs.svelte';
   import { router, type Route } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
@@ -122,7 +125,10 @@
 
   {#if overlay?.kind === 'add-account'}<AddAccount mode={overlay.mode} accountId={overlay.accountId} />
   {:else if overlay?.kind === 'install'}{#key overlay}<Install {...overlay} />{/key}
-  {:else if overlay?.kind === 'crash'}<Crash instanceId={overlay.instanceId} />
+  {:else if overlay?.kind === 'crash'}{#key overlay}<Crash instanceId={overlay.instanceId} runId={overlay.runId} file={overlay.file} />{/key}
+  {:else if overlay?.kind === 'server'}{#key overlay}<ServerDialog instanceId={overlay.instanceId} entry={overlay.entry} />{/key}
+  {:else if overlay?.kind === 'copy-world'}{#key overlay}<CopyWorld {...overlay} />{/key}
+  {:else if overlay?.kind === 'rename-world'}{#key overlay}<WorldEdit instanceId={overlay.instanceId} folder={overlay.folder} name={overlay.name} />{/key}
   {:else if overlay?.kind === 'blocked'}<Blocked jobId={overlay.jobId} />
   {:else if overlay?.kind === 'host'}<Host instanceId={overlay.instanceId} />
   {:else if overlay?.kind === 'palette'}{#key overlay.mode}<Palette mode={overlay.mode} />{/key}

@@ -14,6 +14,7 @@ class Tasks {
   etaSec = $state(0);
   loaded = $state(false);
   #rev = -1;
+  #waiters = new Map<string, (ok: boolean) => void>();
 
   async load() {
     this.apply(await api.downloads.snapshot());
@@ -31,7 +32,29 @@ class Tasks {
     this.loaded = true;
     if (s.historyRev !== this.#rev) {
       this.#rev = s.historyRev;
-      void api.downloads.history().then((h) => (this.history = h ?? []));
+      void api.downloads.history().then((h) => {
+        this.history = h ?? [];
+        this.#settle();
+      });
+    }
+  }
+
+  /** Resolves once a job has finished: true when it completed, false when it failed or was cancelled. */
+  until(id: string): Promise<boolean> {
+    if (!id) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      this.#waiters.set(id, resolve);
+      this.#settle();
+    });
+  }
+
+  #settle() {
+    for (const [id, resolve] of this.#waiters) {
+      if (this.active.some((j) => j.id === id)) continue;
+      const done = this.history.find((j) => j.id === id);
+      if (!done) continue;
+      this.#waiters.delete(id);
+      resolve(done.state === 'done');
     }
   }
 

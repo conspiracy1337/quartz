@@ -1,6 +1,6 @@
 // Real Go services. Each call falls back to a harmless browser-preview behaviour when
 // the Wails bridge is absent, so the UI also runs under plain Vite and in tests.
-import { hasBridge } from '../bridge';
+import { bridged, hasBridge } from '../bridge';
 import * as AppGo from '../wailsjs/go/api/App';
 import * as SettingsGo from '../wailsjs/go/api/Settings';
 import type { api as goapi, settings, theme } from '../wailsjs/go/models';
@@ -20,6 +20,8 @@ export const app = {
       : Promise.resolve({ name: 'Quartz Client', shortName: 'Quartz', version: 'preview', dataDir: '~/.local/share/Quartz', portable: false, os: 'linux', memoryMb: 32768 }),
   /** Opens an https link in the system browser (Go refuses any other scheme). */
   openUrl: (url: string): Promise<void> => (hasBridge() ? AppGo.OpenURL(url) : (window.open(url, '_blank', 'noopener'), Promise.resolve())),
+  /** Shows the launcher's data folder in the file manager. */
+  openDataFolder: bridged(AppGo.OpenDataFolder, () => undefined),
 };
 
 export const settingsApi = {

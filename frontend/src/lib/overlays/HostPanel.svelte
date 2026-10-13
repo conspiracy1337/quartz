@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { copyText } from '../clipboard';
   import { href } from '../router.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -6,7 +7,7 @@
   /** Bottom-right panel while a local server starts or runs. */
   interface Props { instanceId: string; state: 'starting' | 'running' }
   let { instanceId, state }: Props = $props();
-  const copy = (t: string) => void navigator.clipboard?.writeText(t);
+  const copy = (t: string) => void copyText(t);
 </script>
 
 {#if state === 'starting'}

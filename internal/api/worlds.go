@@ -157,6 +157,14 @@ func (a *Worlds) Seed(id, folder string) (string, error) {
 	return a.w.Seed(id, folder)
 }
 
+// OpenFolder opens the instance's saves folder.
+func (a *Worlds) OpenFolder(id string) error {
+	if err := checkInstanceID(id); err != nil {
+		return err
+	}
+	return procx.OpenFolder(a.w.Folder(id))
+}
+
 // ShowInFolder selects the world's folder in the file manager.
 func (a *Worlds) ShowInFolder(id, folder string) error {
 	if err := checkWorld(id, folder); err != nil {

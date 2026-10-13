@@ -24,8 +24,8 @@
   const syncable = $derived(sync.data ? [...sync.data.files, ...sync.data.folders, ...sync.data.mods, ...sync.data.custom].filter((e) => e.enabled && e.available) : []);
   let joined = $state<Record<string, boolean>>({ options: true, servers: true, hotbar: true, resourcepacks: true, xaero: true });
 
-  // Java, memory, window, performance and commands are the instance's own (saved
-  // through Go); syncing and quick play stay local until their milestones land.
+  // Java, memory, window (with "Open straight into"), performance and commands are
+  // the instance's own (saved through Go); syncing stays local until its milestone lands.
   // svelte-ignore state_referenced_locally
   let st = $state($state.snapshot(i.settings));
   const info = query(() => api.app.info());
@@ -51,7 +51,27 @@
     fn();
     void save();
   }
-  let quickPlay = $state('none');
+  // "Open straight into": the instance's own worlds and servers.
+  const worlds = query(() => api.worlds.list(i.id));
+  const servers = query(() => api.servers.list(i.id));
+  const into = $derived(st.window.openInto?.kind ? `${st.window.openInto.kind}:${st.window.openInto.target}` : 'none');
+  const intoOptions = $derived.by(() => {
+    const opts = [{ value: 'none', label: 'Nothing' }];
+    for (const w of worlds.data ?? []) opts.push({ value: `world:${w.id}`, label: `World: ${w.name}` });
+    for (const s of servers.data ?? []) {
+      const e = api.servers.entry(i.id, s.id);
+      if (e) opts.push({ value: `server:${e.address}`, label: `Server: ${s.name}` });
+    }
+    // A world or server that is gone keeps its entry, so the select never shows a blank.
+    const t = st.window.openInto;
+    if (t?.kind && !opts.some((o) => o.value === into)) opts.push({ value: into, label: `${t.kind === 'world' ? 'World' : 'Server'}: ${t.target}` });
+    return opts;
+  });
+  function setInto(v: string) {
+    const at = v.indexOf(':');
+    const kind = v === 'none' ? '' : (v.slice(0, at) as 'world' | 'server');
+    change(() => (st.window.openInto = { kind, target: kind ? v.slice(at + 1) : '' }));
+  }
   let sharedKeys = $state(true);
   const sub = (s: string) => href({ name: 'instance', id: i.id, tab: 'settings', sub: s });
 
@@ -91,7 +111,7 @@
         <div class="divider"></div>
         <Setting title="When the game starts"><Seg options={ON_GAME_START} value={onStart} label="When the game starts" onchange={(v) => change(() => (st.window.onGameStart = v))} /></Setting>
         <div class="divider"></div>
-        <Setting title="Open straight into" desc="Skips the title screen."><Select bind:value={quickPlay} options={[{ value: 'none', label: 'Nothing' }, { value: 'northwatch', label: 'World: Northwatch' }, { value: 'smp', label: 'Server: Friends SMP' }]} label="Open straight into" /></Setting>
+        <Setting title="Open straight into" desc="Skips the title screen."><Select value={into} options={intoOptions} label="Open straight into" onchange={setInto} /></Setting>
       </div>
     </section>
     <section class="sec" aria-label="Syncing">

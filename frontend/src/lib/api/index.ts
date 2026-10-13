@@ -2,6 +2,7 @@
 // mock fixtures; each later milestone replaces one domain with its Go service without
 // touching the screens.
 import * as home from './mock/home';
+import type { PlayInto } from './types';
 import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
@@ -18,6 +19,8 @@ import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { accountsApi, signInAlerts } from './accounts';
 import { browseApi, importsApi, manualApi, packsApi } from './browse';
 import { contentApi } from './content';
+import { bytes } from '../format';
+import { homeApi, logFilesApi, screenshotsApi, serversApi, worldsApi } from './game';
 import { downloadsApi } from './downloads';
 import { app, settingsApi } from './system';
 
@@ -87,19 +90,20 @@ export const api = {
   },
   content: contentApi,
   home: {
-    /** Sign-in alerts, missing mod dependencies and modpack updates; disk space arrives with M7. */
+    /** Sign-in alerts, missing mod dependencies, modpack updates and low disk space. */
     alerts: () => (hasBridge()
-      ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts(), packAlerts()]).then((lists) => lists.flat())
+      ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts(), packAlerts(), diskAlerts()]).then((lists) => lists.flat())
       : serve(home.alerts)),
-    news: unbuilt((): typeof home.news | null => home.news, null),
-    week: unbuilt(() => home.week, home.week.map((d) => ({ ...d, minutes: 0 }))),
-    servers: unbuilt(() => home.servers, []),
-    recentShots: unbuilt(() => home.recentShots, []),
+    ...homeApi,
   },
-  screenshots: { list: unbuilt((_instanceId: string) => home.instanceShots, []) },
+  screenshots: screenshotsApi,
+  worlds: worldsApi,
+  servers: serversApi,
   launch: {
     /** accountId "" plays with the default account; "Launch as" passes another one. */
     play: bridged(LaunchGo.Play, (_id: string, _accountId: string) => undefined),
+    /** Opens straight into a world (its folder) or a server (its address). */
+    playInto: bridged((id: string, accountId: string, into: PlayInto) => LaunchGo.PlayInto(id, accountId, into.kind, into.target), (_id: string, _accountId: string, _into: PlayInto) => undefined),
     stop: bridged(LaunchGo.Stop, (_id: string) => undefined),
     cancelLaunch: bridged(LaunchGo.CancelLaunch, (_id: string) => undefined),
     status: bridged(LaunchGo.Status, () => ({ running: [] as string[], launching: [] as string[] })),
@@ -108,9 +112,8 @@ export const api = {
   },
   logs: {
     live: bridged(LogsGo.Live, (_instanceId: string) => logs.liveLog),
-    files: unbuilt((_instanceId: string) => logs.logFiles, []),
-    text: unbuilt((_instanceId: string, _name: string) => logs.latestLogText, ''),
     runs,
+    ...logFilesApi,
   },
   versions: {
     minecraft: bridged(VersionsGo.Minecraft, () => versions.families),
@@ -150,6 +153,12 @@ async function missingAlerts(): Promise<Alert[]> {
     const more = m.more ? ` and ${m.more} more` : '';
     return [{ tone: 'warn', subject: name, text: `is missing ${m.dep}${more}`, action: 'Fix', target: { kind: 'instance', id: m.instanceId, tab: 'mods' } }];
   });
+}
+
+/** "Low disk space 3.2 GB left", when the data folder's drive has under 5 GB free. */
+async function diskAlerts(): Promise<Alert[]> {
+  const d = await homeApi.disk();
+  return d.low && d.free >= 0 ? [{ tone: 'warn', subject: 'Low disk space', text: `${bytes(d.free)} left`, action: 'Clean up', target: { kind: 'settings', tab: 'storage' } }] : [];
 }
 
 /** "Create: Above and Beyond 1.4.1 is out": one alert per pack with a newer version. */

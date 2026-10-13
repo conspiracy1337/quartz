@@ -5,6 +5,7 @@
   import { hasBridge, onEvent } from '../bridge';
   import { searchIn } from '../format';
   import { query } from '../query.svelte';
+  import { revs } from '../revs.svelte';
   import { projectKindOf } from '../labels';
   import { go, href } from '../router.svelte';
   import { session } from '../session.svelte';
@@ -32,7 +33,6 @@
     datapacks: { noun: 'data packs', secondary: 'Check updates', primary: 'Add data packs', toggles: true, projects: true,
       chips: (items) => [{ label: 'All worlds', test: () => true }, ...[...new Set(items.map((c) => c.group).filter((g) => g !== undefined))].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
     worlds: { noun: 'worlds', secondary: 'Open folder', primary: 'Import world', toggles: false, projects: false,
-      hint: 'Worlds are backed up before each launch. The last 5 backups are kept.',
       chips: () => [all, { label: 'Survival', test: (c) => c.group === 'Survival' }, { label: 'Creative', test: (c) => c.group === 'Creative' }] },
     servers: { noun: 'servers', secondary: 'Refresh', primary: 'Add server', toggles: false, projects: false,
       chips: () => [all, { label: 'Online', test: (c) => c.online === true }] },
@@ -43,6 +43,8 @@
 
   const cfg = $derived(CONFIG[kind]);
   const isManaged = $derived(managed(kind));
+  // Worlds and servers have their own row menus and actions (WorldsMenu, ServersMenu).
+  const hasMenu = $derived(isManaged || kind === 'worlds' || kind === 'servers');
   const info = query(() => (managed(kind) ? api.content.info(instanceId) : Promise.resolve(null)));
   // The shader hint names the shader mod the instance has (Iris or Oculus).
   const hint = $derived(kind === 'shaders' && info.data ? `Only one shader pack runs at a time. ${info.data.shaderMod ? `Uses ${info.data.shaderMod}.` : 'Shaders need Iris or Oculus.'}` : cfg.hint);
@@ -88,6 +90,19 @@
   const pending = $derived(rows.filter((c) => c.status?.kind === 'update').length);
   const review = () => go({ name: 'instance', id: instanceId, tab: kind, sub: 'updates' });
   async function secondary() {
+    if (kind === 'worlds') return api.worlds.openFolder(instanceId).catch((e: unknown) => session.fail('Open folder', e));
+    if (kind === 'servers') {
+      checking = true;
+      try {
+        await api.servers.list(instanceId, true);
+        revs.bump('servers');
+      } catch (e) {
+        session.fail('Refresh', e);
+      } finally {
+        checking = false;
+      }
+      return;
+    }
     if (!isManaged) {
       checking = true;
       setTimeout(() => (checking = false), CHECK_MS);
@@ -104,6 +119,46 @@
     } finally {
       checking = false;
     }
+  }
+
+  // Import world and Add server.
+  async function primary() {
+    if (kind === 'servers') return session.open({ kind: 'server', instanceId });
+    try {
+      const name = await api.worlds.import(instanceId);
+      if (name) session.notify({ subject: name, text: 'added' });
+    } catch (e) {
+      session.fail('Import world', e);
+    }
+  }
+
+  // A row's Play or Join opens the game straight into that world or server.
+  function rowAction(c: ContentItem) {
+    if (kind === 'worlds') return session.play(instanceId, '', { kind: 'world', target: c.id });
+    const address = api.servers.entry(instanceId, c.id)?.address;
+    session.play(instanceId, '', address ? { kind: 'server', target: address } : undefined);
+  }
+
+  async function removeWorld(c: ContentItem) {
+    const token = await api.worlds.remove(instanceId, c.id);
+    revs.bump('worlds');
+    session.notify({ subject: c.name, text: 'was deleted', undo: () => void api.worlds.undo(instanceId, token).then(() => revs.bump('worlds')).catch((e: unknown) => session.fail('Undo', e)) });
+  }
+  async function exportWorld(c: ContentItem) {
+    if (await api.worlds.export(instanceId, c.id)) session.notify({ subject: c.name, text: 'was exported' });
+  }
+  async function removeServer(c: ContentItem) {
+    const e = api.servers.entry(instanceId, c.id);
+    if (!e) return;
+    const token = await api.servers.remove(instanceId, e.index, e.address);
+    revs.bump('servers');
+    session.notify({ subject: c.name, text: 'was removed', undo: () => void api.servers.undo(instanceId, token).then(() => revs.bump('servers')).catch((err: unknown) => session.fail('Undo', err)) });
+  }
+  async function moveServer(c: ContentItem, by: number) {
+    const e = api.servers.entry(instanceId, c.id);
+    if (!e) return;
+    await api.servers.move(instanceId, e.index, e.address, by);
+    revs.bump('servers');
   }
 
   // The row's "…" menu (composed from the Accounts "…" menu).
@@ -181,10 +236,20 @@
   // Files dropped on the window while this tab shows are added to it; Go keeps
   // the paths, the tab only names where they go.
   $effect(() => {
-    if (!managed(kind)) return;
+    if (!managed(kind) && kind !== 'worlds') return;
     return onEvent<{ dropId: string; count: number; names: string[] }>('content:dropped', (d) => void add(d.dropId));
   });
   async function add(dropId: string) {
+    if (kind === 'worlds') {
+      try {
+        const added = await api.worlds.importDropped(dropId, instanceId);
+        revs.bump('worlds');
+        if (added.length) session.notify({ subject: added.length === 1 ? added[0]! : `${added.length} worlds`, text: 'added' });
+      } catch (e) {
+        session.fail('Import world', e);
+      }
+      return;
+    }
     let world = '';
     if (kind === 'datapacks') {
       const worlds = info.data?.worlds ?? [];
@@ -233,7 +298,7 @@
     {#if cfg.projects}
       <a href={href({ name: 'browse', type: projectKindOf(kind), instance: instanceId })} class="btn btn-accent"><Icon name="plus" size={14} sw={2} />{cfg.primary}</a>
     {:else}
-      <button class="btn btn-accent"><Icon name="plus" size={14} sw={2} />{cfg.primary}</button>
+      <button class="btn btn-accent" onclick={primary}><Icon name="plus" size={14} sw={2} />{cfg.primary}</button>
     {/if}
   </div>
   {#if hint}<p class="small faint" style="margin: 0">{hint}</p>{/if}
@@ -249,11 +314,11 @@
           <a href={cfg.projects && c.ref ? href({ name: 'project', id: c.ref }) : undefined} class="dim" style="min-width: 0; text-decoration: none"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></a>
           <span class="c-stat">
             {#if b}<span class="badge {b.cls}">{b.text}</span>{/if}
-            {#if c.action}<button class="btn btn-sm" onclick={() => session.play(instanceId)}>{c.action}</button>{/if}
+            {#if c.action}<button class="btn btn-sm" onclick={() => rowAction(c)}>{c.action}</button>{/if}
           </span>
           <span class="mono muted trunc">{c.meta}</span>
           <span class="opt">{#if c.source}<span class="src" title={SOURCES[c.source][1]}>{SOURCES[c.source][0]}</span>{/if}</span>
-          <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {c.name}" aria-haspopup="menu" disabled={!isManaged} onclick={(e) => openMenu(e, c)}><Icon name="more" size={14} /></button>
+          <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {c.name}" aria-haspopup="menu" disabled={!hasMenu} onclick={(e) => openMenu(e, c)}><Icon name="more" size={14} /></button>
         </div>
       {:else}
         <Empty text={items.data.length ? 'Nothing matches this filter.' : EMPTY[kind]} />
@@ -277,6 +342,26 @@
 {#if menu}
   {@const c = menu.item}
   <Menu x={menu.x} y={menu.y} label="More for {c.name}" onclose={() => (menu = null)}>
+    {#if kind === 'worlds'}
+      <!-- WorldsMenu.dc.html: Play stays on the row. -->
+      <button class="mi" role="menuitem" onclick={() => act(async () => session.open({ kind: 'rename-world', instanceId, folder: c.id, name: c.name }), 'Rename')}><Icon name="file" size={14} /><span>Rename</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(async () => session.copy(await api.worlds.seed(instanceId, c.id), 'Seed'), 'Copy seed')}><Icon name="link" size={14} /><span>Copy seed</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(() => exportWorld(c), 'Export')}><Icon name="download" size={14} /><span>Export as .zip</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(async () => session.open({ kind: 'copy-world', instanceId, folder: c.id, name: c.name, sub: `${c.sub.split(', ').at(-1)}, ${c.meta}` }), 'Copy')}><Icon name="library" size={14} /><span>Copy to instance…</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(() => api.worlds.showInFolder(instanceId, c.id), 'Show in folder')}><Icon name="folder" size={14} /><span>Show in folder</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(() => removeWorld(c), 'Delete')}><Icon name="trash" size={14} /><span>Delete</span><span></span></button>
+    {:else if kind === 'servers'}
+      <!-- ServersMenu.dc.html -->
+      {@const entry = api.servers.entry(instanceId, c.id)}
+      <button class="mi" role="menuitem" onclick={() => act(async () => rowAction(c), 'Join')}><Icon name="play" size={14} /><span>Join</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(async () => session.open({ kind: 'server', instanceId, ...(entry ? { entry } : {}) }), 'Edit')}><Icon name="file" size={14} /><span>Edit</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(() => session.copy(entry?.address ?? '', 'Address'), 'Copy address')}><Icon name="link" size={14} /><span>Copy address</span><span></span></button>
+      <div class="divider" style="margin: 4px 0"></div>
+      <button class="mi" role="menuitem" onclick={() => act(() => moveServer(c, -1), 'Move up')}><Icon name="chevron-up" size={14} /><span>Move up</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(() => moveServer(c, 1), 'Move down')}><Icon name="chevron-down" size={14} /><span>Move down</span><span></span></button>
+      <div class="divider" style="margin: 4px 0"></div>
+      <button class="mi" role="menuitem" onclick={() => act(() => removeServer(c), 'Remove')}><Icon name="trash" size={14} /><span>Remove</span><span></span></button>
+    {:else}
     {#if kind === 'resourcepacks' && c.enabled}
       <button class="mi" role="menuitem" onclick={() => act(() => move(c, -1), 'Move up')}><Icon name="chevron-up" size={14} /><span>Move up</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => move(c, 1), 'Move down')}><Icon name="chevron-down" size={14} /><span>Move down</span><span></span></button>
@@ -289,6 +374,7 @@
     {/if}
     <button class="mi" role="menuitem" onclick={() => act(() => api.content.showInFolder(instanceId, c.id), 'Show in folder')}><Icon name="folder" size={14} /><span>Show in folder</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => remove(c), 'Remove')}><Icon name="trash" size={14} /><span>Remove</span><span></span></button>
+    {/if}
   </Menu>
 {/if}
 

@@ -1,10 +1,11 @@
 // Mods, resource packs, shaders and data packs: Go's content service. The browser
 // preview serves the design's fixtures and keeps its edits in memory.
-import { bridged, hasBridge, preview } from '../bridge';
+import { bridged } from '../bridge';
 import { artOf } from '../look';
 import { revs } from '../revs.svelte';
 import * as Go from '../wailsjs/go/api/Content';
 import { content as fixtures } from './mock/content';
+import { serversApi, worldsApi } from './game';
 import * as inst from './mock/instances';
 import * as misc from './mock/misc';
 import type {
@@ -12,7 +13,7 @@ import type {
   PendingUpdate, Source, StoreUsage, UpdateReview, ChangelogVersion,
 } from './types';
 
-/** The kinds Go manages; worlds and servers arrive with M7. */
+/** The kinds the content service manages; worlds and servers have their own services. */
 export type ManagedKind = Exclude<ContentKind, 'worlds' | 'servers'>;
 export const managed = (k: ContentKind): k is ManagedKind => k !== 'worlds' && k !== 'servers';
 
@@ -120,7 +121,7 @@ const edit = <A extends unknown[], R>(fn: (...a: A) => Promise<R>) => async (...
 
 export const contentApi = {
   list: (id: string, kind: ContentKind): Promise<ContentItem[]> =>
-    managed(kind) ? revs.load('content', () => list(id, kind)) : hasBridge() ? Promise.resolve([]) : preview(fixtures[kind]),
+    kind === 'worlds' ? worldsApi.list(id) : kind === 'servers' ? serversApi.list(id) : revs.load('content', () => list(id, kind)),
   info: (id: string) => revs.load('content', bridged(() => Go.Info(id), () => mock.info(id))),
   setEnabled: edit(bridged(Go.SetEnabled, mock.setEnabled)),
   setActiveShader: edit(bridged(Go.SetActiveShader, mock.setActiveShader)),

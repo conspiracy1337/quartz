@@ -1,4 +1,4 @@
-import type { LogFile, LogLine, Run } from '../types';
+import type { CrashInfo, LogFile, LogLine, Run } from '../types';
 import { daysAgo } from './time';
 
 const L = (time: string, level: LogLine['level'], thread: string, message: string, redacted = false): LogLine =>
@@ -61,3 +61,19 @@ export const runs: Run[] = [
   { id: 'r7', startedAt: daysAgo(30, 23, 40), lengthMin: 0, exitCode: 1, result: 'failed' },
   { id: 'r8', startedAt: daysAgo(40, 10, 12), lengthMin: 164, exitCode: 0, result: 'ok' },
 ];
+
+/** The design's crash dialog (DlgCrash). */
+export const crash = (instanceId: string, runId: string): CrashInfo => ({
+  instanceId, runId, lengthMin: 3, exitCode: 1,
+  cause: {
+    title: 'Entity Culling 1.7.2 failed to load',
+    text: 'Its mixin into the entity renderer did not apply. This usually means it does not support Sodium 0.6.5 yet. Entity Culling 1.7.4 fixes this.',
+    detail: 'Mixin apply failed in entityculling',
+    mod: { item: 'ec', name: 'Entity Culling', version: '1.7.2', update: '1.7.4', enabled: true },
+    fixes: ['update', 'disable'],
+  },
+  trace: `java.lang.RuntimeException: Mixin transformation of net.minecraft.client.render.entity.EntityRenderer failed
+  at org.spongepowered.asm.mixin.transformer.MixinProcessor.applyMixins
+  Caused by: InvalidInjectionException: @Inject(method = "shouldRender") on entityculling.mixins.json:EntityRendererMixin
+  Mod file: mods/entityculling-fabric-1.7.2.jar`,
+});

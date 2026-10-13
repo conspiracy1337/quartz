@@ -5,6 +5,8 @@
   import { onEvent } from '$lib/bridge';
   import LogsNav from '$lib/components/LogsNav.svelte';
   import SearchField from '$lib/ui/SearchField.svelte';
+  import { copyText } from '$lib/clipboard';
+  import { session } from '$lib/session.svelte';
 
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
@@ -56,7 +58,7 @@
     follow = con.scrollHeight - con.scrollTop - con.clientHeight < ROW * 2;
   }
   async function copy() {
-    await navigator.clipboard.writeText(shown.map((l) => `[${l.time}] [${l.thread ? l.thread + '/' : ''}${l.level}]: ${l.message}`).join('\n'));
+    await copyText(shown.map((l) => `[${l.time}] [${l.thread ? l.thread + '/' : ''}${l.level}]: ${l.message}`).join('\n'));
   }
   const count = (l: LogLevel) => all.filter((x) => x.level === l).length;
   const shown = $derived(all.filter((l) => levels[l.level]));
@@ -89,7 +91,7 @@
   <div style="flex: 1 1 0"></div>
   <button class="btn btn-sm" aria-pressed={wrap} onclick={() => (wrap = !wrap)}>Wrap</button>
   <button class="btn btn-sm" onclick={copy}>Copy</button>
-  <button class="btn btn-sm">Upload to mclo.gs</button>
+  <button class="btn btn-sm" onclick={() => session.upload(() => api.logs.uploadRun(instanceId, ''))}>Upload to mclo.gs</button>
 </div>
 <div class="con" class:nowrap={!wrap} role="log" aria-label="Game output" bind:this={con} onscroll={scrolled}>
   {#if !wrap}<div style="height: {first * ROW}px" aria-hidden="true"></div>{/if}

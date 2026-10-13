@@ -13,10 +13,18 @@
   const HEAD_H = 44;
 
   let reload = $state(0);
+  // Refresh pings every server again; other reloads use the last minute's answers.
+  let force = false;
   const servers = query(() => {
     void reload; // re-fetch when Refresh bumps it
-    return api.home.servers();
+    const f = force;
+    force = false;
+    return api.home.servers(f);
   });
+  function refresh() {
+    force = true;
+    reload++;
+  }
   const instances = query(() => api.instances.list());
   let onlineOnly = $state(false);
   let open = $state<string | null>(null);
@@ -29,9 +37,10 @@
   const pingClass = (ms?: number) => (ms === undefined ? '' : ms < 30 ? 'p4' : ms < 80 ? 'p3' : ms < 250 ? 'p2' : 'p1');
   const inst = (id: string) => instances.data?.find((i) => i.id === id);
 
-  function join(instanceId: string | undefined) {
+  /** Joins the server with an instance (the one last used on it by default). */
+  function join(s: MergedServer, instanceId: string | undefined) {
     open = null;
-    if (instanceId) session.play(instanceId);
+    if (instanceId) session.play(instanceId, '', { kind: 'server', target: s.address });
   }
   function filter(online: boolean) {
     onlineOnly = online;
@@ -45,7 +54,7 @@
     <span style="display: flex; gap: 6px; align-items: center">
       <button class="chip" class:on={!onlineOnly} onclick={() => filter(false)}>All</button>
       <button class="chip" class:on={onlineOnly} onclick={() => filter(true)}>Online</button>
-      <button class="btn btn-icon btn-sm btn-ghost" aria-label="Refresh" onclick={() => reload++}><Icon name="refresh" size={14} sw={1.8} /></button>
+      <button class="btn btn-icon btn-sm btn-ghost" aria-label="Refresh" onclick={refresh}><Icon name="refresh" size={14} sw={1.8} /></button>
     </span>
   </div>
   <div class="sl-body">
@@ -58,7 +67,7 @@
           <span class="c-play small tnum trunc" style="color: {s.online ? 'var(--text)' : 'var(--faint)'}">{players(s)}</span>
           <span class="s-ping"><span class="s-ms">{s.pingMs !== undefined ? `${s.pingMs} ms` : ''}</span><span class="ping {pingClass(s.pingMs)}" aria-hidden="true"><i style="height: 4px"></i><i style="height: 6px"></i><i style="height: 8px"></i><i style="height: 11px"></i></span></span>
           <span class="split">
-            <button class="btn btn-sm" class:btn-accent={s.online} onclick={() => join(s.instances[0])}>Join</button>
+            <button class="btn btn-sm" class:btn-accent={s.online} onclick={() => join(s, s.instances[0])}>Join</button>
             <button class="btn btn-sm" onclick={() => (open = open === s.id ? null : s.id)} aria-expanded={open === s.id} aria-label="Join {s.name} with another instance"><Icon name="chevron-down" size={10} sw={2.4} /></button>
           </span>
         </div>
@@ -84,7 +93,7 @@
       {#each menuFor.instances as id, j (id)}
         {@const i = inst(id)}
         {#if i}
-          <button class="mi" role="menuitem" onclick={() => join(id)}><Tile art={i.art} icon={i.icon} size="sm" /><span class="trunc">{i.name}</span><span class="small faint">{j === 0 ? 'Last used' : i.minecraft}</span></button>
+          <button class="mi" role="menuitem" onclick={() => join(menuFor, id)}><Tile art={i.art} icon={i.icon} size="sm" /><span class="trunc">{i.name}</span><span class="small faint">{j === 0 ? 'Last used' : i.minecraft}</span></button>
         {/if}
       {/each}
     </div>

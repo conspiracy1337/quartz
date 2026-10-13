@@ -240,6 +240,13 @@ func (s *Service) dir(id, folder string) (string, error) {
 	return d, nil
 }
 
+// Folder is the instance's saves folder (made if missing, so it can be opened).
+func (s *Service) Folder(id string) string {
+	d := s.saves(id)
+	_ = os.MkdirAll(d, 0o700)
+	return d
+}
+
 // Path is a world's folder, for Show in folder.
 func (s *Service) Path(id, folder string) (string, error) { return s.dir(id, folder) }
 
