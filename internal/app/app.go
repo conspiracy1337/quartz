@@ -615,6 +615,7 @@ func (a *app) startup(ctx context.Context) {
 		st := a.sandbox.Status()
 		a.log.Info("sandbox", "available", st.Available, "backend", st.Name, "version", st.Version, "reason", st.Reason)
 	}()
+	a.watchDesktop()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)

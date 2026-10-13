@@ -7,6 +7,41 @@
   "frontend:dev:watcher": "pnpm run dev",
   "frontend:dev:serverUrl": "auto",
   "wailsjsdir": "./frontend/src/lib",
-  "author": { "name": "conspiracy1337", "email": "cns@conspiracy.moe" },
-  "info": { "productName": "Quartz Client", "companyName": "Quartz Client" }
+  "author": {
+    "name": "conspiracy1337",
+    "email": "cns@conspiracy.moe"
+  },
+  "info": {
+    "productName": "Quartz Client",
+    "companyName": "Quartz Client",
+    "productVersion": "0.0.0",
+    "copyright": "Personal build",
+    "comments": "Minecraft launcher",
+    "fileAssociations": [
+      {
+        "ext": "mrpack",
+        "name": "Modrinth modpack",
+        "description": "Modrinth modpack",
+        "iconName": "iconfile",
+        "role": "Viewer"
+      }
+    ],
+    "protocols": [
+      {
+        "scheme": "modrinth",
+        "description": "Modrinth install links",
+        "role": "Viewer"
+      },
+      {
+        "scheme": "curseforge",
+        "description": "CurseForge install links",
+        "role": "Viewer"
+      },
+      {
+        "scheme": "quartz",
+        "description": "Quartz Client links",
+        "role": "Viewer"
+      }
+    ]
+  }
 }
