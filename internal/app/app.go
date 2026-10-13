@@ -57,6 +57,7 @@ import (
 	"quartz/internal/intent"
 	"quartz/internal/java"
 	"quartz/internal/launch"
+	"quartz/internal/launchers"
 	"quartz/internal/loader"
 	"quartz/internal/logfiles"
 	"quartz/internal/manual"
@@ -194,6 +195,8 @@ func Run(o Options) error {
 			api.NewBrowse(a.ctx, a.browse),
 			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Opens: a.opens, Picture: a.pictures.Src}),
 			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
+			api.NewLaunchers(a.ctx, api.LaunchersDeps{Instances: a.instances, Packs: a.packs, Meta: a.meta, Java: a.java, Tasks: a.tasks,
+				Opens: a.opens, Log: a.log, Env: launchers.SystemEnv()}),
 			api.NewManual(api.ManualDeps{Service: a.manual, Drops: a.drops, App: appFacade}),
 			api.NewLaunch(a.ctx, a.launcher),
 			api.NewHost(a.ctx, a.host),

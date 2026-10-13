@@ -15,7 +15,7 @@ import (
 
 // Origin is where a pack comes from, for its updates.
 type Origin struct {
-	Source  string `json:"source"` // modrinth | curseforge | ftb | technic | file
+	Source  string `json:"source"` // modrinth | curseforge | ftb | technic | file | launcher
 	Project string `json:"project,omitempty"`
 	Version string `json:"version,omitempty"`
 	Slug    string `json:"slug,omitempty"`
@@ -70,6 +70,10 @@ type Pack struct {
 	Icon     []byte
 	IconURL  string
 	Warnings []string
+	// Folder is a game folder brought over from another launcher (instead
+	// of Archive), and Imported what else came with it.
+	Folder   *Folder
+	Imported *Imported
 }
 
 // Errors for broken or hostile packs.

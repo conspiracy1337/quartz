@@ -577,7 +577,7 @@ func (s *Service) install(inst string, k Kind, pi *planned) error {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
 		return err
 	}
-	if _, err := s.d.Store.Place(sha1, abs); err != nil {
+	if err := s.place(v.in.ID, sha1, abs); err != nil {
 		return err
 	}
 	if had && rel != old.Rel {

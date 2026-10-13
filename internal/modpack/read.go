@@ -312,6 +312,39 @@ var mmcLoaders = map[string]string{
 	"net.fabricmc.fabric-loader": "fabric", "org.quiltmc.quilt-loader": "quilt", "net.minecraftforge": "forge", "net.neoforged": "neoforge",
 }
 
+// ReadMMCPack sets the game and loader from a Prism or MultiMC
+// mmc-pack.json; components it can't install (jar mods, custom versions,
+// LiteLoader) are left out with a warning.
+func (p *Pack) ReadMMCPack(data []byte) error {
+	var pack struct {
+		Components []struct {
+			UID     string `json:"uid"`
+			Version string `json:"version"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(data, &pack); err != nil {
+		return ErrNotPack
+	}
+	unknown := 0
+	for _, c := range pack.Components {
+		switch {
+		case c.UID == "net.minecraft":
+			p.Minecraft = c.Version
+		case mmcLoaders[c.UID] != "":
+			p.Loader, p.LoaderVersion = mmcLoaders[c.UID], c.Version
+		case !knownComponents[c.UID]:
+			unknown++
+		}
+	}
+	if p.Minecraft == "" {
+		return ErrNoMinecraft
+	}
+	if unknown > 0 {
+		p.Warnings = append(p.Warnings, fmt.Sprintf("%d custom %s (such as jar mods) %s left out", unknown, plural(unknown, "component"), were(unknown)))
+	}
+	return nil
+}
+
 func readMMC(zr *archive.Reader) (*Pack, error) {
 	cfgs := zr.Glob("", "instance.cfg")
 	if len(cfgs) == 0 {
@@ -339,31 +372,12 @@ func readMMC(zr *archive.Reader) (*Pack, error) {
 			}
 		}
 	}
-	var pack struct {
-		Components []struct {
-			UID     string `json:"uid"`
-			Version string `json:"version"`
-		} `json:"components"`
+	data, err := zr.Read(root+"mmc-pack.json", maxManifest)
+	if err != nil {
+		return nil, ErrNotPack
 	}
-	if err := readJSON(zr, root+"mmc-pack.json", &pack); err != nil {
+	if err := p.ReadMMCPack(data); err != nil {
 		return nil, err
-	}
-	unknown := 0
-	for _, c := range pack.Components {
-		switch {
-		case c.UID == "net.minecraft":
-			p.Minecraft = c.Version
-		case mmcLoaders[c.UID] != "":
-			p.Loader, p.LoaderVersion = mmcLoaders[c.UID], c.Version
-		case !knownComponents[c.UID]:
-			unknown++
-		}
-	}
-	if p.Minecraft == "" {
-		return nil, ErrNoMinecraft
-	}
-	if unknown > 0 {
-		p.Warnings = append(p.Warnings, fmt.Sprintf("%d custom %s (such as jar mods) %s left out", unknown, plural(unknown, "component"), were(unknown)))
 	}
 	for _, dir := range []string{".minecraft/", "minecraft/"} {
 		if zr.HasPrefix(root + dir) {

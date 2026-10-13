@@ -323,14 +323,34 @@ func (s *Service) create(ctx context.Context, p *Pack, files []planned, set *man
 	if err != nil {
 		return err
 	}
-	dest := s.d.Instances.GameDir(in.ID)
-	if err := os.Remove(dest); err == nil || errors.Is(err, os.ErrNotExist) {
-		err = os.Rename(game, dest)
+	if p.Folder != nil && p.Folder.InPlace {
+		// The game folder stays the other launcher's: no marker is written,
+		// so purging the instance never deletes it.
+		_, err := s.d.Instances.Update(in.ID, func(i *instance.Instance) error {
+			i.Location, i.InPlace = p.Folder.Path, true
+			return nil
+		})
 		if err != nil {
 			return err
 		}
 	} else {
-		return err
+		dest := s.d.Instances.GameDir(in.ID)
+		if err := os.Remove(dest); err == nil || errors.Is(err, os.ErrNotExist) {
+			if err := os.Rename(game, dest); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	if p.Imported != nil {
+		if err := s.imported(in.ID, p.Imported, defaults); err != nil {
+			return err
+		}
+		if s.d.Bus != nil {
+			s.d.Bus.Emit(events.InstancesChanged, nil)
+		}
+		return nil // another launcher's instance is not a modpack to update
 	}
 	if _, err := s.d.Instances.Update(in.ID, func(i *instance.Instance) error {
 		i.Pack = &instance.PackRef{Source: p.Origin.Source, Project: p.Origin.Project, Version: p.Origin.Version, Name: p.Name, VersionName: p.Version}
@@ -345,6 +365,25 @@ func (s *Service) create(ctx context.Context, p *Pack, files []planned, set *man
 		s.d.Bus.Emit(events.InstancesChanged, nil)
 	}
 	return nil
+}
+
+// imported records what an instance brought from another launcher: its
+// playtime, its memory and where it came from.
+func (s *Service) imported(id string, im *Imported, defaults instance.JavaSettings) error {
+	_, err := s.d.Instances.Update(id, func(i *instance.Instance) error {
+		i.PlaytimeMin = max(im.PlaytimeMin, 0)
+		i.LastPlayed = im.LastPlayed
+		i.ImportedFrom = &instance.ImportedFrom{Launcher: im.Launcher, Path: im.Path}
+		if im.MemoryMB > 0 {
+			j := defaults
+			j.Override = true
+			j.MemoryMaxMB = im.MemoryMB
+			j.MemoryMinMB = min(j.MemoryMinMB, im.MemoryMB)
+			i.Settings.Java = j
+		}
+		return nil
+	})
+	return err
 }
 
 // blob makes sure a downloaded file is in the store and returns its sha1.

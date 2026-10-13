@@ -390,3 +390,12 @@ func (m *Manager) zulu(ctx context.Context, major int) (archiveRelease, error) {
 	// Azul's size is approximate, so it only drives progress; the sha256 verifies.
 	return archiveRelease{url: chosen.URL, name: chosen.Name, version: strings.Join(parts, "."), estimate: d.Size, sum: sum}, nil
 }
+
+// Bytes is how much the plan downloads.
+func (p *Plan) Bytes() int64 {
+	var n int64
+	for _, w := range p.Downloads {
+		n += w.Bytes()
+	}
+	return n
+}

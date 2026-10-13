@@ -98,9 +98,9 @@ export const modpackDiff = {
 };
 
 export const otherLaunchers: OtherLauncher[] = [
-  { name: 'Prism Launcher', art: { background: '#b48cf2', initial: 'P' }, summary: '6 instances, 2 accounts', instances: 6 },
-  { name: 'Modrinth App', art: { background: '#3ecf8e', initial: 'M' }, summary: '3 instances', instances: 3 },
-  { name: 'CurseForge', art: { background: '#f2a25c', initial: 'C' }, summary: '2 modpacks', instances: 2 },
+  { id: 'prism', name: 'Prism Launcher', art: { background: '#b48cf2', initial: 'P' }, summary: '6 instances', instances: 6 },
+  { id: 'modrinth', name: 'Modrinth App', art: { background: '#3ecf8e', initial: 'M' }, summary: '3 instances', instances: 3 },
+  { id: 'curseforge', name: 'CurseForge', art: { background: '#f2a25c', initial: 'C' }, summary: '2 instances', instances: 2 },
 ];
 
 /** RevC: installing Distant Horizons. */

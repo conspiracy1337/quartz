@@ -113,6 +113,12 @@ var ErrTooBig = errors.New("modpack: the pack's files are larger than the launch
 // through root, so no entry can leave the folder; links are never made.
 func (p *Pack) Extract(root *os.Root) (map[string]string, error) {
 	out := map[string]string{}
+	if p.Folder != nil {
+		if p.Folder.InPlace {
+			return out, nil // played where it is
+		}
+		return out, copyFolder(p.Folder, root)
+	}
 	if p.Archive == "" {
 		return out, nil
 	}

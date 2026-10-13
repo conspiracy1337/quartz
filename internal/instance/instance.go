@@ -119,6 +119,13 @@ type Instance struct {
 	Pack *PackRef `json:"pack,omitempty"`
 	// Host is how the instance was last hosted as a local server (nil: never).
 	Host *Host `json:"host,omitempty"`
+	// InPlace marks a game folder that belongs to another launcher (imported
+	// "in place"): it is never adopted into the store or given read-only
+	// links, and purging never deletes it (it carries no marker).
+	InPlace bool `json:"inPlace,omitempty"`
+	// ImportedFrom is the other launcher's instance this one was brought
+	// over from (nil: made here).
+	ImportedFrom *ImportedFrom `json:"importedFrom,omitempty"`
 	// HideDiscord keeps the instance out of Discord's "Playing" status (the
 	// Overview switch; the global one is in Integrations).
 	HideDiscord bool `json:"hideDiscord,omitempty"`
