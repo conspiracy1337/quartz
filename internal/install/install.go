@@ -152,11 +152,17 @@ func (in *Installer) Resolve(ctx context.Context, t Target, gameDir string, env 
 	default:
 		r.GameAssets = in.dirs.Assets
 	}
-	if lc := v.Logging; lc != nil && lc.Client != nil && fileID.MatchString(lc.Client.File.ID) {
-		r.LogConfig = filepath.Join(in.dirs.LogConfigs, lc.Client.File.ID)
-		r.LogArgument = lc.Client.Argument
-	}
+	r.LogConfig, r.LogArgument = in.logConfig(v)
 	return r, nil
+}
+
+// logConfig is where a version's log4j configuration goes and the argument
+// naming it ("" when the version has none).
+func (in *Installer) logConfig(v *mojang.Version) (path, arg string) {
+	if lc := v.Logging; lc != nil && lc.Client != nil && fileID.MatchString(lc.Client.File.ID) {
+		return filepath.Join(in.dirs.LogConfigs, lc.Client.File.ID), lc.Client.Argument
+	}
+	return "", ""
 }
 
 // fillChecksums asks the maven repository for the sha1 of libraries whose
@@ -212,20 +218,11 @@ func (in *Installer) files(r *Resolved) (game, assets []download.Item, err error
 		return nil, nil, fmt.Errorf("install: %s has no client download", v.ID)
 	}
 	game = append(game, item([]string{client.URL}, r.ClientJar, client.Size, client.SHA1))
-	for _, l := range append(slices.Clone(r.Libraries), r.Extra...) {
-		dest, err := fsx.SafeJoin(in.dirs.Libraries, l.Path)
-		if err != nil {
-			return nil, nil, err
-		}
-		if l.URL == "" {
-			// Unpacked from a loader installer, or about to be made by its processors.
-			if _, err := os.Stat(dest); err != nil && !r.Produced[l.Path] {
-				return nil, nil, fmt.Errorf("install: library %s is missing and has no download", l.Name)
-			}
-			continue
-		}
-		game = append(game, item(append([]string{l.URL}, l.Mirrors...), dest, l.Size, l.SHA1))
+	libs, err := in.libraryItems(append(slices.Clone(r.Libraries), r.Extra...), r.Produced)
+	if err != nil {
+		return nil, nil, err
 	}
+	game = append(game, libs...)
 	if r.LogConfig != "" {
 		f := v.Logging.Client.File
 		game = append(game, item([]string{f.URL}, r.LogConfig, f.Size, f.SHA1))
@@ -240,6 +237,27 @@ func (in *Installer) files(r *Resolved) (game, assets []download.Item, err error
 		assets = append(assets, item([]string{o.URL()}, dest, o.Size, o.Hash))
 	}
 	return game, assets, nil
+}
+
+// libraryItems are the downloads of libraries; one with no address must be
+// in place already (unpacked from a loader installer) or be produced by the
+// loader's processors.
+func (in *Installer) libraryItems(libs []mojang.ResolvedLibrary, produced map[string]bool) ([]download.Item, error) {
+	var out []download.Item
+	for _, l := range libs {
+		dest, err := fsx.SafeJoin(in.dirs.Libraries, l.Path)
+		if err != nil {
+			return nil, err
+		}
+		if l.URL == "" {
+			if _, err := os.Stat(dest); err != nil && !produced[l.Path] {
+				return nil, fmt.Errorf("install: library %s is missing and has no download", l.Name)
+			}
+			continue
+		}
+		out = append(out, item(append([]string{l.URL}, l.Mirrors...), dest, l.Size, l.SHA1))
+	}
+	return out, nil
 }
 
 func item(urls []string, dest string, size int64, sha1 string) download.Item {
@@ -298,27 +316,36 @@ func (in *Installer) Plan(req Request) (*tasks.Spec, error) {
 		spec.After("Legacy assets", tasks.Count, tasks.Func("copy legacy assets", func(context.Context) error { return in.legacyAssets(r) }))
 		pending = true
 	}
-	if p := r.Processing; p != nil && (req.Force || !p.Done()) {
-		if req.ProcessorJava == nil {
-			return nil, errors.New("install: this loader needs Java to finish installing")
-		}
-		spec.After("Processing Minecraft", tasks.Count, tasks.Func("run the loader's installer", func(ctx context.Context) error {
-			javaPath, err := req.ProcessorJava(ctx)
-			if err == nil {
-				err = p.Run(ctx, javaPath)
-			}
-			if err != nil && ctx.Err() == nil {
-				// A processor fails the same way every time; retrying only delays the message.
-				return &netx.PermanentError{Err: err}
-			}
-			return err
-		}))
-		pending = true
+	added, err := addProcessing(spec, r.Processing, req.Force, req.ProcessorJava)
+	if err != nil {
+		return nil, err
 	}
-	if !pending {
+	if !pending && !added {
 		return nil, nil
 	}
 	return spec, nil
+}
+
+// addProcessing adds a loader's processing to a job unless it already ran.
+func addProcessing(spec *tasks.Spec, p *loader.Processing, force bool, javaFor func(context.Context) (string, error)) (bool, error) {
+	if p == nil || (!force && p.Done()) {
+		return false, nil
+	}
+	if javaFor == nil {
+		return false, errors.New("install: this loader needs Java to finish installing")
+	}
+	spec.After("Processing Minecraft", tasks.Count, tasks.Func("run the loader's installer", func(ctx context.Context) error {
+		javaPath, err := javaFor(ctx)
+		if err == nil {
+			err = p.Run(ctx, javaPath)
+		}
+		if err != nil && ctx.Err() == nil {
+			// A processor fails the same way every time; retrying only delays the message.
+			return &netx.PermanentError{Err: err}
+		}
+		return err
+	}))
+	return true, nil
 }
 
 // Estimate is how many bytes the first launch of a version still downloads.

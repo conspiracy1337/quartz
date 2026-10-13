@@ -52,14 +52,25 @@ const (
 // installProfile is install_profile.json in both its shapes: modern
 // (minecraft, json, data, processors, libraries) and legacy (install, versionInfo).
 type installProfile struct {
-	Minecraft  string                             `json:"minecraft"`
-	JSON       string                             `json:"json"`
-	Data       map[string]struct{ Client string } `json:"data"`
-	Processors []processor                        `json:"processors"`
-	Libraries  []mojang.Library                   `json:"libraries"`
+	Minecraft  string               `json:"minecraft"`
+	JSON       string               `json:"json"`
+	Path       string               `json:"path"` // pre-1.17: the jar a server starts with
+	Data       map[string]dataEntry `json:"data"`
+	Processors []processor          `json:"processors"`
+	Libraries  []mojang.Library     `json:"libraries"`
 
 	Install     *legacyInstall  `json:"install"`
 	VersionInfo json.RawMessage `json:"versionInfo"`
+}
+
+// dataEntry is one install_profile data value, per side.
+type dataEntry struct{ Client, Server string }
+
+func (d dataEntry) of(side string) string {
+	if side == "server" {
+		return d.Server
+	}
+	return d.Client
 }
 
 type processor struct {
@@ -158,15 +169,24 @@ func (in *installer) unpackModern(zr *archive.Reader, jar, dir string, p install
 	if err := archive.ExtractZip(jar, in.dirs.Libraries, archive.Options{Prefix: "maven/", MaxTotalSize: maxEmbedded}); err != nil {
 		return err
 	}
-	// Data files the processors read, such as the binary patches.
+	return extractData(zr, dir, p, "client")
+}
+
+// extractData keeps the data files one side's processors read, such as the
+// binary patches, unless they are already there.
+func extractData(zr *archive.Reader, dir string, p installProfile, side string) error {
 	for _, d := range p.Data {
-		if !strings.HasPrefix(d.Client, "/") {
+		v := d.of(side)
+		if !strings.HasPrefix(v, "/") {
 			continue
 		}
-		name := strings.TrimPrefix(d.Client, "/")
+		name := strings.TrimPrefix(v, "/")
 		dst, err := fsx.SafeJoin(dir, filepath.FromSlash(name))
 		if err != nil {
 			return err
+		}
+		if _, err := os.Stat(dst); err == nil {
+			continue
 		}
 		body, err := zr.Read(name, maxEmbedded)
 		if err != nil {
@@ -212,7 +232,11 @@ func (in *installer) profile(req Request, dir, jar, stamp string) (*Profile, err
 		return nil, fmt.Errorf("loader: %s install profile: %w", in.kind.Name(), err)
 	}
 	if p.Install != nil {
-		return in.legacyProfile(req, p)
+		prof, err := in.legacyProfile(req, p)
+		if err == nil && req.Server {
+			prof.Server, err = in.jarStart(req, p.Install.Path, prof)
+		}
+		return prof, err
 	}
 	if p.Minecraft != req.Minecraft {
 		return nil, fmt.Errorf("loader: this %s build is for Minecraft %s, not %s", in.kind.Name(), p.Minecraft, req.Minecraft)
@@ -233,8 +257,16 @@ func (in *installer) profile(req Request, dir, jar, stamp string) (*Profile, err
 		return nil, err
 	}
 	prof := &Profile{Version: v, Extra: extra, Produced: map[string]bool{}}
+	marker := ".processed"
+	if req.Server {
+		// The server's data files were left out when the build was first prepared.
+		if err := in.serverData(jar, dir, p); err != nil {
+			return nil, err
+		}
+		marker = ".processed-server"
+	}
 	vars := in.dataMap(req, dir, jar, p)
-	proc, err := in.processing(req, vars, p.Processors, prof, filepath.Join(dir, ".processed"), stamp)
+	proc, err := in.processing(req, vars, p.Processors, prof, filepath.Join(dir, marker), stamp)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +274,21 @@ func (in *installer) profile(req Request, dir, jar, stamp string) (*Profile, err
 		prof.Processing = proc
 		prof.NoClientJar = true
 	}
+	if req.Server {
+		if prof.Server, err = in.serverStart(req, jar, p, prof, vars); err != nil {
+			return nil, err
+		}
+	}
 	return prof, nil
+}
+
+func (in *installer) serverData(jar, dir string, p installProfile) error {
+	zr, err := archive.Open(jar)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = zr.Close() }()
+	return extractData(zr, dir, p, "server")
 }
 
 // inherits checks a loader version JSON extends exactly mc (filling it in
@@ -263,6 +309,7 @@ type legacyLibrary struct {
 	Name      string            `json:"name"`
 	URL       string            `json:"url"`
 	ClientReq *bool             `json:"clientreq"`
+	ServerReq *bool             `json:"serverreq"`
 	Natives   map[string]string `json:"natives"`
 	Extract   *mojang.Extract   `json:"extract"`
 	Rules     []mojang.Rule     `json:"rules"`
@@ -273,8 +320,9 @@ type legacyVersion struct {
 	Libraries []legacyLibrary `json:"libraries"`
 }
 
-// legacyProfile converts versionInfo: libraries the client doesn't need are
-// dropped, the universal jar points at the copy unpack placed, and the dead
+// legacyProfile converts versionInfo: libraries the side doesn't need are
+// dropped (a server takes only those marked serverreq; its vanilla jar
+// carries the rest), the universal jar points at the copy unpack placed, and the dead
 // Forge maven addresses become the current one with Maven Central and
 // Mojang's repository as fallbacks (Forge shipped some of these jars only as
 // .pack.xz, which nothing in pure Go can unpack).
@@ -289,7 +337,10 @@ func (in *installer) legacyProfile(req Request, p installProfile) (*Profile, err
 	v := lv.Version
 	v.Libraries = nil
 	for _, l := range lv.Libraries {
-		if l.ClientReq != nil && !*l.ClientReq {
+		if req.Server && (l.ServerReq == nil || !*l.ServerReq) && l.Name != p.Install.Path {
+			continue
+		}
+		if !req.Server && l.ClientReq != nil && !*l.ClientReq {
 			continue
 		}
 		lib := mojang.Library{Name: l.Name, Natives: l.Natives, Extract: l.Extract, Rules: l.Rules}
@@ -334,7 +385,7 @@ func legacyRepo(u string) string {
 
 // dataVars are what processor arguments refer to: the values every Forge
 // installer defines (taken literally) and install_profile's data for the
-// client side (resolved by expand when used, so a bad entry only fails if
+// request's side (resolved by expand when used, so a bad entry only fails if
 // something needs it).
 type dataVars struct {
 	builtin map[string]string
@@ -344,15 +395,15 @@ type dataVars struct {
 
 func (in *installer) dataMap(req Request, dir, jar string, p installProfile) dataVars {
 	v := dataVars{dir: dir, data: map[string]string{}, builtin: map[string]string{
-		"SIDE":              "client",
-		"MINECRAFT_JAR":     req.ClientJar,
+		"SIDE":              req.side(),
+		"MINECRAFT_JAR":     req.gameJar(),
 		"MINECRAFT_VERSION": req.Minecraft,
 		"ROOT":              filepath.Dir(in.dirs.Libraries),
 		"INSTALLER":         jar,
 		"LIBRARY_DIR":       in.dirs.Libraries,
 	}}
 	for k, d := range p.Data {
-		v.data[k] = d.Client
+		v.data[k] = d.of(req.side())
 	}
 	return v
 }

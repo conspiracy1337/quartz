@@ -90,6 +90,26 @@ type Request struct {
 	Env       mojang.Env      // the platform, for rules in installer library lists
 	Parent    *mojang.Version // the vanilla version JSON
 	ClientJar string          // where the vanilla client jar is (or will be) downloaded
+	// Server prepares a dedicated server instead of the client; ServerJar is
+	// where the vanilla server jar is (or will be) downloaded.
+	Server    bool
+	ServerJar string
+}
+
+// side is the installer side a request prepares.
+func (r Request) side() string {
+	if r.Server {
+		return "server"
+	}
+	return "client"
+}
+
+// gameJar is the vanilla jar the request builds on.
+func (r Request) gameJar() string {
+	if r.Server {
+		return r.ServerJar
+	}
+	return r.ClientJar
 }
 
 // Profile is everything a loader adds to a launch.
@@ -108,6 +128,23 @@ type Profile struct {
 	// NoClientJar keeps the vanilla jar off the classpath (processed Forge
 	// builds put a patched copy there instead).
 	NoClientJar bool
+	// Server says how a dedicated server starts; set only for server requests.
+	Server *ServerStart
+}
+
+// ServerStart is how a loader's dedicated server starts, beyond the JVM's
+// memory and user options (which come first) and the game's own arguments
+// (which the caller appends).
+type ServerStart struct {
+	// Argv starts the server, e.g. "-jar forge-1.12.2-14.23.5.2859.jar" or
+	// Forge's argument file. Empty means "-cp <libraries> <main class>".
+	Argv []string
+	// Place maps files Argv refers to relative to the server folder
+	// ("libraries/…", "forge-….jar") to the store files they are.
+	Place map[string]string
+	// GameJarProperty is the system property pointing the loader at the
+	// vanilla server jar (Fabric and Quilt); "" for none.
+	GameJarProperty string
 }
 
 // Provider is one loader's upstream.
