@@ -114,7 +114,13 @@ type Project struct {
 	Library bool   `json:"library"`
 	Icon    string `json:"icon,omitempty"` // picture URL on the platform CDN
 	Summary string `json:"summary,omitempty"`
+	// ServerSide is whether the project runs on servers: "required",
+	// "optional", "unsupported" or SideUnknown; "" when the platform doesn't say.
+	ServerSide string `json:"serverSide,omitempty"`
 }
+
+// SideUnknown is a platform's answer that it doesn't know a project's side.
+const SideUnknown = "unknown"
 
 // Hashes identify one file.
 type Hashes struct {

@@ -255,7 +255,7 @@ func (s *Service) ensureKnown(abs, sha1 string, sp spec) {
 			k.Bad = true
 			return
 		}
-		k.Info, k.Bad = &info, false
+		k.Info, k.Bad, k.Rev = &info, false, metaRev
 	})
 }
 

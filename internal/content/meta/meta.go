@@ -40,6 +40,12 @@ const (
 	Breaks   DepKind = "breaks"
 )
 
+// Sides a mod can be limited to; "" means both (or unknown).
+const (
+	SideClient = "client"
+	SideServer = "server"
+)
+
 // Dep is a relation to another mod, by mod id.
 type Dep struct {
 	ID   string  `json:"id"`
@@ -60,6 +66,8 @@ type Info struct {
 	Library     bool        `json:"library,omitempty"`
 	Icon        string      `json:"icon,omitempty"` // sha256 of the stored icon
 	Pack        *PackFormat `json:"pack,omitempty"`
+	// Side is SideClient or SideServer when the mod runs on only one side.
+	Side string `json:"side,omitempty"`
 	// Partial is set when the metadata was malformed and only partly read.
 	Partial bool `json:"partial,omitempty"`
 }

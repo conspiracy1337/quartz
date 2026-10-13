@@ -109,6 +109,7 @@ type fabricJSON struct {
 	Depends     map[string]json.RawMessage `json:"depends"`
 	Breaks      map[string]json.RawMessage `json:"breaks"`
 	Provides    []string                   `json:"provides"`
+	Environment string                     `json:"environment"`
 	Custom      struct {
 		ModMenu struct {
 			Badges []string `json:"badges"`
@@ -122,7 +123,7 @@ func parseFabric(data []byte, _ Source) (Info, string, error) {
 		return Info{}, "", err
 	}
 	info := Info{ID: f.ID, Name: f.Name, Version: f.Version, Description: f.Description, Provides: f.Provides,
-		Library: slices.Contains(f.Custom.ModMenu.Badges, "library")}
+		Library: slices.Contains(f.Custom.ModMenu.Badges, "library"), Side: side(f.Environment)}
 	for _, a := range f.Authors {
 		info.Authors = append(info.Authors, person(a))
 	}
@@ -184,6 +185,9 @@ type quiltJSON struct {
 			Icon         json.RawMessage   `json:"icon"`
 		} `json:"metadata"`
 	} `json:"quilt_loader"`
+	Minecraft struct {
+		Environment string `json:"environment"`
+	} `json:"minecraft"`
 }
 
 func parseQuilt(data []byte, _ Source) (Info, string, error) {
@@ -192,7 +196,7 @@ func parseQuilt(data []byte, _ Source) (Info, string, error) {
 		return Info{}, "", err
 	}
 	l := q.Loader
-	info := Info{ID: l.ID, Name: l.Metadata.Name, Version: l.Version, Description: l.Metadata.Description}
+	info := Info{ID: l.ID, Name: l.Metadata.Name, Version: l.Version, Description: l.Metadata.Description, Side: side(q.Minecraft.Environment)}
 	names := make([]string, 0, len(l.Metadata.Contributors))
 	for name := range l.Metadata.Contributors {
 		names = append(names, name)
@@ -215,6 +219,18 @@ func parseQuilt(data []byte, _ Source) (Info, string, error) {
 		}
 	}
 	return info, iconPath(l.Metadata.Icon), nil
+}
+
+// side maps a Fabric or Quilt environment ("*", "client", "server",
+// "dedicated_server") to a Side.
+func side(env string) string {
+	switch strings.ToLower(strings.TrimSpace(env)) {
+	case "client":
+		return SideClient
+	case "server", "dedicated_server":
+		return SideServer
+	}
+	return ""
 }
 
 // quiltRef reads "id" or {"id": …, "optional": …}.
@@ -263,6 +279,9 @@ func parseForgeTOML(data []byte, r Source) (Info, string, error) {
 		}
 	}
 	info.Deps = forgeDeps(doc["dependencies"], info.ID)
+	if only, _ := pick("clientSideOnly").(bool); only {
+		info.Side = SideClient
+	}
 	return info, str(pick("logoFile")), nil
 }
 
