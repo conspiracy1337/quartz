@@ -30,6 +30,7 @@ import (
 	"quartz/internal/java"
 	"quartz/internal/mojang"
 	"quartz/internal/runview"
+	"quartz/internal/sandbox"
 	"quartz/internal/syncing"
 	"quartz/internal/wrapperjar"
 )
@@ -87,6 +88,13 @@ type spec struct {
 	runID   string
 	view    *runview.View    // nil runs in the game folder itself
 	session *syncing.Session // nil shares nothing
+	// sandboxed runs the game in the instance's sandbox; jail is it once built.
+	sandboxed bool
+	jail      *sandbox.Jail
+	// cmd, script and shown are the prepared start (see command).
+	cmd    procx.Spec
+	script []byte
+	shown  string
 }
 
 // moduleExports are the named-module main classes the wrapper jar calls
@@ -99,8 +107,10 @@ var moduleExports = map[string]string{ //nolint:gosec // module names, not crede
 // command builds the java command line and the stdin script. Nothing secret
 // goes on the command line: the account's token is a game argument and game
 // arguments only travel through the script. It also returns both as text for
-// the run's cmd.txt (the caller redacts it).
-func (l *Launcher) command(sp spec) (procx.Spec, []byte, string, error) {
+// the run's cmd.txt (the caller redacts it). A sandboxed run is wrapped in
+// its jail here (sp.jail), so the sandbox's own failures happen before
+// anything starts.
+func (l *Launcher) command(sp *spec) (procx.Spec, []byte, string, error) {
 	jar, err := wrapperjar.Install(l.cfg.BinDir)
 	if err != nil {
 		return procx.Spec{}, nil, "", err
@@ -153,17 +163,22 @@ func (l *Launcher) command(sp spec) (procx.Spec, []byte, string, error) {
 	}
 	script.Launch(v.MainClass)
 
-	argv, err := wrappers(eff, sp.vars)
+	argv, err := wrappers(eff, sp.vars, sp.sandboxed)
 	if err != nil {
 		return procx.Spec{}, nil, "", err
 	}
 	argv = append(argv, java.LaunchBinary(sp.rt.Path))
 	argv = append(argv, args...)
-	if sp.view != nil {
-		argv = sp.view.Wrap(argv)
+	cmd := procx.Spec{Argv: argv, Dir: sp.gameDir, Env: gameEnv(sp.vars, eff, sp.sandboxed)}
+	switch {
+	case sp.sandboxed:
+		if cmd, sp.jail, err = l.cfg.Sandbox.Wrap(l.sandboxRun(sp, argv), cmd); err != nil {
+			return procx.Spec{}, nil, "", err
+		}
+	case sp.view != nil:
+		cmd.Argv = sp.view.Wrap(argv)
 	}
-	cmd := procx.Spec{Argv: argv, Dir: sp.gameDir, Env: gameEnv(sp.vars, eff)}
-	shown := strings.Join(argv, " ") + "\n\nGame arguments (sent to the game over stdin, never on the command line):\n" + strings.Join(game, " ") + "\n"
+	shown := strings.Join(cmd.Argv, " ") + "\n\nGame arguments (sent to the game over stdin, never on the command line):\n" + strings.Join(game, " ") + "\n"
 	return cmd, script.Bytes(), shown, nil
 }
 
@@ -199,18 +214,18 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		return nil, err
 	}
 	inst, acc, sess, rt, mem := sp.inst, sp.acc, sp.sess, sp.rt, sp.mem
-	cmd, script, shown, err := l.command(sp)
-	if err != nil {
-		return nil, err
-	}
+	cmd, script, shown := sp.cmd, sp.script, sp.shown
 	now := time.Now()
 	r := &run{
 		id: sp.runID, instanceID: inst.ID, started: now, accountID: acc.ID, done: make(chan struct{}),
 		record:   Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID, Mods: sp.mods},
 		server:   serverOf(sp.into),
-		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: gameEnv(sp.vars, sp.eff), sp: sp,
+		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: gameEnv(sp.vars, sp.eff, false), sp: sp,
 	}
 	r.record.ID = r.id
+	if sp.jail != nil {
+		r.record.Sandbox = sp.jail.Name
+	}
 	r.con = gamelog.NewConsole(consoleLines, l.cfg.Redactor, logBatch, r.add, func(lines []gamelog.Line) {
 		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, RunID: r.id, Lines: lines})
 	})
@@ -218,6 +233,7 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	if err := os.MkdirAll(runsDir, 0o700); err != nil {
 		return nil, err
 	}
+	var err error
 	if r.logFile, err = os.OpenFile(filepath.Join(runsDir, r.id+".log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil { //nolint:gosec // our own runs folder
 		return nil, err
 	}
@@ -236,6 +252,7 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	if sp.view != nil {
 		sp.view.Started(child.Process.Pid)
 	}
+	sp.jail.Started(child.Process.Pid)
 	_, werr := child.Stdin.Write(script)
 	_ = child.Stdin.Close()
 	if werr != nil {

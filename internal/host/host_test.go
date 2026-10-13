@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"quartz/internal/sandbox"
+	"quartz/internal/sandbox/rules"
 	"runtime"
 	"strings"
 	"sync"
@@ -228,6 +230,12 @@ func until(t *testing.T, what string, cond func() bool) {
 
 func fakeService(t *testing.T, script string) (*Service, *server, *recorder) {
 	t.Helper()
+	return fakeServiceIn(t, script, nil)
+}
+
+// fakeServiceIn starts the fake server, in sb's sandbox when sb is set.
+func fakeServiceIn(t *testing.T, script string, sb *sandbox.Service) (*Service, *server, *recorder) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake server is a shell script")
 	}
@@ -235,7 +243,7 @@ func fakeService(t *testing.T, script string) (*Service, *server, *recorder) {
 	rec := &recorder{}
 	bus.Subscribe(events.HostState, func(p any) { rec.mu.Lock(); rec.states = append(rec.states, p.(State)); rec.mu.Unlock() })
 	bus.Subscribe(events.HostLog, func(p any) { rec.mu.Lock(); rec.lines = append(rec.lines, p.(LogBatch).Lines...); rec.mu.Unlock() })
-	s := New(Deps{Bus: bus, Redactor: noRedact{}, Log: slog.New(slog.DiscardHandler)})
+	s := New(Deps{Bus: bus, Redactor: noRedact{}, Log: slog.New(slog.DiscardHandler), Sandbox: sb})
 	dir := t.TempDir()
 	path := filepath.Join(dir, "server.sh")
 	if err := os.WriteFile(path, []byte(script), 0o700); err != nil { //nolint:gosec // a test script must run
@@ -243,7 +251,7 @@ func fakeService(t *testing.T, script string) (*Service, *server, *recorder) {
 	}
 	_, cancel := context.WithCancel(context.Background())
 	srv := &server{id: "inst", runID: "run", name: "Survival", opts: Options{Port: 1}, dir: dir, saves: filepath.Join(dir, "saves"), world: "Northwatch",
-		cancel: cancel, done: make(chan struct{}), ping: make(chan struct{}, 1)}
+		cancel: cancel, done: make(chan struct{}), ping: make(chan struct{}, 1), rules: rules.Settings{On: sb != nil, Preset: rules.Strict}}
 	srv.st = State{InstanceID: "inst", RunID: "run", State: "starting"}
 	s.cur = srv
 	if err := s.spawn(context.Background(), srv, "/bin/sh", []string{path, "nogui"}); err != nil {
@@ -308,6 +316,31 @@ func TestFailureBeforeReady(t *testing.T) {
 	_, srv, rec := fakeService(t, "#!/bin/sh\necho 'Error: Unable to access jarfile server.jar' >&2\nexit 1\n")
 	<-srv.done
 	if st := rec.last(); st.Result != "failed" || st.Message != "Error: Unable to access jarfile server.jar" {
+		t.Fatalf("final state %+v", st)
+	}
+}
+
+// A sandboxed instance's server runs in its sandbox: commands and Stop
+// still reach it, and the network stays even under Strict (players join).
+func TestSandboxedServer(t *testing.T) {
+	sb := sandbox.New(sandbox.Config{DataRoot: t.TempDir()})
+	if st := sb.Status(); !st.Available || runtime.GOOS == "windows" {
+		t.Skip(st.Reason)
+	}
+	s, srv, rec := fakeServiceIn(t, fakeServer, sb)
+	until(t, "running", func() bool { return rec.has("running") })
+	if srv.jail == nil {
+		t.Fatal("the server isn't sandboxed")
+	}
+	if err := s.Command("inst", "list"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, "the command's echo", func() bool { return rec.logged("got list") })
+	if err := s.Stop("inst"); err != nil {
+		t.Fatal(err)
+	}
+	<-srv.done
+	if st := rec.last(); st.State != "stopped" || st.Result != "ok" {
 		t.Fatalf("final state %+v", st)
 	}
 }

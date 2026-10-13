@@ -35,6 +35,8 @@ type Run struct {
 	Scratch  string // this run's own folder (exists; the sandbox may write files there)
 	Data     string // the instance's persistent sandbox data (caches, mods' own config)
 	Read     []string
+	// Write are other read-write folders (a hosted server's worlds).
+	Write []string
 	// Shared are the shared folders the run's view uses read-write; on
 	// Windows they need the container's access too.
 	Shared []string
@@ -121,6 +123,11 @@ func (s *Service) Wrap(r Run, spec procx.Spec) (procx.Spec, *Jail, error) {
 			return procx.Spec{}, nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 	}
+	for _, d := range append([]string{r.Scratch, r.GameDir}, r.Write...) {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			return procx.Spec{}, nil, err
+		}
+	}
 	if r.Data != "" {
 		for _, d := range []string{"cache", "config", "data"} {
 			if err := os.MkdirAll(filepath.Join(r.Data, d), 0o700); err != nil {
@@ -204,3 +211,13 @@ func within(p, root string) bool {
 // Forget drops what an instance's sandbox keeps between runs (its Windows
 // app container); call it when the instance is deleted for good.
 func (s *Service) Forget(instance string) error { return forget(instance) }
+
+// JavaRoot is the runtime folder holding a java binary (…/bin/java), or a
+// macOS bundle's Contents folder, so its libraries come along.
+func JavaRoot(bin string) string {
+	root := filepath.Dir(filepath.Dir(bin))
+	if filepath.Base(root) == "Home" && filepath.Base(filepath.Dir(root)) == "Contents" {
+		root = filepath.Dir(root)
+	}
+	return root
+}

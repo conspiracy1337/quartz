@@ -337,8 +337,13 @@ type Store struct {
 	mu    sync.Mutex
 	files map[string]*jsonfile.Store[Instance]
 
-	locate atomic.Pointer[Locator]
+	locate  atomic.Pointer[Locator]
+	onPurge atomic.Pointer[func(id string)]
 }
+
+// OnPurge sets what runs after an instance is deleted for good (its
+// sandbox's leftovers go too).
+func (s *Store) OnPurge(fn func(id string)) { s.onPurge.Store(&fn) }
 
 // Locator says under which folder an instance-relative path really lives:
 // the game folder, or the shared folder when the instance shares it.

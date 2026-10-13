@@ -114,6 +114,9 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 	if r.Data != "" {
 		a.Bind(r.Data, r.Data)
 	}
+	for _, p := range r.Write {
+		a.Bind(p, p)
+	}
 	a.Bind(r.GameDir, r.GameDir)
 	a.Add(r.Mounts...)
 
@@ -187,8 +190,8 @@ func bindRead(a *bwrap.Args, p string, bound *[]string) {
 			*bound = append(*bound, q)
 		}
 	}
-	if _, err := os.Stat(p); err != nil {
-		return
+	if _, err := os.Stat(p); err != nil || isSystemRoot(filepath.Clean(p)) {
+		return // the system is bound already, never as a whole
 	}
 	add(p)
 	if real, err := filepath.EvalSymlinks(p); err == nil && real != p {
@@ -336,7 +339,7 @@ func displayNumber(d string) (string, bool) {
 	return n, true
 }
 
-func exists(p string) bool { _, err := os.Stat(p); return err == nil }
+func exists(p string) bool { _, err := os.Stat(p); return err == nil } //nolint:gosec // only stats system and session paths
 
 // getEnv reads a variable from env.
 func getEnv(env []string, name string) string {
@@ -350,3 +353,25 @@ func getEnv(env []string, name string) string {
 
 // forget is a no-op: nothing outlives a run here.
 func forget(string) error { return nil }
+
+// Desktop names what the Graphics and audio rule lets through here.
+func Desktop() string {
+	var parts []string
+	if exists("/dev/dri") || exists("/dev/nvidiactl") {
+		parts = append(parts, "GPU")
+	}
+	run := os.Getenv("XDG_RUNTIME_DIR")
+	switch {
+	case run != "" && exists(filepath.Join(run, "pipewire-0")):
+		parts = append(parts, "PipeWire")
+	case run != "" && exists(filepath.Join(run, "pulse", "native")):
+		parts = append(parts, "PulseAudio")
+	}
+	switch {
+	case os.Getenv("WAYLAND_DISPLAY") != "":
+		parts = append(parts, "Wayland")
+	case os.Getenv("DISPLAY") != "":
+		parts = append(parts, "X11")
+	}
+	return strings.Join(parts, ", ")
+}

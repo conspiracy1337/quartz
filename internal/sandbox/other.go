@@ -22,3 +22,6 @@ func (noBackend) wrap(*Service, Run, procx.Spec) (procx.Spec, *Jail, error) {
 
 // forget is a no-op: nothing outlives a run here.
 func forget(string) error { return nil }
+
+// Desktop names what the Graphics and audio rule lets through here.
+func Desktop() string { return "" }

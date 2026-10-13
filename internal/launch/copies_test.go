@@ -61,6 +61,10 @@ func TestTwoCopiesRunAndMergeBack(t *testing.T) {
 			t.Fatal(err)
 		}
 		sp.vars = instVars(inst, insts.Dir(inst.ID), sp.gameDir, fake)
+		var err error
+		if sp.cmd, sp.script, sp.shown, err = l.command(&sp); err != nil {
+			t.Fatal(err)
+		}
 		if _, err := l.start(context.Background(), sp); err != nil {
 			t.Fatal(err)
 		}

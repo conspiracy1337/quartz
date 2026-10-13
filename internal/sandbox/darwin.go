@@ -81,7 +81,7 @@ func canonAll(ps []string) []string {
 
 func (b *darwinBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Jail, error) {
 	sb := seatbelt{Network: r.Headless || r.Level(rules.Internet) == rules.Allowed}
-	write := []string{r.GameDir, r.Data}
+	write := append([]string{r.GameDir, r.Data}, r.Write...)
 	read := slices.Clone(r.Read)
 	for _, f := range r.Rules.Folders {
 		if f.Level == rules.RW {
@@ -127,3 +127,6 @@ func (b *darwinBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *J
 
 // forget is a no-op: nothing outlives a run here.
 func forget(string) error { return nil }
+
+// Desktop names what the Graphics and audio rule lets through here.
+func Desktop() string { return "GPU, Core Audio, window server" }

@@ -446,6 +446,60 @@ export namespace api {
 	
 	
 	
+	export class SandboxRow {
+	    id: string;
+	    folder: boolean;
+	    path: string;
+	    level: string;
+	    choices: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SandboxRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.folder = source["folder"];
+	        this.path = source["path"];
+	        this.level = source["level"];
+	        this.choices = source["choices"];
+	    }
+	}
+	export class SandboxView {
+	    on: boolean;
+	    preset: string;
+	    rows: SandboxRow[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SandboxView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.on = source["on"];
+	        this.preset = source["preset"];
+	        this.rows = this.convertValues(source["rows"], SandboxRow);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SkinView {
 	    hash: string;
 	    name: string;
@@ -1916,6 +1970,7 @@ export namespace launch {
 	    account: string;
 	    accountId: string;
 	    mods: number;
+	    sandbox?: string;
 	    world?: string;
 	    server?: string;
 	    shots?: number;
@@ -1937,6 +1992,7 @@ export namespace launch {
 	        this.account = source["account"];
 	        this.accountId = source["accountId"];
 	        this.mods = source["mods"];
+	        this.sandbox = source["sandbox"];
 	        this.world = source["world"];
 	        this.server = source["server"];
 	        this.shots = source["shots"];
@@ -2223,6 +2279,29 @@ export namespace mojang {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace sandbox {
+	
+	export class Status {
+	    available: boolean;
+	    name: string;
+	    version: string;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.reason = source["reason"];
+	    }
 	}
 
 }

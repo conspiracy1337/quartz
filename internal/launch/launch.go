@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"quartz/internal/loader"
 	"quartz/internal/mojang"
 	"quartz/internal/runview"
+	"quartz/internal/sandbox"
 	"quartz/internal/settings"
 	"quartz/internal/syncing"
 )
@@ -91,6 +93,10 @@ type Config struct {
 	// Hosted reports a world a local server plays now, which the game may
 	// not open too (nil: none ever is).
 	Hosted func(id, folder string) bool
+	// Sandbox runs sandboxed instances (nil runs everything unsandboxed:
+	// tests). StoreRead are the store folders a sandboxed game reads.
+	Sandbox   *sandbox.Service
+	StoreRead []string
 }
 
 // ModChecker summarises the mods a launch will load. It never blocks a
@@ -339,6 +345,8 @@ func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance, account
 		f.Code, f.AccountID, f.Message = "sign-in-expired", p.signedIn, "Sign in again: "+auth.Describe(err).Message
 	case ctx.Err() != nil:
 		f.Code, f.Message = "cancelled", "Launch cancelled"
+	case errors.Is(err, sandbox.ErrUnavailable):
+		f.Code, f.Message = "sandbox", "The"+strings.TrimPrefix(err.Error(), "the")
 	}
 	if f.Code != "cancelled" {
 		l.cfg.Log.Warn("launch failed", "instance", inst.ID, "stage", stage, "err", err)
@@ -416,17 +424,31 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	p.set(StageFiles, "Ready")
 	p.progress(StageSandbox, 88)
 
-	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir, mods: p.mods, into: p.into, runID: newRunID(time.Now())}
+	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir, mods: p.mods, into: p.into, runID: newRunID(time.Now()),
+		sandboxed: p.inst.Sandbox.On && l.cfg.Sandbox != nil}
+	if sp.sandboxed {
+		if st := l.cfg.Sandbox.Status(); !st.Available {
+			return StageSandbox, fmt.Errorf("%w: %s", sandbox.ErrUnavailable, st.Reason)
+		}
+	}
 	if err := l.assemble(&sp); err != nil {
 		return StageSandbox, err
 	}
-	p.set(StageSandbox, "Off")
-	p.progress(StageStart, 90)
 	sp.vars = instVars(p.inst, l.cfg.Instances.Dir(p.inst.ID), sp.gameDir, rt.Path)
+	if sp.cmd, sp.script, sp.shown, err = l.command(&sp); err != nil {
+		l.disassemble(&sp)
+		return StageSandbox, err
+	}
+	if sp.jail != nil {
+		p.set(StageSandbox, sp.jail.Name)
+	} else {
+		p.set(StageSandbox, "Off")
+	}
+	p.progress(StageStart, 90)
 	if pre := p.eff.Commands.PreLaunch; pre != "" {
 		p.set(StageStart, "Before-launch command")
 		p.progress(StageStart, 92)
-		if err := runCommand(ctx, pre, sp.gameDir, sp.vars, gameEnv(sp.vars, p.eff)); err != nil {
+		if err := runCommand(ctx, pre, sp.gameDir, sp.vars, gameEnv(sp.vars, p.eff, false)); err != nil {
 			l.disassemble(&sp)
 			return StageStart, fmt.Errorf("before-launch command: %w", err)
 		}

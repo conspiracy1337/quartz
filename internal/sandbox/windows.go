@@ -170,6 +170,9 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 		}
 	}
 	grants := []grant{{r.GameDir, sid, accessModify}, {r.Data, sid, accessModify}}
+	for _, p := range r.Write {
+		grants = append(grants, grant{p, sid, accessModify})
+	}
 	for _, p := range r.Read {
 		grants = append(grants, grant{p, store, accessRead})
 	}
@@ -322,3 +325,6 @@ func forget(instance string) error {
 	}
 	return nil
 }
+
+// Desktop names what the Graphics and audio rule lets through here.
+func Desktop() string { return "GPU, audio, desktop" }

@@ -41,7 +41,7 @@ func gameArgs(t *testing.T, ver string, into instance.Into) ([]string, string) {
 	env := mojang.Env{OS: "linux", Arch: "x86_64", Features: map[string]bool{}}
 	sp := spec{inst: inst, eff: inst.Resolve(st.Get()), sess: accounts.Session{Name: "Steve", AccessToken: "TOKEN"}, res: res, rt: java.Runtime{Path: "/java"}, mem: MemoryRange{Min: 512, Max: 1024}, env: env, gameDir: insts.GameDir(inst.ID), into: into}
 	sp.vars = instVars(inst, insts.Dir(inst.ID), sp.gameDir, sp.rt.Path)
-	_, script, shown, err := l.command(sp)
+	_, script, shown, err := l.command(&sp)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -144,11 +144,13 @@ func TestTrashRestoreAndPurge(t *testing.T) {
 	}
 
 	// Expired entries are purged; recent ones stay.
+	var purged []string
+	s.OnPurge(func(id string) { purged = append(purged, id) })
 	old, _ := s.Trash(back.ID, now.Add(-31*24*time.Hour))
 	recent := create(t, s, "Recent")
 	_, _ = s.Trash(recent.ID, now)
-	if n := s.PurgeExpired(now); n != 1 {
-		t.Fatalf("purged %d", n)
+	if n := s.PurgeExpired(now); n != 1 || len(purged) != 1 || purged[0] != back.ID {
+		t.Fatalf("purged %d %v", n, purged)
 	}
 	if _, err := s.readEntry(old.Key); err == nil {
 		t.Fatal("expired entry kept")

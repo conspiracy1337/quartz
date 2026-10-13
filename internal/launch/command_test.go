@@ -50,7 +50,7 @@ func TestCommandKeepsTokenOffTheCommandLine(t *testing.T) {
 	sess := accounts.Session{Name: "Steve", UUID: "0123456789abcdef0123456789abcdef", AccessToken: "SECRET_TOKEN_eyJhbGciOi", UserType: "msa"}
 	sp := spec{inst: inst, eff: inst.Resolve(st.Get()), sess: sess, res: res, rt: java.Runtime{Path: "/jdk/bin/java"}, mem: MemoryRange{Min: 1024, Max: 4096}, env: env, gameDir: insts.GameDir(inst.ID)}
 	sp.vars = instVars(inst, insts.Dir(inst.ID), sp.gameDir, sp.rt.Path)
-	cmd, script, _, err := l.command(sp)
+	cmd, script, _, err := l.command(&sp)
 	if err != nil {
 		t.Fatal(err)
 	}
