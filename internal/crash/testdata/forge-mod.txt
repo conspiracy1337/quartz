@@ -1,0 +1,14 @@
+---- Minecraft Crash Report ----
+Description: Mod loading error has occurred
+
+java.lang.Exception: Mod Loading has failed
+	at net.minecraftforge.logging.CrashReportExtender.dumpModLoadingCrashReport(CrashReportExtender.java:60)
+
+-- MOD embeddium --
+Details:
+	Caused by 0: java.lang.NoClassDefFoundError: me/jellysquid/mods/sodium/client/SodiumClientMod
+		at org.embeddedt.embeddium.impl.Embeddium.<init>(Embeddium.java:21) ~[embeddium-0.3.18+mc1.20.1.jar%23187!/:0.3.18+mc1.20.1] {re:classloading}
+	Mod File: /home/steve/.minecraft/mods/embeddium-0.3.18+mc1.20.1.jar
+	Failure message: Embeddium (embeddium) has failed to load correctly
+		java.lang.NoClassDefFoundError: me/jellysquid/mods/sodium/client/SodiumClientMod
+	Mod Version: 0.3.18+mc1.20.1
