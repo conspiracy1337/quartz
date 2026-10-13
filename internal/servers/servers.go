@@ -108,6 +108,19 @@ func New(d Deps) *Service {
 	if d.Protocol == nil {
 		d.Protocol = func(string) int { return 0 }
 	}
+	// Reading the protocol opens the client jar; once per version is enough.
+	read := d.Protocol
+	var known sync.Map
+	d.Protocol = func(mc string) int {
+		if v, ok := known.Load(mc); ok {
+			return v.(int)
+		}
+		p := read(mc)
+		if p > 0 {
+			known.Store(mc, p)
+		}
+		return p
+	}
 	if d.Pinger == nil {
 		d.Pinger = slp.NewPinger()
 	}

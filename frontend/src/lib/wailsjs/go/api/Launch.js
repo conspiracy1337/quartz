@@ -10,6 +10,10 @@ export function Play(arg1, arg2) {
   return window['go']['api']['Launch']['Play'](arg1, arg2);
 }
 
+export function PlayInto(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['Launch']['PlayInto'](arg1, arg2, arg3, arg4);
+}
+
 export function Repair(arg1) {
   return window['go']['api']['Launch']['Repair'](arg1);
 }

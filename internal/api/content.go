@@ -19,6 +19,8 @@ type ContentDeps struct {
 	Store    *store.Store
 	Settings *settings.Store
 	Drops    *Drops
+	// Watch also follows the shown instance's worlds, screenshots and servers; nil in tests.
+	Watch func(id string)
 }
 
 // Content exposes the content tabs, updates and the shared store.
@@ -272,6 +274,9 @@ func (c *Content) Watch(instanceID string) error {
 		}
 	}
 	c.d.Service.Watch(instanceID)
+	if c.d.Watch != nil {
+		c.d.Watch(instanceID)
+	}
 	return nil
 }
 

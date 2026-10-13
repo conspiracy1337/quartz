@@ -6,6 +6,10 @@ export function Info() {
   return window['go']['api']['App']['Info']();
 }
 
+export function OpenDataFolder() {
+  return window['go']['api']['App']['OpenDataFolder']();
+}
+
 export function OpenURL(arg1) {
   return window['go']['api']['App']['OpenURL'](arg1);
 }

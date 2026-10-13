@@ -4,4 +4,6 @@ import {api} from '../models';
 
 export function Info():Promise<api.AppInfo>;
 
+export function OpenDataFolder():Promise<void>;
+
 export function OpenURL(arg1:string):Promise<void>;
