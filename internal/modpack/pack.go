@@ -49,7 +49,10 @@ func (f File) Blocked() bool { return len(f.URLs) == 0 }
 
 // Pack is a modpack read from any format.
 type Pack struct {
-	Origin        Origin
+	Origin Origin
+	// Format names where the pack is from for people: "Modrinth",
+	// "CurseForge", "Prism or MultiMC", "Technic", "FTB".
+	Format        string
 	Name          string
 	Version       string
 	Summary       string

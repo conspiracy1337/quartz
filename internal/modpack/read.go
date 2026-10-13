@@ -108,7 +108,7 @@ func readMrpack(zr *archive.Reader) (*Pack, error) {
 	if ix.FormatVersion != 1 || ix.Game != "minecraft" {
 		return nil, ErrNotPack
 	}
-	p := &Pack{Origin: Origin{Source: "file"}, Name: clip(ix.Name, 80), Version: clip(ix.VersionID, 40), Summary: clip(ix.Summary, 300),
+	p := &Pack{Origin: Origin{Source: "file"}, Format: "Modrinth", Name: clip(ix.Name, 80), Version: clip(ix.VersionID, 40), Summary: clip(ix.Summary, 300),
 		Layers: []string{"overrides/", "client-overrides/"}}
 	for key, ver := range ix.Dependencies {
 		switch {
@@ -219,7 +219,7 @@ func (r *Reader) readCurse(ctx context.Context, zr *archive.Reader) (*Pack, erro
 	if o, err := CleanPath(overrides); err != nil || strings.Contains(o, "/") {
 		return nil, ErrUnsafePath
 	}
-	p := &Pack{Origin: Origin{Source: "file"}, Name: clip(m.Name, 80), Version: clip(m.Version, 40), Minecraft: mc, Layers: []string{overrides + "/"}}
+	p := &Pack{Origin: Origin{Source: "file"}, Format: "CurseForge", Name: clip(m.Name, 80), Version: clip(m.Version, 40), Minecraft: mc, Layers: []string{overrides + "/"}}
 	for _, l := range m.Minecraft.ModLoaders {
 		if kind, ver, ok := cfLoader(l.ID, mc); ok && (l.Primary || p.Loader == "") {
 			p.Loader, p.LoaderVersion = kind, ver
@@ -328,7 +328,7 @@ func readMMC(zr *archive.Reader) (*Pack, error) {
 			return nil, ErrUnsafePath
 		}
 	}
-	p := &Pack{Origin: Origin{Source: "file"}}
+	p := &Pack{Origin: Origin{Source: "file"}, Format: "Prism or MultiMC"}
 	// Only the name is read: commands, JVM arguments and the environment an
 	// instance file may carry are never taken over.
 	if b, err := zr.Read(cfg, 1<<20); err == nil {
@@ -381,7 +381,7 @@ func readMMC(zr *archive.Reader) (*Pack, error) {
 // the forgeversion.properties of very old packs). hint fills what the zip
 // can't say (the Minecraft version, from Technic's API).
 func readTechnic(zr *archive.Reader, hint *Pack) (*Pack, error) {
-	p := &Pack{Origin: Origin{Source: "file"}, Layers: []string{""}, Skip: []string{"bin/"}}
+	p := &Pack{Origin: Origin{Source: "file"}, Format: "Technic", Layers: []string{""}, Skip: []string{"bin/"}}
 	if hint != nil {
 		p.Origin, p.Name, p.Version, p.Minecraft, p.IconURL = hint.Origin, hint.Name, hint.Version, hint.Minecraft, hint.IconURL
 	}

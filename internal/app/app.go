@@ -26,10 +26,12 @@ import (
 	"quartz/internal/api"
 	"quartz/internal/auth"
 	"quartz/internal/brand"
+	"quartz/internal/browse"
 	"quartz/internal/content"
 	"quartz/internal/content/store"
 	"quartz/internal/core/download"
 	"quartz/internal/core/events"
+	"quartz/internal/core/hashx"
 	"quartz/internal/core/httpcache"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/netx"
@@ -44,8 +46,9 @@ import (
 	"quartz/internal/java"
 	"quartz/internal/launch"
 	"quartz/internal/loader"
-	"quartz/internal/meta"
 	"quartz/internal/manual"
+	"quartz/internal/meta"
+	"quartz/internal/modpack"
 	"quartz/internal/modplatform"
 	"quartz/internal/modplatform/curseforge"
 	"quartz/internal/modplatform/modrinth"
@@ -84,6 +87,10 @@ type app struct {
 	installer *install.Installer
 	icons     *icons.Library
 	stopPurge func()
+	stopPacks func()
+	browse    *browse.Service
+	packRead  *modpack.Reader
+	packs     *modpack.Service
 	loaders   *loader.Registry
 	launcher  *launch.Launcher
 	content   *content.Service
@@ -106,6 +113,7 @@ func Run(o Options) error {
 	defer func() { _ = a.logFile.Close() }()
 	a.log.Info("starting", "version", brand.Version, "data", a.paths.Root, "portable", a.paths.Portable)
 
+	appFacade := api.NewApp(a.ctx, a.paths)
 	return wails.Run(&options.App{
 		Title:            brand.Name,
 		Width:            1200,
@@ -124,7 +132,7 @@ func Run(o Options) error {
 		},
 		Linux: &linux.Options{ProgramName: brand.Slug},
 		Bind: []any{
-			api.NewApp(a.ctx, a.paths),
+			appFacade,
 			api.NewSettings(a.ctx, a.settings, a.css, a.network),
 			api.NewDownloads(a.tasks),
 			api.NewVersions(a.ctx, a.meta, a.loaders, a.installer),
@@ -135,6 +143,10 @@ func Run(o Options) error {
 				Running: a.launcher.Running, Busy: a.launcher.Busy, Content: a.content,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops}),
+			api.NewBrowse(a.ctx, a.browse),
+			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Picture: a.pictures.Src}),
+			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
+			api.NewManual(api.ManualDeps{Service: a.manual, Drops: a.drops, App: appFacade}),
 			api.NewLaunch(a.ctx, a.launcher),
 			api.NewLogs(a.launcher),
 		},
@@ -284,7 +296,63 @@ func (a *app) buildTasks() error {
 		Settings: a.settings, Bus: a.bus, Redactor: a.redactor, BinDir: a.paths.Bin(), Log: a.log,
 		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited}, Mods: a.content,
 	})
+	a.buildBrowse(dl)
 	return nil
+}
+
+// buildBrowse wires Browse, the modpack reader and pack installs and updates.
+func (a *app) buildBrowse(dl *download.Downloader) {
+	channel := func() modplatform.Channel { return modplatform.ParseChannel(a.settings.Get().Updates.ModChannel) }
+	a.browse = browse.New(browse.Deps{
+		Platforms: a.platforms, Pictures: a.pictures, Channel: channel, Log: a.log,
+		Target: func(id string) (browse.Target, error) {
+			in, err := a.instances.Get(id)
+			if err != nil {
+				return browse.Target{}, err
+			}
+			return browse.Target{Name: in.Name, Minecraft: in.Minecraft, Loader: in.Loader, Installed: a.content.Installed(id)}, nil
+		},
+	})
+	a.packRead = modpack.NewReader(modpack.Deps{
+		Modrinth: a.platforms[0], CurseForge: a.platforms[1], HTTP: a.http, Cache: filepath.Join(a.paths.Cache(), "imports"), Log: a.log,
+		Fetch: func(ctx context.Context, raw string, size int64, sum hashx.Sum, dest string) error {
+			return dl.Fetch(ctx, download.Item{URLs: []string{raw}, Dest: dest, Size: size, Sum: sum}, nil)
+		},
+	})
+	staging := filepath.Join(a.paths.Instances(), ".staging")
+	_ = os.RemoveAll(staging) // installs a crash interrupted
+	a.packs = modpack.NewService(modpack.InstallDeps{
+		Reader: a.packRead, Instances: a.instances, Store: a.store, Tasks: a.tasks, Manual: a.manual, Loaders: a.loaders, Icons: a.icons,
+		Prepare: func(ctx context.Context, t install.Target, gameDir string, meta tasks.Meta) (*tasks.Spec, error) {
+			return a.launcher.Prepare(ctx, t, gameDir, meta, false)
+		},
+		Defaults: func() instance.JavaSettings {
+			g := a.settings.Get().Java
+			return instance.JavaSettings{MemoryMinMB: g.MemoryMinMB, MemoryMaxMB: g.MemoryMaxMB, JVMArgs: g.JVMArgs}
+		},
+		GetIcon: modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log,
+	}, modpack.UpdateDeps{Known: a.content.Known, Record: a.content.Record, Channel: channel})
+}
+
+// checkPacks looks for modpack updates now and every 6 hours (a timer, not
+// polling); it returns the stop function.
+func (a *app) checkPacks() func() {
+	done := make(chan struct{})
+	go func() {
+		t := time.NewTicker(6 * time.Hour)
+		defer t.Stop()
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			a.packs.CheckUpdates(ctx)
+			cancel()
+			select {
+			case <-t.C:
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() { close(done) }
 }
 
 // buildContent wires the content store, the mod platforms and the content
@@ -392,6 +460,7 @@ func (a *app) startup(ctx context.Context) {
 	})
 	a.accounts.Start()
 	a.stopPurge = a.purgeTrash()
+	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
 }
 
@@ -428,6 +497,9 @@ func (a *app) purgeTrash() func() {
 func (a *app) shutdown(context.Context) {
 	if a.stopPurge != nil {
 		a.stopPurge()
+	}
+	if a.stopPacks != nil {
+		a.stopPacks()
 	}
 	a.accounts.Close()
 	a.launcher.Close()

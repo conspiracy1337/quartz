@@ -290,3 +290,49 @@ func (c *Content) CleanUp() (store.Usage, error) {
 // cleanGrace spares files stored in the last few minutes: an update job may
 // be about to place them. (Removed items stay referenced until purged.)
 const cleanGrace = 10 * time.Minute
+
+var (
+	planIDRe = regexp.MustCompile(`^[0-9a-f]{12}$`)
+	depIDRe  = regexp.MustCompile(`^dep-(?:modrinth|curseforge)-[A-Za-z0-9]{1,32}$`)
+)
+
+// PlanInstall picks the version of a project to install into an instance
+// ("" version for the newest that fits) and lists its dependencies.
+func (c *Content) PlanInstall(instanceID, kind, world, ref, source, version string) (*content.InstallPlan, error) {
+	k, err := checkKind(kind)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkInstanceID(instanceID); err != nil {
+		return nil, err
+	}
+	if world != "" && !worldRe.MatchString(world) {
+		return nil, ErrBadWorld
+	}
+	r, err := modplatform.ParseRef(ref)
+	if err != nil {
+		return nil, err
+	}
+	src, err := checkSource(source)
+	if err != nil {
+		return nil, err
+	}
+	if r.ID(src) == "" || (version != "" && !versionIDRe.MatchString(version)) {
+		return nil, ErrBadSource
+	}
+	return c.d.Service.PlanInstall(c.ctx.Get(), content.InstallRequest{Instance: instanceID, Kind: k, World: world, Source: src,
+		Project: r.ID(src), Version: version, Channel: c.channel()})
+}
+
+// ApplyInstall starts the install job with the optional dependencies picked.
+func (c *Content) ApplyInstall(planID string, optional []string) (string, error) {
+	if !planIDRe.MatchString(planID) || len(optional) > 64 {
+		return "", ErrBadCheck
+	}
+	for _, id := range optional {
+		if !depIDRe.MatchString(id) {
+			return "", ErrBadItem
+		}
+	}
+	return c.d.Service.ApplyInstall(planID, optional)
+}

@@ -291,7 +291,7 @@ func (r *Reader) ftb(ctx context.Context, id, version string) (*Pack, error) {
 	if err := r.d.HTTP.JSON(ctx, http.MethodGet, ftbAPI+id+"/"+vid, nil, nil, &ver); err != nil || ver.Status == "error" {
 		return nil, ErrLink
 	}
-	p := &Pack{Origin: Origin{Source: "ftb", Project: id, Version: vid}, Name: clip(pack.Name, 80), Version: clip(ver.Name, 40), Summary: clip(pack.Synopsis, 300)}
+	p := &Pack{Origin: Origin{Source: "ftb", Project: id, Version: vid}, Format: "FTB", Name: clip(pack.Name, 80), Version: clip(ver.Name, 40), Summary: clip(pack.Synopsis, 300)}
 	for _, a := range pack.Art {
 		if a.Type == "square" && allowedURL(a.URL, nil) {
 			p.IconURL = a.URL
@@ -367,7 +367,7 @@ func (r *Reader) technic(ctx context.Context, slug string) (*Pack, error) {
 	if err := r.d.HTTP.JSON(ctx, http.MethodGet, technicAPI+slug+"?build=quartz", nil, nil, &info); err != nil || info.Error != "" {
 		return nil, ErrLink
 	}
-	hint := &Pack{Origin: Origin{Source: "technic", Project: slug}, Name: clip(orElse(info.DisplayName, info.Name), 80),
+	hint := &Pack{Origin: Origin{Source: "technic", Project: slug}, Format: "Technic", Name: clip(orElse(info.DisplayName, info.Name), 80),
 		Version: clip(info.Version, 40), Minecraft: info.Minecraft, IconURL: info.Icon.URL}
 	if s := strings.TrimRight(info.Solder, "/"); s != "" {
 		return r.solder(ctx, s, info.Name, hint)
