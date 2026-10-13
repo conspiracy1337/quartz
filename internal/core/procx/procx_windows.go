@@ -55,3 +55,21 @@ func Terminate(p *os.Process) error {
 
 // Kill ends the game at once.
 func Kill(p *os.Process) error { return p.Kill() }
+
+const stillActive = 259
+
+// Alive reports whether a process with this id is still running (it may
+// belong to someone else after the id was reused; callers treat true as
+// "maybe").
+func Alive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid)) //nolint:gosec // Windows process ids are 32-bit
+	if err != nil {
+		return false
+	}
+	defer func() { _ = windows.CloseHandle(h) }()
+	var code uint32
+	return windows.GetExitCodeProcess(h, &code) == nil && code == stillActive
+}

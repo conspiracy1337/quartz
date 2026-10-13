@@ -23,3 +23,13 @@ func Terminate(p *os.Process) error { return syscall.Kill(-p.Pid, syscall.SIGTER
 
 // Kill ends the game's process group at once.
 func Kill(p *os.Process) error { return syscall.Kill(-p.Pid, syscall.SIGKILL) }
+
+// Alive reports whether a process with this id exists (it may belong to
+// someone else after the id was reused; callers treat true as "maybe").
+func Alive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	return err == nil || err == syscall.EPERM
+}
