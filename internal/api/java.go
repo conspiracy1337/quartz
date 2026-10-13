@@ -53,7 +53,7 @@ func (j *Java) Scan() []JavaRuntime {
 
 // AddFromFolder lets the user pick a Java installation folder.
 func (j *Java) AddFromFolder() ([]JavaRuntime, error) {
-	dir, err := wruntime.OpenDirectoryDialog(j.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose a Java installation folder"})
+	dir, err := openDirDialog(j.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose a Java installation folder"})
 	if err != nil || dir == "" {
 		return j.list(), err
 	}

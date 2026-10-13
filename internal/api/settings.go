@@ -40,7 +40,7 @@ func (s *Settings) CustomCSS() theme.CSSState { return s.css.Current() }
 // PickCustomCSS lets the user choose a CSS file and turns custom CSS on.
 // It returns the stored settings; an empty pick changes nothing.
 func (s *Settings) PickCustomCSS() (settings.Settings, error) {
-	path, err := wruntime.OpenFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
+	path, err := openFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a CSS file",
 		Filters: []wruntime.FileFilter{{DisplayName: "CSS files (*.css)", Pattern: "*.css"}},
 	})
@@ -82,7 +82,7 @@ func (s *Settings) ExportTheme(css string) error {
 	if len(css) > theme.MaxCSSSize {
 		return ErrThemeTooLarge
 	}
-	path, err := wruntime.SaveFileDialog(s.ctx.Get(), wruntime.SaveDialogOptions{
+	path, err := saveFileDialog(s.ctx.Get(), wruntime.SaveDialogOptions{
 		Title:           "Export theme",
 		DefaultFilename: "theme.css",
 		Filters:         []wruntime.FileFilter{{DisplayName: "CSS files (*.css)", Pattern: "*.css"}},

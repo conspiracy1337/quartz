@@ -232,7 +232,7 @@ func (a *Accounts) added(s skins.Skin, err error) (SkinView, error) {
 // an empty view when the dialog is cancelled. The path never comes from the
 // page.
 func (a *Accounts) ImportSkinFile() (SkinView, error) {
-	path, err := wruntime.OpenFileDialog(a.ctx.Get(), wruntime.OpenDialogOptions{
+	path, err := openFileDialog(a.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a skin",
 		Filters: []wruntime.FileFilter{{DisplayName: "Skins (*.png)", Pattern: "*.png"}},
 	})

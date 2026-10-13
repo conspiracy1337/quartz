@@ -79,13 +79,7 @@ func build(version string, which []string) error {
 		if !ok {
 			return fmt.Errorf("unknown target %q", w)
 		}
-		args := []string{"build", "-platform", strings.Replace(w, "-", "/", 1), "-trimpath", "-ldflags", ldflags(version, pub), "-o", t.File}
-		if strings.HasPrefix(w, "linux") {
-			args = append(args, "-tags", "webkit2_41")
-		}
-		if frontendBuilt {
-			args = append(args, "-s") // the frontend is the same for every target
-		}
+		args := wailsArgs(w, ldflags(version, pub), t.File, frontendBuilt)
 		fmt.Println("wails", strings.Join(args[:4], " "), "…")
 		cmd := exec.Command("wails", args...) //nolint:gosec // fixed tool, our own arguments
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
@@ -99,6 +93,20 @@ func build(version string, which []string) error {
 	}
 	fmt.Println("Done. Next: release manifest", version, "<notes.md>")
 	return nil
+}
+
+// wailsArgs is the wails build command line for one target. Release builds
+// only ever carry the WebKitGTK tag: never the development tags (fakeauth,
+// e2e) that swap in fake sign-in or scripted dialogs.
+func wailsArgs(w, flags, file string, skipFrontend bool) []string {
+	args := []string{"build", "-platform", strings.Replace(w, "-", "/", 1), "-trimpath", "-ldflags", flags, "-o", file}
+	if strings.HasPrefix(w, "linux") {
+		args = append(args, "-tags", "webkit2_41")
+	}
+	if skipFrontend {
+		args = append(args, "-s") // the frontend is the same for every target
+	}
+	return args
 }
 
 // collect moves a build into dist/ (the macOS .app zipped, ad-hoc signed).

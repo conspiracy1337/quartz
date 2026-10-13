@@ -52,7 +52,7 @@ func (a *App) ChangeDataFolder() (string, error) {
 	if a.d.Pristine != nil && !a.d.Pristine() {
 		return "", ErrNotPristine
 	}
-	dir, err := wruntime.OpenDirectoryDialog(a.ctx.Get(), wruntime.OpenDialogOptions{Title: "Where to keep instances", DefaultDirectory: filepath.Dir(a.paths.Root)})
+	dir, err := openDirDialog(a.ctx.Get(), wruntime.OpenDialogOptions{Title: "Where to keep instances", DefaultDirectory: filepath.Dir(a.paths.Root)})
 	if err != nil || dir == "" {
 		return "", err
 	}

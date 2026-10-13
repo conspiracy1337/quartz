@@ -377,7 +377,7 @@ func (s *Instances) SetIcon(id, hash string) (InstanceView, error) {
 func (s *Instances) ChooseIcon() (string, error) { return s.chooseIcon() }
 
 func (s *Instances) chooseIcon() (string, error) {
-	path, err := wruntime.OpenFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
+	path, err := openFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a picture",
 		Filters: []wruntime.FileFilter{{DisplayName: "Pictures (*.png, *.jpg)", Pattern: "*.png;*.jpg;*.jpeg"}},
 	})
@@ -597,7 +597,7 @@ func (s *Instances) Move(id string) (string, error) {
 	if err := checkInstanceID(id); err != nil {
 		return "", err
 	}
-	parent, err := wruntime.OpenDirectoryDialog(s.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose where the game folder goes"})
+	parent, err := openDirDialog(s.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose where the game folder goes"})
 	if err != nil || parent == "" {
 		return "", err
 	}

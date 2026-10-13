@@ -202,7 +202,7 @@ func (a *Sandbox) AddFolder(id string) (SandboxView, error) {
 	if err := checkInstanceID(id); err != nil {
 		return SandboxView{}, err
 	}
-	dir, err := wruntime.OpenDirectoryDialog(a.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose a folder the game may reach"})
+	dir, err := openDirDialog(a.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose a folder the game may reach"})
 	if err != nil || dir == "" {
 		if err == nil {
 			return a.View(id)
