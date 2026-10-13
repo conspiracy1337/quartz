@@ -202,7 +202,7 @@ func (s *Service) Diff(ctx context.Context, id string) (*Diff, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, kept := plan(old, want, diskOf(s.d.Instances.GameDir(id)))
+	_, kept := plan(old, want, diskOf(func(rel string) string { return s.d.Instances.Path(id, rel) }))
 	d := &Diff{From: in.Pack.VersionName, To: next.Version, KeptEdits: kept, Rows: s.rows(ctx, old, next)}
 	if d.KeptEdits == nil {
 		d.KeptEdits = []string{}
@@ -283,10 +283,12 @@ type disk struct {
 	off    bool // the file is there with .disabled
 }
 
-func diskOf(game string) func(rel string) disk {
+// diskOf reads files through abs, which finds an instance-relative path in
+// the game folder or, for shared folders, the shared one.
+func diskOf(abs func(rel string) string) func(rel string) disk {
 	return func(rel string) disk {
 		for _, suffix := range []string{"", ".disabled"} {
-			p := filepath.Join(game, filepath.FromSlash(rel+suffix))
+			p := abs(rel + suffix)
 			fi, err := os.Lstat(p)
 			if err != nil || !fi.Mode().IsRegular() {
 				continue
@@ -606,7 +608,7 @@ func (s *Service) Update(ctx context.Context, id string, backupWorlds bool) (str
 	game := s.d.Instances.GameDir(id)
 	if backupWorlds {
 		spec.Step("Backing up worlds", tasks.Count, tasks.Func("back up worlds", func(context.Context) error {
-			_, err := backup.Worlds(game, filepath.Join(s.d.Instances.Dir(id), "backups"), time.Now())
+			_, err := backup.Worlds(s.d.Instances.Base(id, "saves"), filepath.Join(s.d.Instances.Dir(id), "backups"), time.Now())
 			if errors.Is(err, backup.ErrNoWorlds) {
 				return nil
 			}
@@ -646,7 +648,6 @@ func (s *Service) Update(ctx context.Context, id string, backupWorlds bool) (str
 
 // apply runs the three-way update in the game folder and records the new version.
 func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, files []planned, set *manual.Set, t install.Target, work string) error {
-	game := s.d.Instances.GameDir(in.ID)
 	old, err := ReadManifest(s.d.Instances.Dir(in.ID))
 	if err != nil {
 		return err
@@ -668,17 +669,35 @@ func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, fil
 	if err != nil {
 		return err
 	}
-	changes, _ := plan(old, want, diskOf(game))
+	abs := func(rel string) string { return s.d.Instances.Path(in.ID, rel) }
+	changes, _ := plan(old, want, diskOf(abs))
 	byPath := map[string]planned{}
 	for _, f := range files {
 		byPath[strings.TrimSuffix(f.Path, ".disabled")] = f
 	}
-	groot, err := os.OpenRoot(game)
-	if err != nil {
-		return err
+	// A path may sit in a folder the instance shares; each base gets a root.
+	roots := map[string]*os.Root{}
+	defer func() {
+		for _, r := range roots {
+			_ = r.Close()
+		}
+	}()
+	rootOf := func(rel string) (*os.Root, error) {
+		b := s.d.Instances.Base(in.ID, rel)
+		if r, ok := roots[b]; ok {
+			return r, nil
+		}
+		r, err := os.OpenRoot(b)
+		if err == nil {
+			roots[b] = r
+		}
+		return r, err
 	}
-	defer func() { _ = groot.Close() }()
 	for _, c := range changes {
+		groot, err := rootOf(c.rel)
+		if err != nil {
+			return err
+		}
 		name := c.rel
 		if c.off {
 			name += ".disabled"
@@ -692,7 +711,7 @@ func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, fil
 		if c.act == actDelete {
 			continue
 		}
-		dst := filepath.Join(game, filepath.FromSlash(name))
+		dst := abs(name)
 		if dir := path.Dir(name); dir != "." {
 			if err := groot.MkdirAll(dir, 0o700); err != nil {
 				return err

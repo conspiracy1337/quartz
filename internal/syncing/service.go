@@ -143,6 +143,23 @@ func (s *Service) base(id, rel string) string {
 	return ""
 }
 
+// Busy reports whether files under rel can't change now: the instance runs,
+// or it shares rel's folder with another instance that runs.
+func (s *Service) Busy(id, rel string) bool {
+	if s.running(id) {
+		return true
+	}
+	if s.base(id, rel) == "" {
+		return false
+	}
+	for _, in := range s.c.Instances.List() {
+		if in.ID != id && s.running(in.ID) && s.base(in.ID, rel) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // reconcile keeps joins a subset of what is turned on.
 func (s *Service) reconcile() {
 	y := s.settings()

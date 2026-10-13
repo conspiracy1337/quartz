@@ -26,6 +26,7 @@ type env struct {
 	svc     *Service
 	id      string
 	game    string
+	insts   *instance.Store
 	running bool
 	events  []Changed
 	mu      sync.Mutex
@@ -47,7 +48,7 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, id: in.ID, game: insts.GameDir(in.ID)}
+	e := &env{t: t, id: in.ID, game: insts.GameDir(in.ID), insts: insts}
 	bus := events.NewBus()
 	bus.Subscribe(events.ContentChanged, func(p any) {
 		e.mu.Lock()
@@ -456,5 +457,43 @@ func TestAddDataPackFolderToAWorld(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(e.game, "saves", "North", "datapacks", "graves", "pack.mcmeta")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSharedFolderItems(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	shared := t.TempDir()
+	// The instance shares its resource packs (package syncing's resolver).
+	e.insts.SetLocator(func(_, rel string) string {
+		if rel == "resourcepacks" || strings.HasPrefix(rel, "resourcepacks/") {
+			return shared
+		}
+		return ""
+	})
+	writeZip(t, filepath.Join(shared, "resourcepacks", "faithful.zip"), map[string]string{"pack.mcmeta": `{"pack":{"pack_format":34,"description":"Faithful"}}`})
+	e.mod("sodium.jar", "sodium", "Sodium", "")
+	rows := e.list(ResourcePacks)
+	if len(rows) != 1 || len(e.list(Mods)) != 1 {
+		t.Fatalf("packs %v", rows)
+	}
+	token, err := e.svc.Remove(ctx, e.id, ResourcePacks, []string{rows[0].ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(shared, "resourcepacks", "faithful.zip")); !os.IsNotExist(err) {
+		t.Fatal("not removed from the shared folder")
+	}
+	if held, _ := filepath.Glob(filepath.Join(shared, ".quartz", "removed", "*")); len(held) == 0 {
+		t.Fatal("held outside the shared folder")
+	}
+	if err := e.svc.Undo(ctx, e.id, token); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.list(ResourcePacks)) != 1 {
+		t.Fatal("undo")
+	}
+	if !e.svc.AnyHasMod("SODIUM") || e.svc.AnyHasMod("xaerominimap") {
+		t.Fatal("AnyHasMod")
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"path"
-	"path/filepath"
 	"time"
 
 	"quartz/internal/content/packwiz"
@@ -114,7 +113,7 @@ func (s *Service) writeMetadata(id string, k Kind) {
 		if b, ok := s.d.Store.Blob(e.SHA1); ok {
 			m.Download.HashFormat, m.Download.Hash = "sha512", b.SHA512
 		}
-		dir := filepath.Join(v.game, filepath.FromSlash(path.Join(path.Dir(e.Rel), specs[k].indexIn)))
+		dir := s.abs(v.in.ID, path.Join(path.Dir(e.Rel), specs[k].indexIn))
 		if err := packwiz.Write(dir, m); err != nil {
 			s.d.Log.Warn("content: writing metadata failed", "item", e.Rel, "err", err)
 		}

@@ -347,7 +347,9 @@ func (a *app) buildGame() {
 	runs := func(id string) []launch.Record { return a.launcher.Runs(id) }
 	a.gameImages = localimg.New(filepath.Join(a.paths.Cache(), "thumbs"))
 	a.favicons = servers.NewFavicons(filepath.Join(a.paths.Cache(), "favicons"))
-	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: busy, Bus: a.bus, Log: a.log})
+	// Worlds may be shared: another instance playing them counts too.
+	worldsBusy := func(id string) bool { return a.syncing.Busy(id, "saves") }
+	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: worldsBusy, Bus: a.bus, Log: a.log})
 	a.servers = servers.New(servers.Deps{
 		Instances: a.instances, Busy: busy, Runs: runs, Favicons: a.favicons, Bus: a.bus, Log: a.log,
 		Protocol: func(mc string) int {
@@ -372,7 +374,7 @@ func (a *app) buildGame() {
 		},
 	})
 	a.home = home.New(home.Deps{Instances: a.instances, Runs: runs, Meta: a.meta, Pictures: a.pictures, DataDir: a.paths.Root})
-	a.gameWatch = gamewatch.New(a.bus, a.instances.GameDir)
+	a.gameWatch = gamewatch.New(a.bus, a.instances.Path)
 	// A finished game changes this week's play time.
 	a.bus.Subscribe(events.GameState, func(p any) {
 		if st, ok := p.(launch.State); ok && st.State == "exited" {

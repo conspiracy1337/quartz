@@ -94,7 +94,7 @@ func New(d Deps) *Service {
 	return &Service{d: d, sizes: map[string]sized{}}
 }
 
-func (s *Service) saves(id string) string { return filepath.Join(s.d.Instances.GameDir(id), "saves") }
+func (s *Service) saves(id string) string { return s.d.Instances.Path(id, "saves") }
 
 // List returns an instance's worlds, the most recently played first.
 func (s *Service) List(ctx context.Context, id string) ([]World, error) {
@@ -326,7 +326,7 @@ func (s *Service) Delete(id, folder string) (string, error) {
 	if _, err := s.dir(id, folder); err != nil {
 		return "", err
 	}
-	root, err := os.OpenRoot(s.d.Instances.GameDir(id))
+	root, err := os.OpenRoot(s.d.Instances.Base(id, "saves"))
 	if err != nil {
 		return "", err
 	}
@@ -341,7 +341,7 @@ func (s *Service) Delete(id, folder string) (string, error) {
 
 // Undo brings back a deleted world.
 func (s *Service) Undo(id, token string) error {
-	root, err := os.OpenRoot(s.d.Instances.GameDir(id))
+	root, err := os.OpenRoot(s.d.Instances.Base(id, "saves"))
 	if err != nil {
 		return err
 	}
@@ -353,7 +353,7 @@ func (s *Service) Undo(id, token string) error {
 
 // purge deletes worlds whose Undo time is over.
 func (s *Service) purge(id string) {
-	if root, err := os.OpenRoot(s.d.Instances.GameDir(id)); err == nil {
+	if root, err := os.OpenRoot(s.d.Instances.Base(id, "saves")); err == nil {
 		holdbin.Purge(root, s.d.Now(), nil)
 		_ = root.Close()
 	}
@@ -431,7 +431,7 @@ func (s *Service) Import(id, src string) (string, error) {
 		base = strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
 	}
 	// Unpack beside saves/ first, so a failed import leaves nothing behind.
-	staging := filepath.Join(s.d.Instances.GameDir(id), ".quartz", "import-"+random())
+	staging := filepath.Join(s.d.Instances.Base(id, "saves"), ".quartz", "import-"+random())
 	defer func() { _ = os.RemoveAll(staging) }()
 	if err := archive.ExtractZip(src, staging, archive.Options{Prefix: prefix}); err != nil {
 		return "", err
@@ -509,7 +509,7 @@ func (s *Service) changed(id string) {
 // FinishRun names the world a run played: the one whose level.dat changed
 // last while the game ran.
 func (s *Service) FinishRun(f *launch.Finished) {
-	saves := filepath.Join(f.GameDir, "saves")
+	saves := s.saves(f.InstanceID)
 	entries, err := os.ReadDir(saves)
 	if err != nil {
 		return

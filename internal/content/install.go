@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -272,7 +271,7 @@ func (s *Service) installDir(v view, k Kind, world string) (string, error) {
 		return "", ErrPickWorld
 	}
 	rel := path.Join("saves", world)
-	if fi, err := os.Stat(filepath.Join(v.game, filepath.FromSlash(rel))); err != nil || !fi.IsDir() { //nolint:gosec // world checked by instance.ValidWorldFolder
+	if fi, err := os.Stat(s.abs(v.in.ID, rel)); err != nil || !fi.IsDir() { //nolint:gosec // world checked by instance.ValidWorldFolder
 		return "", ErrPickWorld
 	}
 	return path.Join(rel, "datapacks"), nil

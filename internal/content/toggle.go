@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -113,12 +112,12 @@ func (s *Service) rename(ctx context.Context, id string, e Entry, on bool) error
 	return s.Scan(ctx, id, e.Kind)
 }
 
-// renameIn renames inside the game folder only; a link can't lead out.
+// renameIn renames inside the item's folder only; a link can't lead out.
 func (s *Service) renameIn(id, from, to string) error {
 	if from == to {
 		return nil
 	}
-	root, err := os.OpenRoot(s.d.Instances.GameDir(id))
+	root, err := os.OpenRoot(s.d.Instances.Base(id, from))
 	if err != nil {
 		return err
 	}
@@ -210,7 +209,7 @@ func (s *Service) writeShader(id, name string) error {
 	if err != nil {
 		return err
 	}
-	p := shaderConfig(v.game, s.oculus(v))
+	p := s.abs(v.in.ID, shaderConfig(s.oculus(v)))
 	l, err := optfile.Read(p, "=")
 	if err != nil {
 		return err
@@ -264,7 +263,7 @@ func (s *Service) SetLocked(id, item string, locked bool) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(v.game, filepath.FromSlash(path.Join(path.Dir(e.Rel), specs[e.Kind].indexIn)))
+	dir := s.abs(v.in.ID, path.Join(path.Dir(e.Rel), specs[e.Kind].indexIn))
 	pw, ok := s.pwFor(&v, e)
 	if !ok {
 		k := v.known[e.SHA1]

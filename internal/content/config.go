@@ -84,12 +84,13 @@ func enabledPacks(l optfile.File) []string {
 
 // ---- Iris / Oculus properties ----
 
-// shaderConfig is the properties file of the shader mod an instance has.
-func shaderConfig(game string, oculus bool) string {
+// shaderConfig is the properties file of the shader mod an instance has,
+// relative to the instance (config/ may be shared).
+func shaderConfig(oculus bool) string {
 	if oculus {
-		return filepath.Join(game, "config", "oculus.properties")
+		return "config/oculus.properties"
 	}
-	return filepath.Join(game, "config", "iris.properties")
+	return "config/iris.properties"
 }
 
 // activeShader reads the selected shader pack ("" when shaders are off).

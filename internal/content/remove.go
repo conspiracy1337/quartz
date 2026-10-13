@@ -37,7 +37,7 @@ func (s *Service) remove(id string, k Kind, items []string) (string, []string, e
 	if err != nil {
 		return "", nil, err
 	}
-	root, err := os.OpenRoot(v.game)
+	root, err := os.OpenRoot(s.base(id, k))
 	if err != nil {
 		return "", nil, err
 	}
@@ -99,7 +99,7 @@ func (s *Service) undo(id, token string) (Kind, error) {
 	if !ok || len(rem.Items) == 0 {
 		return "", ErrUndoExpired
 	}
-	root, err := os.OpenRoot(s.d.Instances.GameDir(id))
+	root, err := os.OpenRoot(s.base(id, rem.Items[0].Entry.Kind))
 	if err != nil {
 		return "", err
 	}
@@ -117,7 +117,7 @@ func (s *Service) undo(id, token string) (Kind, error) {
 
 // purgeRemovals deletes held items whose undo time is over. Store files are
 // unlinked through the store first, which keeps the blob sealed.
-func (s *Service) purgeRemovals(id, game string, cur Index) {
+func (s *Service) purgeRemovals(id string, cur Index) {
 	now := s.now()
 	cutoff := now.Add(-holdbin.Keep).Unix()
 	var done []string
@@ -127,14 +127,22 @@ func (s *Service) purgeRemovals(id, game string, cur Index) {
 		}
 		for _, r := range rem.Items {
 			if !r.Entry.Dir && r.Held != "" {
-				_ = s.d.Store.Unlink(filepath.Join(game, filepath.FromSlash(r.Held)), r.Entry.SHA1)
+				_ = s.d.Store.Unlink(filepath.Join(s.base(id, r.Entry.Kind), filepath.FromSlash(r.Held)), r.Entry.SHA1)
 			}
 		}
 		done = append(done, token)
 	}
-	if root, err := os.OpenRoot(game); err == nil {
-		holdbin.Purge(root, now, nil)
-		_ = root.Close()
+	// Held items wait in the folder they came from: the game folder, or the
+	// shared one for shared kinds.
+	seen := map[string]bool{}
+	for _, k := range Kinds {
+		if b := s.base(id, k); !seen[b] {
+			seen[b] = true
+			if root, err := os.OpenRoot(b); err == nil {
+				holdbin.Purge(root, now, nil)
+				_ = root.Close()
+			}
+		}
 	}
 	if len(done) == 0 {
 		return

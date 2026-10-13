@@ -104,4 +104,12 @@ func (s *Service) emit(id string, k Kind) {
 	}
 }
 
+// base is the folder an instance's items of kind k live under: the game
+// folder, or the shared folder when the instance shares theirs. Item paths
+// (Entry.Rel) are relative to it either way.
+func (s *Service) base(id string, k Kind) string { return s.d.Instances.Base(id, k.top()) }
+
+// abs is where an instance-relative path really is.
+func (s *Service) abs(id, rel string) string { return s.d.Instances.Path(id, rel) }
+
 func (s *Service) running(id string) bool { return s.d.Running != nil && s.d.Running(id) }

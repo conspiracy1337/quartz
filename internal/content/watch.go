@@ -3,7 +3,7 @@ package content
 import (
 	"context"
 	"path/filepath"
-	"strings"
+	"quartz/internal/core/fsx"
 	"sync"
 	"time"
 
@@ -16,7 +16,7 @@ type watcher struct {
 	mu    sync.Mutex
 	w     *fsnotify.Watcher
 	id    string
-	game  string
+	dirs  map[string]Kind // each kind's folder (game or shared) → kind
 	timer *time.Timer
 	dirty map[Kind]bool
 }
@@ -43,14 +43,17 @@ func (s *Service) Watch(id string) {
 		s.d.Log.Warn("content: can't watch folders", "err", err)
 		return
 	}
-	game := s.d.Instances.GameDir(id)
-	for _, dir := range []string{"mods", "resourcepacks", "shaderpacks", "saves"} {
-		_ = w.Add(filepath.Join(game, dir))
+	dirs := map[string]Kind{}
+	for _, k := range Kinds {
+		dir := s.abs(id, k.top())
+		dirs[dir] = k
+		_ = w.Add(dir)
 	}
-	for _, f := range worldsAt(game) {
-		_ = w.Add(filepath.Join(game, filepath.FromSlash(f)))
+	saves := s.base(id, DataPacks)
+	for _, f := range worldsAt(saves) {
+		_ = w.Add(filepath.Join(saves, filepath.FromSlash(f)))
 	}
-	s.watch.w, s.watch.game, s.watch.dirty = w, game, map[Kind]bool{}
+	s.watch.w, s.watch.dirs, s.watch.dirty = w, dirs, map[Kind]bool{}
 	go s.watchLoop(w, id)
 }
 
@@ -88,19 +91,20 @@ func (s *Service) touched(id, name string) {
 	if s.watch.id != id {
 		return
 	}
-	rel, err := filepath.Rel(s.watch.game, name)
-	if err != nil {
-		return
+	k, ok := Kind(""), false
+	for dir, kind := range s.watch.dirs {
+		if fsx.Inside(dir, name) {
+			k, ok = kind, true
+		}
 	}
-	first := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
-	k, ok := map[string]Kind{"mods": Mods, "resourcepacks": ResourcePacks, "shaderpacks": Shaders, "saves": DataPacks}[first]
 	if !ok {
 		return
 	}
 	if k == DataPacks && s.watch.w != nil {
 		// A new world: start following its datapacks folder too.
-		for _, f := range worldsAt(s.watch.game) {
-			_ = s.watch.w.Add(filepath.Join(s.watch.game, filepath.FromSlash(f)))
+		saves := s.base(id, DataPacks)
+		for _, f := range worldsAt(saves) {
+			_ = s.watch.w.Add(filepath.Join(saves, filepath.FromSlash(f)))
 		}
 	}
 	s.watch.dirty[k] = true

@@ -284,3 +284,17 @@ func TestModAvailabilityAndNewInstanceShares(t *testing.T) {
 		t.Fatal("New instance shares turn their targets on")
 	}
 }
+
+func TestBusyCountsSharers(t *testing.T) {
+	e := newEnv(t)
+	e.enable("saves")
+	for _, id := range []string{e.a, e.b} {
+		if err := e.svc.Join(context.Background(), id, "saves"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.running[e.b] = true
+	if !e.svc.Busy(e.a, "saves") || e.svc.Busy(e.a, "resourcepacks") {
+		t.Fatal("A shares worlds with B, which runs; its packs are its own")
+	}
+}

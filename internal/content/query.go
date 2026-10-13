@@ -101,7 +101,7 @@ func (s *Service) Info(id string) TabInfo {
 	if m := s.shaderMod(v); m.id != "" {
 		t.ShaderMod = strings.TrimSpace(m.name + " " + m.version)
 	}
-	if root, err := os.OpenRoot(v.game); err == nil {
+	if root, err := os.OpenRoot(s.base(id, DataPacks)); err == nil {
 		for _, f := range worlds(root) {
 			t.Worlds = append(t.Worlds, f.Group)
 		}
@@ -177,7 +177,7 @@ func (s *Service) Path(id, item string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(s.d.Instances.GameDir(id), filepath.FromSlash(e.Rel)), nil
+	return s.abs(id, e.Rel), nil
 }
 
 // Installed is an identified item an instance has.
