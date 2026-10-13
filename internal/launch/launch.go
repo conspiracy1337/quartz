@@ -8,15 +8,18 @@ package launch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"quartz/internal/accounts"
 	"quartz/internal/auth"
 	"quartz/internal/core/events"
+	"quartz/internal/core/fsx"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
@@ -75,6 +78,8 @@ type Config struct {
 	Hooks     Hooks
 	// Mods checks an instance's mods before launch (content); nil skips it.
 	Mods ModChecker
+	// Finishers add to a run's record after the game exits, in order.
+	Finishers []Finisher
 }
 
 // ModChecker summarises the mods a launch will load. It never blocks a
@@ -178,10 +183,18 @@ func (l *Launcher) Busy(id string) bool {
 	return launching || running
 }
 
+// ErrBadTarget is returned for a world or server Play can't open into.
+var ErrBadTarget = errors.New("launch: not a world or server to open")
+
 // Play starts the launch pipeline in the background with an account
 // (accountID "" means the default one; "Launch as" passes another, for this
-// launch only). Progress and the outcome arrive as events.
-func (l *Launcher) Play(id, accountID string) error {
+// launch only). into opens a world or server straight away; its zero value
+// uses the instance's "Open straight into" setting. Progress and the outcome
+// arrive as events.
+func (l *Launcher) Play(id, accountID string, into instance.Into) error {
+	if !into.Valid() {
+		return ErrBadTarget
+	}
 	inst, err := l.cfg.Instances.Get(id)
 	if err != nil {
 		return err
@@ -198,7 +211,7 @@ func (l *Launcher) Play(id, accountID string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	l.launching[id] = cancel
 	l.mu.Unlock()
-	go l.pipeline(ctx, inst, accountID)
+	go l.pipeline(ctx, inst, accountID, into)
 	return nil
 }
 
@@ -228,6 +241,34 @@ func (l *Launcher) Live(id string) []gamelog.Line {
 // Runs returns an instance's launch history, newest first.
 func (l *Launcher) Runs(id string) []Record { return listRecords(l.cfg.Instances.RunsDir(id)) }
 
+// Run returns one record of an instance's history.
+func (l *Launcher) Run(id, runID string) (Record, error) {
+	if !ValidRunID(runID) {
+		return Record{}, ErrNoRun
+	}
+	data, err := fsx.ReadCapped(filepath.Join(l.cfg.Instances.RunsDir(id), runID+".json"), 64<<10)
+	if err != nil {
+		return Record{}, ErrNoRun
+	}
+	var r Record
+	if err := json.Unmarshal(data, &r); err != nil || r.ID != runID {
+		return Record{}, ErrNoRun
+	}
+	return r, nil
+}
+
+// Evidence returns the path of one of a run's saved files, if it exists.
+func (l *Launcher) Evidence(id, runID, kind string) (string, error) {
+	p, err := EvidencePath(l.cfg.Instances.RunsDir(id), runID, kind)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(p); err != nil {
+		return "", ErrNoRun
+	}
+	return p, nil
+}
+
 // pipeline runs the launch steps; each failure ends it with launch:failed.
 // details is also written from the task engine's event goroutine, so it is
 // guarded.
@@ -236,6 +277,7 @@ type pipeline struct {
 	inst    instance.Instance
 	eff     instance.Effective // inst's settings over the global ones
 	account string
+	into    instance.Into
 	// signedIn is the account the sign-in step resolved, for failure events.
 	signedIn string
 	// mods is how many enabled mods the launch loads.
@@ -258,8 +300,11 @@ func (p *pipeline) progress(stage, pct int) {
 	p.l.cfg.Bus.Emit(events.LaunchProgress, Progress{InstanceID: p.inst.ID, Stage: stage, Details: d, Pct: pct})
 }
 
-func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance, accountID string) {
-	p := &pipeline{l: l, inst: inst, eff: inst.Resolve(l.cfg.Settings.Get()), account: accountID, details: make([]string, stageCount)}
+func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance, accountID string, into instance.Into) {
+	p := &pipeline{l: l, inst: inst, eff: inst.Resolve(l.cfg.Settings.Get()), account: accountID, into: into, details: make([]string, stageCount)}
+	if p.into.Kind == "" {
+		p.into = p.eff.OpenInto
+	}
 	stage, err := p.run(ctx)
 	l.mu.Lock()
 	delete(l.launching, inst.ID)
@@ -353,7 +398,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	p.set(StageSandbox, "Off")
 	p.progress(StageStart, 90)
 
-	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir, mods: p.mods}
+	sp := spec{inst: p.inst, eff: p.eff, acc: acc, sess: sess, res: res, rt: rt, mem: mem, env: env, gameDir: gameDir, mods: p.mods, into: p.into}
 	sp.vars = instVars(p.inst, l.cfg.Instances.Dir(p.inst.ID), gameDir, rt.Path)
 	if pre := p.eff.Commands.PreLaunch; pre != "" {
 		p.set(StageStart, "Before-launch command")

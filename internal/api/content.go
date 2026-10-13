@@ -8,6 +8,7 @@ import (
 	"quartz/internal/content"
 	"quartz/internal/content/store"
 	"quartz/internal/core/procx"
+	"quartz/internal/instance"
 	"quartz/internal/modplatform"
 	"quartz/internal/settings"
 )
@@ -41,7 +42,6 @@ var (
 	checkIDRe = regexp.MustCompile(`^[0-9a-f]{12}$`)
 	tokenRe   = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	updateRe  = regexp.MustCompile(`^(?:[0-9a-f]{16}|dep-(?:modrinth|curseforge)-[A-Za-z0-9]{1,32})$`)
-	worldRe   = regexp.MustCompile(`^[^/\\\x00-\x1f]{1,128}$`)
 	mcRe      = regexp.MustCompile(`^[A-Za-z0-9._ -]{1,64}$`)
 )
 
@@ -183,7 +183,7 @@ func (c *Content) AddDropped(dropID, instanceID, kind, world string) (content.Ad
 	if err := checkInstanceID(instanceID); err != nil {
 		return content.AddResult{}, err
 	}
-	if world != "" && !worldRe.MatchString(world) {
+	if world != "" && !instance.ValidWorldFolder(world) {
 		return content.AddResult{}, ErrBadWorld
 	}
 	paths, err := c.d.Drops.Take(dropID)
@@ -306,7 +306,7 @@ func (c *Content) PlanInstall(instanceID, kind, world, ref, source, version stri
 	if err := checkInstanceID(instanceID); err != nil {
 		return nil, err
 	}
-	if world != "" && !worldRe.MatchString(world) {
+	if world != "" && !instance.ValidWorldFolder(world) {
 		return nil, ErrBadWorld
 	}
 	r, err := modplatform.ParseRef(ref)

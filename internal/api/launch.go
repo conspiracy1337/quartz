@@ -32,7 +32,7 @@ func (a *Launch) Play(id, accountID string) error {
 			return err
 		}
 	}
-	return a.l.Play(id, accountID)
+	return a.l.Play(id, accountID, instance.Into{})
 }
 
 // CancelLaunch stops a launch before the game starts.

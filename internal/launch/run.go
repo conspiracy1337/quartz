@@ -2,6 +2,7 @@ package launch
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -10,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,8 +22,10 @@ import (
 	"quartz/internal/accounts"
 	"quartz/internal/brand"
 	"quartz/internal/core/events"
+	"quartz/internal/core/fsx"
 	"quartz/internal/core/procx"
 	"quartz/internal/core/shlex"
+	"quartz/internal/core/slp"
 	"quartz/internal/gamelog"
 	"quartz/internal/install"
 	"quartz/internal/instance"
@@ -47,6 +52,9 @@ type run struct {
 
 	stopping atomic.Bool
 	killed   atomic.Bool
+	// loaded is set once the game got far enough to log its user: a
+	// non-zero exit before that is "Failed to start", after it a crash.
+	loaded atomic.Bool
 
 	firstOnce   sync.Once
 	firstOutput chan struct{}
@@ -54,6 +62,7 @@ type run struct {
 
 	pmu     sync.Mutex
 	pending []gamelog.Line
+	server  string // the last "Connecting to host, port" (guarded by pmu)
 
 	record Record
 	// postExit is the player's after-exit command, with the variables it gets.
@@ -76,6 +85,7 @@ type spec struct {
 	gameDir string
 	vars    map[string]string // $INST_* values
 	mods    int
+	into    instance.Into // a world or server to open straight into
 }
 
 // moduleExports are the named-module main classes the wrapper jar calls
@@ -87,11 +97,12 @@ var moduleExports = map[string]string{ //nolint:gosec // module names, not crede
 
 // command builds the java command line and the stdin script. Nothing secret
 // goes on the command line: the account's token is a game argument and game
-// arguments only travel through the script.
-func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, error) {
+// arguments only travel through the script. It also returns both as text for
+// the run's cmd.txt (the caller redacts it).
+func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, string, error) {
 	jar, err := wrapperjar.Install(l.cfg.BinDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	sess, res, eff := sp.sess, sp.res, sp.eff
 	v := res.Version
@@ -107,6 +118,7 @@ func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, error) {
 		"resolution_width": strconv.Itoa(eff.Width), "resolution_height": strconv.Itoa(eff.Height),
 		"quickPlayPath": filepath.Join(sp.gameDir, "quickPlay", "log.json"),
 	}
+	quickPlay(sp.into, sp.env, vars)
 	unknown := func(name string) {
 		l.cfg.Log.Warn("unknown placeholder in version metadata", "version", v.ID, "name", name)
 	}
@@ -115,7 +127,7 @@ func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, error) {
 	args = append(args, fmt.Sprintf("-Xms%dM", sp.mem.Min), fmt.Sprintf("-Xmx%dM", sp.mem.Max))
 	user, err := shlex.Split(eff.JVMArgs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("JVM arguments: %w", err)
+		return nil, nil, "", fmt.Errorf("JVM arguments: %w", err)
 	}
 	args = append(args, user...)
 	args = append(args, nativeLibraryArgs(eff)...)
@@ -129,18 +141,20 @@ func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, error) {
 	}
 	args = append(args, wrapperjar.MainClass)
 
-	script := new(wrapperjar.Script)
-	for _, a := range v.GameArgs(sp.env, vars, unknown) {
-		script.Arg(a)
-	}
+	game := v.GameArgs(sp.env, vars, unknown)
+	game = append(game, legacyServer(sp.into, game)...)
 	if eff.Fullscreen {
-		script.Arg("--fullscreen")
+		game = append(game, "--fullscreen")
+	}
+	script := new(wrapperjar.Script)
+	for _, a := range game {
+		script.Arg(a)
 	}
 	script.Launch(v.MainClass)
 
 	argv, err := wrappers(eff, sp.vars)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	argv = append(argv, java.LaunchBinary(sp.rt.Path))
 	argv = append(argv, args...)
@@ -148,7 +162,34 @@ func (l *Launcher) command(sp spec) (*exec.Cmd, []byte, error) {
 	cmd.Dir = sp.gameDir
 	cmd.Env = gameEnv(sp.vars, eff)
 	procx.Detach(cmd)
-	return cmd, script.Bytes(), nil
+	shown := strings.Join(argv, " ") + "\n\nGame arguments (sent to the game over stdin, never on the command line):\n" + strings.Join(game, " ") + "\n"
+	return cmd, script.Bytes(), shown, nil
+}
+
+// quickPlay turns on the version's Quick Play arguments (1.20 and later).
+func quickPlay(into instance.Into, env mojang.Env, vars mojang.Vars) {
+	switch into.Kind {
+	case "world":
+		env.Features["is_quick_play_singleplayer"] = true
+		vars["quickPlaySingleplayer"] = into.Target
+	case "server":
+		env.Features["is_quick_play_multiplayer"] = true
+		vars["quickPlayMultiplayer"] = into.Target
+	}
+}
+
+// legacyServer joins a server on versions without Quick Play through the
+// older --server and --port arguments (Prism does the same). A world can't
+// be opened that way; those versions start at the title screen.
+func legacyServer(into instance.Into, game []string) []string {
+	if into.Kind != "server" || slices.Contains(game, "--quickPlayMultiplayer") {
+		return nil
+	}
+	a, err := slp.Parse(into.Target)
+	if err != nil {
+		return nil
+	}
+	return []string{"--server", a.Host, "--port", strconv.Itoa(cmp.Or(a.Port, slp.DefaultPort))}
 }
 
 // start spawns the game and wires its output, events and exit handling.
@@ -157,7 +198,7 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		return nil, err
 	}
 	inst, acc, sess, rt, mem := sp.inst, sp.acc, sp.sess, sp.rt, sp.mem
-	cmd, script, err := l.command(sp)
+	cmd, script, shown, err := l.command(sp)
 	if err != nil {
 		return nil, err
 	}
@@ -178,6 +219,7 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		id: newRunID(now), instanceID: inst.ID, cmd: cmd, started: now, buf: gamelog.NewBuffer(consoleLines), accountID: acc.ID,
 		firstOutput: make(chan struct{}), done: make(chan struct{}),
 		record:   Record{StartedAt: now.UnixMilli(), Java: rt.Name(), Memory: mem, Account: acc.Name, AccountID: acc.ID, Mods: sp.mods},
+		server:   serverOf(sp.into),
 		postExit: sp.eff.Commands.PostExit, vars: sp.vars, env: cmd.Env, gameDir: sp.gameDir,
 	}
 	r.record.ID = r.id
@@ -191,6 +233,9 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	// The token stays a secret for the launcher's lifetime: another run may
 	// share it, and the account manager holds it too.
 	l.cfg.Redactor.AddSecret(sess.AccessToken)
+	if err := fsx.AtomicWrite(filepath.Join(runsDir, r.id+evidenceExt[EvidenceCommand]), []byte(l.cfg.Redactor.Redact(shown)), fsx.FilePerm); err != nil {
+		l.cfg.Log.Warn("saving the launch command failed", "err", err)
+	}
 	if err := cmd.Start(); err != nil {
 		_ = r.logFile.Close()
 		return nil, err
@@ -237,8 +282,22 @@ func (l *Launcher) read(r *run, src io.Reader, stderr bool, wg *sync.WaitGroup) 
 	p.Close()
 }
 
+var connectingRe = regexp.MustCompile(`^Connecting to (\S+), (\d{1,5})$`)
+
 func (r *run) add(line gamelog.Line) {
 	r.buf.Add(line)
+	if !r.loaded.Load() && (strings.HasPrefix(line.Message, "Setting user: ") || strings.HasPrefix(line.Message, "Backend library: LWJGL") || strings.HasPrefix(line.Message, "LWJGL Version")) {
+		r.loaded.Store(true)
+	}
+	if m := connectingRe.FindStringSubmatch(line.Message); m != nil {
+		host := m[1]
+		if m[2] != strconv.Itoa(slp.DefaultPort) {
+			host += ":" + m[2]
+		}
+		r.pmu.Lock()
+		r.server = host
+		r.pmu.Unlock()
+	}
 	thread := ""
 	if line.Thread != "" {
 		thread = line.Thread + "/"
@@ -272,6 +331,27 @@ func (l *Launcher) flush(r *run) {
 	if len(lines) > 0 {
 		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, Lines: lines})
 	}
+}
+
+// tailLines is how much of the console finishers see.
+const tailLines = 400
+
+func tail(lines []gamelog.Line, n int) []gamelog.Line {
+	if len(lines) > n {
+		return lines[len(lines)-n:]
+	}
+	return lines
+}
+
+// serverOf is the server a launch opens into, for its record.
+func serverOf(into instance.Into) string {
+	if into.Kind != "server" {
+		return ""
+	}
+	if a, err := slp.Parse(into.Target); err == nil {
+		return a.String()
+	}
+	return ""
 }
 
 // LogBatch is what game:log carries.
@@ -322,13 +402,23 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	case r.killed.Load():
 		result = ResultKilled
 	case r.stopping.Load():
+	case (code != 0 || (waitErr != nil && r.cmd.ProcessState == nil)) && !r.loaded.Load():
+		result = ResultFailed
 	case code != 0 || (waitErr != nil && r.cmd.ProcessState == nil):
 		result = ResultCrash
 	}
-	length := time.Since(r.started)
-	r.record.LengthMin = int(math.Round(length.Minutes()))
+	ended := time.Now()
+	r.record.LengthMin = int(math.Round(ended.Sub(r.started).Minutes()))
 	r.record.ExitCode, r.record.Result = code, result
-	if err := saveRecord(l.cfg.Instances.RunsDir(r.instanceID), r.record); err != nil {
+	r.pmu.Lock()
+	r.record.Server = r.server
+	r.pmu.Unlock()
+	runsDir := l.cfg.Instances.RunsDir(r.instanceID)
+	f := &Finished{InstanceID: r.instanceID, GameDir: r.gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record, Tail: tail(r.buf.Lines(), tailLines)}
+	for _, fin := range l.cfg.Finishers {
+		fin.FinishRun(f)
+	}
+	if err := saveRecord(runsDir, r.record); err != nil {
 		l.cfg.Log.Error("saving run record failed", "err", err)
 	}
 	started := r.started.UTC()
