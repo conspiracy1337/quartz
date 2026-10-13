@@ -1,4 +1,4 @@
-// Package export writes an instance out for sharing: a Modrinth .mrpack that
+// Package exporting writes an instance out for sharing: a Modrinth .mrpack that
 // links every file Modrinth can serve and bundles the rest, a full zip of the
 // same shape with everything bundled (Quartz, Prism and the Modrinth App all
 // import it), or a plain mod list in Markdown or CSV.
@@ -6,7 +6,7 @@
 // Only the instance's game folder and the folders it shares are read, through
 // os.Root and regular files only. Accounts, settings, instance.json, launch
 // history, logs and crash reports never get in.
-package export
+package exporting
 
 import (
 	"archive/zip"
@@ -95,9 +95,9 @@ type Preview struct {
 
 // Errors callers branch on.
 var (
-	ErrPlan        = errors.New("export: unknown export format")
-	ErrDestination = errors.New("export: choose a place outside the instance's folders")
-	ErrNoMods      = errors.New("export: this instance has no mods to list")
+	ErrPlan        = errors.New("exporting: unknown export format")
+	ErrDestination = errors.New("exporting: choose a place outside the instance's folders")
+	ErrNoMods      = errors.New("exporting: this instance has no mods to list")
 )
 
 // Manifester lists an instance's content files (content.Service).
@@ -400,7 +400,7 @@ func copyInto(zw *zip.Writer, name, dir, in string) error {
 	}
 	defer func() { _ = src.Close() }()
 	if info, err := src.Stat(); err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("export: %s is not a regular file", in)
+		return fmt.Errorf("exporting: %s is not a regular file", in)
 	}
 	return put(zw, name, src)
 }

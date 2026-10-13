@@ -27,7 +27,8 @@ export type Overlay =
   | { kind: 'shortcuts' }
   | { kind: 'rename'; instanceId: string }
   | { kind: 'icon'; instanceId: string }
-  | { kind: 'shortcut'; instanceId: string };
+  | { kind: 'shortcut'; instanceId: string }
+  | { kind: 'export'; instanceId: string };
 
 export type AddAccountMode = 'browser' | 'code' | 'offline';
 

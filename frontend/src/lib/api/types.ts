@@ -361,6 +361,15 @@ export interface KeyChoice { id: string; name: string; category: string; key: st
 export interface InstanceSync { join: string[]; keys: boolean }
 
 // ---- java ----
+// ---- export ----
+export type ExportFormat = 'mrpack' | 'zip' | 'list';
+export type ExportListFormat = 'md' | 'csv';
+export interface ExportInclude { worlds: boolean; screenshots: boolean; options: boolean; servers: boolean; config: boolean }
+export interface ExportPlan { format: ExportFormat; list: ExportListFormat; include: ExportInclude }
+export interface ExportPreview { linked: number; bundled: number; bytes: number }
+/** A pack export's job, or a mod list's saved file name; empty when the save dialog was cancelled. */
+export interface ExportResult { job?: string; file?: string }
+
 export interface JavaRuntime {
   id: string; major: number; name: string; source: 'Managed' | 'System' | 'SDKMAN' | 'Found'; path: string; usedBy: number;
   /** Downloaded by Quartz (Remove), added from a folder (Forget), or every instance's Java while automatic picking is off. */

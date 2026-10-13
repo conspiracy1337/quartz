@@ -155,6 +155,20 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class ExportResult {
+	    job?: string;
+	    file?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.job = source["job"];
+	        this.file = source["file"];
+	    }
+	}
 	export class ImportPreview {
 	    token: string;
 	    name: string;
@@ -1502,6 +1516,81 @@ export namespace docs {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace exporting {
+	
+	export class Include {
+	    worlds: boolean;
+	    screenshots: boolean;
+	    options: boolean;
+	    servers: boolean;
+	    config: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Include(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.worlds = source["worlds"];
+	        this.screenshots = source["screenshots"];
+	        this.options = source["options"];
+	        this.servers = source["servers"];
+	        this.config = source["config"];
+	    }
+	}
+	export class Plan {
+	    format: string;
+	    list: string;
+	    include: Include;
+	
+	    static createFrom(source: any = {}) {
+	        return new Plan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.format = source["format"];
+	        this.list = source["list"];
+	        this.include = this.convertValues(source["include"], Include);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Preview {
+	    linked: number;
+	    bundled: number;
+	    bytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Preview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.linked = source["linked"];
+	        this.bundled = source["bundled"];
+	        this.bytes = source["bytes"];
+	    }
 	}
 
 }

@@ -7,7 +7,7 @@ import * as inst from './mock/instances';
 import * as logs from './mock/logs';
 import * as misc from './mock/misc';
 import * as versions from './mock/versions';
-import type { Alert, Instance, InstanceSummary, JavaNeed } from './types';
+import type { Alert, ExportPlan, ExportPreview, ExportResult, Instance, InstanceSummary, JavaNeed } from './types';
 import { activityFeed } from '../activity';
 import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
@@ -15,6 +15,7 @@ import * as InstancesGo from '../wailsjs/go/api/Instances';
 import * as JavaGo from '../wailsjs/go/api/Java';
 import * as LaunchGo from '../wailsjs/go/api/Launch';
 import * as LaunchersGo from '../wailsjs/go/api/Launchers';
+import * as ExportsGo from '../wailsjs/go/api/Exports';
 import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as SyncGo from '../wailsjs/go/api/Sync';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
@@ -147,6 +148,11 @@ export const api = {
     /** Binds a shared keybind to a key the page captured (KeyboardEvent.code or "Mouse<button>"). */
     setKey: bridged(SyncGo.SetKey, misc.mockSync.setKey),
     removeKey: bridged(SyncGo.RemoveKey, misc.mockSync.removeKey),
+  },
+  /** Writes an instance out as a pack or a mod list (the save dialog is Go's). */
+  exports: {
+    preview: bridged(ExportsGo.Preview, (_id: string, _plan: ExportPlan): ExportPreview => ({ linked: 41, bundled: 7, bytes: 2_400_000 })),
+    run: bridged(ExportsGo.Export, (_id: string, plan: ExportPlan): ExportResult => ({ file: plan.format === 'list' ? `Survival-mods.${plan.list}` : `Survival.${plan.format}` })),
   },
   java: {
     runtimes: bridged(JavaGo.Runtimes, () => misc.runtimes),

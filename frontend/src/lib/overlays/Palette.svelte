@@ -43,7 +43,10 @@
     ...(session.update && session.update.status !== 'off' && session.update.status !== 'ready'
       ? [{ key: 'self-check', group: 'Actions', label: 'Check for launcher updates', icon: 'refresh' as const, run: () => void api.updates.check().then((u) => (session.update = u)).catch((e) => session.fail('Check for updates', e)) }]
       : []),
-    ...(router.route.name === 'instance' ? [{ key: 'shortcut', group: 'Actions', label: 'Create shortcut…', icon: 'link' as const, run: () => session.open({ kind: 'shortcut', instanceId: (router.route as { id: string }).id }) }] : []),
+    ...(router.route.name === 'instance' ? [
+      { key: 'shortcut', group: 'Actions', label: 'Create shortcut…', icon: 'link' as const, run: () => session.open({ kind: 'shortcut', instanceId: (router.route as { id: string }).id }) },
+      { key: 'export', group: 'Actions', label: 'Export instance…', icon: 'upload' as const, run: () => session.open({ kind: 'export', instanceId: (router.route as { id: string }).id }) },
+    ] : []),
     { key: 'import-launchers', group: 'Actions', label: 'Import from other launchers', icon: 'download', run: nav({ name: 'setup', step: 4 }) },
     { key: 'data-folder', group: 'Actions', label: 'Open data folder', icon: 'folder', run: () => void api.app.openDataFolder() },
     { key: 'new', group: 'Actions', label: 'Create a new instance', icon: 'plus', run: nav({ name: 'new-instance' }) },

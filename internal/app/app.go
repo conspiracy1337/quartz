@@ -48,7 +48,7 @@ import (
 	"quartz/internal/crash"
 	"quartz/internal/desktop"
 	"quartz/internal/discord"
-	"quartz/internal/export"
+	"quartz/internal/exporting"
 	"quartz/internal/gamewatch"
 	"quartz/internal/home"
 	"quartz/internal/host"
@@ -209,7 +209,7 @@ func Run(o Options) error {
 			api.NewUpdates(a.ctx, a.updater, a.restart),
 			api.NewHost(a.ctx, a.host),
 			api.NewExports(a.ctx, api.ExportDeps{
-				Service:   export.New(export.Deps{Instances: a.instances, Content: a.content, Icons: a.icons, Shared: a.sharedFolders}),
+				Service:   exporting.New(exporting.Deps{Instances: a.instances, Content: a.content, Icons: a.icons, Shared: a.sharedFolders}),
 				Instances: a.instances, Tasks: a.tasks, Busy: a.launcher.Busy, Hosting: a.host.Running,
 			}),
 			api.NewLogs(a.ctx, a.launcher, a.logFiles, a.crash),

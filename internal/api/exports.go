@@ -9,13 +9,13 @@ import (
 
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/tasks"
-	"quartz/internal/export"
+	"quartz/internal/exporting"
 	"quartz/internal/instance"
 )
 
 // ExportDeps wires the export facade.
 type ExportDeps struct {
-	Service   *export.Service
+	Service   *exporting.Service
 	Instances *instance.Store
 	Tasks     *tasks.Engine
 	Busy      func(id string) bool // a game is starting or running
@@ -38,24 +38,24 @@ type ExportResult struct {
 }
 
 // Preview counts what a pack export would link and bundle.
-func (x *Exports) Preview(id string, p export.Plan) (export.Preview, error) {
+func (x *Exports) Preview(id string, p exporting.Plan) (exporting.Preview, error) {
 	if err := checkInstanceID(id); err != nil {
-		return export.Preview{}, err
+		return exporting.Preview{}, err
 	}
 	if !p.Valid() {
-		return export.Preview{}, export.ErrPlan
+		return exporting.Preview{}, exporting.ErrPlan
 	}
 	return x.d.Service.Preview(x.ctx.Get(), id, p)
 }
 
 // Export asks where to save, then writes the export: packs as a download
 // job (they can be large), mod lists immediately.
-func (x *Exports) Export(id string, p export.Plan) (ExportResult, error) {
+func (x *Exports) Export(id string, p exporting.Plan) (ExportResult, error) {
 	if err := checkInstanceID(id); err != nil {
 		return ExportResult{}, err
 	}
 	if !p.Valid() {
-		return ExportResult{}, export.ErrPlan
+		return ExportResult{}, exporting.ErrPlan
 	}
 	if err := x.guard(id); err != nil {
 		return ExportResult{}, err
@@ -65,7 +65,7 @@ func (x *Exports) Export(id string, p export.Plan) (ExportResult, error) {
 		return ExportResult{}, err
 	}
 	name, ext := fsx.FileName(in.Name, "instance"), p.Ext()
-	if p.Format == export.List {
+	if p.Format == exporting.List {
 		name += "-mods"
 	}
 	dest, err := saveFileDialog(x.ctx.Get(), wruntime.SaveDialogOptions{
@@ -79,7 +79,7 @@ func (x *Exports) Export(id string, p export.Plan) (ExportResult, error) {
 	if !strings.EqualFold(filepath.Ext(dest), ext) {
 		dest += ext
 	}
-	if p.Format == export.List {
+	if p.Format == exporting.List {
 		return ExportResult{File: filepath.Base(dest)}, x.d.Service.Write(x.ctx.Get(), id, p, dest)
 	}
 	spec := tasks.NewJob(tasks.Meta{Title: "Exporting " + in.Name, Subtitle: filepath.Base(dest), Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "export"}).
