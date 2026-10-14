@@ -421,6 +421,10 @@ func Open(dir string, log *slog.Logger) (*Store, error) {
 		return nil, err
 	}
 	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), stagePrefix) {
+			_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+			continue
+		}
 		if !e.IsDir() || !ValidID(e.Name()) {
 			continue
 		}
@@ -458,6 +462,10 @@ func ReadAll(dir string) ([]Instance, error) {
 	}
 	var out []Instance
 	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), stagePrefix) {
+			_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+			continue
+		}
 		if !e.IsDir() || !ValidID(e.Name()) {
 			continue
 		}

@@ -14,6 +14,8 @@ export function CreateShortcut(arg1:string,arg2:string,arg3:string,arg4:string,a
 
 export function DeleteGroup(arg1:string):Promise<void>;
 
+export function Duplicate(arg1:string):Promise<string>;
+
 export function FollowOffers():Promise<Array<follow.Offer>>;
 
 export function Get(arg1:string):Promise<api.InstanceView>;

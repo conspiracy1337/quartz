@@ -225,7 +225,7 @@ func TestMove(t *testing.T) {
 	dst := filepath.Join(root, "drive2")
 	_ = os.MkdirAll(dst, 0o700)
 	var last int64
-	if err := copyTree(context.Background(), s.GameDir(in.ID), filepath.Join(dst, "copy"), func(d, _ int64) { last = d }); err != nil || last != 5 {
+	if err := copyTree(context.Background(), s.GameDir(in.ID), filepath.Join(dst, "copy"), copyOpts{progress: func(d, _ int64) { last = d }}); err != nil || last != 5 {
 		t.Fatalf("copy: %v (%d bytes)", err, last)
 	}
 	p, _ := s.PlanMove(in.ID, dst)
@@ -316,7 +316,7 @@ func TestCopyTreeRepointsLinksIntoTheSource(t *testing.T) {
 	if err := os.Symlink(filepath.Join(src, "shared"), filepath.Join(src, "link")); err != nil {
 		t.Skip("no symlinks here")
 	}
-	if err := copyTree(context.Background(), src, dst, nil); err != nil {
+	if err := copyTree(context.Background(), src, dst, copyOpts{}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.Readlink(filepath.Join(dst, "link")); got != filepath.Join(dst, "shared") {
@@ -347,5 +347,59 @@ func TestCheckGameDirNoticesAMissingDrive(t *testing.T) {
 	_ = os.MkdirAll(moved.Location, 0o700)
 	if err := s.CheckGameDir(in.ID); !errors.Is(err, ErrGameDirMissing) {
 		t.Fatalf("missing drive: %v", err)
+	}
+}
+
+func TestDuplicate(t *testing.T) {
+	s, _ := newStore(t)
+	in := create(t, s, "Survival")
+	game := s.GameDir(in.ID)
+	for rel, body := range map[string]string{"saves/World/level.dat": "level", "options.txt": "fov:90", "mods/a.jar": "jar", "logs/latest.log": "log", ".quartz/removed/x": "held"} {
+		_ = os.MkdirAll(filepath.Dir(filepath.Join(game, rel)), 0o700)
+		_ = os.WriteFile(filepath.Join(game, rel), []byte(body), 0o600)
+	}
+	_ = os.WriteFile(filepath.Join(s.Dir(in.ID), "modpack.json"), []byte("{}"), 0o600)
+	_, _ = s.Update(in.ID, func(i *Instance) error { i.PlaytimeMin = 300; return nil })
+	var linked []string
+	place := func(rel, dst string) (bool, error) {
+		if rel != "mods/a.jar" {
+			return false, nil
+		}
+		linked = append(linked, rel)
+		return true, os.WriteFile(dst, []byte("jar"), 0o600)
+	}
+	cp, err := s.Duplicate(context.Background(), in.ID, place, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cp.ID == in.ID || cp.Name != "Survival (copy)" || cp.PlaytimeMin != 0 || cp.Minecraft != in.Minecraft {
+		t.Fatalf("%+v", cp)
+	}
+	got := s.GameDir(cp.ID)
+	for rel, want := range map[string]bool{"saves/World/level.dat": true, "options.txt": true, "mods/a.jar": true, "logs/latest.log": false, ".quartz": false} {
+		if _, err := os.Stat(filepath.Join(got, rel)); (err == nil) != want {
+			t.Errorf("%s exists=%v", rel, err == nil)
+		}
+	}
+	if len(linked) != 1 {
+		t.Fatal("store files must be placed, not copied")
+	}
+	if _, err := os.Stat(filepath.Join(s.Dir(cp.ID), "modpack.json")); err != nil {
+		t.Fatal("the modpack record must come along")
+	}
+	again, _ := s.Duplicate(context.Background(), in.ID, nil, nil)
+	if again.Name != "Survival (copy) (2)" {
+		t.Fatalf("second copy: %q", again.Name)
+	}
+
+	// A failure leaves nothing behind.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.Duplicate(ctx, in.ID, nil, nil); err == nil {
+		t.Fatal("cancelled duplicate succeeded")
+	}
+	entries, _ := os.ReadDir(filepath.Dir(s.Dir(in.ID)))
+	if len(entries) != 3 {
+		t.Fatalf("left behind: %v", entries)
 	}
 }

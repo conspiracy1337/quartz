@@ -48,6 +48,8 @@ type InstanceDeps struct {
 	Shortcuts *shortcuts.Service
 	// Follow offers moves to the newest release; nil in tests.
 	Follow *follow.Checker
+	// Opens shows toasts for work that ends after the call returns; nil in tests.
+	Opens *Opens
 }
 
 // Counter counts one kind of thing an instance has.
@@ -641,6 +643,49 @@ func (s *Instances) move(id, parent string) (string, error) {
 				s.d.Bus.Emit(events.InstancesChanged, nil)
 			}
 			return err
+		}))
+	return s.d.Tasks.Submit(spec)
+}
+
+// Duplicate copies an instance into a new one ("<name> (copy)") as a job:
+// worlds, options and content come along, mods linked from the store
+// rather than stored twice; playtime and history start fresh.
+func (s *Instances) Duplicate(id string) (string, error) {
+	if err := checkInstanceID(id); err != nil {
+		return "", err
+	}
+	if err := s.guard(id); err != nil {
+		return "", err
+	}
+	in, err := s.d.Store.Get(id)
+	if err != nil {
+		return "", err
+	}
+	spec := tasks.NewJob(tasks.Meta{Title: "Duplicating " + in.Name, Subtitle: "A copy with its worlds and content", Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "move"}).
+		Step("Copying", tasks.Count, tasks.Func("copy the instance", func(ctx context.Context) error {
+			if err := s.guard(id); err != nil {
+				return err
+			}
+			var place func(rel, dst string) (bool, error)
+			if s.d.Content != nil {
+				// Fresh hashes first: a stored copy is only linked for a file
+				// that is still exactly what was indexed.
+				for _, k := range content.Kinds {
+					if err := s.d.Content.Scan(ctx, id, k); err != nil {
+						return err
+					}
+				}
+				place = s.d.Content.Placer(id)
+			}
+			cp, err := s.d.Store.Duplicate(ctx, id, place, nil)
+			if err != nil {
+				return err
+			}
+			s.d.Bus.Emit(events.InstancesChanged, nil)
+			if s.d.Opens != nil {
+				s.d.Opens.Show(OpenTarget{Kind: OpenNotice, Subject: "Duplicated " + in.Name, Text: "as " + cp.Name, Instance: cp.ID})
+			}
+			return nil
 		}))
 	return s.d.Tasks.Submit(spec)
 }

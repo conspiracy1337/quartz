@@ -87,6 +87,7 @@ export const api = {
     /** Picks a folder in a native dialog and moves the game folder there as a job; resolves with its id ("" if cancelled). */
     move: bridged(InstancesGo.Move, (_id: string) => ''),
     moveDefault: bridged(InstancesGo.MoveDefault, (_id: string) => ''),
+    duplicate: bridged(InstancesGo.Duplicate, (_id: string) => ''),
     /** How many enabled mods have a build for another Minecraft version (and loader), or null without mods. */
     compatibility: (id: string, target: string, loader = '') => contentApi.compatibility(id, target, loader),
     /** Play sessions and content changes, newest first. */

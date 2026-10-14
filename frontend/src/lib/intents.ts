@@ -18,9 +18,12 @@ export function show(t: OpenTarget) {
     case 'instance':
       if (t.instance) go({ name: 'instance', id: t.instance, tab: 'overview' });
       break;
-    case 'notice':
-      session.notify({ subject: t.subject ?? '', text: t.text ?? '' });
+    case 'notice': {
+      // A notice about an instance (a finished duplicate) offers to open it.
+      const id = t.instance;
+      session.notify({ subject: t.subject ?? '', text: t.text ?? '', ...(id ? { action: { label: 'Open', run: () => go({ name: 'instance', id, tab: 'overview' }) } } : {}) });
       break;
+    }
     case 'error':
       session.notify({ tone: 'error', subject: t.subject ?? "Couldn't open that", text: t.text ?? '' });
       break;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from '../api';
   import { ago } from '../format';
+  import { duplicate } from '../instanceActions';
   import { SETTINGS_TAB_LABELS, instanceMeta } from '../labels';
   import { query } from '../query.svelte';
   import { go, router, type Route } from '../router.svelte';
@@ -64,6 +65,7 @@
     ...(router.route.name === 'instance' ? [
       { key: 'shortcut', group: 'Actions', label: 'Create shortcut…', icon: 'link' as const, run: () => session.open({ kind: 'shortcut', instanceId: (router.route as { id: string }).id }) },
       { key: 'export', group: 'Actions', label: 'Export instance…', icon: 'upload' as const, run: () => session.open({ kind: 'export', instanceId: (router.route as { id: string }).id }) },
+      { key: 'duplicate', group: 'Actions', label: 'Duplicate instance', icon: 'plus' as const, run: () => void duplicate({ id: (router.route as { id: string }).id, name: '' }) },
     ] : []),
     { key: 'import-launchers', group: 'Actions', label: 'Import from other launchers', icon: 'download', run: nav({ name: 'setup', step: 3 }) },
     { key: 'data-folder', group: 'Actions', label: 'Open data folder', icon: 'folder', run: () => void api.app.openDataFolder() },
