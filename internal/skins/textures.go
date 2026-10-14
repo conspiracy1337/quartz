@@ -8,8 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"golang.org/x/sync/singleflight"
-
+	"quartz/internal/core/flightx"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/netx"
 	"quartz/internal/mcapi"
@@ -21,7 +20,7 @@ import (
 type Textures struct {
 	dir    string
 	http   *netx.Client
-	flight singleflight.Group
+	flight flightx.Group[struct{}]
 }
 
 // NewTextures uses dir as the cache folder.
@@ -39,7 +38,7 @@ func (t *Textures) Path(ctx context.Context, hash string) (string, error) {
 	if _, err := os.Stat(path); err == nil { //nolint:gosec // hash matched textureHash, so path stays in dir
 		return path, nil
 	}
-	_, err, _ := t.flight.Do(hash, func() (any, error) { return nil, t.fetch(ctx, hash, path) })
+	_, err := t.flight.Do(ctx, hash, func(ctx context.Context) (struct{}, error) { return struct{}{}, t.fetch(ctx, hash, path) })
 	return path, err
 }
 

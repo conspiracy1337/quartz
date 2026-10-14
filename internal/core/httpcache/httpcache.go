@@ -21,8 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
+	"quartz/internal/core/flightx"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/hashx"
 	"quartz/internal/core/jsonfile"
@@ -74,7 +73,7 @@ type Cache struct {
 	idx   *jsonfile.Store[index]
 	doer  Doer
 	log   *slog.Logger
-	group singleflight.Group
+	group flightx.Group[[]byte]
 	now   func() time.Time
 }
 
@@ -106,11 +105,7 @@ func (c *Cache) Flush() error { return c.idx.Flush() }
 // Get returns the body for url according to p. Concurrent calls for the same
 // URL share one fetch.
 func (c *Cache) Get(ctx context.Context, url string, p Policy) ([]byte, error) {
-	v, err, _ := c.group.Do(url+"\x00"+p.SHA1, func() (any, error) { return c.get(ctx, url, p) })
-	if err != nil {
-		return nil, err
-	}
-	return v.([]byte), nil
+	return c.group.Do(ctx, url+"\x00"+p.SHA1, func(ctx context.Context) ([]byte, error) { return c.get(ctx, url, p) })
 }
 
 // GetJSON fetches url through the cache and decodes it into T.

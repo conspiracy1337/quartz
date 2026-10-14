@@ -21,9 +21,8 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/sync/singleflight"
-
 	"quartz/internal/core/disklru"
+	"quartz/internal/core/flightx"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/netx"
 )
@@ -70,7 +69,7 @@ type Cache struct {
 	urls map[string]string // token → URL
 	lru  *disklru.LRU
 
-	flight singleflight.Group
+	flight flightx.Group[string]
 }
 
 // New uses dir as the cache folder.
@@ -133,12 +132,11 @@ func (c *Cache) Path(ctx context.Context, token string) (string, error) {
 	if !ok {
 		return "", ErrUnknown
 	}
-	p, err, _ := c.flight.Do(token, func() (any, error) { return c.fetch(ctx, token, raw) })
+	p, err := c.flight.Do(ctx, token, func(ctx context.Context) (string, error) { return c.fetch(ctx, token, raw) })
 	if err != nil {
 		c.log.Debug("picture not fetched", "err", err)
-		return "", err
 	}
-	return p.(string), nil
+	return p, err
 }
 
 // cached finds a token's file and marks it recently used.

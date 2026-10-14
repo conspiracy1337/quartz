@@ -32,6 +32,7 @@ type fileServer struct {
 	hits    atomic.Int32
 	ranges  []string
 	slow    chan struct{} // when set, the handler blocks after the first chunk
+	stall   chan struct{} // when set, it pauses after the first chunk, then sends the rest
 	noRange bool
 }
 
@@ -47,7 +48,7 @@ func (fs *fileServer) serve(w http.ResponseWriter, r *http.Request) {
 	fs.mu.Lock()
 	body, ok := fs.files[r.URL.Path]
 	fs.ranges = append(fs.ranges, r.Header.Get("Range"))
-	etag, slow, noRange := fs.etag, fs.slow, fs.noRange
+	etag, slow, stall, noRange := fs.etag, fs.slow, fs.stall, fs.noRange
 	fs.mu.Unlock()
 	if !ok {
 		http.NotFound(w, r)
@@ -59,6 +60,14 @@ func (fs *fileServer) serve(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(body[:len(body)/2])
 		w.(http.Flusher).Flush()
 		<-slow
+		return
+	}
+	if stall != nil {
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		_, _ = w.Write(body[:len(body)/2])
+		w.(http.Flusher).Flush()
+		<-stall
+		_, _ = w.Write(body[len(body)/2:])
 		return
 	}
 	if noRange {
@@ -390,5 +399,43 @@ func TestVerifyLocalFile(t *testing.T) {
 	}
 	if err := e.dl.Verify(Item{Dest: it.Dest}); err == nil {
 		t.Fatal("verified against no checksum")
+	}
+}
+
+func TestSharedFetchSurvivesOneCallerCancelling(t *testing.T) {
+	e := newEnv(t)
+	body := payload(40_000)
+	it := e.item("shared.jar", body)
+	release := make(chan struct{})
+	e.srv.mu.Lock()
+	e.srv.stall = release
+	e.srv.mu.Unlock()
+	// Job A starts the transfer; job B needs the same file and joins it.
+	ctxA, cancelA := context.WithCancel(context.Background())
+	var seen atomic.Int64
+	errA := make(chan error, 1)
+	go func() { errA <- e.dl.Fetch(ctxA, it, func(n int64) { seen.Store(n) }) }()
+	for seen.Load() < 20_000 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	var doneB atomic.Int64
+	errB := make(chan error, 1)
+	go func() { errB <- e.dl.Fetch(context.Background(), it, func(n int64) { doneB.Store(n) }) }()
+	time.Sleep(20 * time.Millisecond)
+	cancelA()
+	if err := <-errA; !errors.Is(err, context.Canceled) {
+		t.Fatalf("A: %v", err)
+	}
+	close(release) // the shared transfer must still be running for B
+	select {
+	case err := <-errB:
+		if err != nil {
+			t.Fatalf("B failed because A cancelled: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("B never finished")
+	}
+	if !bytes.Equal(readFile(t, it.Dest), body) || doneB.Load() != it.Total() {
+		t.Fatalf("B: content or progress wrong (%d)", doneB.Load())
 	}
 }
