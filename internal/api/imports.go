@@ -44,6 +44,17 @@ type ImportPreview struct {
 	Warnings  []string      `json:"warnings"`
 	// Optional are files the pack lets the player choose (off by default).
 	Optional []modpack.OptionalFile `json:"optional"`
+	// Existing is an instance already installed from this pack, which can
+	// move to this version instead of a second copy being made.
+	Existing *ExistingPack `json:"existing,omitempty"`
+}
+
+// ExistingPack is an instance installed from the pack being imported.
+type ExistingPack struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version string `json:"version"` // installed
+	Target  string `json:"target"`  // the version being imported, by platform id
 }
 
 // ErrBadLink is returned for links that are too long to be real.
@@ -61,6 +72,9 @@ func (im *Imports) preview(p *modpack.Pack, err error) (*ImportPreview, error) {
 		Stats: st, Warnings: append([]string{}, p.Warnings...), Optional: p.Optional()}
 	if k, err := loader.ParseKind(p.Loader); err == nil {
 		v.Loader = k.Name()
+	}
+	if in, ok := im.d.Packs.Installed(p.Origin); ok && in.Pack.Version != p.Origin.Version {
+		v.Existing = &ExistingPack{ID: in.ID, Name: in.Name, Version: in.Pack.VersionName, Target: p.Origin.Version}
 	}
 	if im.d.Picture != nil && p.IconURL != "" {
 		v.Icon = im.d.Picture(p.IconURL)

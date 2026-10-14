@@ -15,7 +15,9 @@
 
   const versions = query(() => api.modpacks.versions(i.id));
   /** The version to move to: the one the last check offered, else the newest other one; the player may pick any. */
-  let picked = $state('');
+  // svelte-ignore state_referenced_locally
+  let picked = $state(session.packPick?.instanceId === i.id ? session.packPick.version : '');
+  session.packPick = null;
   const chosen = $derived(picked || (versions.data?.find((v) => v.offered) ?? versions.data?.find((v) => !v.current))?.id || '');
   const diff = query(() => (versions.data || versions.error ? api.modpacks.diff(i.id, chosen) : new Promise<never>(() => {})));
   const currentAt = $derived(versions.data?.findIndex((v) => v.current) ?? -1);

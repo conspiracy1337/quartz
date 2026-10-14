@@ -358,6 +358,8 @@ export interface ImportPreview {
   icon?: string; art?: Art; stats: PackStats; warnings: string[];
   /** Files the pack lets the player choose; they install turned off unless picked. */
   optional: { path: string; name: string }[];
+  /** An instance already installed from this pack: it can move to this version (`target`) instead. */
+  existing?: { id: string; name: string; version: string; target: string };
 }
 export interface PackUpdate { instanceId: string; name: string; version: string }
 export interface ManualItem { id: string; name: string; fileName: string; size: number; state: 'waiting' | 'fetching' | 'found' | 'skipped'; twin: boolean; page?: string; art?: Art }

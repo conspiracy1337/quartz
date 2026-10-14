@@ -266,11 +266,12 @@ func (r *Reader) resolveCurse(ctx context.Context, p *Pack, refs []cfRef) error 
 	if err != nil {
 		return err
 	}
-	skipped := 0
+	skipped, gone := 0, 0
 	for _, ref := range refs {
 		v, ok := files[fmt.Sprint(ref.file)]
 		if !ok || v.ProjectID != fmt.Sprint(ref.project) {
-			return fmt.Errorf("modpack: CurseForge doesn't have file %d any more", ref.file)
+			gone++ // removed by its author: the rest of the pack still installs (XMCL drops it too)
+			continue
 		}
 		folder, known := curseFolders[v.Class]
 		if !known {
@@ -298,7 +299,45 @@ func (r *Reader) resolveCurse(ctx context.Context, p *Pack, refs []cfRef) error 
 	if skipped > 0 {
 		p.Warnings = append(p.Warnings, fmt.Sprintf("%d %s for worlds %s left out", skipped, plural(skipped, "file"), were(skipped)))
 	}
+	if gone > 0 {
+		p.Warnings = append(p.Warnings, fmt.Sprintf("%d %s CurseForge no longer has %s left out", gone, plural(gone, "file"), were(gone)))
+	}
+	r.modrinthCopies(ctx, p)
 	return nil
+}
+
+// modrinthCopies gives blocked CurseForge files the download of the same
+// file on Modrinth, found by sha1, so only the rest need a manual download
+// (Prism does this by default). Modrinth being unreachable changes nothing.
+func (r *Reader) modrinthCopies(ctx context.Context, p *Pack) {
+	mr := r.d.Modrinth
+	if mr == nil || !mr.Ready() {
+		return
+	}
+	var ask []modplatform.Hashes
+	for _, f := range p.Files {
+		if f.Blocked() {
+			ask = append(ask, modplatform.Hashes{SHA1: f.SHA1})
+		}
+	}
+	if len(ask) == 0 {
+		return
+	}
+	found, err := mr.Identify(ctx, ask)
+	if err != nil {
+		r.d.Log.Debug("modpack: Modrinth copies of blocked files", "err", err)
+		return
+	}
+	for i, f := range p.Files {
+		v, ok := found[f.SHA1]
+		if !f.Blocked() || !ok || !strings.EqualFold(v.File.SHA1, f.SHA1) || !modplatform.ValidURL(v.File.URL) {
+			continue
+		}
+		p.Files[i].URLs = []string{v.File.URL}
+		if hexOf(strings.ToLower(v.File.SHA512), 128) {
+			p.Files[i].SHA512 = strings.ToLower(v.File.SHA512)
+		}
+	}
 }
 
 // --- Prism and MultiMC instance zips ---

@@ -69,6 +69,8 @@ class Session {
   launchAs = $state<{ instanceId: string; x: number; y: number } | null>(null);
   /** The instance Browse and project pages install into, once picked (else the most recent). */
   browseTarget = $state<string | null>(null);
+  /** A pack version the Import screen sends to an instance's update page, picked there instead of the offered one. */
+  packPick = $state<{ instanceId: string; version: string } | null>(null);
   /** Items a content tab's selection sends to the update review, ticked there instead of its defaults. */
   updatePick = $state<Set<string> | null>(null);
   /** Browse's "Hide projects with" choices, kept while the launcher runs. */

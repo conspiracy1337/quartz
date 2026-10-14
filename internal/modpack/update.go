@@ -24,6 +24,7 @@ import (
 	"quartz/internal/core/tasks"
 	"quartz/internal/install"
 	"quartz/internal/instance"
+	"quartz/internal/loader"
 	"quartz/internal/manual"
 	"quartz/internal/modplatform"
 )
@@ -83,6 +84,20 @@ func (s *Service) CheckUpdates(ctx context.Context) []Available {
 		s.d.Bus.Emit(events.ModpacksChanged, nil)
 	}
 	return out
+}
+
+// Installed finds an instance already installed from the pack o comes from
+// (played in its own folder, so it can be updated instead).
+func (s *Service) Installed(o Origin) (instance.Instance, bool) {
+	if !o.Updatable() {
+		return instance.Instance{}, false
+	}
+	for _, in := range s.d.Instances.List() {
+		if in.Pack != nil && !in.InPlace && in.Pack.Source == o.Source && in.Pack.Project == o.Project {
+			return in, true
+		}
+	}
+	return instance.Instance{}, false
 }
 
 // Updates returns what the last check found.
@@ -300,6 +315,9 @@ func (s *Service) Diff(ctx context.Context, id, version string) (*Diff, error) {
 	}
 	if next.Minecraft != in.Minecraft || next.Loader != in.Loader {
 		d.Game = "Minecraft " + next.Minecraft
+		if k, err := loader.ParseKind(next.Loader); err == nil && next.Loader != "" {
+			d.Game += ", " + k.Name()
+		}
 	}
 	d.Summary = s.changelog(ctx, next.Origin)
 	return d, nil
@@ -497,12 +515,12 @@ type modFile struct{ rel, sha1, sha512, project, version string }
 func (s *Service) rows(ctx context.Context, old Manifest, next *Pack) []DiffRow {
 	var oldFiles, newFiles []modFile
 	for rel, f := range old.Files {
-		if isMod(rel) {
+		if isContent(rel) {
 			oldFiles = append(oldFiles, modFile{rel: rel, sha1: f.SHA1})
 		}
 	}
 	for _, f := range next.Files {
-		if isMod(f.Path) {
+		if isContent(f.Path) {
 			newFiles = append(newFiles, modFile{rel: f.Path, sha1: f.SHA1, sha512: f.SHA512, project: f.Project, version: f.Version})
 		}
 	}
@@ -639,9 +657,21 @@ func fromTo(a, b string) string {
 	return orElse(b, a)
 }
 
-func isMod(rel string) bool {
+// isContent reports whether a pack file is a mod, resource pack or shader
+// pack, the files the review lists by name.
+func isContent(rel string) bool {
 	rel = strings.TrimSuffix(rel, ".disabled")
-	return strings.HasPrefix(rel, "mods/") && strings.HasSuffix(rel, ".jar") && strings.Count(rel, "/") == 1
+	dir, name, ok := strings.Cut(rel, "/")
+	if !ok || strings.Contains(name, "/") {
+		return false
+	}
+	switch dir {
+	case "mods":
+		return strings.HasSuffix(name, ".jar")
+	case "resourcepacks", "shaderpacks":
+		return strings.HasSuffix(name, ".zip")
+	}
+	return false
 }
 
 // stem is a mod file's name without its version ("create-1.20.1-0.5.1.f.jar"

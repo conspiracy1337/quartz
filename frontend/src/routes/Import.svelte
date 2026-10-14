@@ -121,6 +121,14 @@
         <div class="divider"></div>
         <div class="card-pad" style="display: flex; flex-direction: column; gap: 12px">
           <div class="kv small" style="grid-template-columns: 96px minmax(0,1fr); row-gap: 8px"><span>Source</span><span>{pack.source}</span><span>Mods</span><span class="tnum">{pack.stats.mods}{pack.stats.modBytes ? `, ${bytes(pack.stats.modBytes)}` : ''}</span><span>Overrides</span><span class="tnum trunc">{overrides}</span></div>
+          {#if pack.existing}
+            {@const ex = pack.existing}
+            <div class="card" style="padding: 10px 12px; display: grid; grid-template-columns: 16px minmax(0,1fr) auto; gap: 10px; align-items: center">
+              <Icon name="info" size={16} sw={1.8} color="var(--info)" />
+              <span class="small"><span style="display: block; font-weight: 500">You have {ex.name}</span><span class="faint" style="display: block">Version {ex.version} is installed.</span></span>
+              <button class="btn btn-sm" onclick={() => { session.packPick = { instanceId: ex.id, version: ex.target }; go({ name: 'instance', id: ex.id, tab: 'overview', sub: 'update' }); }}>Update it instead</button>
+            </div>
+          {/if}
           {#each warnings as w (w.title)}
             <div class="card" style="padding: 10px 12px; border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); display: grid; grid-template-columns: 16px minmax(0,1fr); gap: 10px">
               <Icon name="warn" size={16} sw={1.8} color="var(--warn)" />

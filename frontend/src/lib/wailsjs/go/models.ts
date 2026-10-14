@@ -155,6 +155,24 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class ExistingPack {
+	    id: string;
+	    name: string;
+	    version: string;
+	    target: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExistingPack(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.target = source["target"];
+	    }
+	}
 	export class ExportResult {
 	    job?: string;
 	    file?: string;
@@ -180,6 +198,7 @@ export namespace api {
 	    stats: modpack.Stats;
 	    warnings: string[];
 	    optional: modpack.OptionalFile[];
+	    existing?: ExistingPack;
 	
 	    static createFrom(source: any = {}) {
 	        return new ImportPreview(source);
@@ -197,6 +216,7 @@ export namespace api {
 	        this.stats = this.convertValues(source["stats"], modpack.Stats);
 	        this.warnings = source["warnings"];
 	        this.optional = this.convertValues(source["optional"], modpack.OptionalFile);
+	        this.existing = this.convertValues(source["existing"], ExistingPack);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
