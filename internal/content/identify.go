@@ -23,7 +23,7 @@ func (s *Service) identifyLater(id string, k Kind) {
 	if _, busy := s.identifying.LoadOrStore(key, struct{}{}); busy {
 		return
 	}
-	go func() {
+	s.bg.Go(func() {
 		defer s.identifying.Delete(key)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -32,7 +32,7 @@ func (s *Service) identifyLater(id string, k Kind) {
 		} else if n > 0 {
 			s.emit(id, k)
 		}
-	}()
+	})
 }
 
 // Identify asks the platforms about every file of one kind not identified

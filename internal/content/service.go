@@ -57,7 +57,8 @@ type Service struct {
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
 
-	identifying sync.Map // instance id → struct{}: one background identification at a time
+	identifying sync.Map       // instance id → struct{}: one background identification at a time
+	bg          sync.WaitGroup // background identifications
 	watch       watcher
 
 	plansMu sync.Mutex

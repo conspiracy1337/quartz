@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"slices"
 	"sort"
@@ -28,6 +29,9 @@ const (
 // several loaders reports all of them.
 func Mod(r *archive.Reader, ic Icons) (Info, error) {
 	info, iconFile, err := modInfo(r)
+	if errors.Is(err, ErrNotContent) {
+		info, err = bare(r)
+	}
 	if err != nil {
 		return Info{}, err
 	}
@@ -86,6 +90,11 @@ func modInfo(r Source) (Info, string, error) {
 		loaders = []string{FormatForge}
 	}
 	info.Loaders = loaders
+	return tidy(info), iconFile, nil
+}
+
+// tidy cleans what a jar said about itself.
+func tidy(info Info) Info {
 	info.ID = cleanID(info.ID)
 	info.Name = clean(info.Name, maxName)
 	if info.Name == "" {
@@ -96,7 +105,32 @@ func modInfo(r Source) (Info, string, error) {
 	info.Authors = cleanList(info.Authors, maxAuthors)
 	info.Deps = cleanDeps(info.Deps)
 	info.Game = cleanRange(info.Game)
-	return info, iconFile, nil
+	return info
+}
+
+// bare describes a jar without a mod descriptor of its own (a JarJar
+// wrapper, OptiFine, an old coremod): as the first mod nested in it
+// (Pandora's fallback), else by what its manifest says. It is still a jar
+// the game may load, so it is listed rather than called unreadable.
+// Installers are not mods.
+func bare(r *archive.Reader) (Info, error) {
+	if r.Has("install_profile.json") || r.HasPrefix("net/fabricmc/installer/") {
+		return Info{}, ErrNotContent
+	}
+	if inner := nested(r); len(inner) > 0 {
+		info := inner[0]
+		info.Partial = true
+		return info, nil
+	}
+	mf := manifest(r)
+	name := mf["Implementation-Title"]
+	if name == "" {
+		name = mf["Specification-Title"]
+	}
+	if name == "" {
+		name = mf["Automatic-Module-Name"]
+	}
+	return tidy(Info{Name: name, Version: mf["Implementation-Version"], Partial: true}), nil
 }
 
 // ---- Fabric ----
@@ -408,19 +442,30 @@ func jarVersion(v string, r Source) string {
 	if v != "${file.jarVersion}" {
 		return v
 	}
+	if val := manifest(r)["Implementation-Version"]; !strings.Contains(val, "archiveVersion") {
+		return val
+	}
+	return ""
+}
+
+// manifest reads a jar's MANIFEST.MF main attributes.
+func manifest(r Source) map[string]string {
+	out := map[string]string{}
 	mf, err := r.Read("META-INF/MANIFEST.MF", maxText)
 	if err != nil {
-		return ""
+		return out
 	}
 	sc := bufio.NewScanner(bytes.NewReader(mf))
 	for sc.Scan() {
-		if k, val, ok := strings.Cut(sc.Text(), ":"); ok && strings.EqualFold(strings.TrimSpace(k), "Implementation-Version") {
-			if val = strings.TrimSpace(val); !strings.Contains(val, "archiveVersion") {
-				return val
-			}
+		line := sc.Text()
+		if strings.TrimSpace(line) == "" {
+			break // the main section ends at the first blank line
+		}
+		if k, val, ok := strings.Cut(line, ":"); ok && !strings.HasPrefix(line, " ") {
+			out[strings.TrimSpace(k)] = strings.TrimSpace(val)
 		}
 	}
-	return ""
+	return out
 }
 
 // ---- mcmod.info (Forge 1.12 and older) ----
@@ -483,6 +528,16 @@ func parseModInfo(data []byte, _ Source) (Info, string, error) {
 
 func nestedIDs(r *archive.Reader) []string {
 	var ids []string
+	for _, info := range nested(r) {
+		ids = append(ids, info.ID)
+		ids = append(ids, info.Provides...)
+	}
+	return ids
+}
+
+// nested reads the mods inside a jar, one level deep.
+func nested(r *archive.Reader) []Info {
+	var out []Info
 	jars := append(r.Glob("META-INF/jars/", ".jar"), r.Glob("META-INF/jarjar/", ".jar")...)
 	for i, name := range jars {
 		if i == maxNestedJars {
@@ -496,14 +551,11 @@ func nestedIDs(r *archive.Reader) []string {
 		if err != nil {
 			continue
 		}
-		info, _, err := modInfo(inner)
-		if err != nil {
-			continue
+		if info, _, err := modInfo(inner); err == nil {
+			out = append(out, info)
 		}
-		ids = append(ids, info.ID)
-		ids = append(ids, info.Provides...)
 	}
-	return ids
+	return out
 }
 
 // ---- cleaning ----

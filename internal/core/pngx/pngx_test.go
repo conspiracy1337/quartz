@@ -84,3 +84,27 @@ func TestDecodesWebP(t *testing.T) {
 		t.Fatal("webp accepted as a skin")
 	}
 }
+
+func TestFitKeepsTheWholePicture(t *testing.T) {
+	// A wide red logo with a transparent margin.
+	img := image.NewNRGBA(image.Rect(0, 0, 100, 60))
+	for y := 20; y < 40; y++ {
+		for x := 10; x < 90; x++ {
+			img.Set(x, y, color.NRGBA{R: 255, A: 255})
+		}
+	}
+	out := Fit(img, 64)
+	if out.Bounds().Dx() != 64 || out.Bounds().Dy() != 64 {
+		t.Fatalf("size %v", out.Bounds())
+	}
+	// The logo spans the full width once trimmed (Square would cut its ends).
+	if _, _, _, a := out.At(0, 32).RGBA(); a == 0 {
+		t.Fatal("left end cut off")
+	}
+	if _, _, _, a := out.At(63, 32).RGBA(); a == 0 {
+		t.Fatal("right end cut off")
+	}
+	if _, _, _, a := out.At(32, 2).RGBA(); a != 0 {
+		t.Fatal("expected transparent padding above")
+	}
+}

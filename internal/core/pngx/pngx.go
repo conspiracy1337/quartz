@@ -11,10 +11,12 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/draw"
 	_ "image/jpeg" // icons may be photos
 
-	_ "golang.org/x/image/webp" // Modrinth serves project icons as WebP
 	"image/png"
+
+	_ "golang.org/x/image/webp" // Modrinth serves project icons as WebP
 )
 
 // ErrNotImage is returned for anything that isn't an acceptable image.
@@ -53,6 +55,34 @@ func Encode(img image.Image) ([]byte, string, error) {
 	}
 	sum := sha256.Sum256(buf.Bytes())
 	return buf.Bytes(), hex.EncodeToString(sum[:]), nil
+}
+
+// Fit trims img's fully transparent border, centres what is left on a
+// transparent square (so nothing is cut off) and scales it like Square.
+func Fit(img image.Image, side int) *image.NRGBA {
+	b := opaqueBounds(img)
+	n := max(b.Dx(), b.Dy())
+	sq := image.NewNRGBA(image.Rect(0, 0, n, n))
+	draw.Draw(sq, image.Rect((n-b.Dx())/2, (n-b.Dy())/2, n, n), img, b.Min, draw.Src)
+	return Square(sq, side)
+}
+
+// opaqueBounds is the smallest rectangle holding every visible pixel (all
+// of img when it has none).
+func opaqueBounds(img image.Image) image.Rectangle {
+	b := img.Bounds()
+	minX, minY, maxX, maxY := b.Max.X, b.Max.Y, b.Min.X-1, b.Min.Y-1
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if _, _, _, a := img.At(x, y).RGBA(); a != 0 {
+				minX, minY, maxX, maxY = min(minX, x), min(minY, y), max(maxX, x), max(maxY, y)
+			}
+		}
+	}
+	if maxX < minX {
+		return b
+	}
+	return image.Rect(minX, minY, maxX+1, maxY+1)
 }
 
 // Square crops img to its centred square and scales it down to at most side

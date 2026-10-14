@@ -98,8 +98,9 @@ func (s *Service) view(id string) (view, error) {
 	if v.idx.Pending.Packs != nil {
 		v.packs = v.idx.Pending.Packs
 	}
-	props, _ := optfile.Read(s.abs(v.in.ID, shaderConfig(s.oculus(v))), "=")
-	v.shader = activeShader(props)
+	mod := s.shaderMod(v).id
+	props, _ := optfile.Read(s.abs(v.in.ID, shaderConfig(mod)), "=")
+	v.shader = activeShader(props, mod)
 	if v.idx.Pending.Shader != nil {
 		v.shader = *v.idx.Pending.Shader
 	}
@@ -212,6 +213,10 @@ func (s *Service) status(v *view, id string, e Entry, info *meta.Info, problems 
 	if p, ok := problems[id]; ok {
 		return &Status{Kind: "problem", Label: p.Label, Tone: p.Tone}
 	}
+	if !e.Dir && v.known[e.SHA1].Bad {
+		// A broken or truncated file: say so instead of listing it as unknown.
+		return &Status{Kind: "problem", Label: "Can't read this file", Tone: "danger"}
+	}
 	if u, ok := v.idx.Updates[id]; ok && !r.Locked {
 		return &Status{Kind: "update", Version: u.Version}
 	}
@@ -299,24 +304,26 @@ func projectURL(k Kind, id *Ident) string {
 	return ""
 }
 
-// oculus reports whether the instance uses Oculus rather than Iris.
-func (s *Service) oculus(v view) bool {
-	return s.shaderMod(v).id == "oculus"
-}
-
 type shaderMod struct{ id, name, version string }
 
-// shaderMod finds the enabled Iris or Oculus mod.
+// shaderMod finds the enabled shader mod: Iris or Oculus, else OptiFine (its
+// jar, or OptiFabric that loads it), as XMCL also supports. "" when none.
 func (s *Service) shaderMod(v view) shaderMod {
+	var optifine shaderMod
 	for _, e := range entriesOf(v.idx, Mods) {
 		if strings.HasSuffix(e.Rel, Disabled) {
 			continue
 		}
-		if info := v.known[e.SHA1].Info; info != nil && (info.ID == "iris" || info.ID == "oculus") {
+		info := v.known[e.SHA1].Info
+		switch {
+		case info != nil && (info.ID == "iris" || info.ID == "oculus"):
 			return shaderMod{id: info.ID, name: map[string]string{"iris": "Iris", "oculus": "Oculus"}[info.ID], version: info.Version}
+		case info != nil && (info.ID == "optifabric" || info.Name == "OptiFine"),
+			strings.HasPrefix(strings.ToLower(path.Base(e.Rel)), "optifine"):
+			optifine = shaderMod{id: "optifine", name: "OptiFine"}
 		}
 	}
-	return shaderMod{}
+	return optifine
 }
 
 var clientFormatCache sync.Map // minecraft version → meta.ClientFormats (only successes)

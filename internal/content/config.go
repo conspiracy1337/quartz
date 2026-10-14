@@ -1,6 +1,7 @@
 package content
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -140,27 +141,44 @@ func enabledPacks(l optfile.File, legacy bool) []string {
 	return out
 }
 
-// ---- Iris / Oculus properties ----
+// ---- shader mod settings ----
 
-// shaderConfig is the properties file of the shader mod an instance has,
-// relative to the instance (config/ may be shared).
-func shaderConfig(oculus bool) string {
-	if oculus {
+// shaderConfig is the file the shader mod an instance has keeps its choice
+// in, relative to the instance (config/ may be shared): Iris' or Oculus'
+// properties, or OptiFine's optionsshaders.txt in the game folder.
+func shaderConfig(mod string) string {
+	switch mod {
+	case "oculus":
 		return "config/oculus.properties"
+	case "optifine":
+		return "optionsshaders.txt"
 	}
 	return "config/iris.properties"
 }
 
+// optifineOff is OptiFine's shaderPack value for shaders off.
+const optifineOff = "OFF"
+
 // activeShader reads the selected shader pack ("" when shaders are off).
-func activeShader(l optfile.File) string {
-	if v, _ := l.Get("enableShaders"); strings.EqualFold(strings.TrimSpace(v), "false") {
+func activeShader(l optfile.File, mod string) string {
+	v, _ := l.Get("shaderPack")
+	if mod == "optifine" {
+		if v == optifineOff || v == "(internal)" {
+			return ""
+		}
+		return v
+	}
+	if on, _ := l.Get("enableShaders"); strings.EqualFold(strings.TrimSpace(on), "false") {
 		return ""
 	}
-	v, _ := l.Get("shaderPack")
 	return v
 }
 
-func setShader(l *optfile.File, name string) {
+func setShader(l *optfile.File, name, mod string) {
+	if mod == "optifine" {
+		l.Set("shaderPack", cmp.Or(name, optifineOff))
+		return
+	}
 	if name == "" {
 		l.Set("enableShaders", "false")
 		return

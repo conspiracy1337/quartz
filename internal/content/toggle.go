@@ -235,13 +235,14 @@ func (s *Service) writeShader(id, name string) error {
 	if err != nil {
 		return err
 	}
-	p := s.abs(v.in.ID, shaderConfig(s.oculus(v)))
+	mod := s.shaderMod(v).id
+	p := s.abs(v.in.ID, shaderConfig(mod))
 	if s.running(id) {
 		base := v.shader
 		if v.idx.Pending.Shader != nil {
 			base = v.idx.Pending.ShaderBase
 		} else if l, err := optfile.Read(p, "="); err == nil {
-			base = activeShader(l)
+			base = activeShader(l, mod)
 		}
 		_, err := ix.Update(func(i *Index) error { i.Pending.Shader, i.Pending.ShaderBase = &name, base; return nil })
 		return err
@@ -250,7 +251,7 @@ func (s *Service) writeShader(id, name string) error {
 	if err != nil {
 		return err
 	}
-	setShader(&l, name)
+	setShader(&l, name, mod)
 	if err := l.Write(p); err != nil {
 		return err
 	}
@@ -285,8 +286,9 @@ func (s *Service) GameExited(id string) {
 		}
 	}
 	if pend.Shader != nil {
-		props, _ := optfile.Read(s.abs(id, shaderConfig(s.oculus(v))), "=")
-		if activeShader(props) != pend.ShaderBase {
+		mod := s.shaderMod(v).id
+		props, _ := optfile.Read(s.abs(id, shaderConfig(mod)), "=")
+		if activeShader(props, mod) != pend.ShaderBase {
 			s.d.Log.Info("content: shader changed in game; keeping the game's choice")
 			_, _ = ix.Update(func(i *Index) error { i.Pending.Shader, i.Pending.ShaderBase = nil, ""; return nil })
 		} else if err := s.writeShader(id, *pend.Shader); err != nil {

@@ -226,8 +226,33 @@ versionRange="[0.6,)"
 }
 
 func TestNotAMod(t *testing.T) {
-	if _, err := Mod(jar(t, map[string]string{"a.class": "x"}), nil); !errors.Is(err, ErrNotContent) {
-		t.Fatalf("err = %v", err)
+	for name, files := range map[string]map[string]string{
+		"forge installer":  {"install_profile.json": "{}", "a.class": "x"},
+		"fabric installer": {"net/fabricmc/installer/Main.class": "x"},
+	} {
+		if _, err := Mod(jar(t, files), nil); !errors.Is(err, ErrNotContent) {
+			t.Fatalf("%s: err = %v", name, err)
+		}
+	}
+}
+
+func TestJarsWithoutADescriptor(t *testing.T) {
+	// OptiFine and old coremods: named by their manifest.
+	optifine := jar(t, map[string]string{"optifine/Config.class": "x",
+		"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nImplementation-Title: OptiFine\nImplementation-Version: HD_U_I6\n\nName: x\nImplementation-Title: other\n"})
+	info, err := Mod(optifine, nil)
+	if err != nil || info.Name != "OptiFine" || info.Version != "HD_U_I6" || !info.Partial {
+		t.Fatalf("manifest: %+v %v", info, err)
+	}
+	// A wrapper: described by the first mod nested in it.
+	wrapper := jar(t, map[string]string{"META-INF/jarjar/inner.jar": string(zipBytes(t, map[string][]byte{"META-INF/mods.toml": []byte("[[mods]]\nmodId=\"inner\"\nversion=\"2.0\"\n")}))})
+	info, err = Mod(wrapper, nil)
+	if err != nil || info.ID != "inner" || info.Version != "2.0" || !info.Partial {
+		t.Fatalf("wrapper: %+v %v", info, err)
+	}
+	// Nothing to go on: still a jar the game may load, listed by file name.
+	if info, err := Mod(jar(t, map[string]string{"a.class": "x"}), nil); err != nil || info.Name != "" {
+		t.Fatalf("plain jar: %+v %v", info, err)
 	}
 }
 

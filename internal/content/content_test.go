@@ -64,6 +64,7 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(e.svc.bg.Wait) // background identification writes into the temp dir
 	return e
 }
 
@@ -451,7 +452,7 @@ func TestQuick(t *testing.T) {
 
 func TestConfigEditsKeepOtherBytes(t *testing.T) {
 	l := optfile.File{Sep: "=", Text: []string{"# comment", "a=1", "shaderPack=old"}, CRLF: true, Exist: true}
-	setShader(&l, "Ünï code.zip")
+	setShader(&l, "Ünï code.zip", "iris")
 	if got, _ := l.Get("shaderPack"); got != "Ünï code.zip" {
 		t.Fatalf("%q", got)
 	}
@@ -465,25 +466,27 @@ func TestAddDropped(t *testing.T) {
 	src := t.TempDir()
 	mod := filepath.Join(src, "sodium.jar")
 	writeZip(t, mod, map[string]string{"fabric.mod.json": `{"id":"sodium","name":"Sodium"}`})
-	notMod := filepath.Join(src, "random.jar")
-	writeZip(t, notMod, map[string]string{"a.class": "x"})
+	bare := filepath.Join(src, "random.jar") // no descriptor: still a jar the game loads
+	writeZip(t, bare, map[string]string{"a.class": "x"})
+	notMod := filepath.Join(src, "forge-installer.jar")
+	writeZip(t, notMod, map[string]string{"install_profile.json": "{}"})
 	pack := filepath.Join(src, "pack.mrpack")
 	_ = os.WriteFile(pack, []byte("PK\x03\x04"), 0o600)
 	txt := filepath.Join(src, "notes.txt")
 	_ = os.WriteFile(txt, []byte("x"), 0o600)
 	link := filepath.Join(src, "link.jar")
 	_ = os.Symlink(mod, link)
-	res, err := e.svc.Add(context.Background(), e.id, Mods, "", []string{mod, notMod, pack, txt, link, "relative.jar"})
+	res, err := e.svc.Add(context.Background(), e.id, Mods, "", []string{mod, bare, notMod, pack, txt, link, "relative.jar"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Added) != 1 || res.Added[0] != "sodium.jar" || len(res.Rejected) != 5 {
+	if len(res.Added) != 2 || res.Added[0] != "sodium.jar" || res.Added[1] != "random.jar" || len(res.Rejected) != 5 {
 		t.Fatalf("%+v", res)
 	}
 	if res.Rejected[1].Reason != "It's a modpack: import it from the Library" {
 		t.Fatalf("%+v", res.Rejected)
 	}
-	if rows := e.list(Mods); len(rows) != 1 || rows[0].Name != "Sodium" {
+	if rows := e.list(Mods); len(rows) != 2 || byName(rows, "Sodium").ID == "" || byName(rows, "random").ID == "" {
 		t.Fatalf("%+v", rows)
 	}
 	again, _ := e.svc.Add(context.Background(), e.id, Mods, "", []string{mod})
@@ -620,5 +623,42 @@ func TestWatchSeesAFolderCreatedLater(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatal("a mod added to a folder created after the watch began was never seen")
 		}
+	}
+}
+
+func TestUnreadableFilesSaySo(t *testing.T) {
+	e := newEnv(t)
+	_ = os.MkdirAll(filepath.Join(e.game, "mods"), 0o700)
+	_ = os.WriteFile(filepath.Join(e.game, "mods", "broken.jar"), []byte("PK\x03\x04 truncated"), 0o600)
+	rows := e.list(Mods)
+	if len(rows) != 1 || rows[0].Status == nil || rows[0].Status.Label != "Can't read this file" || rows[0].Status.Tone != "danger" {
+		t.Fatalf("%+v", rows)
+	}
+}
+
+func TestOptiFineShaders(t *testing.T) {
+	e := newEnv(t)
+	writeZip(t, filepath.Join(e.game, "mods", "OptiFine_1.21.1_HD_U_J1.jar"), map[string]string{"optifine/Config.class": "x"})
+	writeZip(t, filepath.Join(e.game, "shaderpacks", "BSL.zip"), map[string]string{"shaders/composite.fsh": "x"})
+	_ = os.WriteFile(filepath.Join(e.game, "optionsshaders.txt"), []byte("antialiasingLevel=0\nshaderPack=OFF\n"), 0o600)
+	e.list(Mods)
+	rows := e.list(Shaders)
+	if len(rows) != 1 || rows[0].Enabled {
+		t.Fatalf("%+v", rows)
+	}
+	if err := e.svc.SetActiveShader(context.Background(), e.id, rows[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(filepath.Join(e.game, "optionsshaders.txt")) //nolint:gosec // test temp dir
+	if string(got) != "antialiasingLevel=0\nshaderPack=BSL.zip\n" {
+		t.Fatalf("%q", got)
+	}
+	if _, err := os.Stat(filepath.Join(e.game, "config", "iris.properties")); err == nil {
+		t.Fatal("iris.properties written although OptiFine is the shader mod")
+	}
+	_ = e.svc.SetActiveShader(context.Background(), e.id, "")
+	got, _ = os.ReadFile(filepath.Join(e.game, "optionsshaders.txt")) //nolint:gosec // test temp dir
+	if string(got) != "antialiasingLevel=0\nshaderPack=OFF\n" {
+		t.Fatalf("off: %q", got)
 	}
 }
