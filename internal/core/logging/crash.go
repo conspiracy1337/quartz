@@ -29,7 +29,7 @@ func Crashes(dir string, r *Redactor, now time.Time) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fsx.FilePerm)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fsx.FilePerm) //nolint:gosec // our own logs folder
 	if err != nil {
 		return prev, err
 	}
