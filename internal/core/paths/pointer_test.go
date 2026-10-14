@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"quartz/internal/brand"
 )
@@ -171,5 +172,53 @@ func TestProblem(t *testing.T) {
 	p, _ := Resolve("", env)
 	if err := p.MoveTo(filepath.Join(home, "a!b")); !errors.Is(err, ErrBadRoot) {
 		t.Fatal(err)
+	}
+}
+
+// Across drives, a move needs the room first, and keeps store files shared
+// and times as they were (nothing is verified again afterwards).
+func TestCopyStaged(t *testing.T) {
+	from, to := filepath.Join(t.TempDir(), "from"), filepath.Join(t.TempDir(), "to")
+	blob := filepath.Join(from, "store", "blob")
+	mod := filepath.Join(from, "instances", "a", "mods", "x.jar")
+	for _, d := range []string{filepath.Dir(blob), filepath.Dir(mod), to} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = os.WriteFile(blob, []byte("jar"), 0o400)
+	if err := os.Link(blob, mod); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Date(2024, 5, 6, 7, 8, 9, 0, time.UTC)
+	_ = os.Chtimes(blob, old, old)
+
+	free := diskFree
+	t.Cleanup(func() { diskFree = free })
+	diskFree = func(string) (uint64, error) { return 1 << 20, nil }
+	if err := copyStaged(from, to, []string{"store", "instances"}); !errors.Is(err, ErrNoRoom) {
+		t.Fatalf("err = %v, want ErrNoRoom", err)
+	}
+	if entries, _ := os.ReadDir(to); len(entries) != 0 {
+		t.Fatalf("a refused move left %v", entries)
+	}
+
+	diskFree = func(string) (uint64, error) { return 1 << 40, nil }
+	if err := copyStaged(from, to, []string{"store", "instances"}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.Stat(filepath.Join(to, "store", "blob"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := os.Stat(filepath.Join(to, "instances", "a", "mods", "x.jar"))
+	if err != nil || !os.SameFile(b, m) {
+		t.Fatalf("the mod is no longer the store file: %v", err)
+	}
+	if !b.ModTime().Equal(old) || b.Mode().Perm()&0o200 != 0 {
+		t.Fatalf("store file: %v %v", b.ModTime(), b.Mode())
+	}
+	if _, err := os.Stat(blob); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("the original stayed behind")
 	}
 }

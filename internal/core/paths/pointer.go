@@ -10,6 +10,7 @@ import (
 	"quartz/internal/brand"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/linkx"
+	"quartz/internal/core/sysinfo"
 )
 
 // pointerFile, at the OS data location, names a data folder chosen in
@@ -167,6 +168,9 @@ var moveData = move
 // stagingDir holds copies across drives until every one has succeeded.
 const stagingDir = ".quartz-move"
 
+// moveMargin is room left free on the new drive after a copy.
+const moveMargin = 256 << 20
+
 // move brings every entry of from into to (see ApplyMove).
 func move(from, to string) error {
 	if err := os.MkdirAll(to, dirPerm); err != nil {
@@ -210,10 +214,29 @@ func move(from, to string) error {
 	return nil
 }
 
+// ErrNoRoom means the new folder's drive can't hold the data.
+var ErrNoRoom = errors.New("paths: the new folder's drive doesn't have room for the data")
+
+// diskFree is sysinfo.DiskFree (a variable for tests).
+var diskFree = sysinfo.DiskFree
+
 // copyStaged copies names from from into to's staging folder, then renames
 // them into place and removes the originals. Nothing lands in to unless
-// every copy succeeded.
+// every copy succeeded, and nothing is copied unless the drive has room.
+// The copy is faithful (linkx.Mirror): times and read-only marks survive, so
+// nothing has to be verified again, and store files stay shared.
 func copyStaged(from, to string, names []string) error {
+	srcs := make([]string, len(names))
+	for i, n := range names {
+		srcs[i] = filepath.Join(from, n)
+	}
+	need, err := linkx.Size(srcs...)
+	if err != nil {
+		return err
+	}
+	if free, err := diskFree(to); err == nil && uint64(need)+moveMargin > free { //nolint:gosec // sizes are never negative
+		return fmt.Errorf("%w (%d MB needed, %d MB free)", ErrNoRoom, need>>20, free>>20)
+	}
 	stage := filepath.Join(to, stagingDir)
 	if err := os.RemoveAll(stage); err != nil {
 		return err
@@ -222,18 +245,9 @@ func copyStaged(from, to string, names []string) error {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
-	for _, n := range names {
-		src, dst := filepath.Join(from, n), filepath.Join(stage, n)
-		fi, err := os.Lstat(src)
-		if err != nil {
-			return err
-		}
-		if fi.IsDir() {
-			err = linkx.CopyTree(src, dst, linkx.Options{NoHardlink: true})
-		} else {
-			_, err = linkx.Place(src, dst, linkx.Options{NoHardlink: true})
-		}
-		if err != nil {
+	m := &linkx.Mirror{From: from, To: to}
+	for i, n := range names {
+		if err := m.Copy(srcs[i], filepath.Join(stage, n)); err != nil {
 			return err
 		}
 	}

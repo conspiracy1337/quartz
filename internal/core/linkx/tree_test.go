@@ -82,3 +82,78 @@ func TestUpdateTree(t *testing.T) {
 		}
 	}
 }
+
+func TestMirror(t *testing.T) {
+	stub(t, noClone, nil) // another drive: nothing can be cloned
+	from, to := t.TempDir(), filepath.Join(t.TempDir(), "data")
+	old := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	blob := filepath.Join(from, "store", "ab", "blob")
+	for _, d := range []string{filepath.Dir(blob), filepath.Join(from, "instances", "a", "mods"), filepath.Join(from, "instances", "b", "mods"), filepath.Join(from, "java", "bin")} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, blob, "jar")
+	_ = os.Chtimes(blob, old, old)
+	if err := SetReadOnly(blob, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range []string{"a", "b"} {
+		if err := os.Link(blob, filepath.Join(from, "instances", in, "mods", "x.jar")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, filepath.Join(from, "instances", "a", "options.txt"), "opts")
+	_ = os.Chtimes(filepath.Join(from, "instances", "a", "options.txt"), old, old)
+	write(t, filepath.Join(from, "java", "bin", "java"), "exe")
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+	write(t, outside, "x")
+	links := map[string]string{
+		filepath.Join(from, "java", "rel"):     filepath.Join("bin", "java"),
+		filepath.Join(from, "java", "abs"):     filepath.Join(from, "java", "bin", "java"),
+		filepath.Join(from, "java", "outside"): outside,
+	}
+	for at, target := range links {
+		if err := os.Symlink(target, at); err != nil {
+			t.Skip("no symlinks here:", err)
+		}
+	}
+
+	m := &Mirror{From: from, To: to}
+	for _, n := range []string{"store", "instances", "java"} {
+		if err := m.Copy(filepath.Join(from, n), filepath.Join(to, n)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	newBlob := filepath.Join(to, "store", "ab", "blob")
+	info, err := os.Stat(newBlob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(old) || info.Mode().Perm()&0o200 != 0 {
+		t.Errorf("blob: mtime %v mode %v, want the original's", info.ModTime(), info.Mode())
+	}
+	for _, in := range []string{"a", "b"} {
+		li, err := os.Stat(filepath.Join(to, "instances", in, "mods", "x.jar"))
+		if err != nil || !os.SameFile(info, li) {
+			t.Errorf("instance %s's mod is no longer the store file: %v", in, err)
+		}
+	}
+	if oi, err := os.Stat(filepath.Join(to, "instances", "a", "options.txt")); err != nil || !oi.ModTime().Equal(old) || oi.Mode().Perm()&0o200 == 0 {
+		t.Errorf("options.txt: %v %v", oi, err)
+	}
+	if got, err := os.Readlink(filepath.Join(to, "java", "rel")); err != nil || got != filepath.Join("bin", "java") {
+		t.Errorf("relative link = %q, %v", got, err)
+	}
+	if got, err := os.Readlink(filepath.Join(to, "java", "abs")); err != nil || got != filepath.Join(to, "java", "bin", "java") {
+		t.Errorf("absolute link = %q, %v (want it under the new folder)", got, err)
+	}
+	if _, err := os.Lstat(filepath.Join(to, "java", "outside")); err == nil {
+		t.Error("a link leading outside the data folder was copied")
+	}
+
+	size, err := Size(filepath.Join(from, "store"), filepath.Join(from, "instances"))
+	if err != nil || size != int64(len("jar")+len("opts")) {
+		t.Errorf("Size = %d, %v: a file with hard links should count once", size, err)
+	}
+}
