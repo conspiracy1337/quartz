@@ -73,6 +73,9 @@ func (s *Service) view(id string) (view, error) {
 	if err != nil {
 		return view{}, err
 	}
+	if err := s.d.Instances.CheckGameDir(id); err != nil {
+		return view{}, err
+	}
 	ix, err := s.idx.get(id)
 	if err != nil {
 		return view{}, err

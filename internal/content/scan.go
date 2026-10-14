@@ -42,6 +42,10 @@ func (s *Service) Scan(ctx context.Context, id string, k Kind) error {
 }
 
 func (s *Service) scan(ctx context.Context, id string, k Kind) error {
+	// A missing folder must not empty the index: the drive may come back.
+	if err := s.d.Instances.CheckGameDir(id); err != nil {
+		return err
+	}
 	unlock := s.lock(id)
 	defer unlock()
 	ix, err := s.idx.get(id)

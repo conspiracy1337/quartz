@@ -375,6 +375,9 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	p.set(StageMods, p.checkMods(ctx))
 	p.progress(StageJava, 10)
 
+	if err := l.cfg.Instances.CheckGameDir(p.inst.ID); err != nil {
+		return StageJava, err
+	}
 	gameDir := l.cfg.Instances.GameDir(p.inst.ID)
 	if err := os.MkdirAll(gameDir, 0o700); err != nil {
 		return StageJava, err
@@ -617,6 +620,9 @@ func (l *Launcher) Close() {
 func (l *Launcher) Repair(ctx context.Context, id string) (string, error) {
 	inst, err := l.cfg.Instances.Get(id)
 	if err != nil {
+		return "", err
+	}
+	if err := l.cfg.Instances.CheckGameDir(id); err != nil {
 		return "", err
 	}
 	meta := tasks.Meta{Title: inst.Name, Subtitle: "Repairing game files", Art: tasks.Art{Background: inst.Art.Background, Initial: inst.Art.Initial}, Kind: "repair"}

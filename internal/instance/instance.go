@@ -198,6 +198,7 @@ var (
 	ErrBadLoader       = errors.New("instance: unknown mod loader")
 	ErrInvalidSettings = errors.New("instance: invalid settings")
 	ErrBadGroup        = errors.New("instance: group names need at most 32 characters")
+	ErrGameDirMissing  = errors.New("instance: the game folder isn't there. Is its drive connected?")
 )
 
 var (
@@ -465,6 +466,26 @@ func (s *Store) GameDir(id string) string {
 }
 
 func (s *Store) defaultGameDir(id string) string { return filepath.Join(s.dir, id, "game") }
+
+// CheckGameDir makes sure a game folder outside the data folder is really
+// there before anything writes to it: a folder moved by the launcher must
+// still carry its marker, another launcher's folder must exist. Otherwise an
+// unplugged drive would get a fresh, empty game at its mount point.
+func (s *Store) CheckGameDir(id string) error {
+	in, err := s.Get(id)
+	if err != nil || in.Location == "" {
+		return err
+	}
+	ok := markedFor(in.Location, id)
+	if in.InPlace {
+		info, err := os.Stat(in.Location)
+		ok = err == nil && info.IsDir()
+	}
+	if !ok {
+		return fmt.Errorf("%w (%s)", ErrGameDirMissing, in.Location)
+	}
+	return nil
+}
 
 // RunsDir holds the instance's launch history.
 func (s *Store) RunsDir(id string) string { return filepath.Join(s.dir, id, "runs") }

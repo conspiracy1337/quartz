@@ -323,3 +323,29 @@ func TestCopyTreeRepointsLinksIntoTheSource(t *testing.T) {
 		t.Fatalf("link = %q", got)
 	}
 }
+
+func TestCheckGameDirNoticesAMissingDrive(t *testing.T) {
+	s, root := newStore(t)
+	in := create(t, s, "Away")
+	if err := s.CheckGameDir(in.ID); err != nil {
+		t.Fatalf("default folder: %v", err)
+	}
+	drive := filepath.Join(root, "drive2")
+	_ = os.MkdirAll(drive, 0o700)
+	p, _ := s.PlanMove(in.ID, drive)
+	moved, err := s.Move(context.Background(), p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckGameDir(in.ID); err != nil {
+		t.Fatalf("moved folder: %v", err)
+	}
+	// Unplugged: the mount point is there, empty, without our marker.
+	if err := os.RemoveAll(moved.Location); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(moved.Location, 0o700)
+	if err := s.CheckGameDir(in.ID); !errors.Is(err, ErrGameDirMissing) {
+		t.Fatalf("missing drive: %v", err)
+	}
+}
