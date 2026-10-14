@@ -43,6 +43,7 @@ import (
 	"quartz/internal/core/paths"
 	"quartz/internal/core/procx"
 	"quartz/internal/core/remoteimg"
+	"quartz/internal/core/safe"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
 	"quartz/internal/crash"
@@ -151,6 +152,8 @@ type app struct {
 	presence  *discord.Presence
 	updater   *update.Updater
 	stopCheck func()
+	// crashed names the crash report the last run left ("" after a clean exit).
+	crashed string
 }
 
 // Run builds the app and blocks until the window closes.
@@ -266,6 +269,10 @@ func build(o Options) (*app, error) {
 	if moveErr != nil {
 		log.Error("moving the data folder failed", "err", moveErr)
 	}
+	crashed, err := logging.Crashes(p.Logs(), redactor, time.Now())
+	if err != nil {
+		log.Warn("can't record launcher crashes", "err", err)
+	}
 	bus := events.NewBus()
 	store, err := settings.Open(p.Settings(), bus, log)
 	if err != nil {
@@ -286,6 +293,7 @@ func build(o Options) (*app, error) {
 	a := &app{
 		paths: p, log: log, logFile: logFile, redactor: redactor, bus: bus, settings: store,
 		css: theme.NewCustomCSS(bus, log), secrets: secrets.NewKeychain(), http: httpClient, ctx: &api.Ctx{},
+		crashed: crashed,
 	}
 	a.network = network.New(httpClient, store.Get().Downloads, a.secrets, redactor, log)
 	if a.cache, err = httpcache.Open(p.Cache(), httpClient, log); err != nil {
@@ -538,10 +546,12 @@ func (a *app) checkPacks() func() {
 		t := time.NewTicker(6 * time.Hour)
 		defer t.Stop()
 		for {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			a.packs.CheckUpdates(ctx)
-			a.follow.Check(ctx)
-			cancel()
+			safe.Run(a.log, "modpack and follow-latest checks", func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				a.packs.CheckUpdates(ctx)
+				a.follow.Check(ctx)
+			})
 			select {
 			case <-t.C:
 			case <-done:
@@ -675,20 +685,29 @@ func (a *app) startup(ctx context.Context) {
 	})
 	a.accounts.Start()
 	// Games that ran when the launcher last quit get merged back.
-	go a.launcher.Recover()
-	go a.host.Recover()
+	safe.Go(a.log, "recover games", a.launcher.Recover)
+	safe.Go(a.log, "recover hosted servers", a.host.Recover)
 	go func() {
 		st := a.sandbox.Status()
 		a.log.Info("sandbox", "available", st.Available, "backend", st.Name, "version", st.Version, "reason", st.Reason)
 	}()
 	a.watchDesktop()
-	go a.shortcuts.Refresh()
+	safe.Go(a.log, "refresh shortcuts", a.shortcuts.Refresh)
 	a.finishUpdate()
+	a.reportCrash()
 	a.stopCheck = a.scheduleUpdates()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
 	a.act(a.args)
+}
+
+// reportCrash tells the player once that the last run crashed.
+func (a *app) reportCrash() {
+	if a.crashed != "" {
+		a.opens.Show(api.OpenTarget{Kind: api.OpenError, Subject: brand.Name + " closed unexpectedly last time",
+			Text: "The report is " + a.crashed + " in the logs folder."})
+	}
 }
 
 // startState starts the window minimized when the computer started the
@@ -736,15 +755,7 @@ func (a *app) purgeTrash() func() {
 		t := time.NewTicker(24 * time.Hour)
 		defer t.Stop()
 		for {
-			if n := a.instances.PurgeExpired(time.Now()); n > 0 {
-				a.log.Info("emptied old trash", "instances", n)
-			}
-			a.syncing.PurgeTrash(time.Now())
-			if freed, n, err := a.store.GC(a.content.Refs, storeGrace); err != nil {
-				a.log.Warn("cleaning the content store failed", "err", err)
-			} else if n > 0 {
-				a.log.Info("cleaned the content store", "files", n, "bytes", freed)
-			}
+			safe.Run(a.log, "daily cleanup", a.cleanup)
 			select {
 			case <-t.C:
 			case <-done:
@@ -753,6 +764,19 @@ func (a *app) purgeTrash() func() {
 		}
 	}()
 	return func() { close(done) }
+}
+
+// cleanup empties old trash and stored content nothing uses any more.
+func (a *app) cleanup() {
+	if n := a.instances.PurgeExpired(time.Now()); n > 0 {
+		a.log.Info("emptied old trash", "instances", n)
+	}
+	a.syncing.PurgeTrash(time.Now())
+	if freed, n, err := a.store.GC(a.content.Refs, storeGrace); err != nil {
+		a.log.Warn("cleaning the content store failed", "err", err)
+	} else if n > 0 {
+		a.log.Info("cleaned the content store", "files", n, "bytes", freed)
+	}
 }
 
 func (a *app) shutdown(context.Context) {
