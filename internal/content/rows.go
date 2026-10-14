@@ -2,6 +2,7 @@ package content
 
 import (
 	"context"
+	"os"
 	"path"
 	"slices"
 	"sort"
@@ -51,6 +52,8 @@ type view struct {
 	idx     Index
 	known   map[string]Known
 	pw      map[string]map[string]packwiz.Meta // index folder → lower filename → meta
+	options string                             // the options.txt to edit (see optionsFile)
+	legacy  bool                               // packs named the pre-1.13 way
 	packs   []string                           // enabled resource packs, top first
 	shader  string                             // active shader pack
 	formats meta.ClientFormats
@@ -89,8 +92,9 @@ func (s *Service) view(id string) (view, error) {
 		}
 	}
 	v.known = s.cat.many(sha)
-	opts, _ := optfile.Read(optionsPath(v.game), ":")
-	v.packs = enabledPacks(opts)
+	v.options, v.legacy = s.optionsFile(id, v.game), legacyPacks(in.Minecraft)
+	opts, _ := optfile.Read(v.options, ":")
+	v.packs = enabledPacks(opts, v.legacy)
 	if v.idx.Pending.Packs != nil {
 		v.packs = v.idx.Pending.Packs
 	}
@@ -101,6 +105,22 @@ func (s *Service) view(id string) (view, error) {
 	}
 	v.formats, v.fmtOK = s.clientFormats(in.Minecraft)
 	return v, nil
+}
+
+// optionsFile is the options.txt to edit: the game's own, or before the
+// first start a defaults mod's copy (see defaultOptions).
+func (s *Service) optionsFile(id, game string) string {
+	own := optionsPath(game)
+	if _, err := os.Stat(own); err == nil {
+		return own
+	}
+	for _, rel := range defaultOptions {
+		p := s.abs(id, rel)
+		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
+			return p
+		}
+	}
+	return own
 }
 
 // pwFor returns the packwiz metadata describing an entry, if any.

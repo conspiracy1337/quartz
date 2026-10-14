@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -163,12 +164,23 @@ func (s *Service) writePacks(id string, packs []string) error {
 	if err != nil {
 		return err
 	}
-	if s.running(id) {
-		_, err := ix.Update(func(i *Index) error { i.Pending.Packs = append([]string{}, packs...); return nil })
-		return err
-	}
 	v, err := s.view(id)
 	if err != nil {
+		return err
+	}
+	if s.running(id) {
+		// Remember the list this edit started from: if the game changes it
+		// meanwhile, the player's in-game choice wins (see GameExited).
+		base := v.packs
+		if v.idx.Pending.Packs != nil {
+			base = v.idx.Pending.PacksBase
+		} else if opts, err := optfile.Read(v.options, ":"); err == nil {
+			base = enabledPacks(opts, v.legacy)
+		}
+		_, err := ix.Update(func(i *Index) error {
+			i.Pending.Packs, i.Pending.PacksBase = append([]string{}, packs...), append([]string{}, base...)
+			return nil
+		})
 		return err
 	}
 	incompatible := map[string]bool{}
@@ -181,15 +193,17 @@ func (s *Service) writePacks(id string, packs []string) error {
 			incompatible[base(e)] = true
 		}
 	}
-	l, err := optfile.Read(optionsPath(v.game), ":")
+	l, err := optfile.Read(v.options, ":")
 	if err != nil {
 		return err
 	}
-	orderPacks(&l, packs, incompatible, v.formats.WorldVersion)
-	if err := l.Write(optionsPath(v.game)); err != nil {
+	if err := orderPacks(&l, packs, incompatible, v.formats.WorldVersion, v.legacy); err != nil {
 		return err
 	}
-	_, err = ix.Update(func(i *Index) error { i.Pending.Packs = nil; return nil })
+	if err := l.Write(v.options); err != nil {
+		return err
+	}
+	_, err = ix.Update(func(i *Index) error { i.Pending.Packs, i.Pending.PacksBase = nil, nil; return nil })
 	return err
 }
 
@@ -210,15 +224,21 @@ func (s *Service) writeShader(id, name string) error {
 	if err != nil {
 		return err
 	}
-	if s.running(id) {
-		_, err := ix.Update(func(i *Index) error { i.Pending.Shader = &name; return nil })
-		return err
-	}
 	v, err := s.view(id)
 	if err != nil {
 		return err
 	}
 	p := s.abs(v.in.ID, shaderConfig(s.oculus(v)))
+	if s.running(id) {
+		base := v.shader
+		if v.idx.Pending.Shader != nil {
+			base = v.idx.Pending.ShaderBase
+		} else if l, err := optfile.Read(p, "="); err == nil {
+			base = activeShader(l)
+		}
+		_, err := ix.Update(func(i *Index) error { i.Pending.Shader, i.Pending.ShaderBase = &name, base; return nil })
+		return err
+	}
 	l, err := optfile.Read(p, "=")
 	if err != nil {
 		return err
@@ -227,11 +247,12 @@ func (s *Service) writeShader(id, name string) error {
 	if err := l.Write(p); err != nil {
 		return err
 	}
-	_, err = ix.Update(func(i *Index) error { i.Pending.Shader = nil; return nil })
+	_, err = ix.Update(func(i *Index) error { i.Pending.Shader, i.Pending.ShaderBase = nil, ""; return nil })
 	return err
 }
 
-// GameExited applies edits queued while the instance's game ran.
+// GameExited applies edits queued while the instance's game ran, unless the
+// player changed the same setting in game meanwhile: then theirs wins.
 func (s *Service) GameExited(id string) {
 	if s.running(id) {
 		return // another copy still runs
@@ -240,23 +261,33 @@ func (s *Service) GameExited(id string) {
 	if err != nil {
 		return
 	}
-	pend := ix.Get().Pending
+	unlock := s.lock(id)
+	defer unlock()
+	v, err := s.view(id)
+	if err != nil {
+		return
+	}
+	pend := v.idx.Pending
 	if pend.Packs != nil {
-		unlock := s.lock(id)
-		err := s.writePacks(id, pend.Packs)
-		unlock()
-		if err != nil {
+		opts, _ := optfile.Read(v.options, ":")
+		if now := enabledPacks(opts, v.legacy); !slices.Equal(now, pend.PacksBase) {
+			s.d.Log.Info("content: resource packs changed in game; keeping the game's choice")
+			_, _ = ix.Update(func(i *Index) error { i.Pending.Packs, i.Pending.PacksBase = nil, nil; return nil })
+		} else if err := s.writePacks(id, pend.Packs); err != nil {
 			s.d.Log.Warn("content: applying the resource pack order failed", "err", err)
 		}
 	}
 	if pend.Shader != nil {
-		unlock := s.lock(id)
-		err := s.writeShader(id, *pend.Shader)
-		unlock()
-		if err != nil {
+		props, _ := optfile.Read(s.abs(id, shaderConfig(s.oculus(v))), "=")
+		if activeShader(props) != pend.ShaderBase {
+			s.d.Log.Info("content: shader changed in game; keeping the game's choice")
+			_, _ = ix.Update(func(i *Index) error { i.Pending.Shader, i.Pending.ShaderBase = nil, ""; return nil })
+		} else if err := s.writeShader(id, *pend.Shader); err != nil {
 			s.d.Log.Warn("content: applying the shader choice failed", "err", err)
 		}
 	}
+	s.emit(id, ResourcePacks)
+	s.emit(id, Shaders)
 }
 
 // SetLocked locks an item's version (update checks skip it) or unlocks it.

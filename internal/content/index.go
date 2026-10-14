@@ -39,6 +39,10 @@ type Update struct {
 type Pending struct {
 	Packs  []string `json:"packs,omitempty"`
 	Shader *string  `json:"shader,omitempty"`
+	// What the game had when the first edit was queued: if it has something
+	// else on exit, the player changed it in game and that wins.
+	PacksBase  []string `json:"packsBase,omitempty"`
+	ShaderBase string   `json:"shaderBase,omitempty"`
 }
 
 // removal is a set of items moved aside, restorable for a while.
