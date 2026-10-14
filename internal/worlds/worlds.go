@@ -241,6 +241,25 @@ func (s *Service) dir(id, folder string) (string, error) {
 	return d, nil
 }
 
+// open reports whether a game, from this launcher or any other, has the
+// world in dir open: the game locks its session.lock while it plays.
+func playing(dir string) bool { return fsx.Locked(filepath.Join(dir, "session.lock")) }
+
+// editable returns a world's folder when nothing plays it.
+func (s *Service) editable(id, folder string) (string, error) {
+	if s.d.Busy(id) {
+		return "", ErrBusy
+	}
+	d, err := s.dir(id, folder)
+	if err != nil {
+		return "", err
+	}
+	if playing(d) {
+		return "", ErrBusy
+	}
+	return d, nil
+}
+
 // Folder is the instance's saves folder (made if missing, so it can be opened).
 func (s *Service) Folder(id string) string {
 	d := s.saves(id)
@@ -280,10 +299,7 @@ func (s *Service) Rename(id, folder, name string) error {
 	if name == "" || len([]rune(name)) > 64 || strings.ContainsAny(name, "\x00\n\r") {
 		return ErrName
 	}
-	if s.d.Busy(id) {
-		return ErrBusy
-	}
-	d, err := s.dir(id, folder)
+	d, err := s.editable(id, folder)
 	if err != nil {
 		return err
 	}
@@ -327,10 +343,7 @@ func Retitle(dir, suffix string) error {
 
 // Delete moves a world aside and returns the token Undo takes.
 func (s *Service) Delete(id, folder string) (string, error) {
-	if s.d.Busy(id) {
-		return "", ErrBusy
-	}
-	if _, err := s.dir(id, folder); err != nil {
+	if _, err := s.editable(id, folder); err != nil {
 		return "", err
 	}
 	root, err := os.OpenRoot(s.d.Instances.Base(id, "saves"))
@@ -373,6 +386,9 @@ func (s *Service) Export(id, folder, dest string) error {
 	if err != nil {
 		return err
 	}
+	if playing(d) {
+		return ErrBusy // a world mid-save would zip half written
+	}
 	if err := backup.ZipDir(d, dest, folder+"/"); err != nil {
 		if errors.Is(err, backup.ErrNoWorlds) {
 			return ErrNoWorld
@@ -384,10 +400,7 @@ func (s *Service) Export(id, folder, dest string) error {
 
 // CopyTo copies a world into another instance and returns its folder there.
 func (s *Service) CopyTo(id, folder, target string) (string, error) {
-	if s.d.Busy(id) {
-		return "", ErrBusy
-	}
-	d, err := s.dir(id, folder)
+	d, err := s.editable(id, folder)
 	if err != nil {
 		return "", err
 	}

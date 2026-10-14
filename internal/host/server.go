@@ -114,6 +114,8 @@ func (s *Service) Start(id string, o Options) error {
 		world = fsx.FreeName(saves, "New world", true)
 	} else if info, err := os.Stat(filepath.Join(saves, world)); err != nil || !info.IsDir() {
 		return ErrNoWorld
+	} else if fsx.Locked(filepath.Join(saves, world, "session.lock")) {
+		return ErrWorldOpen
 	}
 	if err := s.free(); err != nil {
 		return err

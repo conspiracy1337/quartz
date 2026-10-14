@@ -48,6 +48,7 @@ var (
 	ErrBusy       = errors.New("host: close the game first")
 	ErrPortInUse  = errors.New("host: that port is in use")
 	ErrNoWorld    = errors.New("host: that world is gone")
+	ErrWorldOpen  = errors.New("host: that world is open in a game; close it first")
 	ErrBadPort    = errors.New("host: the port is a number from 1024 to 65535")
 	ErrBadPlayers = errors.New("host: max players is a number from 1 to 999")
 	ErrBadMemory  = errors.New("host: memory is at least 512 MB and at most what this computer has")
