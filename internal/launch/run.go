@@ -37,8 +37,11 @@ import (
 
 const (
 	consoleLines = 20_000
-	stopGrace    = 3 * time.Second
-	logBatch     = 100 * time.Millisecond
+	// stopGrace is how long Stop waits before killing the game. Quitting
+	// halts the singleplayer server, which saves the world first; a big one
+	// takes several seconds. A second Stop kills at once.
+	stopGrace = 15 * time.Second
+	logBatch  = 100 * time.Millisecond
 )
 
 // run is one running game.
@@ -331,7 +334,7 @@ type LogBatch struct {
 	Lines      []gamelog.Line `json:"lines"`
 }
 
-// Stop asks every copy of the game to quit; after 3 seconds, or on a second
+// Stop asks every copy of the game to quit; after 15 seconds, or on a second
 // Stop, they are killed.
 func (l *Launcher) Stop(id string) error {
 	l.mu.Lock()
