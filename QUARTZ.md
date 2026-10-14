@@ -946,7 +946,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 - **EULA:** accepted for you on Start, with a comment saying so.
 - **Cheats:** a world with cheats on makes the host an operator (`ops.json`, or `ops.txt` before 1.7.6). Entries already there are kept.
 - **World backup:** the world is zipped before hosting, keeping the 5 newest. [host/backup.go](internal/host/backup.go)
-- **Inventory carry:** your singleplayer player moves into `playerdata/<uuid>.dat` for the server and back afterwards (1.9+). [carry.go](internal/host/carry.go)
+- **Inventory carry:** your singleplayer player moves into `playerdata/<uuid>.dat` for the server and back afterwards (1.9+). From 26.1 every player is `players/data/<uuid>.dat` and level.dat names the singleplayer one; its file is copied to the id the server sees (an offline server with a Microsoft account) and back. [carry.go](internal/host/carry.go)
 
 **While running**
 - **Header:** a `localhost:<port>` chip toggles the panel.

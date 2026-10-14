@@ -114,6 +114,51 @@ func TestCarryInventory(t *testing.T) {
 	}
 }
 
+// From 26.1 the singleplayer player is players/data/<uuid>.dat; an offline
+// server sees the host under its offline id, so the file is copied across
+// and back.
+func TestCarryNewLayout(t *testing.T) {
+	world := t.TempDir()
+	host := "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+	offline := "8667ba71-b85a-4004-af54-457a9734eed7"
+	root := nbt.NewCompound()
+	data := nbt.NewCompound()
+	data.Comp.Set("DataVersion", nbt.NewInt(4700))
+	data.Comp.Set("singleplayer_uuid", nbt.Tag{Kind: nbt.IntArray, Ints: []int32{0x069a79f4, 0x44e94726, -0x5a410357 /* 0xa5befca9 */, 0x0e38aaf5}})
+	root.Comp.Set("Data", data)
+	if err := nbt.WriteFile(filepath.Join(world, "level.dat"), &nbt.File{Root: root, Gzip: true}); err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := singleplayerID(world); !ok || id != host {
+		t.Fatalf("singleplayer id %q", id)
+	}
+	put := func(uuid, body string, at time.Time) {
+		p := filepath.Join(world, "players", "data", uuid+".dat")
+		_ = os.MkdirAll(filepath.Dir(p), 0o700)
+		_ = os.WriteFile(p, []byte(body), 0o600)
+		_ = os.Chtimes(p, at, at)
+	}
+	get := func(uuid string) string {
+		b, _ := os.ReadFile(filepath.Join(world, "players", "data", uuid+".dat"))
+		return string(b)
+	}
+	start := time.Now()
+	put(host, "alone", start.Add(-time.Hour))
+	if err := carryIn(world, offline); err != nil || get(offline) != "alone" {
+		t.Fatalf("carry in: %q %v", get(offline), err)
+	}
+	put(offline, "hosted", start.Add(time.Minute))
+	if err := carryOut(world, offline, start); err != nil || get(host) != "hosted" {
+		t.Fatalf("carry out: %q %v", get(host), err)
+	}
+	if _, err := os.Stat(filepath.Join(world, "playerdata")); err == nil {
+		t.Fatal("the old playerdata folder was used")
+	}
+	if err := carryIn(world, host); err != nil { // the server sees the host as itself
+		t.Fatal(err)
+	}
+}
+
 func TestBackupPrune(t *testing.T) {
 	world := filepath.Join(t.TempDir(), "Northwatch")
 	if err := os.MkdirAll(world, 0o700); err != nil {
