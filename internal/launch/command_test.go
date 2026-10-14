@@ -28,7 +28,7 @@ func TestCommandKeepsTokenOffTheCommandLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
-	inst, err := insts.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	inst, err := insts.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4"})
 	if err != nil {
 		t.Fatal(err)
 	}

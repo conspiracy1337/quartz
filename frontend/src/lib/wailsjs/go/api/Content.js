@@ -10,6 +10,10 @@ export function AddDropped(arg1, arg2, arg3, arg4) {
   return window['go']['api']['Content']['AddDropped'](arg1, arg2, arg3, arg4);
 }
 
+export function AddFiles(arg1, arg2, arg3) {
+  return window['go']['api']['Content']['AddFiles'](arg1, arg2, arg3);
+}
+
 export function ApplyInstall(arg1, arg2) {
   return window['go']['api']['Content']['ApplyInstall'](arg1, arg2);
 }
@@ -36,6 +40,14 @@ export function CleanUp() {
 
 export function Compatibility(arg1, arg2, arg3) {
   return window['go']['api']['Content']['Compatibility'](arg1, arg2, arg3);
+}
+
+export function Dependents(arg1, arg2) {
+  return window['go']['api']['Content']['Dependents'](arg1, arg2);
+}
+
+export function FindMod(arg1) {
+  return window['go']['api']['Content']['FindMod'](arg1);
 }
 
 export function Info(arg1) {
@@ -68,6 +80,10 @@ export function SetActiveShader(arg1, arg2) {
 
 export function SetEnabled(arg1, arg2, arg3, arg4) {
   return window['go']['api']['Content']['SetEnabled'](arg1, arg2, arg3, arg4);
+}
+
+export function SetEnabledMany(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['Content']['SetEnabledMany'](arg1, arg2, arg3, arg4);
 }
 
 export function SetLocked(arg1, arg2, arg3) {

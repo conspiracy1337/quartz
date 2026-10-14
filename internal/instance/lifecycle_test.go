@@ -22,7 +22,7 @@ func newStore(t *testing.T) (*Store, string) {
 
 func create(t *testing.T, s *Store, name string) Instance {
 	t.Helper()
-	in, err := s.Create(CreateRequest{Name: name, Minecraft: "1.21.1"}, JavaSettings{})
+	in, err := s.Create(CreateRequest{Name: name, Minecraft: "1.21.1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestMove(t *testing.T) {
 	dst := filepath.Join(root, "drive2")
 	_ = os.MkdirAll(dst, 0o700)
 	var last int64
-	if err := copyTree(context.Background(), s.GameDir(in.ID), filepath.Join(dst, "copy"), func(d, _ int64) { last = d }); err != nil || last != 5 {
+	if err := copyTree(context.Background(), s.GameDir(in.ID), filepath.Join(dst, "copy"), copyOpts{progress: func(d, _ int64) { last = d }}); err != nil || last != 5 {
 		t.Fatalf("copy: %v (%d bytes)", err, last)
 	}
 	p, _ := s.PlanMove(in.ID, dst)
@@ -247,5 +247,159 @@ func TestMove(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(s.GameDir(in.ID), markerName)); err == nil {
 		t.Fatal("the default folder needs no marker")
+	}
+}
+
+func TestHandEditOfTheWrongTypeKeepsTheInstance(t *testing.T) {
+	s, root := newStore(t)
+	in := create(t, s, "Survival")
+	if err := s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(s.Dir(in.ID), "instance.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := strings.Replace(string(data), `"playtimeMin": 0`, `"playtimeMin": "120"`, 1)
+	if edited == string(data) {
+		t.Fatal("test setup: playtimeMin not found")
+	}
+	data = []byte(edited)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(filepath.Join(root, "instances"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := again.Get(in.ID); err != nil || got.Name != "Survival" {
+		t.Fatalf("instance lost after a hand edit: %+v %v", got, err)
+	}
+}
+
+func TestMoveKeepsTheSourceWhenSavingFails(t *testing.T) {
+	s, root := newStore(t)
+	in := create(t, s, "Kept")
+	world := filepath.Join(s.GameDir(in.ID), "saves", "World")
+	_ = os.MkdirAll(world, 0o700)
+	_ = os.WriteFile(filepath.Join(world, "level.dat"), []byte("level"), 0o600)
+	drive := filepath.Join(root, "drive2")
+	_ = os.MkdirAll(drive, 0o700)
+	p, err := s.PlanMove(in.ID, drive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	f := s.files[in.ID]
+	delete(s.files, in.ID) // saving the new location now fails
+	s.mu.Unlock()
+	if _, err := s.Move(context.Background(), p, nil); err == nil {
+		t.Fatal("move succeeded without saving")
+	}
+	if b, _ := os.ReadFile(filepath.Join(p.From, "saves", "World", "level.dat")); string(b) != "level" {
+		t.Fatal("the source was lost although the instance still points at it")
+	}
+	if _, err := os.Stat(p.To); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("the half-moved copy was left behind")
+	}
+	s.mu.Lock()
+	s.files[in.ID] = f
+	s.mu.Unlock()
+}
+
+func TestCopyTreeRepointsLinksIntoTheSource(t *testing.T) {
+	root := t.TempDir()
+	src, dst := filepath.Join(root, "src"), filepath.Join(root, "dst")
+	_ = os.MkdirAll(filepath.Join(src, "shared"), 0o700)
+	_ = os.WriteFile(filepath.Join(src, "shared", "a"), []byte("a"), 0o600)
+	if err := os.Symlink(filepath.Join(src, "shared"), filepath.Join(src, "link")); err != nil {
+		t.Skip("no symlinks here")
+	}
+	if err := copyTree(context.Background(), src, dst, copyOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.Readlink(filepath.Join(dst, "link")); got != filepath.Join(dst, "shared") {
+		t.Fatalf("link = %q", got)
+	}
+}
+
+func TestCheckGameDirNoticesAMissingDrive(t *testing.T) {
+	s, root := newStore(t)
+	in := create(t, s, "Away")
+	if err := s.CheckGameDir(in.ID); err != nil {
+		t.Fatalf("default folder: %v", err)
+	}
+	drive := filepath.Join(root, "drive2")
+	_ = os.MkdirAll(drive, 0o700)
+	p, _ := s.PlanMove(in.ID, drive)
+	moved, err := s.Move(context.Background(), p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckGameDir(in.ID); err != nil {
+		t.Fatalf("moved folder: %v", err)
+	}
+	// Unplugged: the mount point is there, empty, without our marker.
+	if err := os.RemoveAll(moved.Location); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(moved.Location, 0o700)
+	if err := s.CheckGameDir(in.ID); !errors.Is(err, ErrGameDirMissing) {
+		t.Fatalf("missing drive: %v", err)
+	}
+}
+
+func TestDuplicate(t *testing.T) {
+	s, _ := newStore(t)
+	in := create(t, s, "Survival")
+	game := s.GameDir(in.ID)
+	for rel, body := range map[string]string{"saves/World/level.dat": "level", "options.txt": "fov:90", "mods/a.jar": "jar", "logs/latest.log": "log", ".quartz/removed/x": "held"} {
+		_ = os.MkdirAll(filepath.Dir(filepath.Join(game, rel)), 0o700)
+		_ = os.WriteFile(filepath.Join(game, rel), []byte(body), 0o600)
+	}
+	_ = os.WriteFile(filepath.Join(s.Dir(in.ID), "modpack.json"), []byte("{}"), 0o600)
+	_, _ = s.Update(in.ID, func(i *Instance) error { i.PlaytimeMin = 300; return nil })
+	var linked []string
+	place := func(rel, dst string) (bool, error) {
+		if rel != "mods/a.jar" {
+			return false, nil
+		}
+		linked = append(linked, rel)
+		return true, os.WriteFile(dst, []byte("jar"), 0o600)
+	}
+	cp, err := s.Duplicate(context.Background(), in.ID, place, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cp.ID == in.ID || cp.Name != "Survival (copy)" || cp.PlaytimeMin != 0 || cp.Minecraft != in.Minecraft {
+		t.Fatalf("%+v", cp)
+	}
+	got := s.GameDir(cp.ID)
+	for rel, want := range map[string]bool{"saves/World/level.dat": true, "options.txt": true, "mods/a.jar": true, "logs/latest.log": false, ".quartz": false} {
+		if _, err := os.Stat(filepath.Join(got, rel)); (err == nil) != want {
+			t.Errorf("%s exists=%v", rel, err == nil)
+		}
+	}
+	if len(linked) != 1 {
+		t.Fatal("store files must be placed, not copied")
+	}
+	if _, err := os.Stat(filepath.Join(s.Dir(cp.ID), "modpack.json")); err != nil {
+		t.Fatal("the modpack record must come along")
+	}
+	again, _ := s.Duplicate(context.Background(), in.ID, nil, nil)
+	if again.Name != "Survival (copy) (2)" {
+		t.Fatalf("second copy: %q", again.Name)
+	}
+
+	// A failure leaves nothing behind.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.Duplicate(ctx, in.ID, nil, nil); err == nil {
+		t.Fatal("cancelled duplicate succeeded")
+	}
+	entries, _ := os.ReadDir(filepath.Dir(s.Dir(in.ID)))
+	if len(entries) != 3 {
+		t.Fatalf("left behind: %v", entries)
 	}
 }

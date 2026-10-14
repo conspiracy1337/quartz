@@ -57,12 +57,16 @@ type Service struct {
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
 
-	identifying sync.Map // instance id → struct{}: one background identification at a time
+	identifying sync.Map       // instance id → struct{}: one background identification at a time
+	bg          sync.WaitGroup // background identifications
 	watch       watcher
 
 	plansMu sync.Mutex
 	plans   map[string]*plan // update checks waiting for Apply, by check id
 	compat  map[string]compatEntry
+
+	jobsMu sync.Mutex
+	jobs   map[string][]string // instance id → content jobs submitted for it
 }
 
 // New builds the service; the catalog lives beside the store.
@@ -71,7 +75,7 @@ func New(d Deps, storeDir string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Service{d: d, cat: cat, now: time.Now, locks: map[string]*sync.Mutex{}, plans: map[string]*plan{}, compat: map[string]compatEntry{},
+	s := &Service{d: d, cat: cat, now: time.Now, locks: map[string]*sync.Mutex{}, plans: map[string]*plan{}, compat: map[string]compatEntry{}, jobs: map[string][]string{},
 		idx: &indexes{open: map[string]*jsonfile.Store[Index]{}, dir: d.Instances.Dir, log: d.Log}}
 	if d.Bus != nil {
 		d.Bus.Subscribe(events.InstancesChanged, func(any) { s.idx.prune(d.Instances) })

@@ -39,8 +39,8 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	e := &env{insts: insts, runs: map[string][]launch.Record{}}
-	e.a, _ = insts.Create(instance.CreateRequest{Name: "Vanilla", Minecraft: "1.21.4"}, instance.JavaSettings{})
-	e.b, _ = insts.Create(instance.CreateRequest{Name: "Modded", Minecraft: "1.20.1"}, instance.JavaSettings{})
+	e.a, _ = insts.Create(instance.CreateRequest{Name: "Vanilla", Minecraft: "1.21.4"})
+	e.b, _ = insts.Create(instance.CreateRequest{Name: "Modded", Minecraft: "1.20.1"})
 	ping := fakePinger{status: map[string]*slp.Status{
 		"smp.kestrel.gg": {Version: "Paper 1.21.4", Protocol: 769, Online: 6, Max: 20, Latency: 21 * time.Millisecond},
 		"mc.hypixel.net": {Version: "Requires MC 1.8 / 1.21", Protocol: 769, Online: 41208, Max: 200000, Latency: 38 * time.Millisecond},

@@ -243,6 +243,7 @@ export namespace api {
 	    tags: string[];
 	    hasServers: boolean;
 	    lastPlayed?: number;
+	    created: number;
 	    playtimeMin: number;
 	    running: boolean;
 	
@@ -263,6 +264,7 @@ export namespace api {
 	        this.tags = source["tags"];
 	        this.hasServers = source["hasServers"];
 	        this.lastPlayed = source["lastPlayed"];
+	        this.created = source["created"];
 	        this.playtimeMin = source["playtimeMin"];
 	        this.running = source["running"];
 	    }
@@ -311,6 +313,7 @@ export namespace api {
 	    tags: string[];
 	    hasServers: boolean;
 	    lastPlayed?: number;
+	    created: number;
 	    playtimeMin: number;
 	    running: boolean;
 	    sandboxed: boolean;
@@ -319,7 +322,6 @@ export namespace api {
 	    javaAuto: string;
 	    sandboxPreset: string;
 	    memoryMB: MemoryRange;
-	    created: number;
 	    folder: string;
 	    moved: boolean;
 	    notes: string;
@@ -349,6 +351,7 @@ export namespace api {
 	        this.tags = source["tags"];
 	        this.hasServers = source["hasServers"];
 	        this.lastPlayed = source["lastPlayed"];
+	        this.created = source["created"];
 	        this.playtimeMin = source["playtimeMin"];
 	        this.running = source["running"];
 	        this.sandboxed = source["sandboxed"];
@@ -357,7 +360,6 @@ export namespace api {
 	        this.javaAuto = source["javaAuto"];
 	        this.sandboxPreset = source["sandboxPreset"];
 	        this.memoryMB = this.convertValues(source["memoryMB"], MemoryRange);
-	        this.created = source["created"];
 	        this.folder = source["folder"];
 	        this.moved = source["moved"];
 	        this.notes = source["notes"];
@@ -1053,6 +1055,8 @@ export namespace content {
 	    installed: boolean;
 	    size: number;
 	    blocked?: boolean;
+	    off?: boolean;
+	    unavailable?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new InstallDep(source);
@@ -1068,6 +1072,8 @@ export namespace content {
 	        this.installed = source["installed"];
 	        this.size = source["size"];
 	        this.blocked = source["blocked"];
+	        this.off = source["off"];
+	        this.unavailable = source["unavailable"];
 	    }
 	}
 	export class InstallPlan {
@@ -1264,6 +1270,8 @@ export namespace content {
 	    label?: string;
 	    tone?: string;
 	    world?: string;
+	    problem?: string;
+	    depId?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Status(source);
@@ -1276,6 +1284,8 @@ export namespace content {
 	        this.label = source["label"];
 	        this.tone = source["tone"];
 	        this.world = source["world"];
+	        this.problem = source["problem"];
+	        this.depId = source["depId"];
 	    }
 	}
 	export class Row {
@@ -1293,6 +1303,9 @@ export namespace content {
 	    project?: string;
 	    ref?: string;
 	    clientOnly?: boolean;
+	    file: string;
+	    size: number;
+	    added: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Row(source);
@@ -1314,6 +1327,9 @@ export namespace content {
 	        this.project = source["project"];
 	        this.ref = source["ref"];
 	        this.clientOnly = source["clientOnly"];
+	        this.file = source["file"];
+	        this.size = source["size"];
+	        this.added = source["added"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2045,6 +2061,7 @@ export namespace instance {
 	    window: WindowSettings;
 	    commands: CommandSettings;
 	    performance: PerformanceSettings;
+	    account?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -2056,6 +2073,7 @@ export namespace instance {
 	        this.window = this.convertValues(source["window"], WindowSettings);
 	        this.commands = this.convertValues(source["commands"], CommandSettings);
 	        this.performance = this.convertValues(source["performance"], PerformanceSettings);
+	        this.account = source["account"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

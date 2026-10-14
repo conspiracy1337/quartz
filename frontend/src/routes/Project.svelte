@@ -9,6 +9,7 @@
   import { session } from '$lib/session.svelte';
   import Empty from '$lib/ui/Empty.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import SplitButton from '$lib/ui/SplitButton.svelte';
   import Inline from '$lib/ui/Inline.svelte';
   import type { IconName } from '$lib/ui/icons';
   import Menu from '$lib/ui/Menu.svelte';
@@ -89,10 +90,7 @@
         <div class="seg" role="group" aria-label="Source" style="margin-right: 4px">
           {#each SOURCES as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]}>{SRC_NAMES[s]}</button>{/each}
         </div>
-        <div style="display: flex; gap: 0">
-          <button class="btn btn-accent btn-lg" style="border-radius: 6px 0 0 6px" disabled={!!kind?.content && !target} onclick={() => install()}>Install</button>
-          <button class="btn btn-accent btn-lg btn-icon" style="border-radius: 0 6px 6px 0; border-left: 1px solid rgba(0,0,0,.2); width: 36px" aria-label="Choose instance" aria-haspopup="menu" disabled={!kind?.content} onclick={choose}><Icon name="chevron-down" size={12} sw={2.2} /></button>
-        </div>
+        <SplitButton size="lg" accent disabled={!!kind?.content && !target} onclick={() => install()} menuLabel="Choose instance" menuDisabled={!kind?.content} onmenu={choose}>Install</SplitButton>
       </header>
       <Tabs items={tabs} active={tab} label="Project" onselect={(k) => (tab = k)} />
 

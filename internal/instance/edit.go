@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"quartz/internal/sandbox/rules"
@@ -97,4 +98,11 @@ func (s *Store) EditSandbox(id string, edit func(*rules.Settings) error) (Instan
 		in.Sandbox = next.Normalize()
 		return nil
 	})
+}
+
+// AddPlaytime counts a session's length, carrying seconds between sessions.
+func (in *Instance) AddPlaytime(d time.Duration) {
+	total := in.PlaytimeSec + int(max(d, 0)/time.Second)
+	in.PlaytimeMin += total / 60
+	in.PlaytimeSec = total % 60
 }

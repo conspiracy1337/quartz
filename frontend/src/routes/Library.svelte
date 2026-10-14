@@ -27,10 +27,12 @@
 
   const matches = (i: InstanceSummary) =>
     filter === 'all' || (filter === 'servers' ? i.hasServers : filter === 'modded' ? i.kind !== 'vanilla' : i.kind === filter);
+  // "Pack 2" before "Pack 10"; an instance never played counts from when it was made.
+  const names = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   const order: Record<Sort, (a: InstanceSummary, b: InstanceSummary) => number> = {
-    last: (a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0),
-    name: (a, b) => a.name.localeCompare(b.name),
-    playtime: (a, b) => b.playtimeMin - a.playtimeMin,
+    last: (a, b) => (b.lastPlayed ?? b.created) - (a.lastPlayed ?? a.created),
+    name: (a, b) => names.compare(a.name, b.name),
+    playtime: (a, b) => b.playtimeMin - a.playtimeMin || names.compare(a.name, b.name),
   };
   const rows = $derived(
     (list.data ?? []).filter((i) => matches(i) && [i.name, ...i.tags].some((t) => t.toLowerCase().includes(search.trim().toLowerCase()))).sort(order[sort]),

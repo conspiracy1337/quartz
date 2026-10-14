@@ -238,6 +238,12 @@ func (s *Store) Unlink(path, sha1 string) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
+	return s.Reseal(sha1)
+}
+
+// Reseal makes a blob read-only again after a link to it was removed or
+// replaced (hardlinks share the flag, so clearing it on one cleared it on all).
+func (s *Store) Reseal(sha1 string) error {
 	if ValidSHA1(sha1) {
 		if _, err := os.Stat(s.Path(sha1)); err == nil {
 			return linkx.SetReadOnly(s.Path(sha1), true)

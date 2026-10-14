@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"quartz/internal/content/packwiz"
 	"quartz/internal/content/store"
@@ -40,7 +41,7 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in, err := insts.Create(instance.CreateRequest{Name: "Test", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.9"}, instance.JavaSettings{})
+	in, err := insts.Create(instance.CreateRequest{Name: "Test", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.9"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,6 +64,7 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(e.svc.bg.Wait) // background identification writes into the temp dir
 	return e
 }
 
@@ -308,6 +310,40 @@ func TestDataPacksByWorld(t *testing.T) {
 	}
 }
 
+func TestFolderDataPackTurnsOffForTheGame(t *testing.T) {
+	e := newEnv(t)
+	dir := filepath.Join(e.game, "saves", "Plots", "datapacks")
+	_ = os.MkdirAll(filepath.Join(dir, "graves", "data"), 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "graves", "pack.mcmeta"), []byte(`{"pack":{"pack_format":48,"description":"Graves"}}`), 0o600)
+	// Turned off by name only (by hand or an older launcher): still listed, and fixed.
+	_ = os.MkdirAll(filepath.Join(dir, "old.disabled"), 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "old.disabled", "pack.mcmeta"), []byte(`{"pack":{"pack_format":48,"description":"Old"}}`), 0o600)
+	rows := e.list(DataPacks)
+	if len(rows) != 2 {
+		t.Fatalf("both folders should be listed: %+v", rows)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "old.disabled", "pack.mcmeta")); err == nil {
+		t.Fatal("a pack off by name only must lose its manifest, or the game still loads it")
+	}
+	graves := byName(rows, "graves")
+	ctx := context.Background()
+	if err := e.svc.SetEnabled(ctx, e.id, DataPacks, graves.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "graves.disabled", "pack.mcmeta.disabled")); err != nil {
+		t.Fatal("turned off: the game must not find a pack.mcmeta")
+	}
+	if r := byName(e.list(DataPacks), "graves"); r.ID != graves.ID || r.Enabled {
+		t.Fatalf("off: %+v", r)
+	}
+	if err := e.svc.SetEnabled(ctx, e.id, DataPacks, graves.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "graves", "pack.mcmeta")); err != nil {
+		t.Fatal("turned on again: manifest not restored")
+	}
+}
+
 func TestRemoveAndUndo(t *testing.T) {
 	e := newEnv(t)
 	e.mod("a.jar", "a", "A", "")
@@ -416,7 +452,7 @@ func TestQuick(t *testing.T) {
 
 func TestConfigEditsKeepOtherBytes(t *testing.T) {
 	l := optfile.File{Sep: "=", Text: []string{"# comment", "a=1", "shaderPack=old"}, CRLF: true, Exist: true}
-	setShader(&l, "Ünï code.zip")
+	setShader(&l, "Ünï code.zip", "iris")
 	if got, _ := l.Get("shaderPack"); got != "Ünï code.zip" {
 		t.Fatalf("%q", got)
 	}
@@ -430,25 +466,27 @@ func TestAddDropped(t *testing.T) {
 	src := t.TempDir()
 	mod := filepath.Join(src, "sodium.jar")
 	writeZip(t, mod, map[string]string{"fabric.mod.json": `{"id":"sodium","name":"Sodium"}`})
-	notMod := filepath.Join(src, "random.jar")
-	writeZip(t, notMod, map[string]string{"a.class": "x"})
+	bare := filepath.Join(src, "random.jar") // no descriptor: still a jar the game loads
+	writeZip(t, bare, map[string]string{"a.class": "x"})
+	notMod := filepath.Join(src, "forge-installer.jar")
+	writeZip(t, notMod, map[string]string{"install_profile.json": "{}"})
 	pack := filepath.Join(src, "pack.mrpack")
 	_ = os.WriteFile(pack, []byte("PK\x03\x04"), 0o600)
 	txt := filepath.Join(src, "notes.txt")
 	_ = os.WriteFile(txt, []byte("x"), 0o600)
 	link := filepath.Join(src, "link.jar")
 	_ = os.Symlink(mod, link)
-	res, err := e.svc.Add(context.Background(), e.id, Mods, "", []string{mod, notMod, pack, txt, link, "relative.jar"})
+	res, err := e.svc.Add(context.Background(), e.id, Mods, "", []string{mod, bare, notMod, pack, txt, link, "relative.jar"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Added) != 1 || res.Added[0] != "sodium.jar" || len(res.Rejected) != 5 {
+	if len(res.Added) != 2 || res.Added[0] != "sodium.jar" || res.Added[1] != "random.jar" || len(res.Rejected) != 5 {
 		t.Fatalf("%+v", res)
 	}
 	if res.Rejected[1].Reason != "It's a modpack: import it from the Library" {
 		t.Fatalf("%+v", res.Rejected)
 	}
-	if rows := e.list(Mods); len(rows) != 1 || rows[0].Name != "Sodium" {
+	if rows := e.list(Mods); len(rows) != 2 || byName(rows, "Sodium").ID == "" || byName(rows, "random").ID == "" {
 		t.Fatalf("%+v", rows)
 	}
 	again, _ := e.svc.Add(context.Background(), e.id, Mods, "", []string{mod})
@@ -516,5 +554,137 @@ func TestSharedFolderItems(t *testing.T) {
 	}
 	if !e.svc.AnyHasMod("SODIUM") || e.svc.AnyHasMod("xaerominimap") {
 		t.Fatal("AnyHasMod")
+	}
+}
+
+func TestLinkedModsFolderIsListedAndLeftAlone(t *testing.T) {
+	e := newEnv(t)
+	elsewhere := filepath.Join(t.TempDir(), "prism-mods")
+	writeZip(t, filepath.Join(elsewhere, "a.jar"), map[string]string{"fabric.mod.json": `{"id":"a","name":"A","version":"1.0"}`})
+	if err := os.Symlink(elsewhere, filepath.Join(e.game, "mods")); err != nil {
+		t.Skip("no symlinks here")
+	}
+	rows := e.list(Mods)
+	if len(rows) != 1 || rows[0].Name != "A" {
+		t.Fatalf("a linked mods folder must be listed: %+v", rows)
+	}
+	if info, err := os.Lstat(filepath.Join(elsewhere, "a.jar")); err != nil || info.Mode().Perm()&0o200 == 0 {
+		t.Fatal("a file in a linked folder must not be adopted into the store (sealed)")
+	}
+	ctx := context.Background()
+	if err := e.svc.SetEnabled(ctx, e.id, Mods, rows[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(elsewhere, "a.jar.disabled")); err != nil {
+		t.Fatal("turning off in a linked folder")
+	}
+	if _, err := e.svc.Remove(ctx, e.id, Mods, []string{rows[0].ID}); !errors.Is(err, ErrLinkedFolder) {
+		t.Fatalf("remove from a linked folder: %v", err)
+	}
+}
+
+func TestMetadataOfAFileDeletedOutsideGoesToo(t *testing.T) {
+	e := newEnv(t)
+	e.mod("alpha.jar", "alpha", "Alpha", "")
+	e.mod("beta.jar", "beta", "Beta", "")
+	index := filepath.Join(e.game, "mods", ".index")
+	for _, n := range []string{"alpha", "beta"} {
+		if err := packwiz.Write(index, packwiz.Meta{Slug: n, Name: n, Filename: n + ".jar"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(e.list(Mods)) != 2 {
+		t.Fatal("setup")
+	}
+	_ = os.Remove(filepath.Join(e.game, "mods", "alpha.jar"))
+	e.list(Mods)
+	got, _ := packwiz.ReadDir(index)
+	if _, ok := got["alpha.jar"]; ok {
+		t.Fatal("the deleted mod's .pw.toml was left behind")
+	}
+	if _, ok := got["beta.jar"]; !ok {
+		t.Fatal("another mod's .pw.toml went too")
+	}
+}
+
+func TestWatchSeesAFolderCreatedLater(t *testing.T) {
+	e := newEnv(t)
+	_ = os.RemoveAll(filepath.Join(e.game, "mods"))
+	e.svc.Watch(e.id)
+	t.Cleanup(func() { e.svc.Watch("") })
+	_ = os.MkdirAll(filepath.Join(e.game, "mods"), 0o700)
+	time.Sleep(100 * time.Millisecond) // let the new folder's watch be added
+	e.mod("late.jar", "late", "Late", "")
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		ix, _ := e.svc.idx.get(e.id)
+		if len(entriesOf(ix.Get(), Mods)) == 1 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a mod added to a folder created after the watch began was never seen")
+		}
+	}
+}
+
+func TestUnreadableFilesSaySo(t *testing.T) {
+	e := newEnv(t)
+	_ = os.MkdirAll(filepath.Join(e.game, "mods"), 0o700)
+	_ = os.WriteFile(filepath.Join(e.game, "mods", "broken.jar"), []byte("PK\x03\x04 truncated"), 0o600)
+	rows := e.list(Mods)
+	if len(rows) != 1 || rows[0].Status == nil || rows[0].Status.Label != "Can't read this file" || rows[0].Status.Tone != "danger" {
+		t.Fatalf("%+v", rows)
+	}
+}
+
+func TestOptiFineShaders(t *testing.T) {
+	e := newEnv(t)
+	writeZip(t, filepath.Join(e.game, "mods", "OptiFine_1.21.1_HD_U_J1.jar"), map[string]string{"optifine/Config.class": "x"})
+	writeZip(t, filepath.Join(e.game, "shaderpacks", "BSL.zip"), map[string]string{"shaders/composite.fsh": "x"})
+	_ = os.WriteFile(filepath.Join(e.game, "optionsshaders.txt"), []byte("antialiasingLevel=0\nshaderPack=OFF\n"), 0o600)
+	e.list(Mods)
+	rows := e.list(Shaders)
+	if len(rows) != 1 || rows[0].Enabled {
+		t.Fatalf("%+v", rows)
+	}
+	if err := e.svc.SetActiveShader(context.Background(), e.id, rows[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(filepath.Join(e.game, "optionsshaders.txt")) //nolint:gosec // test temp dir
+	if string(got) != "antialiasingLevel=0\nshaderPack=BSL.zip\n" {
+		t.Fatalf("%q", got)
+	}
+	if _, err := os.Stat(filepath.Join(e.game, "config", "iris.properties")); err == nil {
+		t.Fatal("iris.properties written although OptiFine is the shader mod")
+	}
+	_ = e.svc.SetActiveShader(context.Background(), e.id, "")
+	got, _ = os.ReadFile(filepath.Join(e.game, "optionsshaders.txt")) //nolint:gosec // test temp dir
+	if string(got) != "antialiasingLevel=0\nshaderPack=OFF\n" {
+		t.Fatalf("off: %q", got)
+	}
+}
+
+func TestBulkToggleAndDependents(t *testing.T) {
+	e := newEnv(t)
+	e.mod("api.jar", "fabric-api", "Fabric API", "")
+	e.mod("sodium.jar", "sodium", "Sodium", `,"depends":{"fabric-api":"*"}`)
+	e.mod("extra.jar", "sodium-extra", "Sodium Extra", `,"depends":{"sodium":"*"}`)
+	rows := e.list(Mods)
+	sodium, extra := byName(rows, "Sodium").ID, byName(rows, "Sodium Extra").ID
+	if got := e.svc.Dependents(e.id, []string{sodium}); strings.Join(got, ",") != "Sodium Extra" {
+		t.Fatalf("dependents of Sodium: %v", got)
+	}
+	if got := e.svc.Dependents(e.id, []string{sodium, extra}); len(got) != 0 {
+		t.Fatalf("both going: nothing is left unmet: %v", got)
+	}
+	ctx := context.Background()
+	if err := e.svc.SetEnabledMany(ctx, e.id, Mods, []string{sodium, extra}, false); err != nil {
+		t.Fatal(err)
+	}
+	rows = e.list(Mods)
+	if byName(rows, "Sodium").Enabled || byName(rows, "Sodium Extra").Enabled || !byName(rows, "Fabric API").Enabled {
+		t.Fatalf("%+v", rows)
+	}
+	if err := e.svc.SetEnabledMany(ctx, e.id, Shaders, []string{sodium}, true); !errors.Is(err, ErrOneShader) {
+		t.Fatalf("several shaders on: %v", err)
 	}
 }

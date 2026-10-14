@@ -29,7 +29,7 @@ func testService(t *testing.T, exe string) (*Service, *instance.Store, linux) {
 
 func TestCreateHideRestore(t *testing.T) {
 	s, store, w := testService(t, "/opt/quartz/quartz")
-	in, err := store.Create(instance.CreateRequest{Name: "My Pack", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	in, err := store.Create(instance.CreateRequest{Name: "My Pack", Minecraft: "1.21.4"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestRemoveLeavesOtherFiles(t *testing.T) {
 
 func TestRefreshRewritesAfterAMove(t *testing.T) {
 	s, store, _ := testService(t, "/old/quartz")
-	in, _ := store.Create(instance.CreateRequest{Name: "Pack", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	in, _ := store.Create(instance.CreateRequest{Name: "Pack", Minecraft: "1.21.4"})
 	paths, err := s.Create(in.ID, []Where{Desktop}, "", instance.Into{})
 	if err != nil {
 		t.Fatal(err)

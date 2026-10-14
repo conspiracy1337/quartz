@@ -207,7 +207,7 @@ func Run(o Options) error {
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
 				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Worlds: a.worlds, Servers: a.servers,
-				Syncing: a.syncing, Shortcuts: a.shortcuts, Follow: a.follow,
+				Syncing: a.syncing, Shortcuts: a.shortcuts, Follow: a.follow, Opens: a.opens,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
 			api.NewBrowse(a.ctx, a.browse),
@@ -415,7 +415,9 @@ func (a *app) buildTasks() error {
 	a.launcher = launch.New(launch.Config{
 		Instances: a.instances, Accounts: a.accounts, Installer: a.installer, Loaders: a.loaders, Java: a.java, Tasks: eng,
 		Settings: a.settings, Bus: a.bus, Redactor: a.redactor, BinDir: a.paths.Bin(), Log: a.log,
-		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited}, Mods: a.content,
+		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited, AfterExitFailed: func(name string, err error) {
+			a.opens.Fail(name+"'s after-exit command failed", err)
+		}}, Mods: a.content,
 		// In order: the world played names the screenshots it took; the crash goes last.
 		Finishers: []launch.Finisher{a.worlds, a.screenshots, a.servers, a.crash},
 		Syncing:   a.syncing,

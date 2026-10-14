@@ -69,6 +69,29 @@ func TestCorruptFileIsKeptAside(t *testing.T) {
 	}
 }
 
+func TestWrongTypeKeepsTheRest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "x.json")
+	if err := os.WriteFile(path, []byte(`{"name":"mine","count":"7"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(opts(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Get(); got.Name != "mine" || got.Count != 1 {
+		t.Fatalf("got %+v, want the name kept and the bad count at its default", got)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("the file must stay in place")
+	}
+	if _, err := os.Stat(path + ".corrupt"); err != nil {
+		t.Fatalf("a copy should be kept aside: %v", err)
+	}
+	if got, err := Read(opts(path)); err != nil || got.Name != "mine" {
+		t.Fatalf("Read: %+v %v", got, err)
+	}
+}
+
 func TestUpdateDeepCopiesAndPersists(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "x.json")
 	s, err := Open(opts(path))

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,6 +20,7 @@ var (
 	ErrNameTaken    = errors.New("content: a file with that name is already there")
 	ErrNotLockable  = errors.New("content: only items found on Modrinth or CurseForge can be locked")
 	ErrGameHasFiles = errors.New("content: close the game first; it is using this file")
+	ErrOneShader    = errors.New("content: only one shader pack can be on at a time")
 )
 
 // entry looks an item up in the current index.
@@ -60,6 +63,51 @@ func (s *Service) SetEnabled(ctx context.Context, id string, k Kind, item string
 	return s.rename(ctx, id, e, on)
 }
 
+// SetEnabledMany switches several items of one kind on or off at once, then
+// rescans once. Shader packs are exclusive: several can only be turned off.
+func (s *Service) SetEnabledMany(ctx context.Context, id string, k Kind, items []string, on bool) error {
+	switch specs[k].toggle {
+	case toggleShader:
+		if on {
+			return ErrOneShader
+		}
+		return s.setShader(ctx, id, "")
+	case togglePackList:
+		v, err := s.view(id)
+		if err != nil {
+			return err
+		}
+		packs := v.packs
+		for _, item := range items {
+			e, ok := v.idx.Entries[item]
+			if !ok || e.Kind != k {
+				continue
+			}
+			packs = without(packs, base(e))
+			if on {
+				packs = append([]string{base(e)}, packs...)
+			}
+		}
+		return s.setPacks(ctx, id, packs)
+	}
+	var first error
+	for _, item := range items {
+		e, err := s.entry(id, item)
+		if err != nil || e.Kind != k {
+			continue
+		}
+		unlock := s.lock(id)
+		if err := s.renameIn(id, e.Rel, toggled(e.Rel, on)); err != nil && first == nil {
+			first = err
+		}
+		unlock()
+	}
+	if err := s.Scan(ctx, id, k); err != nil {
+		return err
+	}
+	return first
+}
+
 // SetActiveShader makes one shader pack the active one ("" turns shaders off).
 func (s *Service) SetActiveShader(ctx context.Context, id, item string) error {
 	if item == "" {
@@ -99,12 +147,7 @@ func without(list []string, s string) []string {
 // rename adds or removes the .disabled suffix.
 func (s *Service) rename(ctx context.Context, id string, e Entry, on bool) error {
 	unlock := s.lock(id)
-	from := e.Rel
-	to := strings.TrimSuffix(from, Disabled)
-	if !on {
-		to += Disabled
-	}
-	err := s.renameIn(id, from, to)
+	err := s.renameIn(id, e.Rel, toggled(e.Rel, on))
 	unlock()
 	if err != nil {
 		return err
@@ -112,16 +155,31 @@ func (s *Service) rename(ctx context.Context, id string, e Entry, on bool) error
 	return s.Scan(ctx, id, e.Kind)
 }
 
-// renameIn renames inside the item's folder only; a link can't lead out.
+// toggled is an item's path when turned on or off by suffix.
+func toggled(rel string, on bool) string {
+	rel = strings.TrimSuffix(rel, Disabled)
+	if !on {
+		rel += Disabled
+	}
+	return rel
+}
+
+// renameIn renames inside the item's folder only (that folder may itself be
+// a link, which scans follow); a link inside can't lead out.
 func (s *Service) renameIn(id, from, to string) error {
 	if from == to {
 		return nil
 	}
-	root, err := os.OpenRoot(s.d.Instances.Base(id, from))
+	dir := filepath.Join(s.d.Instances.Base(id, from), filepath.FromSlash(path.Dir(from)))
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = root.Close() }()
+	from, to = path.Base(from), path.Base(to)
 	if _, err := root.Lstat(to); err == nil {
 		return ErrNameTaken
 	}
@@ -133,6 +191,15 @@ func (s *Service) renameIn(id, from, to string) error {
 			return ErrGameHasFiles
 		}
 		return err
+	}
+	if info, err := root.Lstat(to); err == nil && info.IsDir() {
+		// A folder pack: its manifest decides whether the game loads it.
+		on, off := path.Join(to, packManifest), path.Join(to, offManifest)
+		if strings.HasSuffix(to, Disabled) {
+			_ = root.Rename(on, off)
+		} else {
+			_ = root.Rename(off, on)
+		}
 	}
 	return nil
 }
@@ -154,12 +221,23 @@ func (s *Service) writePacks(id string, packs []string) error {
 	if err != nil {
 		return err
 	}
-	if s.running(id) {
-		_, err := ix.Update(func(i *Index) error { i.Pending.Packs = append([]string{}, packs...); return nil })
-		return err
-	}
 	v, err := s.view(id)
 	if err != nil {
+		return err
+	}
+	if s.running(id) {
+		// Remember the list this edit started from: if the game changes it
+		// meanwhile, the player's in-game choice wins (see GameExited).
+		base := v.packs
+		if v.idx.Pending.Packs != nil {
+			base = v.idx.Pending.PacksBase
+		} else if opts, err := optfile.Read(v.options, ":"); err == nil {
+			base = enabledPacks(opts, v.legacy)
+		}
+		_, err := ix.Update(func(i *Index) error {
+			i.Pending.Packs, i.Pending.PacksBase = append([]string{}, packs...), append([]string{}, base...)
+			return nil
+		})
 		return err
 	}
 	incompatible := map[string]bool{}
@@ -172,15 +250,17 @@ func (s *Service) writePacks(id string, packs []string) error {
 			incompatible[base(e)] = true
 		}
 	}
-	l, err := optfile.Read(optionsPath(v.game), ":")
+	l, err := optfile.Read(v.options, ":")
 	if err != nil {
 		return err
 	}
-	orderPacks(&l, packs, incompatible, v.formats.WorldVersion)
-	if err := l.Write(optionsPath(v.game)); err != nil {
+	if err := orderPacks(&l, packs, incompatible, v.formats.WorldVersion, v.legacy); err != nil {
 		return err
 	}
-	_, err = ix.Update(func(i *Index) error { i.Pending.Packs = nil; return nil })
+	if err := l.Write(v.options); err != nil {
+		return err
+	}
+	_, err = ix.Update(func(i *Index) error { i.Pending.Packs, i.Pending.PacksBase = nil, nil; return nil })
 	return err
 }
 
@@ -201,28 +281,36 @@ func (s *Service) writeShader(id, name string) error {
 	if err != nil {
 		return err
 	}
-	if s.running(id) {
-		_, err := ix.Update(func(i *Index) error { i.Pending.Shader = &name; return nil })
-		return err
-	}
 	v, err := s.view(id)
 	if err != nil {
 		return err
 	}
-	p := s.abs(v.in.ID, shaderConfig(s.oculus(v)))
+	mod := s.shaderMod(v).id
+	p := s.abs(v.in.ID, shaderConfig(mod))
+	if s.running(id) {
+		base := v.shader
+		if v.idx.Pending.Shader != nil {
+			base = v.idx.Pending.ShaderBase
+		} else if l, err := optfile.Read(p, "="); err == nil {
+			base = activeShader(l, mod)
+		}
+		_, err := ix.Update(func(i *Index) error { i.Pending.Shader, i.Pending.ShaderBase = &name, base; return nil })
+		return err
+	}
 	l, err := optfile.Read(p, "=")
 	if err != nil {
 		return err
 	}
-	setShader(&l, name)
+	setShader(&l, name, mod)
 	if err := l.Write(p); err != nil {
 		return err
 	}
-	_, err = ix.Update(func(i *Index) error { i.Pending.Shader = nil; return nil })
+	_, err = ix.Update(func(i *Index) error { i.Pending.Shader, i.Pending.ShaderBase = nil, ""; return nil })
 	return err
 }
 
-// GameExited applies edits queued while the instance's game ran.
+// GameExited applies edits queued while the instance's game ran, unless the
+// player changed the same setting in game meanwhile: then theirs wins.
 func (s *Service) GameExited(id string) {
 	if s.running(id) {
 		return // another copy still runs
@@ -231,23 +319,34 @@ func (s *Service) GameExited(id string) {
 	if err != nil {
 		return
 	}
-	pend := ix.Get().Pending
+	unlock := s.lock(id)
+	defer unlock()
+	v, err := s.view(id)
+	if err != nil {
+		return
+	}
+	pend := v.idx.Pending
 	if pend.Packs != nil {
-		unlock := s.lock(id)
-		err := s.writePacks(id, pend.Packs)
-		unlock()
-		if err != nil {
+		opts, _ := optfile.Read(v.options, ":")
+		if now := enabledPacks(opts, v.legacy); !slices.Equal(now, pend.PacksBase) {
+			s.d.Log.Info("content: resource packs changed in game; keeping the game's choice")
+			_, _ = ix.Update(func(i *Index) error { i.Pending.Packs, i.Pending.PacksBase = nil, nil; return nil })
+		} else if err := s.writePacks(id, pend.Packs); err != nil {
 			s.d.Log.Warn("content: applying the resource pack order failed", "err", err)
 		}
 	}
 	if pend.Shader != nil {
-		unlock := s.lock(id)
-		err := s.writeShader(id, *pend.Shader)
-		unlock()
-		if err != nil {
+		mod := s.shaderMod(v).id
+		props, _ := optfile.Read(s.abs(id, shaderConfig(mod)), "=")
+		if activeShader(props, mod) != pend.ShaderBase {
+			s.d.Log.Info("content: shader changed in game; keeping the game's choice")
+			_, _ = ix.Update(func(i *Index) error { i.Pending.Shader, i.Pending.ShaderBase = nil, ""; return nil })
+		} else if err := s.writeShader(id, *pend.Shader); err != nil {
 			s.d.Log.Warn("content: applying the shader choice failed", "err", err)
 		}
 	}
+	s.emit(id, ResourcePacks)
+	s.emit(id, Shaders)
 }
 
 // SetLocked locks an item's version (update checks skip it) or unlocks it.

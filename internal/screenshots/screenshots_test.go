@@ -29,8 +29,8 @@ func shot(t *testing.T, dir, name string, at time.Time) {
 func TestListFinishTrash(t *testing.T) {
 	dir := t.TempDir()
 	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
-	a, _ := insts.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"}, instance.JavaSettings{})
-	b, _ := insts.Create(instance.CreateRequest{Name: "B", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	a, _ := insts.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"})
+	b, _ := insts.Create(instance.CreateRequest{Name: "B", Minecraft: "1.21.4"})
 	svc := New(Deps{Instances: insts, Images: localimg.New(filepath.Join(dir, "thumbs"))})
 	now := time.Now()
 	folder := filepath.Join(insts.GameDir(a.ID), "screenshots")

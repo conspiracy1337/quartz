@@ -9,14 +9,12 @@
 package loader
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -273,45 +271,6 @@ func (r *Registry) Profile(ctx context.Context, k Kind, req Request, id string) 
 	return p.Profile(ctx, req, id)
 }
 
-// compareVersions orders dotted version strings numerically part by part
-// ("0.16.10" > "0.16.9"); a pre-release suffix ("-beta.1") sorts below the
-// release it precedes. Non-numeric parts compare as text.
-func compareVersions(a, b string) int {
-	ab, apre, _ := strings.Cut(a, "-")
-	bb, bpre, _ := strings.Cut(b, "-")
-	as, bs := strings.Split(ab, "."), strings.Split(bb, ".")
-	for i := range max(len(as), len(bs)) {
-		var x, y string
-		if i < len(as) {
-			x = as[i]
-		}
-		if i < len(bs) {
-			y = bs[i]
-		}
-		xi, xerr := strconv.Atoi(cmp.Or(x, "0"))
-		yi, yerr := strconv.Atoi(cmp.Or(y, "0"))
-		switch {
-		case xerr == nil && yerr == nil:
-			if c := cmp.Compare(xi, yi); c != 0 {
-				return c
-			}
-		default:
-			if c := strings.Compare(x, y); c != 0 {
-				return c
-			}
-		}
-	}
-	switch {
-	case apre == bpre:
-		return 0
-	case apre == "":
-		return 1
-	case bpre == "":
-		return -1
-	}
-	return compareVersions(strings.ReplaceAll(apre, "-", "."), strings.ReplaceAll(bpre, "-", "."))
-}
-
 // prerelease reports whether a loader version is marked beta, alpha or pre.
 func prerelease(v string) bool {
 	_, suffix, ok := strings.Cut(v, "-")
@@ -350,7 +309,3 @@ func Display(k Kind, mc, id string) string {
 
 // Label is "Fabric 0.16.10" or "Forge 47.3.0".
 func Label(k Kind, mc, id string) string { return k.Name() + " " + Display(k, mc, id) }
-
-// Compare orders two displayed build versions (see Display): negative when a
-// is older than b.
-func Compare(a, b string) int { return compareVersions(a, b) }

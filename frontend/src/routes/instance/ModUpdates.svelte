@@ -26,12 +26,14 @@
   let busy = $state(false);
   let loading = $state(true);
   const list = $derived(review?.updates ?? []);
-  const chosen = $derived(list.filter((u) => picked[u.id] && !u.blocked));
+  // Blocked files can be picked too: the job waits for their manual download.
+  const chosen = $derived(list.filter((u) => picked[u.id]));
   const count = $derived(chosen.length);
   const size = $derived(chosen.reduce((n, u) => n + u.size, 0));
   const cur = $derived<ModUpdate | undefined>(list[open]);
   const back = $derived(href({ name: 'instance', id: i.id, tab: kind }));
   const locked = $derived(review?.locked ?? []);
+  const failed = $derived(review?.failed ?? []);
   const lockedText = $derived(locked.length === 1 ? `${locked[0]!.name} is locked to ${locked[0]!.version} and was skipped.`
     : `${locked[0]?.name} and ${locked.length - 1} more are locked and were skipped.`);
 
@@ -40,7 +42,10 @@
     try {
       review = await api.content.review(i.id, kind, fresh);
       // Everything that can be downloaded starts picked; the preview keeps the design's sample choice.
-      picked = Object.fromEntries(review.updates.map((u, k) => [u.id, !u.blocked && (hasBridge() || k < 4)]));
+      // Updates picked on the content tab come ticked; otherwise every update that needs no manual download.
+      const want = session.updatePick;
+      session.updatePick = null;
+      picked = Object.fromEntries(review.updates.map((u, k) => [u.id, want ? want.has(u.id) : !u.blocked && (hasBridge() || k < 4)]));
       open = -1;
     } catch (e) {
       session.fail('Check updates', e);
@@ -114,17 +119,21 @@
       {:else}
       {#each list as u, k (u.id)}
         <div class="row ur">
-          <Check on={!!picked[u.id] && !u.blocked} label="Update {u.name}" onchange={(v) => (picked[u.id] = v)} />
+          <Check on={!!picked[u.id]} label="Update {u.name}" onchange={(v) => (picked[u.id] = v)} />
           <Tile art={u.art} />
           <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{u.name}</span><span class="trunc small faint" style="display: block">{u.note}</span></span>
           <span class="mono muted opt" style="gap: 8px; align-items: center"><span>{u.from}</span><Icon name="arrow-right" size={12} sw={2} /><span style="color: var(--text)">{u.to}</span></span>
           <span style="display: flex; justify-content: flex-end"><button class="btn btn-sm" onclick={() => show(k)}>Changelog</button></span>
         </div>
       {:else}
-        <Empty text="Everything is up to date." action="Back" href={back} />
+        <Empty text={failed.length ? 'No updates found.' : 'Everything is up to date.'} action="Back" href={back} />
       {/each}
       {/if}
     </div>
+    {#each failed as f (f)}
+      <!-- Composed from the locked card: a platform that couldn't be asked. -->
+      <div class="card" style="padding: 12px 16px"><span class="small muted">{f}</span></div>
+    {/each}
     {#if locked.length}
       <div class="card" style="display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 14px; align-items: center; padding: 12px 16px">
         <span class="small muted">{lockedText}</span>

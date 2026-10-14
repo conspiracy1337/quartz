@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"quartz/internal/core/archive"
+	"quartz/internal/core/version"
 )
 
 // Read limits for entries inside a jar or pack.
@@ -46,10 +47,12 @@ const (
 	SideServer = "server"
 )
 
-// Dep is a relation to another mod, by mod id.
+// Dep is a relation to another mod, by mod id. Range limits the versions it
+// applies to, written in the Info's RangeStyle ("" applies to every version).
 type Dep struct {
-	ID   string  `json:"id"`
-	Kind DepKind `json:"kind"`
+	ID    string  `json:"id"`
+	Kind  DepKind `json:"kind"`
+	Range string  `json:"range,omitempty"`
 }
 
 // Info is what a file says about itself.
@@ -66,10 +69,21 @@ type Info struct {
 	Library     bool        `json:"library,omitempty"`
 	Icon        string      `json:"icon,omitempty"` // sha256 of the stored icon
 	Pack        *PackFormat `json:"pack,omitempty"`
+	// Game is the range of Minecraft versions the mod says it runs on.
+	Game string `json:"game,omitempty"`
 	// Side is SideClient or SideServer when the mod runs on only one side.
 	Side string `json:"side,omitempty"`
 	// Partial is set when the metadata was malformed and only partly read.
 	Partial bool `json:"partial,omitempty"`
+}
+
+// RangeStyle is how the file writes its version ranges: Fabric and Quilt
+// predicates, or Forge's Maven ranges.
+func (i Info) RangeStyle() version.Style {
+	if i.Format == FormatFabric || i.Format == FormatQuilt {
+		return version.Fabric
+	}
+	return version.Maven
 }
 
 // ErrNotContent means the file isn't a mod, pack or shader pack at all.

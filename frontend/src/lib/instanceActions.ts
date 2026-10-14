@@ -44,6 +44,16 @@ export async function trash(i: Named) {
   }
 }
 
+/** Copies the instance into a new one as a job; a toast with Open says when it is done. */
+export async function duplicate(i: Named) {
+  try {
+    const job = await api.instances.duplicate(i.id);
+    if (job) await tasks.load();
+  } catch (e) {
+    session.fail('Duplicate', e);
+  }
+}
+
 /** Moves the game folder to a folder the user picks, as a download-style job. */
 export async function move(i: Named, back = false) {
   try {

@@ -276,10 +276,7 @@ func packable(rel string) bool {
 
 // never are top-level folders a pack never carries: the launcher's own
 // bookkeeping, logs, and files the game rebuilds.
-var never = map[string]bool{
-	".quartz": true, "logs": true, "crash-reports": true, "natives": true, "versions": true, "libraries": true,
-	"assets": true, ".fabric": true, ".mixin.out": true, ".cache": true, "downloads": true,
-}
+var never = instance.Rebuilt
 
 // private are top-level files that are the player's own, not the pack's.
 var private = map[string]bool{"usercache.json": true, "usernamecache.json": true, "command_history.txt": true, "realms_persistence.json": true}

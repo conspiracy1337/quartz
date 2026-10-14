@@ -79,13 +79,7 @@ func sum(b []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-func TestCompareVersions(t *testing.T) {
-	ordered := []string{"0.16.9", "0.16.10", "0.17.0-beta.1", "0.17.0-beta.2", "0.17.0", "21.1.0-beta", "21.1.0", "21.1.77"}
-	for i := 1; i < len(ordered); i++ {
-		if compareVersions(ordered[i-1], ordered[i]) >= 0 {
-			t.Errorf("%s should sort below %s", ordered[i-1], ordered[i])
-		}
-	}
+func TestPrerelease(t *testing.T) {
 	if !prerelease("0.27.0-beta.1") || prerelease("0.16.10") || !prerelease("26.3.0.75-beta") {
 		t.Fatal("prerelease detection")
 	}

@@ -23,6 +23,7 @@ export interface InstanceSummary {
   tags: string[];
   hasServers: boolean;
   lastPlayed?: number;
+  created: number;
   playtimeMin: number;
   running: boolean;
 }
@@ -35,6 +36,8 @@ export interface InstanceSettings {
   window: { width: number; height: number; fullscreen: boolean; onGameStart: string; openInto?: { kind: '' | 'world' | 'server'; target: string } };
   commands: { preLaunch: string; wrapper: string; postExit: string; env: EnvVar[]; systemGlfw: boolean; systemOpenal: boolean };
   performance: { dedicatedGpu: boolean; gameMode: boolean; mangoHud: boolean };
+  /** The account this instance always plays as ("" or absent: the default one). */
+  account?: string;
 }
 /** What the New instance screen sends; an empty loaderVersion means the newest stable build. */
 export interface CreateInstance { name: string; art: Art; icon: string; minecraft: string; loader: string; loaderVersion: string; group: string; sandbox: boolean; shares: string[] }
@@ -45,7 +48,6 @@ export interface Instance extends InstanceSummary {
   counts: Record<'mods' | 'resourcepacks' | 'shaders' | 'datapacks' | 'worlds' | 'servers', number>;
   java: string;
   memoryMB: { min: number; max: number };
-  created: number;
   folder: string;
   /** The game folder was moved outside the data folder. */
   moved: boolean;
@@ -90,8 +92,13 @@ export type ContentStatus =
   | { kind: 'outdated'; label: string }
   | { kind: 'world'; world: string }
   | { kind: 'offline' }
-  /** A missing dependency, a conflict, a duplicate, or a library nothing needs. */
-  | { kind: 'problem'; label: string; tone: 'warn' | 'danger' | 'info' };
+  /**
+   * A mod for another loader or Minecraft, a missing or wrong-version dependency, a conflict,
+   * a duplicate, a library nothing needs, or a file that can't be read. `problem` names which
+   * (loader | missing | conflict | version | game | duplicate | library | unreadable); a missing
+   * dependency's mod id is `depId`.
+   */
+  | { kind: 'problem'; label: string; tone: 'warn' | 'danger' | 'info'; problem?: string; depId?: string };
 
 export interface ContentItem {
   id: string;
@@ -112,6 +119,10 @@ export interface ContentItem {
   project?: string;
   /** Its reference for the launcher's own project page (identified items). */
   ref?: string;
+  /** The file's name, its size in bytes and when it appeared (unix seconds), for search and sorting. */
+  file?: string;
+  size?: number;
+  added?: number;
   /** A mod a local server leaves out. */
   clientOnly?: boolean;
 }
@@ -309,7 +320,13 @@ export interface ProjectVersion {
   action: '' | 'Install' | 'Update' | 'Switch';
 }
 export interface VersionNotes { id: string; number: string; published: number; items: string[] }
-export interface InstallDep { id: string; name: string; summary?: string; icon?: string; art?: Art; required: boolean; installed: boolean; size: number; blocked?: boolean }
+export interface InstallDep {
+  id: string; name: string; summary?: string; icon?: string; art?: Art; required: boolean; installed: boolean; size: number; blocked?: boolean;
+  /** Installed but turned off: the install turns it on. */
+  off?: boolean;
+  /** Required, but no build fits this instance: it is left out. */
+  unavailable?: boolean;
+}
 export interface InstallPlan {
   planId: string; name: string; kind: ContentKind; version: string; size: number;
   replaces?: string; blocked?: boolean; deps: InstallDep[]; mods: number;

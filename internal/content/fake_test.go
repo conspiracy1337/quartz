@@ -61,3 +61,36 @@ func (f *fakePlatform) Changelogs(_ context.Context, vs []modplatform.Version) e
 	}
 	return nil
 }
+
+// fakeCatalog adds the browsing side, enough to read versions by id.
+type fakeCatalog struct{ *fakePlatform }
+
+func (f fakeCatalog) Search(context.Context, modplatform.SearchQuery) (modplatform.SearchPage, error) {
+	return modplatform.SearchPage{}, nil
+}
+func (f fakeCatalog) Project(context.Context, string) (modplatform.Detail, error) {
+	return modplatform.Detail{}, nil
+}
+func (f fakeCatalog) Slug(context.Context, modplatform.ProjectType, string) (string, error) {
+	return "", nil
+}
+func (f fakeCatalog) Version(_ context.Context, _, id string) (modplatform.Version, error) {
+	vs, _ := f.Files(context.Background(), []string{id})
+	return vs[id], nil
+}
+func (f fakeCatalog) Files(_ context.Context, ids []string) (map[string]modplatform.Version, error) {
+	out := map[string]modplatform.Version{}
+	for _, vs := range f.versions {
+		for _, v := range vs {
+			for _, id := range ids {
+				if v.ID == id {
+					out[id] = v
+				}
+			}
+		}
+	}
+	return out, nil
+}
+func (f fakeCatalog) Categories(context.Context, modplatform.ProjectType) ([]modplatform.Category, error) {
+	return nil, nil
+}

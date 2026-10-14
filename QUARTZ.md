@@ -219,13 +219,13 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 **Library page** ([Library.svelte](frontend/src/routes/Library.svelte))
 - Buttons: Import, New instance.
 - Search matches names and tags. Filter chips: All, Modded, Modpacks, Vanilla, Servers.
-- Sort by Last played, Name or Playtime.
+- Sort by Last played, Name or Playtime. Names sort numerically ("Pack 2" before "Pack 10"), and an instance never played counts from when it was made.
 - **Cards:** cover, icon, name, version and loader, last played, hours.
   - A hover Play button; if the instance is already running, it opens the menu.
   - Right-click opens the instance menu.
 
 **Instance menu** ([InstanceMenu.svelte](frontend/src/lib/overlays/InstanceMenu.svelte), [instanceActions.ts](frontend/src/lib/instanceActions.ts))
-- Actions: Play/Stop, Rename, Change icon, Open folder, Create shortcut…, Export…, Repair game files, Move game folder, Move to trash.
+- Actions: Play/Stop, Rename, Change icon, Open folder, Duplicate, Create shortcut…, Export…, Repair game files, Move game folder, Move to trash.
 - **Play as:** every account, for a single launch. The default account doesn't change.
 - Opens with right-click, Shift+F10 or the Menu key.
 
@@ -237,6 +237,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 - **More options:** group (or a new group), memory, and sandbox. Sandbox is on by default when the system supports it.
 - **Footer:** an estimate of the first download, excluding files already shared. [api/versions.go](internal/api/versions.go)
 - Before creating, the launcher checks that the version and loader build exist upstream.
+- A name another instance already has gets " (2)", " (3)" … so menus never list two alike.
 
 **Editing and organising** ([instance/edit.go](internal/instance/edit.go), [groups.go](internal/instance/groups.go), [art.go](internal/instance/art.go))
 - **Rename:** changes the display name only; the folder stays.
@@ -244,10 +245,17 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Pictures must be PNG or JPEG, at most 8 MB. They are re-encoded to a square PNG of at most 128px and stored by SHA-256.
   - [IconDialog.svelte](frontend/src/lib/overlays/IconDialog.svelte), [icons.go](internal/icons/icons.go)
 - **Groups, tags, notes:**
-  - Groups are ordered and can be collapsed. They're stored in `groups.json`.
+  - An instance's group is set at creation or in its settings, and the list of groups lives in `groups.json`. The Library doesn't group its cards.
   - Up to 12 tags of 24 characters, deduplicated case-insensitively.
   - Notes up to 4000 characters.
-- **Playtime and last played** per instance, plus the total across all instances.
+- **Playtime and last played** per instance, plus the total across all instances. Seconds below a minute carry over to the next session, so short sessions add up.
+
+**Duplicate** ([instance/duplicate.go](internal/instance/duplicate.go), [api/instances.go](internal/api/instances.go))
+- A job makes "&lt;name&gt; (copy)" with the settings, content, worlds, options, modpack record and screenshot details.
+- Mods and packs are linked from the store (reflink or hardlink), after a fresh scan so only unchanged files are linked; everything else is copied.
+- Left behind: logs, crash reports, caches and other folders the game rebuilds (the same list export uses), launch history, activity and playtime.
+- The copy is staged in a hidden folder and appears only once complete; a failure or cancel leaves nothing, and a crash's leftovers are removed at the next start.
+- A toast with **Open** says when it's ready. Also in the palette on an instance page.
 
 **Trash, move, repair** ([trash.go](internal/instance/trash.go), [move.go](internal/instance/move.go))
 - **Move to trash:**
@@ -256,18 +264,21 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - The Storage page lists trashed instances with Restore and Delete now.
 - **Move game folder** to another drive:
   - On the same volume it's a rename.
-  - Across volumes it copies through `os.Root`, verifies every file, then deletes the original. It runs as a job.
+  - Across volumes it copies through `os.Root`, checks every file's size, and deletes the original only once the instance points at the copy. If saving the new place fails, a rename is undone and a copy is dropped. It runs as a job.
+  - Links that pointed into the old folder are repointed into the new one.
   - **Default location** moves the folder back.
+  - A moved folder carries a marker. If it's missing (the drive is unplugged), launching, repairing, scanning and modpack updates refuse and say the drive may be disconnected, instead of creating an empty game there.
 - **Repair game files** re-hashes every file of the version and re-downloads damaged ones. A toast says so when everything is intact. [launch.go](internal/launch/launch.go)
 
 **Storage model** ([instance.go](internal/instance/instance.go), [effective.go](internal/instance/effective.go))
-- Each instance is `instances/<slug>-<4hex>/` containing `instance.json` (schema v2, hand edits repaired field by field), `game/`, `runs/` and `content.json`. The id never changes.
+- Each instance is `instances/<slug>-<4hex>/` containing `instance.json` (schema v2), `game/`, `runs/` and `content.json`. The id never changes.
+  - Hand edits are repaired field by field. A field of the wrong type falls back to its default and the rest is kept (a copy goes to `.corrupt`); only broken JSON starts from defaults.
 - Instance settings sit on top of the global ones:
-  - The Java card overrides as a whole.
+  - The Java card overrides as a whole. A new instance starts with it empty and inherits the global values live.
   - Window settings fall back field by field.
   - The minimum heap floor is 256 MB.
   - If auto-pick is off and no Java is chosen, the launch is blocked rather than downloading Java silently.
-- A guard refuses file changes while a game or hosted server is using the instance.
+- A guard refuses file changes (trash, move, duplicate, version change, export) while a game or hosted server is using the instance, or while one of its downloads (install, update, version switch) is still queued, waiting or running. Moving to the trash also releases the folder watch.
 
 ---
 
@@ -277,7 +288,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 - **Shows:** breadcrumb, icon, Minecraft version, loader, hours played, and a "Sandboxed" badge.
 - **Buttons:** Open folder, a More-actions menu, **Host** (or a live `localhost:<port>` chip that toggles the host panel), Play/Stop.
 - **Tabs with counts:** Overview, Mods, Resource packs, Shaders, Data packs, Worlds, Servers, Screenshots, Logs, Version, Settings.
-- While the page is open, outside file changes are watched live. [content/watch.go](internal/content/watch.go), [gamewatch.go](internal/gamewatch/gamewatch.go)
+- While the page is open, outside file changes are watched live, including content folders created after the page opened; if the system drops events, everything is rescanned. [content/watch.go](internal/content/watch.go), [gamewatch.go](internal/gamewatch/gamewatch.go)
 
 **Overview** ([Overview.svelte](frontend/src/routes/instance/Overview.svelte), [content/activity.go](internal/content/activity.go))
 - **Activity feed:** All, Sessions or Changes.
@@ -305,7 +316,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 
 **Instance settings** ([InstanceSettings.svelte](frontend/src/routes/instance/InstanceSettings.svelte))
 - **Java and memory:**
-  - An "Override global settings" switch; inherited rows are dimmed.
+  - An "Override global settings" switch. While it's off, the dimmed rows show the global values the instance inherits; turning it on, or editing a row, starts from them.
   - Java runtime: automatic or any detected runtime.
   - Min and max memory in MB, with "This PC has N GB. X GB suits N mods."
   - JVM arguments.
@@ -313,6 +324,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Width × height, start fullscreen.
   - When the game starts: keep the launcher open, hide it, or close it.
   - **Open straight into** one of the instance's worlds or servers. [into.go](internal/instance/into.go)
+  - **Play as:** the account this instance always launches with (default account or any added one). Right-click Play as still wins for one launch; if the account was removed, the default plays and the launch panel says so.
 - **Syncing:** a shared-keybinds toggle and a join/leave toggle for each enabled sync target.
 - **Sandbox:** On/Off and the preset, linking to the Sandbox page.
 - **Performance (Linux):** dedicated GPU, Feral GameMode, MangoHud.
@@ -323,10 +335,10 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 - **Commands:**
   - Before launch: must succeed for the game to start.
   - Wrapper: for example `prime-run`.
-  - After exit: receives `$EXIT_CODE`.
+  - After exit: receives `$EXIT_CODE`. A failure shows an error toast with its last lines.
 - **Variables** (Prism-compatible): `$INST_ID $INST_NAME $INST_DIR $INST_MC_DIR $INST_JAVA $INST_MC_VERSION $INST_LOADER`.
 - **Environment variables:** an editable table. Variables that inject JVM flags are refused.
-- **Native libraries:** use the system GLFW or the system OpenAL.
+- **Native libraries:** use the system GLFW or the system OpenAL, found where the linker looks (`LD_LIBRARY_PATH`, `ld.so.conf` and its includes, NixOS, Flatpak, the usual folders). If one isn't found, the launch panel warns and the game uses its own.
 
 **Sandbox page:** see [§14](#14-game-sandbox).
 
@@ -336,7 +348,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 
 **One shared list** ([ContentTab.svelte](frontend/src/lib/components/ContentTab.svelte))
 - The Mods, Resource packs, Shaders, Data packs, Worlds and Servers tabs all use the same component: same toolbar, rows, skeleton and empty states.
-- **Toolbar:** search, filter chips with counts, a secondary action and a primary action.
+- **Toolbar:** search (names and file names), filter chips with counts, a sort button, a secondary action and a primary action.
 
   | Tab | Filter chips |
   |---|---|
@@ -346,12 +358,15 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   | Worlds | One chip per game mode |
   | Servers | All, Online |
 
+  - Sort: Name (load order for resource packs), Recently added, Size, Enabled first. Each tab keeps its sort while the launcher runs. Dragging resource packs works in load order.
   - Secondary: **Check updates** (or Open folder, or Refresh).
-  - Primary: **Add …** opens Browse filtered to this type and instance; Worlds has Import world, Servers has Add server.
+  - Primary: **Add …** opens Browse filtered to this type and instance. Its ▾ (the split button Home's Join and the project page's Install use) offers **From file…** (a native picker, with the same checks as a drop) and, on Mods, **Turn off unused libraries**. Worlds has Import world, Servers has Add server.
 - **Rows:**
   - An enable toggle (shaders are exclusive), icon, name, subtitle linking to the project page, version, and a source letter (M, C or F).
-  - **Status badges:** Update vX, Locked, Unknown, made for another version, problem (info, warn or danger tone), Active.
-- **Row menu:** Move up/down (resource packs), Change version…, Lock/Unlock version, Open on Modrinth/CurseForge, Show in folder, Remove (with Undo).
+  - **Status badges:** Update vX, Locked, Unknown, made for another version, problem (info, warn or danger tone), Active. Problems include a mod for another loader or Minecraft, a dependency missing or of the wrong version, a conflict, a duplicate, an unused library, and "Can't read this file" for a broken or truncated file.
+- **Selecting:** the update review's checkbox sits over a row's icon, shown on hover and on every row once something is picked. Shift-click picks a range, Ctrl+A everything shown, Esc clears. A bar at the bottom (the review's footer) offers Turn on, Turn off, Remove (one Undo) and Update, which opens the review with those ticked. [selection.ts](frontend/src/lib/selection.ts)
+- **Row menu:** Install &lt;dependency&gt; (on a "Needs X" row: its project is found by mod id and the Install dialog opens), Move up/down (resource packs), Change version…, Lock/Unlock version, Open on Modrinth/CurseForge, Show in folder, Remove (with Undo).
+- Turning off or removing mods that other enabled mods need says which ones in the toast.
 - **Drag-reorder** for enabled resource packs, with rows shifting live as you drag.
 - **Drop files onto the window** to add them to the current tab.
   - Data packs need a world chosen first. Rejected files come back with a reason each.
@@ -362,12 +377,17 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 
 | Kind | How it's turned on and off |
 |---|---|
-| Mods, data packs | A `.disabled` suffix |
-| Resource packs | On/off and order in `options.txt`; built-in packs stay at the bottom and `incompatibleResourcePacks` is maintained |
-| Shaders | Sets the active pack in the Iris or Oculus properties file |
+| Mods, data packs | A `.disabled` suffix. A folder data pack also renames its `pack.mcmeta` (Minecraft loads any folder that has one); one off by name only is fixed at the next scan |
+| Resource packs | On/off and order in `options.txt`; `incompatibleResourcePacks` is maintained |
+| Shaders | Sets the active pack in the Iris or Oculus properties file, or OptiFine's `optionsshaders.txt` when OptiFine (or OptiFabric) is the shader mod |
 
 - Every edit is key by key; all other lines stay byte for byte.
-- Edits made while the game runs are queued and applied when it exits.
+- **Resource pack list:**
+  - Before 1.13 the list holds bare file names; both forms are read, and the right one is written.
+  - Built-in packs (vanilla, Programmer Art, mod resources) keep their place just above the file pack they sat on.
+  - A list cut off mid-write keeps its complete entries; one that can't be read at all is left alone rather than rewritten without its built-ins.
+  - Before the first start, edits go to YOSBR's or Default Options' `options.txt`, so the modpack's defaults still apply.
+- Edits made while the game runs are queued and applied when it exits, unless the player changed the same setting in game meanwhile: then the game's choice wins.
 - **Version lock** per item is stored in `.pw.toml` (packwiz `pin` and Prism's lock key). Update checks skip locked items.
 - **Remove with Undo:** the item goes to a hold bin for 15 minutes, and its store blob is kept a week longer. [holdbin.go](internal/holdbin/holdbin.go), [content/remove.go](internal/content/remove.go)
 
@@ -376,12 +396,16 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Unchanged files are only stat'ed. New files are hashed after a stability check, so half-written files wait for the next scan.
   - Uses up to min(GOMAXPROCS, 8) workers. Concurrent scans of the same folder are merged.
   - Partial or browser-temp files are skipped. Jars over 1 GB are listed but not parsed.
+  - A content folder that is a link elsewhere (Prism's copy with symlinks) is followed: its files are listed and can be toggled, but aren't adopted into the store or removed from here.
+  - The `.pw.toml` of a file deleted outside the launcher is removed.
 - **Index files:** a per-instance `content.json` and a global `catalog.json` keyed by sha1, which shares parse results across instances. [content/index.go](internal/content/index.go), [content/catalog.go](internal/content/catalog.go)
 - **Mod metadata:** `fabric.mod.json`, `quilt.mod.json`, `mods.toml`, `neoforge.mods.toml` and `mcmod.info`.
   - Jars built for several loaders report every loader.
   - Nested jars are read one level deep for the mod ids they provide.
-  - Malformed TOML is salvaged and JSON is read leniently.
-  - Client/server side and dependencies are read.
+  - A jar with no descriptor (OptiFine, a JarJar wrapper, an old coremod) is described by the first mod nested in it, else its manifest. Installers aren't mods.
+  - Malformed TOML is salvaged and JSON is read leniently: a field of the wrong type stays empty and the rest is read.
+  - Client/server side, dependencies with their version ranges, and the Minecraft range are read. mcmod.info's `dependencies` only order loading; `requiredMods` (and FML's `required-after:`) are requirements.
+  - Mod and pack icons are trimmed of transparent borders and fitted, not cropped.
   - [meta/mod.go](internal/content/meta/mod.go)
 - **Pack metadata:** every `pack.mcmeta` generation, including `supported_formats` and 1.21.9's `min_format`/`max_format`, plus `pack.png`.
   - Labels such as "Made for 1.20" come from Prism's format tables.
@@ -405,12 +429,16 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Unknown keys survive a rewrite.
   - Writes are atomic and size-capped.
 
-**Dependencies** ([content/deps.go](internal/content/deps.go))
-- Among enabled mods it flags:
+**Dependencies** ([content/deps.go](internal/content/deps.go), [core/version](internal/core/version/version.go))
+- Among enabled mods it flags, most serious first:
+  - a mod built for another loader ("Made for Forge"; Sinytra Connector and Kilt let Fabric mods count on Forge/NeoForge)
   - missing dependencies
-  - conflicts
+  - conflicts, only when the installed version is in the declared range
+  - a dependency of the wrong version ("Needs Lib ≥ 2.0")
+  - a mod whose Minecraft range excludes the instance ("Made for 1.20.x")
   - duplicates
   - library mods that nothing uses
+- Ranges are Fabric/Quilt predicates or Forge's Maven ranges. A version or range that can't be read with certainty (snapshots, "${version}", Minecraft-prefixed builds) is never held against a mod.
 - Well-known dependency ids get friendly names. Home raises an alert for missing dependencies.
 
 **Updates** ([content/updates.go](internal/content/updates.go), [ModUpdates.svelte](frontend/src/routes/instance/ModUpdates.svelte), [ChangelogDialog.svelte](frontend/src/lib/components/ChangelogDialog.svelte))
@@ -419,19 +447,24 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Required dependencies a new version needs are offered too ("needed by …").
 - **Review screen:**
   - A channel switch, which re-checks.
+  - A platform that couldn't be reached is named, instead of everything looking up to date.
   - A checkbox for each update, "from → to", and a changelog for every version in between (up to 5).
   - A card of locked mods, each with Unlock.
-  - "N selected, about X MB", then **Update N**.
+  - "N selected, about X MB", then **Update N**. Updates CurseForge only serves from its website can be ticked; the job waits for their manual download.
 - **Applying** is one job:
   - Downloads are hash-verified. Files over 512 MB are refused, and file names are sanitised.
+  - A new file with the old one's name is placed beside it and swapped in with one rename, so a failure keeps the old file.
   - Renames are followed in the resource-pack list and in the active shader and its settings.
 - **Check all instances:** one palette command. It checks instances one after another to respect rate limits.
 
 **Installing from Browse** ([content/install.go](internal/content/install.go), [Install.svelte](frontend/src/lib/overlays/Install.svelte))
-- **Version choice:** the newest version that fits the instance's Minecraft and loader.
+- **Version choice:** the newest version that fits the instance's Minecraft and loader. Mods can't be installed into an instance without a loader; the dialog says to add one first.
 - **Required dependencies** install automatically. The resolver walks breadth-first, up to depth 6 and 64 nodes.
+  - A dependency pinned to a version gets that version; one named only by its version is resolved to its project.
+  - With no build on the chosen channel, a required dependency falls back to beta, then alpha. With none at all, the dialog lists it as missing.
+  - A required dependency that is installed but turned off is turned on by the install.
 - **Optional dependencies** are offered as checkboxes.
-- **Already installed?** Detected by platform id or by cross-platform slug, so Fabric API from CurseForge counts as Fabric API from Modrinth.
+- **Already installed?** Detected by platform id, by cross-platform slug (Fabric API from CurseForge counts as Fabric API from Modrinth), or by the mod ids jars declare and provide, so a hand-added, unidentified jar or Quilted Fabric API counts too.
 - **Dialog:**
   - Target instance; a world picker for data packs.
   - What the install replaces, and the dependencies with their sizes.
@@ -623,6 +656,7 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
   - Everywhere: SDKMAN, asdf, `~/.jdks`, Gradle, `JAVA_HOME`, `PATH`, and the official launcher's runtimes.
 - **Probing:** through the wrapper jar, cached by size and mtime. 4 probes at once, 15 s timeout.
 - **Auto-pick order:** the instance override, then a managed runtime of the exact major, then a detected one for the host's arch, otherwise a download.
+- **A chosen runtime is checked:** an instance override, or the default runtime with auto-pick off, that is older than the Minecraft version needs stops the launch with what to change. A newer one on Forge for a Java 8 version only warns.
 - **Downloads:** Eclipse Temurin, Azul Zulu or Mojang (Java 8, 16, 17, 21, 25).
   - The setting picks the first vendor; the others are fallbacks.
   - Mojang files prefer the lzma copy and are verified after decoding.

@@ -19,18 +19,17 @@ func TestCreateListUpdateReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	def := JavaSettings{MemoryMinMB: 1024, MemoryMaxMB: 4096, JVMArgs: "-XX:+UseG1GC"}
-	a, err := s.Create(CreateRequest{Name: "  Survival 1.21.4 ", Minecraft: "1.21.4", Art: Art{Background: "#6b8afd"}}, def)
+	a, err := s.Create(CreateRequest{Name: "  Survival 1.21.4 ", Minecraft: "1.21.4", Art: Art{Background: "#6b8afd"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(a.ID, "survival-1-21-4-") || a.Name != "Survival 1.21.4" || a.Art.Initial != "S" || a.Settings.Java.MemoryMaxMB != 4096 || a.Settings.Java.Override {
+	if !strings.HasPrefix(a.ID, "survival-1-21-4-") || a.Name != "Survival 1.21.4" || a.Art.Initial != "S" || a.Settings.Java != (JavaSettings{}) {
 		t.Fatalf("created %+v", a)
 	}
 	if _, err := os.Stat(s.GameDir(a.ID)); err != nil {
 		t.Fatal("game folder missing")
 	}
-	b, _ := s.Create(CreateRequest{Name: "Second", Minecraft: "26.3"}, def)
+	b, _ := s.Create(CreateRequest{Name: "Second", Minecraft: "26.3"})
 	now := time.Now()
 	if _, err := s.Update(a.ID, func(in *Instance) error { in.LastPlayed = &now; in.PlaytimeMin += 30; in.ID = "hijack"; return nil }); err != nil {
 		t.Fatal(err)
@@ -65,18 +64,18 @@ func TestCreateRejects(t *testing.T) {
 		"bad version": {Name: "X", Minecraft: "../../x"},
 	}
 	for name, req := range cases {
-		if _, err := s.Create(req, JavaSettings{}); err == nil {
+		if _, err := s.Create(req); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	if _, err := s.Create(cases["loader"], JavaSettings{}); !errors.Is(err, ErrBadLoader) {
+	if _, err := s.Create(cases["loader"]); !errors.Is(err, ErrBadLoader) {
 		t.Fatal("loader error not specific")
 	}
-	in, err := s.Create(CreateRequest{Name: "Modded", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.10", Group: " Mods "}, JavaSettings{})
+	in, err := s.Create(CreateRequest{Name: "Modded", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.10", Group: " Mods "})
 	if err != nil || in.Loader != "fabric" || in.LoaderVersion != "0.16.10" || in.Group != "Mods" || !in.KeepLoaderUpdated || in.Version != schema {
 		t.Fatalf("modded instance = %+v, %v", in, err)
 	}
-	if in, _ := s.Create(CreateRequest{Name: "Plain", Minecraft: "1.21.1", Loader: "none"}, JavaSettings{}); in.Loader != "" {
+	if in, _ := s.Create(CreateRequest{Name: "Plain", Minecraft: "1.21.1", Loader: "none"}); in.Loader != "" {
 		t.Fatal(`"none" must mean vanilla`)
 	}
 }
@@ -143,7 +142,7 @@ func TestResolveWithAutomaticJavaOff(t *testing.T) {
 
 func TestCommandValidation(t *testing.T) {
 	s, _ := Open(t.TempDir(), nil)
-	in, _ := s.Create(CreateRequest{Name: "C", Minecraft: "1.21.1"}, JavaSettings{})
+	in, _ := s.Create(CreateRequest{Name: "C", Minecraft: "1.21.1"})
 	bad := []CommandSettings{
 		{PreLaunch: "backup\nrm -rf /"},
 		{Env: []EnvVar{{Name: "1BAD", Value: "x"}}},
@@ -182,7 +181,7 @@ func TestHostileFolders(t *testing.T) {
 
 func TestSettingsValidation(t *testing.T) {
 	s, _ := Open(t.TempDir(), nil)
-	a, _ := s.Create(CreateRequest{Name: "A", Minecraft: "1.21.4"}, JavaSettings{})
+	a, _ := s.Create(CreateRequest{Name: "A", Minecraft: "1.21.4"})
 	if _, err := s.SetSettings(a.ID, Settings{Java: JavaSettings{JavaPath: "relative/java"}}); !errors.Is(err, ErrInvalidSettings) {
 		t.Fatal("relative java path accepted")
 	}
@@ -200,5 +199,58 @@ func TestSyncMigratesShareLabels(t *testing.T) {
 		Sync: Sync{Join: []string{"saves", "Bad Id", "c-1a2b"}}})
 	if in.Shares != nil || !in.Sync.Keys || !slices.Equal(in.Sync.Join, []string{"saves", "c-1a2b", "shaderpacks"}) {
 		t.Fatalf("%+v %v", in.Sync, in.Shares)
+	}
+}
+
+func TestPlaytimeCarriesSeconds(t *testing.T) {
+	var in Instance
+	for range 4 {
+		in.AddPlaytime(20 * time.Second) // a quick test start, four times
+	}
+	if in.PlaytimeMin != 1 || in.PlaytimeSec != 20 {
+		t.Fatalf("%d min %d s", in.PlaytimeMin, in.PlaytimeSec)
+	}
+	in.AddPlaytime(90 * time.Minute)
+	if in.PlaytimeMin != 91 || in.PlaytimeSec != 20 {
+		t.Fatalf("%d min %d s", in.PlaytimeMin, in.PlaytimeSec)
+	}
+}
+
+func TestCreateKeepsNamesApart(t *testing.T) {
+	s, err := Open(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, n := range []string{"1.21.4", "1.21.4", "1.21.4", "Survival"} {
+		in, err := s.Create(CreateRequest{Name: n, Minecraft: "1.21.4"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, in.Name)
+	}
+	if strings.Join(names, "|") != "1.21.4|1.21.4 (2)|1.21.4 (3)|Survival" {
+		t.Fatalf("%q", names)
+	}
+	long := strings.Repeat("x", maxName)
+	_, _ = s.Create(CreateRequest{Name: long, Minecraft: "1.21.4"})
+	if in, _ := s.Create(CreateRequest{Name: long, Minecraft: "1.21.4"}); len([]rune(in.Name)) > maxName || !strings.HasSuffix(in.Name, " (2)") {
+		t.Fatalf("%q", in.Name)
+	}
+}
+
+func TestInstanceAccount(t *testing.T) {
+	s, err := Open(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, _ := s.Create(CreateRequest{Name: "Alt", Minecraft: "1.21.4"})
+	id := strings.Repeat("a", 32)
+	got, err := s.SetSettings(in.ID, Settings{Account: id})
+	if err != nil || got.Settings.Account != id || got.Resolve(settings.Defaults()).Account != id {
+		t.Fatalf("%+v %v", got.Settings, err)
+	}
+	if _, err := s.SetSettings(in.ID, Settings{Account: "../x"}); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("bad account id accepted: %v", err)
 	}
 }

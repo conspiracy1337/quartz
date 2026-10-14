@@ -5,6 +5,7 @@ package icons
 
 import (
 	"errors"
+	"image"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,16 +30,20 @@ func ValidHash(h string) bool { return hashRe.MatchString(h) }
 
 // Library is an icon folder.
 type Library struct {
-	dir  string
-	side int
+	dir   string
+	side  int
+	shape func(image.Image, int) *image.NRGBA
 }
 
-// Open returns the instance icon library in dir.
-func Open(dir string) *Library { return OpenSized(dir, Side) }
+// Open returns the instance icon library in dir: pictures the player picks
+// are cropped to their centred square.
+func Open(dir string) *Library { return &Library{dir: dir, side: Side, shape: pngx.Square} }
 
-// OpenSized returns a library whose pictures are stored at most side pixels
-// square (mod and pack icons are drawn smaller than instance icons).
-func OpenSized(dir string, side int) *Library { return &Library{dir: dir, side: side} }
+// OpenSized returns a library for mod and pack icons, stored at most side
+// pixels square (they are drawn smaller than instance icons). They keep
+// their whole picture: transparent borders are trimmed and a wide logo is
+// fitted, not cut (Pandora's crop-to-content).
+func OpenSized(dir string, side int) *Library { return &Library{dir: dir, side: side, shape: pngx.Fit} }
 
 // Import reads a picture the user chose in a native dialog and returns its name.
 func (l *Library) Import(path string) (string, error) {
@@ -58,7 +63,7 @@ func (l *Library) Add(data []byte) (string, error) {
 	if err != nil {
 		return "", ErrNotIcon
 	}
-	out, hash, err := pngx.Encode(pngx.Square(img, l.side))
+	out, hash, err := pngx.Encode(l.shape(img, l.side))
 	if err != nil {
 		return "", err
 	}

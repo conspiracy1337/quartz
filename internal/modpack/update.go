@@ -605,6 +605,10 @@ func (s *Service) Update(ctx context.Context, id string, backupWorlds bool) (str
 		_ = os.RemoveAll(work)
 		return "", err
 	}
+	if err := s.d.Instances.CheckGameDir(id); err != nil {
+		_ = os.RemoveAll(work)
+		return "", err
+	}
 	game := s.d.Instances.GameDir(id)
 	if backupWorlds {
 		spec.Step("Backing up worlds", tasks.Count, tasks.Func("back up worlds", func(context.Context) error {

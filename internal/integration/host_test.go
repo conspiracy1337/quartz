@@ -120,7 +120,7 @@ func TestHost(t *testing.T) {
 				req.Loader, req.LoaderVersion = c.loader, build
 			}
 			req.Sandbox = preset != ""
-			in, err := insts.Create(req, instance.JavaSettings{})
+			in, err := insts.Create(req)
 			if err != nil {
 				t.Fatal(err)
 			}

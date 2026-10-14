@@ -34,7 +34,7 @@ func TestLaunchersListCountsWhatIsHereAlready(t *testing.T) {
 	if len(got) != 1 || got[0].ID != "prism" || got[0].Instances != 2 || got[0].Summary != "2 instances" || got[0].Art.Initial != "P" {
 		t.Fatalf("%+v", got)
 	}
-	in, _ := store.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	in, _ := store.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"})
 	_, _ = store.Update(in.ID, func(i *instance.Instance) error {
 		i.ImportedFrom = &instance.ImportedFrom{Launcher: "prism", Path: filepath.Join(root, "instances", "A", ".minecraft")}
 		return nil

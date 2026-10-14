@@ -18,7 +18,7 @@ func TestSandboxFacade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in, _ := insts.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4", Sandbox: true}, instance.JavaSettings{})
+	in, _ := insts.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4", Sandbox: true})
 	st, _ := settings.Open(filepath.Join(root, "settings.json"), events.NewBus(), nil)
 	a := NewSandbox(&Ctx{}, SandboxDeps{Service: sandbox.New(sandbox.Config{DataRoot: root}), Store: insts, Settings: st, Bus: events.NewBus(), Root: root})
 

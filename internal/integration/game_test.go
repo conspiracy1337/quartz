@@ -140,7 +140,7 @@ func TestLaunchOffline(t *testing.T) {
 	// QUARTZ_IT_SANDBOX=standard|strict runs the game in its sandbox.
 	preset := os.Getenv("QUARTZ_IT_SANDBOX")
 	req.Sandbox = preset != ""
-	inst, err := insts.Create(req, instance.JavaSettings{})
+	inst, err := insts.Create(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestTwoCopies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inst, err := insts.Create(instance.CreateRequest{Name: "Two copies", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	inst, err := insts.Create(instance.CreateRequest{Name: "Two copies", Minecraft: "1.21.4"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,7 +2,9 @@ package content
 
 import (
 	"context"
+	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -32,6 +34,11 @@ type Row struct {
 	Ref string `json:"ref,omitempty"`
 	// ClientOnly marks a mod a local server leaves out.
 	ClientOnly bool `json:"clientOnly,omitempty"`
+	// File is the item's file name, Size its bytes (0 for a folder) and Added
+	// when it appeared (unix seconds), for search and sorting.
+	File  string `json:"file"`
+	Size  int64  `json:"size"`
+	Added int64  `json:"added"`
 }
 
 // Status is the one badge a row shows, most important first.
@@ -41,6 +48,9 @@ type Status struct {
 	Label   string `json:"label,omitempty"`
 	Tone    string `json:"tone,omitempty"`
 	World   string `json:"world,omitempty"`
+	// Problem is the problem's kind (see Problem), DepID a missing mod's id.
+	Problem string `json:"problem,omitempty"`
+	DepID   string `json:"depId,omitempty"`
 }
 
 // view gathers everything rows of one instance are built from.
@@ -50,6 +60,8 @@ type view struct {
 	idx     Index
 	known   map[string]Known
 	pw      map[string]map[string]packwiz.Meta // index folder → lower filename → meta
+	options string                             // the options.txt to edit (see optionsFile)
+	legacy  bool                               // packs named the pre-1.13 way
 	packs   []string                           // enabled resource packs, top first
 	shader  string                             // active shader pack
 	formats meta.ClientFormats
@@ -73,6 +85,9 @@ func (s *Service) view(id string) (view, error) {
 	if err != nil {
 		return view{}, err
 	}
+	if err := s.d.Instances.CheckGameDir(id); err != nil {
+		return view{}, err
+	}
 	ix, err := s.idx.get(id)
 	if err != nil {
 		return view{}, err
@@ -85,18 +100,36 @@ func (s *Service) view(id string) (view, error) {
 		}
 	}
 	v.known = s.cat.many(sha)
-	opts, _ := optfile.Read(optionsPath(v.game), ":")
-	v.packs = enabledPacks(opts)
+	v.options, v.legacy = s.optionsFile(id, v.game), legacyPacks(in.Minecraft)
+	opts, _ := optfile.Read(v.options, ":")
+	v.packs = enabledPacks(opts, v.legacy)
 	if v.idx.Pending.Packs != nil {
 		v.packs = v.idx.Pending.Packs
 	}
-	props, _ := optfile.Read(s.abs(v.in.ID, shaderConfig(s.oculus(v))), "=")
-	v.shader = activeShader(props)
+	mod := s.shaderMod(v).id
+	props, _ := optfile.Read(s.abs(v.in.ID, shaderConfig(mod)), "=")
+	v.shader = activeShader(props, mod)
 	if v.idx.Pending.Shader != nil {
 		v.shader = *v.idx.Pending.Shader
 	}
 	v.formats, v.fmtOK = s.clientFormats(in.Minecraft)
 	return v, nil
+}
+
+// optionsFile is the options.txt to edit: the game's own, or before the
+// first start a defaults mod's copy (see defaultOptions).
+func (s *Service) optionsFile(id, game string) string {
+	own := optionsPath(game)
+	if _, err := os.Stat(own); err == nil {
+		return own
+	}
+	for _, rel := range defaultOptions {
+		p := s.abs(id, rel)
+		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
+			return p
+		}
+	}
+	return own
 }
 
 // pwFor returns the packwiz metadata describing an entry, if any.
@@ -115,7 +148,7 @@ func (s *Service) rows(v view, k Kind) []Row {
 	entries := entriesOf(v.idx, k)
 	var problems map[string]Problem
 	if k == Mods {
-		problems = analyze(s.facts(v.idx))
+		_, problems = s.problems(v.in.ID, v.idx)
 	}
 	rank := map[string]int{}
 	for i, name := range v.packs {
@@ -156,10 +189,11 @@ func (s *Service) row(v *view, id string, e Entry, problems map[string]Problem) 
 	pw, hasPW := s.pwFor(v, e)
 	ident := k.Ident()
 	r := Row{ID: id, Kind: e.Kind, Name: displayName(e, k), Version: info.Version, Icon: info.Icon, Source: "file",
+		File: strings.TrimSuffix(path.Base(e.Rel), Disabled), Size: e.Size, Added: e.Added,
 		Group: e.Group, Locked: hasPW && pw.Pin}
 	switch e.Kind {
 	case ResourcePacks:
-		r.Enabled = contains(v.packs, base(e))
+		r.Enabled = slices.Contains(v.packs, base(e))
 	case Shaders:
 		r.Enabled = v.shader != "" && v.shader == base(e)
 	default:
@@ -186,7 +220,11 @@ func (s *Service) row(v *view, id string, e Entry, problems map[string]Problem) 
 
 func (s *Service) status(v *view, id string, e Entry, info *meta.Info, problems map[string]Problem, r Row, unknown bool) *Status {
 	if p, ok := problems[id]; ok {
-		return &Status{Kind: "problem", Label: p.Label, Tone: p.Tone}
+		return &Status{Kind: "problem", Label: p.Label, Tone: p.Tone, Problem: p.Kind, DepID: p.DepID}
+	}
+	if !e.Dir && v.known[e.SHA1].Bad {
+		// A broken or truncated file: say so instead of listing it as unknown.
+		return &Status{Kind: "problem", Label: "Can't read this file", Tone: "danger", Problem: "unreadable"}
 	}
 	if u, ok := v.idx.Updates[id]; ok && !r.Locked {
 		return &Status{Kind: "update", Version: u.Version}
@@ -275,24 +313,26 @@ func projectURL(k Kind, id *Ident) string {
 	return ""
 }
 
-// oculus reports whether the instance uses Oculus rather than Iris.
-func (s *Service) oculus(v view) bool {
-	return s.shaderMod(v).id == "oculus"
-}
-
 type shaderMod struct{ id, name, version string }
 
-// shaderMod finds the enabled Iris or Oculus mod.
+// shaderMod finds the enabled shader mod: Iris or Oculus, else OptiFine (its
+// jar, or OptiFabric that loads it), as XMCL also supports. "" when none.
 func (s *Service) shaderMod(v view) shaderMod {
+	var optifine shaderMod
 	for _, e := range entriesOf(v.idx, Mods) {
 		if strings.HasSuffix(e.Rel, Disabled) {
 			continue
 		}
-		if info := v.known[e.SHA1].Info; info != nil && (info.ID == "iris" || info.ID == "oculus") {
+		info := v.known[e.SHA1].Info
+		switch {
+		case info != nil && (info.ID == "iris" || info.ID == "oculus"):
 			return shaderMod{id: info.ID, name: map[string]string{"iris": "Iris", "oculus": "Oculus"}[info.ID], version: info.Version}
+		case info != nil && (info.ID == "optifabric" || info.Name == "OptiFine"),
+			strings.HasPrefix(strings.ToLower(path.Base(e.Rel)), "optifine"):
+			optifine = shaderMod{id: "optifine", name: "OptiFine"}
 		}
 	}
-	return shaderMod{}
+	return optifine
 }
 
 var clientFormatCache sync.Map // minecraft version → meta.ClientFormats (only successes)

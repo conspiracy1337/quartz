@@ -11,6 +11,8 @@ import (
 	"quartz/internal/instance"
 	"quartz/internal/modplatform"
 	"quartz/internal/settings"
+
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ContentDeps are what the content facade works with.
@@ -98,6 +100,40 @@ func (c *Content) SetEnabled(instanceID, kind, item string, on bool) error {
 		return err
 	}
 	return c.d.Service.SetEnabled(c.ctx.Get(), instanceID, k, item, on)
+}
+
+// SetEnabledMany switches several items on or off at once.
+func (c *Content) SetEnabledMany(instanceID, kind string, items []string, on bool) error {
+	k, err := checkKind(kind)
+	if err != nil {
+		return err
+	}
+	if err := checkInstanceID(instanceID); err != nil {
+		return err
+	}
+	if err := checkItems(items); err != nil {
+		return err
+	}
+	return c.d.Service.SetEnabledMany(c.ctx.Get(), instanceID, k, items, on)
+}
+
+// Dependents names the enabled mods that need something the items provide.
+func (c *Content) Dependents(instanceID string, items []string) ([]string, error) {
+	if err := checkInstanceID(instanceID); err != nil {
+		return nil, err
+	}
+	if err := checkItems(items); err != nil {
+		return nil, err
+	}
+	return asList(c.d.Service.Dependents(instanceID, items)), nil
+}
+
+// FindMod finds the project ref ("mr:…") for a mod id a dependency names.
+func (c *Content) FindMod(modID string) (string, error) {
+	if !modIDRe.MatchString(modID) {
+		return "", ErrBadItem
+	}
+	return c.d.Service.FindMod(c.ctx.Get(), modID)
 }
 
 // SetActiveShader picks the shader pack ("" turns shaders off).
@@ -191,6 +227,31 @@ func (c *Content) AddDropped(dropID, instanceID, kind, world string) (content.Ad
 	paths, err := c.d.Drops.Take(dropID)
 	if err != nil {
 		return content.AddResult{}, err
+	}
+	return c.d.Service.Add(c.ctx.Get(), instanceID, k, world, paths)
+}
+
+// AddFiles lets the player pick files (native dialog) and adds them to a tab,
+// with the same checks as dropped files; nothing picked adds nothing.
+func (c *Content) AddFiles(instanceID, kind, world string) (content.AddResult, error) {
+	k, err := checkKind(kind)
+	if err != nil {
+		return content.AddResult{}, err
+	}
+	if err := checkInstanceID(instanceID); err != nil {
+		return content.AddResult{}, err
+	}
+	if world != "" && !instance.ValidWorldFolder(world) {
+		return content.AddResult{}, ErrBadWorld
+	}
+	ext := map[content.Kind]string{content.Mods: "*.jar"}[k]
+	if ext == "" {
+		ext = "*.zip"
+	}
+	paths, err := openFilesDialog(c.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose files to add",
+		Filters: []wruntime.FileFilter{{DisplayName: "Files (" + ext + ")", Pattern: ext}}})
+	if err != nil || len(paths) == 0 {
+		return content.AddResult{Added: []string{}, Rejected: []content.Rejected{}}, err
 	}
 	return c.d.Service.Add(c.ctx.Get(), instanceID, k, world, paths)
 }
@@ -305,6 +366,7 @@ func (c *Content) CleanUp() (store.Usage, error) {
 const cleanGrace = 10 * time.Minute
 
 var (
+	modIDRe  = regexp.MustCompile(`^[a-z0-9_.\-]{1,64}$`)
 	planIDRe = regexp.MustCompile(`^[0-9a-f]{12}$`)
 	depIDRe  = regexp.MustCompile(`^dep-(?:modrinth|curseforge)-[A-Za-z0-9]{1,32}$`)
 )

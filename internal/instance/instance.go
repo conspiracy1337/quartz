@@ -84,7 +84,13 @@ type Settings struct {
 	Window      WindowSettings      `json:"window"`
 	Commands    CommandSettings     `json:"commands"`
 	Performance PerformanceSettings `json:"performance"`
+	// Account is the account this instance always plays as ("" for the
+	// default one), as Prism and Pandora let you pick; Play as still wins.
+	Account string `json:"account,omitempty"`
 }
+
+// accountRe is an account id.
+var accountRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // Instance is one instance's record.
 type Instance struct {
@@ -114,7 +120,10 @@ type Instance struct {
 	Created     time.Time  `json:"created"`
 	LastPlayed  *time.Time `json:"lastPlayed,omitempty"`
 	PlaytimeMin int        `json:"playtimeMin"`
-	Settings    Settings   `json:"settings"`
+	// PlaytimeSec carries the seconds below a whole minute, so short
+	// sessions add up instead of rounding away (Prism counts seconds).
+	PlaytimeSec int      `json:"playtimeSec,omitempty"`
+	Settings    Settings `json:"settings"`
 	// Pack is the modpack the instance was installed from (nil for none).
 	Pack *PackRef `json:"pack,omitempty"`
 	// Host is how the instance was last hosted as a local server (nil: never).
@@ -198,6 +207,7 @@ var (
 	ErrBadLoader       = errors.New("instance: unknown mod loader")
 	ErrInvalidSettings = errors.New("instance: invalid settings")
 	ErrBadGroup        = errors.New("instance: group names need at most 32 characters")
+	ErrGameDirMissing  = errors.New("instance: the game folder isn't there. Is its drive connected?")
 )
 
 var (
@@ -233,6 +243,24 @@ func cleanName(n string) (string, error) {
 	return n, nil
 }
 
+// freeName is name, or "name (2)", "name (3)" … when another instance is
+// already called that (ignoring case), so menus that list instances by name
+// never show two alike (XMCL does the same).
+func (s *Store) freeName(name string) string {
+	taken := map[string]bool{}
+	for _, in := range s.List() {
+		taken[strings.ToLower(in.Name)] = true
+	}
+	try := name
+	for n := 2; taken[strings.ToLower(try)]; n++ {
+		suffix := fmt.Sprintf(" (%d)", n)
+		base := []rune(name)
+		base = base[:min(len(base), maxName-len(suffix))]
+		try = strings.TrimSpace(string(base)) + suffix
+	}
+	return try
+}
+
 // normalize repairs a hand-edited file field by field.
 func normalize(in Instance) Instance {
 	if !hexColor.MatchString(in.Art.Background) {
@@ -263,7 +291,11 @@ func normalize(in Instance) Instance {
 	if !slices.Contains([]string{"", "keep-open", "hide", "close"}, w.OnGameStart) {
 		w.OnGameStart = ""
 	}
+	if in.Settings.Account != "" && !accountRe.MatchString(in.Settings.Account) {
+		in.Settings.Account = ""
+	}
 	in.PlaytimeMin = max(in.PlaytimeMin, 0)
+	in.PlaytimeSec = min(max(in.PlaytimeSec, 0), 59)
 	if in.Version < schema {
 		in.Version, in.KeepLoaderUpdated = schema, true
 	}
@@ -398,6 +430,10 @@ func Open(dir string, log *slog.Logger) (*Store, error) {
 		return nil, err
 	}
 	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), stagePrefix) {
+			_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+			continue
+		}
 		if !e.IsDir() || !ValidID(e.Name()) {
 			continue
 		}
@@ -435,6 +471,10 @@ func ReadAll(dir string) ([]Instance, error) {
 	}
 	var out []Instance
 	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), stagePrefix) {
+			_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+			continue
+		}
 		if !e.IsDir() || !ValidID(e.Name()) {
 			continue
 		}
@@ -465,6 +505,26 @@ func (s *Store) GameDir(id string) string {
 }
 
 func (s *Store) defaultGameDir(id string) string { return filepath.Join(s.dir, id, "game") }
+
+// CheckGameDir makes sure a game folder outside the data folder is really
+// there before anything writes to it: a folder moved by the launcher must
+// still carry its marker, another launcher's folder must exist. Otherwise an
+// unplugged drive would get a fresh, empty game at its mount point.
+func (s *Store) CheckGameDir(id string) error {
+	in, err := s.Get(id)
+	if err != nil || in.Location == "" {
+		return err
+	}
+	ok := markedFor(in.Location, id)
+	if in.InPlace {
+		info, err := os.Stat(in.Location)
+		ok = err == nil && info.IsDir()
+	}
+	if !ok {
+		return fmt.Errorf("%w (%s)", ErrGameDirMissing, in.Location)
+	}
+	return nil
+}
 
 // RunsDir holds the instance's launch history.
 func (s *Store) RunsDir(id string) string { return filepath.Join(s.dir, id, "runs") }
@@ -516,12 +576,14 @@ type CreateRequest struct {
 }
 
 // Create makes a new instance folder. The Minecraft version and loader build
-// must already be checked upstream by the caller; defaults seed the Java card.
-func (s *Store) Create(req CreateRequest, defaults JavaSettings) (Instance, error) {
+// must already be checked upstream by the caller. Its Java card starts empty
+// and inherits the global settings live until the player overrides them.
+func (s *Store) Create(req CreateRequest) (Instance, error) {
 	name, err := cleanName(req.Name)
 	if err != nil {
 		return Instance{}, err
 	}
+	name = s.freeName(name)
 	if req.Loader == "none" {
 		req.Loader, req.LoaderVersion = "", ""
 	}
@@ -538,12 +600,10 @@ func (s *Store) Create(req CreateRequest, defaults JavaSettings) (Instance, erro
 	if req.Icon != "" && !iconRe.MatchString(req.Icon) {
 		return Instance{}, fmt.Errorf("%w: icon", ErrInvalidSettings)
 	}
-	defaults.Override = false
 	in := Instance{
 		Version: schema, ID: s.newID(name), Name: name, Art: req.Art, Icon: req.Icon, Minecraft: req.Minecraft,
 		Loader: req.Loader, LoaderVersion: req.LoaderVersion, KeepLoaderUpdated: true,
 		Group: group, Sandbox: rules.Settings{On: req.Sandbox, Preset: rules.Standard}, Created: time.Now().UTC(),
-		Settings: Settings{Java: defaults},
 	}
 	if in.Art.Initial == "" {
 		in.Art.Initial = strings.ToUpper(string([]rune(name)[:1]))
@@ -630,7 +690,8 @@ func checkLoader(kind, ver string) error {
 // SetSettings replaces an instance's settings after validation.
 func (s *Store) SetSettings(id string, st Settings) (Instance, error) {
 	if st.Java.MemoryMinMB < 0 || st.Java.MemoryMaxMB < 0 || len(st.Java.JVMArgs) > maxJVMArgs ||
-		(st.Java.JavaPath != "" && !filepath.IsAbs(st.Java.JavaPath)) || !st.Window.OpenInto.Valid() {
+		(st.Java.JavaPath != "" && !filepath.IsAbs(st.Java.JavaPath)) || !st.Window.OpenInto.Valid() ||
+		(st.Account != "" && !accountRe.MatchString(st.Account)) {
 		return Instance{}, ErrInvalidSettings
 	}
 	c := st.Commands

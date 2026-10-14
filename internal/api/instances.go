@@ -48,6 +48,8 @@ type InstanceDeps struct {
 	Shortcuts *shortcuts.Service
 	// Follow offers moves to the newest release; nil in tests.
 	Follow *follow.Checker
+	// Opens shows toasts for work that ends after the call returns; nil in tests.
+	Opens *Opens
 }
 
 // Counter counts one kind of thing an instance has.
@@ -81,6 +83,7 @@ type InstanceSummary struct {
 	Tags        []string     `json:"tags"`
 	HasServers  bool         `json:"hasServers"`
 	LastPlayed  int64        `json:"lastPlayed,omitempty"` // unix ms
+	Created     int64        `json:"created"`              // unix ms
 	PlaytimeMin int          `json:"playtimeMin"`
 	Running     bool         `json:"running"`
 }
@@ -100,7 +103,6 @@ type InstanceView struct {
 	JavaAuto          string            `json:"javaAuto"`      // what "Automatic" picks, e.g. "Java 21"
 	SandboxPreset     string            `json:"sandboxPreset"` // standard | strict | custom
 	MemoryMB          MemoryRange       `json:"memoryMB"`
-	Created           int64             `json:"created"`
 	Folder            string            `json:"folder"`
 	Moved             bool              `json:"moved"` // the game folder is outside the data folder
 	Notes             string            `json:"notes"`
@@ -120,9 +122,11 @@ var (
 	ErrBadInstanceID = errors.New("api: invalid instance id")
 	ErrBusy          = errors.New("api: close the game first")
 	ErrHosting       = errors.New("api: stop the server first")
+	ErrContentBusy   = errors.New("api: a download for this instance is still running. Let it finish or cancel it in Downloads")
 )
 
-// guard refuses changes to files a game or a hosted server is using.
+// guard refuses changes to files a game, a hosted server or a content job
+// (install, update, version switch) is using.
 func (s *Instances) guard(id string) error {
 	if s.d.Hosting != nil && s.d.Hosting(id) {
 		return ErrHosting
@@ -130,13 +134,16 @@ func (s *Instances) guard(id string) error {
 	if s.d.Busy(id) {
 		return ErrBusy
 	}
+	if s.d.Content != nil && s.d.Content.Busy(id) {
+		return ErrContentBusy
+	}
 	return nil
 }
 
 func (s *Instances) summary(in instance.Instance) InstanceSummary {
 	v := InstanceSummary{
 		ID: in.ID, Name: in.Name, Art: in.Art, Icon: in.Icon, Minecraft: in.Minecraft, Kind: "vanilla",
-		Group: in.Group, Tags: in.Tags, PlaytimeMin: in.PlaytimeMin, Running: s.d.Running(in.ID),
+		Group: in.Group, Tags: in.Tags, PlaytimeMin: in.PlaytimeMin, Running: s.d.Running(in.ID), Created: in.Created.UnixMilli(),
 		HasServers: s.d.Servers != nil && s.d.Servers.Count(in.ID) > 0,
 	}
 	if v.Tags == nil {
@@ -170,7 +177,7 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 	return InstanceView{
 		InstanceSummary: s.summary(in),
 		Sandboxed:       in.Sandbox.On, SandboxPreset: string(in.Sandbox.Preset), Java: java, JavaAuto: auto, MemoryMB: MemoryRange{Min: eff.MemoryMinMB, Max: eff.MemoryMaxMB},
-		Created: in.Created.UnixMilli(), Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
+		Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),
 		DiscordStatus: !in.HideDiscord, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),
@@ -260,8 +267,7 @@ func (s *Instances) Create(req instance.CreateRequest) (InstanceView, error) {
 	if len(req.Shares) > 32 {
 		return InstanceView{}, fmt.Errorf("%w: shares", instance.ErrInvalidSettings)
 	}
-	g := s.d.Settings.Get().Java
-	in, err := s.d.Store.Create(req, instance.JavaSettings{MemoryMinMB: g.MemoryMinMB, MemoryMaxMB: g.MemoryMaxMB, JVMArgs: g.JVMArgs})
+	in, err := s.d.Store.Create(req)
 	if err == nil && s.d.Syncing != nil && len(req.Shares) > 0 {
 		// A new instance has nothing to merge in; a target that can't be
 		// joined just stays off for it.
@@ -637,6 +643,49 @@ func (s *Instances) move(id, parent string) (string, error) {
 				s.d.Bus.Emit(events.InstancesChanged, nil)
 			}
 			return err
+		}))
+	return s.d.Tasks.Submit(spec)
+}
+
+// Duplicate copies an instance into a new one ("<name> (copy)") as a job:
+// worlds, options and content come along, mods linked from the store
+// rather than stored twice; playtime and history start fresh.
+func (s *Instances) Duplicate(id string) (string, error) {
+	if err := checkInstanceID(id); err != nil {
+		return "", err
+	}
+	if err := s.guard(id); err != nil {
+		return "", err
+	}
+	in, err := s.d.Store.Get(id)
+	if err != nil {
+		return "", err
+	}
+	spec := tasks.NewJob(tasks.Meta{Title: "Duplicating " + in.Name, Subtitle: "A copy with its worlds and content", Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "move"}).
+		Step("Copying", tasks.Count, tasks.Func("copy the instance", func(ctx context.Context) error {
+			if err := s.guard(id); err != nil {
+				return err
+			}
+			var place func(rel, dst string) (bool, error)
+			if s.d.Content != nil {
+				// Fresh hashes first: a stored copy is only linked for a file
+				// that is still exactly what was indexed.
+				for _, k := range content.Kinds {
+					if err := s.d.Content.Scan(ctx, id, k); err != nil {
+						return err
+					}
+				}
+				place = s.d.Content.Placer(id)
+			}
+			cp, err := s.d.Store.Duplicate(ctx, id, place, nil)
+			if err != nil {
+				return err
+			}
+			s.d.Bus.Emit(events.InstancesChanged, nil)
+			if s.d.Opens != nil {
+				s.d.Opens.Show(OpenTarget{Kind: OpenNotice, Subject: "Duplicated " + in.Name, Text: "as " + cp.Name, Instance: cp.ID})
+			}
+			return nil
 		}))
 	return s.d.Tasks.Submit(spec)
 }

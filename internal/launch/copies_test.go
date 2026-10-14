@@ -32,7 +32,7 @@ func TestTwoCopiesRunAndMergeBack(t *testing.T) {
 	}
 	v, _ := mojang.Parse(data)
 	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
-	inst, _ := insts.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	inst, _ := insts.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4"})
 	game := insts.GameDir(inst.ID)
 	_ = os.MkdirAll(game, 0o700)
 	// The "game": takes its arguments, logs in, writes one file of its own, waits.

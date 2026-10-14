@@ -25,6 +25,7 @@ import (
 	"quartz/internal/core/logging"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
+	"quartz/internal/core/version"
 	"quartz/internal/gamelog"
 	"quartz/internal/install"
 	"quartz/internal/instance"
@@ -59,6 +60,9 @@ var (
 type Hooks struct {
 	GameStarted func(onGameStart string)
 	AllExited   func()
+	// AfterExitFailed reports the player's after-exit command failing, which
+	// happens with no launch panel open to show it.
+	AfterExitFailed func(instance string, err error)
 }
 
 // Sessions hands out the account and session to launch with (id "" means
@@ -358,23 +362,36 @@ func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance, account
 func (p *pipeline) run(ctx context.Context) (int, error) {
 	l := p.l
 	p.progress(StageSignIn, 0)
-	acc, sess, err := l.cfg.Accounts.Session(ctx, p.account)
+	// Play as wins; else the instance's own account; else the default.
+	id, note := p.account, ""
+	instanceAccount := id == "" && p.eff.Account != ""
+	if instanceAccount {
+		id = p.eff.Account
+	}
+	acc, sess, err := l.cfg.Accounts.Session(ctx, id)
+	if instanceAccount && errors.Is(err, accounts.ErrUnknown) {
+		acc, sess, err = l.cfg.Accounts.Session(ctx, "")
+		note = ", the default account (this instance's was removed)"
+	}
 	p.signedIn = acc.ID
 	if err != nil {
 		return StageSignIn, err
 	}
 	switch {
 	case sess.Fallback:
-		p.set(StageSignIn, "offline, Microsoft unreachable")
+		p.set(StageSignIn, "offline, Microsoft unreachable"+note)
 	case sess.UserType == "msa":
-		p.set(StageSignIn, "online")
+		p.set(StageSignIn, "online"+note)
 	default:
-		p.set(StageSignIn, "offline")
+		p.set(StageSignIn, "offline"+note)
 	}
 
 	p.set(StageMods, p.checkMods(ctx))
 	p.progress(StageJava, 10)
 
+	if err := l.cfg.Instances.CheckGameDir(p.inst.ID); err != nil {
+		return StageJava, err
+	}
 	gameDir := l.cfg.Instances.GameDir(p.inst.ID)
 	if err := os.MkdirAll(gameDir, 0o700); err != nil {
 		return StageJava, err
@@ -397,6 +414,14 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	if err != nil {
 		return StageJava, err
 	}
+	// A runtime the player chose is checked like Prism does: too old can't
+	// load the game's classes; too new breaks old Forge.
+	var javaWarn string
+	if req.Override != "" {
+		if javaWarn, err = javaFits(rt.Major, own.Major, p.inst); err != nil {
+			return StageJava, err
+		}
+	}
 	if res.Processing != nil && req.Override != "" && plan == nil && !res.Processing.Done() {
 		if _, ownPlan, err := l.cfg.Java.Resolve(ctx, own); err == nil {
 			plan = ownPlan
@@ -408,10 +433,16 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	} else {
 		p.set(StageJava, "Java "+rt.Version)
 	}
-	if warn := l.lowMemory(mem.Max); warn != "" {
-		p.mu.Lock()
-		p.details[StageJava] += ", " + warn
-		p.mu.Unlock()
+	var libWarn string
+	if missing := missingLibraries(p.eff); len(missing) > 0 {
+		libWarn = "system " + strings.Join(missing, " and ") + " not found"
+	}
+	for _, warn := range []string{javaWarn, libWarn, l.lowMemory(mem.Max)} {
+		if warn != "" {
+			p.mu.Lock()
+			p.details[StageJava] += ", " + warn
+			p.mu.Unlock()
+		}
 	}
 	p.progress(StageFiles, 20)
 
@@ -512,7 +543,7 @@ func (p *pipeline) updateLoader(ctx context.Context) string {
 	if in.KeepLoaderUpdated && p.l.cfg.Loaders != nil {
 		latest, err := p.l.cfg.Loaders.Latest(ctx, k, in.Minecraft)
 		cur := loader.Display(k, in.Minecraft, in.LoaderVersion)
-		if err == nil && latest.ID != in.LoaderVersion && loader.Compare(latest.Name, cur) > 0 {
+		if err == nil && latest.ID != in.LoaderVersion && version.Compare(latest.Name, cur) > 0 {
 			if updated, err := p.l.cfg.Instances.Update(in.ID, func(i *instance.Instance) error { i.LoaderVersion = latest.ID; return nil }); err == nil {
 				p.inst = updated
 				p.l.cfg.Bus.Emit(events.InstancesChanged, nil)
@@ -590,6 +621,25 @@ func (p *pipeline) memory() MemoryRange {
 	return MemoryRange{Min: p.eff.MemoryMinMB, Max: p.eff.MemoryMaxMB}
 }
 
+// ErrJavaTooOld fails a launch whose chosen Java can't run this Minecraft.
+var ErrJavaTooOld = errors.New("launch: this Java is too old for this Minecraft")
+
+// javaFits checks a chosen runtime's major version against the one the game
+// needs: older fails (the game would crash on its first class), newer only
+// warns for Forge on versions that ran on Java 8, whose old ModLauncher
+// breaks on modern Java.
+func javaFits(have, need int, in instance.Instance) (string, error) {
+	switch {
+	case have == 0 || need == 0:
+		return "", nil // not probed or not stated: nothing to compare
+	case have < need:
+		return "", fmt.Errorf("%w: Minecraft %s needs Java %d, and this instance uses Java %d. Pick another runtime in its settings, or Automatic", ErrJavaTooOld, in.Minecraft, need, have)
+	case have > need && need == 8 && in.Loader == "forge":
+		return fmt.Sprintf("Forge for %s usually needs Java 8", in.Minecraft), nil
+	}
+	return "", nil
+}
+
 // lowMemory warns when free RAM is below the maximum heap (if enabled).
 func (l *Launcher) lowMemory(maxMB int) string {
 	if !l.cfg.Settings.Get().Java.WarnLowMemory {
@@ -617,6 +667,9 @@ func (l *Launcher) Close() {
 func (l *Launcher) Repair(ctx context.Context, id string) (string, error) {
 	inst, err := l.cfg.Instances.Get(id)
 	if err != nil {
+		return "", err
+	}
+	if err := l.cfg.Instances.CheckGameDir(id); err != nil {
 		return "", err
 	}
 	meta := tasks.Meta{Title: inst.Name, Subtitle: "Repairing game files", Art: tasks.Art{Background: inst.Art.Background, Initial: inst.Art.Initial}, Kind: "repair"}

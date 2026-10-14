@@ -26,6 +26,7 @@ type Effective struct {
 	OpenInto    Into
 	Commands    CommandSettings
 	Performance PerformanceSettings
+	Account     string // "" plays as the default account
 }
 
 // minHeapMB keeps an overridden minimum heap from being absurdly small.
@@ -38,7 +39,7 @@ func (in Instance) Resolve(g settings.Settings) Effective {
 		OnGameStart: settings.Resolve(nonEmpty(in.Settings.Window.OnGameStart), g.General.OnGameStart),
 		Width:       in.Settings.Window.Width, Height: in.Settings.Window.Height, Fullscreen: in.Settings.Window.Fullscreen,
 		OpenInto: in.Settings.Window.OpenInto,
-		Commands: in.Settings.Commands, Performance: in.Settings.Performance,
+		Commands: in.Settings.Commands, Performance: in.Settings.Performance, Account: in.Settings.Account,
 	}
 	if j := in.Settings.Java; j.Override {
 		e.JavaPath, e.JVMArgs = j.JavaPath, j.JVMArgs

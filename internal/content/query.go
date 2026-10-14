@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -169,7 +170,78 @@ func (s *Service) Refs(yield func(sha1 string)) error {
 
 // Forget flushes and drops an instance's cached index before its folder
 // moves (to the trash, or elsewhere).
-func (s *Service) Forget(id string) { s.idx.forget(id) }
+func (s *Service) Forget(id string) {
+	s.watch.mu.Lock()
+	watching := s.watch.id == id
+	s.watch.mu.Unlock()
+	if watching {
+		s.Watch("") // an open watch holds the folders (Windows can't move them)
+	}
+	s.idx.forget(id)
+}
+
+// Placer puts an instance's stored files into a copy of its game folder by
+// linking their stored copy (reflink or hardlink, as installs do), so a
+// duplicate doesn't store its mods twice. It answers false for anything
+// else, which is then copied. Items in a shared folder aren't in the game
+// folder at all.
+func (s *Service) Placer(id string) func(rel, dst string) (bool, error) {
+	blobs := map[string]string{}
+	if ix, err := s.idx.get(id); err == nil {
+		game := s.d.Instances.GameDir(id)
+		for _, e := range ix.Get().Entries {
+			if !e.Dir && e.SHA1 != "" && s.base(id, e.Kind) == game {
+				blobs[e.Rel] = e.SHA1
+			}
+		}
+	}
+	return func(rel, dst string) (bool, error) {
+		sha1, ok := blobs[rel]
+		if !ok {
+			return false, nil
+		}
+		if _, ok := s.d.Store.Blob(sha1); !ok {
+			return false, nil // not adopted (another launcher's folder): copy it
+		}
+		_, err := s.d.Store.Place(sha1, dst)
+		return err == nil, nil
+	}
+}
+
+// Busy reports whether a content job for the instance (install, update,
+// version switch) is still queued, waiting or running: its folder must stay
+// where it is until the job ends.
+func (s *Service) Busy(id string) bool {
+	s.jobsMu.Lock()
+	ids := s.jobs[id]
+	s.jobsMu.Unlock()
+	if len(ids) == 0 || s.d.Tasks == nil {
+		return false
+	}
+	for _, j := range s.d.Tasks.Snapshot().Active {
+		if slices.Contains(ids, j.ID) {
+			return true
+		}
+	}
+	return false
+}
+
+// tracked remembers a job submitted for an instance, dropping ones that ended.
+func (s *Service) tracked(inst, job string) {
+	active := map[string]bool{}
+	for _, j := range s.d.Tasks.Snapshot().Active {
+		active[j.ID] = true
+	}
+	s.jobsMu.Lock()
+	defer s.jobsMu.Unlock()
+	keep := []string{job}
+	for _, id := range s.jobs[inst] {
+		if active[id] {
+			keep = append(keep, id)
+		}
+	}
+	s.jobs[inst] = keep
+}
 
 // Path is where an item is on disk.
 func (s *Service) Path(id, item string) (string, error) {

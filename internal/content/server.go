@@ -78,8 +78,8 @@ func (s *Service) fillSides(ctx context.Context, v *view) {
 			continue
 		}
 		k := v.known[e.SHA1]
-		if !k.Bad && k.Rev < metaRev {
-			k = s.reparse(e.SHA1)
+		if k.Rev < metaRev {
+			k = s.current(s.abs(v.in.ID, e.Rel), e.SHA1, specs[Mods])
 		}
 		if k.Modrinth != nil && k.Modrinth.ServerSide == "" {
 			ask = append(ask, k.Modrinth.ProjectID)
@@ -108,16 +108,6 @@ func (s *Service) fillSides(ctx context.Context, v *view) {
 		k.Modrinth = &ident
 		v.known[sha1] = k
 	}
-}
-
-// reparse reads a mod blob's metadata again with the current parser.
-func (s *Service) reparse(sha1 string) Known {
-	info, err := parseFile(s.d.Store.Path(sha1), specs[Mods], s.d.Icons)
-	if err == nil {
-		s.cat.update(sha1, func(k *Known) { k.Info, k.Bad, k.Rev = &info, false, metaRev })
-	}
-	k, _ := s.cat.get(sha1)
-	return k
 }
 
 // modrinthSides asks Modrinth for projects' server sides.

@@ -1,19 +1,22 @@
 package content
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
 	"quartz/internal/content/meta"
+	"quartz/internal/core/version"
 )
 
 // Problem is something wrong with one mod in this instance.
 type Problem struct {
-	Kind  string `json:"kind"`  // missing | conflict | duplicate | library
+	Kind  string `json:"kind"`  // loader | missing | conflict | version | game | duplicate | library
 	Label string `json:"label"` // "Needs Fabric API"
 	Tone  string `json:"tone"`  // warn | danger | info
-	// Dep is the missing mod's display name (missing only).
-	Dep string `json:"dep,omitempty"`
+	// Dep is the missing mod's display name (missing only), DepID its mod id.
+	Dep   string `json:"dep,omitempty"`
+	DepID string `json:"depId,omitempty"`
 }
 
 // modFacts is what the analysis needs about one mod.
@@ -23,6 +26,31 @@ type modFacts struct {
 	name     string
 	info     meta.Info
 	provided []string // its own id plus everything it provides
+}
+
+// target is what an instance runs its mods on.
+type target struct {
+	mc      string
+	loaders []string // loaders whose mods it can run
+}
+
+// Bridges that run Fabric mods on Forge and NeoForge.
+var fabricBridges = []string{"connectormod", "kilt"}
+
+// targetOf is the instance's Minecraft and the loaders its enabled mods can
+// be built for (its loader chain, plus Fabric when a bridge is installed).
+func (s *Service) targetOf(id string, mods []modFacts) target {
+	in, err := s.d.Instances.Get(id)
+	if err != nil {
+		return target{}
+	}
+	t := target{mc: in.Minecraft, loaders: LoaderChain(Mods, in.Loader, in.Minecraft)}
+	for _, m := range mods {
+		if m.enabled && overlaps(m.provided, fabricBridges) && !slices.Contains(t.loaders, "fabric") {
+			t.loaders = append(t.loaders, "fabric")
+		}
+	}
+	return t
 }
 
 // Names of dependencies people know by another name than their id.
@@ -47,19 +75,31 @@ func depName(id string) string {
 	return id
 }
 
-// analyze finds missing dependencies, conflicts, duplicate mods and library
-// mods nothing needs, among enabled mods. Version ranges aren't checked.
-func analyze(mods []modFacts) map[string]Problem {
-	present := map[string]string{} // provided id → name of a mod providing it
-	byID := map[string][]string{}  // mod id → items
+var loaderNames = map[string]string{"fabric": "Fabric", "quilt": "Quilt", "forge": "Forge", "neoforge": "NeoForge"}
+
+// present is an installed mod id: who provides it, and at which version
+// ("" for ids a mod only provides, whose version isn't known).
+type present struct{ name, version string }
+
+// analyze finds, among enabled mods: mods for another loader, missing
+// dependencies, conflicts, dependencies of the wrong version, mods for
+// another Minecraft, duplicates and library mods nothing needs. A version
+// range is only held against a mod when it can be read with certainty.
+func analyze(mods []modFacts, t target) map[string]Problem {
+	have := map[string]present{}
+	byID := map[string][]string{} // mod id → items
 	needed := map[string]bool{}
 	for _, m := range mods {
 		if !m.enabled {
 			continue
 		}
 		for _, id := range m.provided {
-			if _, ok := present[id]; !ok {
-				present[id] = m.name
+			if _, ok := have[id]; !ok {
+				p := present{name: m.name}
+				if id == m.info.ID {
+					p.version = m.info.Version
+				}
+				have[id] = p
 			}
 		}
 		if m.info.ID != "" {
@@ -76,21 +116,8 @@ func analyze(mods []modFacts) map[string]Problem {
 		if !m.enabled {
 			continue
 		}
-		var missing []string
-		for _, d := range m.info.Deps {
-			switch _, ok := present[d.ID]; {
-			case d.Kind == meta.Required && !ok:
-				missing = append(missing, depName(d.ID))
-			case d.Kind == meta.Breaks && ok && !contains(m.provided, d.ID):
-				out[m.item] = Problem{Kind: "conflict", Label: "Conflicts with " + present[d.ID], Tone: "danger"}
-			}
-		}
-		if len(missing) > 0 {
-			sort.Strings(missing)
-			out[m.item] = Problem{Kind: "missing", Label: "Needs " + missing[0], Tone: "warn", Dep: missing[0]}
-			continue
-		}
-		if _, bad := out[m.item]; bad {
+		if p, ok := check(m, have, t); ok {
+			out[m.item] = p
 			continue
 		}
 		if m.info.ID != "" && len(byID[m.info.ID]) > 1 {
@@ -104,13 +131,51 @@ func analyze(mods []modFacts) map[string]Problem {
 	return out
 }
 
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
+// check finds the most serious problem with one mod's loader, dependencies
+// and Minecraft version.
+func check(m modFacts, have map[string]present, t target) (Problem, bool) {
+	if len(m.info.Loaders) > 0 && !overlaps(m.info.Loaders, t.loaders) {
+		return Problem{Kind: "loader", Label: "Made for " + loaderNames[m.info.Loaders[0]], Tone: "danger"}, true
+	}
+	st := m.info.RangeStyle()
+	var missing []string // mod ids
+	var conflict, wrong *Problem
+	for _, d := range m.info.Deps {
+		p, ok := have[d.ID]
+		switch {
+		case d.Kind == meta.Required && !ok:
+			missing = append(missing, d.ID)
+		case d.Kind == meta.Breaks && ok && !slices.Contains(m.provided, d.ID) && conflict == nil:
+			if in, sure := version.Satisfies(st, d.Range, p.version); sure && in {
+				conflict = &Problem{Kind: "conflict", Label: "Conflicts with " + p.name, Tone: "danger"}
+			}
+		case d.Kind == meta.Required && wrong == nil:
+			if in, sure := version.Satisfies(st, d.Range, p.version); sure && !in {
+				wrong = &Problem{Kind: "version", Label: strings.TrimSpace("Needs " + p.name + " " + version.Describe(st, d.Range)), Tone: "warn", Dep: p.name}
+			}
 		}
 	}
-	return false
+	switch {
+	case len(missing) > 0:
+		slices.SortFunc(missing, func(a, b string) int { return strings.Compare(depName(a), depName(b)) })
+		return Problem{Kind: "missing", Label: "Needs " + depName(missing[0]), Tone: "warn", Dep: depName(missing[0]), DepID: missing[0]}, true
+	case conflict != nil:
+		return *conflict, true
+	case wrong != nil:
+		return *wrong, true
+	}
+	if in, sure := version.Satisfies(st, m.info.Game, t.mc); sure && !in {
+		return Problem{Kind: "game", Label: madeFor(version.Describe(st, m.info.Game)), Tone: "warn"}, true
+	}
+	return Problem{}, false
+}
+
+// madeFor labels a Minecraft range: "Made for 1.20.x", "Made for Minecraft ≥ 1.21".
+func madeFor(r string) string {
+	if r != "" && r[0] >= '0' && r[0] <= '9' {
+		return "Made for " + r
+	}
+	return "Made for Minecraft " + r
 }
 
 func anyNeeded(ids []string, needed map[string]bool) bool {
@@ -122,8 +187,9 @@ func anyNeeded(ids []string, needed map[string]bool) bool {
 	return false
 }
 
-// facts gathers the analysis input for an index's mods.
-func (s *Service) facts(i Index) []modFacts {
+// facts gathers the analysis input for an instance's mods. Catalog entries an
+// older parser wrote are read again first, so new fields (ranges) are there.
+func (s *Service) facts(id string, i Index) []modFacts {
 	mods := entriesOf(i, Mods)
 	sha := make([]string, 0, len(mods))
 	for _, e := range mods {
@@ -133,6 +199,9 @@ func (s *Service) facts(i Index) []modFacts {
 	out := make([]modFacts, 0, len(mods))
 	for item, e := range mods {
 		k := known[e.SHA1]
+		if e.SHA1 != "" && k.Rev < metaRev {
+			k = s.current(s.abs(id, e.Rel), e.SHA1, specs[Mods])
+		}
 		if k.Info == nil {
 			continue
 		}
@@ -150,10 +219,15 @@ func (s *Service) facts(i Index) []modFacts {
 	return out
 }
 
+// problems analyses an instance's mods.
+func (s *Service) problems(id string, i Index) ([]modFacts, map[string]Problem) {
+	facts := s.facts(id, i)
+	return facts, analyze(facts, s.targetOf(id, facts))
+}
+
 // missing summarises the first missing dependency for Home's alert.
-func (s *Service) missing(i Index) *Missing {
-	facts := s.facts(i)
-	problems := analyze(facts)
+func (s *Service) missing(id string, i Index) *Missing {
+	facts, problems := s.problems(id, i)
 	var first *Missing
 	n := 0
 	for _, f := range facts {
@@ -168,4 +242,45 @@ func (s *Service) missing(i Index) *Missing {
 		first.More = n - 1
 	}
 	return first
+}
+
+// Dependents names the enabled mods, other than items, that need something
+// items provide: turning items off or removing them leaves those unmet
+// (Prism asks about them; the toast says so).
+func (s *Service) Dependents(id string, items []string) []string {
+	ix, err := s.idx.get(id)
+	if err != nil {
+		return nil
+	}
+	facts := s.facts(id, ix.Get())
+	gone := map[string]bool{}
+	for _, f := range facts {
+		if slices.Contains(items, f.item) {
+			for _, p := range f.provided {
+				gone[p] = true
+			}
+		}
+	}
+	// What still provides an id once items are gone.
+	left := map[string]bool{}
+	for _, f := range facts {
+		if f.enabled && !slices.Contains(items, f.item) {
+			for _, p := range f.provided {
+				left[p] = true
+			}
+		}
+	}
+	var out []string
+	for _, f := range facts {
+		if !f.enabled || slices.Contains(items, f.item) {
+			continue
+		}
+		for _, d := range f.info.Deps {
+			if d.Kind == meta.Required && gone[d.ID] && !left[d.ID] {
+				out = append(out, f.name)
+				break
+			}
+		}
+	}
+	return out
 }

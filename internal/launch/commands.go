@@ -7,7 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"quartz/internal/core/procx"
@@ -109,35 +111,94 @@ func wrappers(eff instance.Effective, vars map[string]string, sandboxed bool) ([
 	return out, nil
 }
 
-// nativeLibraryArgs points LWJGL at the system's GLFW and OpenAL (Linux).
-func nativeLibraryArgs(eff instance.Effective) []string {
+// systemLibraries are the system libraries an instance asked for, by the
+// LWJGL property that points at each.
+func systemLibraries(eff instance.Effective) map[string]string {
 	if runtime.GOOS != "linux" {
 		return nil
 	}
-	var args []string
+	libs := map[string]string{}
 	if eff.Commands.SystemGLFW {
-		if p := findSystemLibrary("libglfw.so.3"); p != "" {
-			args = append(args, "-Dorg.lwjgl.glfw.libname="+p)
-		}
+		libs["org.lwjgl.glfw.libname"] = "libglfw.so.3"
 	}
 	if eff.Commands.SystemOpenAL {
-		if p := findSystemLibrary("libopenal.so.1"); p != "" {
-			args = append(args, "-Dorg.lwjgl.openal.libname="+p)
+		libs["org.lwjgl.openal.libname"] = "libopenal.so.1"
+	}
+	return libs
+}
+
+// nativeLibraryArgs points LWJGL at the system's GLFW and OpenAL (Linux).
+func nativeLibraryArgs(eff instance.Effective) []string {
+	var args []string
+	for prop, name := range systemLibraries(eff) {
+		if p := findSystemLibrary(name); p != "" {
+			args = append(args, "-D"+prop+"="+p)
 		}
 	}
+	slices.Sort(args)
 	return args
 }
 
-var libraryDirs = []string{"/usr/lib64", "/usr/lib", "/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/lib64", "/lib"}
+// missingLibraries names the asked-for system libraries that can't be found,
+// for a launch warning (the game then uses its own copies).
+func missingLibraries(eff instance.Effective) []string {
+	var out []string
+	for _, name := range systemLibraries(eff) {
+		if findSystemLibrary(name) == "" {
+			out = append(out, strings.TrimSuffix(strings.TrimPrefix(name, "lib"), filepath.Ext(name)))
+		}
+	}
+	slices.Sort(out)
+	return out
+}
 
 func findSystemLibrary(name string) string {
-	for _, d := range libraryDirs {
+	for _, d := range libraryDirs() {
 		p := filepath.Join(d, name)
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
 	return ""
+}
+
+// libraryDirs is where the dynamic linker looks: LD_LIBRARY_PATH, the
+// folders ld.so.conf lists (multiarch and distro folders), NixOS' profile,
+// a Flatpak's /app/lib, then the usual ones.
+func libraryDirs() []string {
+	var dirs []string
+	for _, d := range filepath.SplitList(os.Getenv("LD_LIBRARY_PATH")) {
+		if filepath.IsAbs(d) {
+			dirs = append(dirs, d)
+		}
+	}
+	dirs = append(dirs, ldConf("/etc/ld.so.conf", 0)...)
+	return append(dirs, "/run/current-system/sw/lib", "/app/lib", "/usr/lib64", "/usr/lib", "/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/lib64", "/lib")
+}
+
+// ldConf reads an ld.so.conf: one folder per line, "include" globs, comments.
+func ldConf(path string, depth int) []string {
+	data, err := os.ReadFile(path) //nolint:gosec // the system's linker configuration
+	if err != nil || depth > 4 {
+		return nil
+	}
+	var dirs []string
+	for line := range strings.Lines(string(data)) {
+		line, _, _ = strings.Cut(line, "#")
+		line = strings.TrimSpace(line)
+		if rest, ok := strings.CutPrefix(line, "include "); ok {
+			matches, _ := filepath.Glob(filepath.Join(filepath.Dir(path), strings.TrimSpace(rest)))
+			if filepath.IsAbs(strings.TrimSpace(rest)) {
+				matches, _ = filepath.Glob(strings.TrimSpace(rest))
+			}
+			for _, m := range matches {
+				dirs = append(dirs, ldConf(m, depth+1)...)
+			}
+		} else if filepath.IsAbs(line) {
+			dirs = append(dirs, line)
+		}
+	}
+	return dirs
 }
 
 // runCommand runs one of the player's commands to completion and returns its

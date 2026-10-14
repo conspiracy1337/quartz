@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"quartz/internal/core/archive"
+	"quartz/internal/core/version"
 	"quartz/internal/icons"
 )
 
@@ -83,8 +84,8 @@ renderer","authors":["JellySquid",{"name":"IMS"}],"icon":{"16x16":"small.png","1
 	}
 	want := Info{Format: FormatFabric, ID: "sodium", Name: "Sodium", Version: "0.6.5", Description: "Fast renderer",
 		Authors: []string{"JellySquid", "IMS"}, Loaders: []string{"fabric"}, Library: true,
-		Deps:     []Dep{{ID: "optifabric", Kind: Breaks}, {ID: "fabric-api", Kind: Required}},
-		Provides: []string{"fabric-api-base", "fabric-base"}}
+		Deps:     []Dep{{ID: "optifabric", Kind: Breaks, Range: "*"}, {ID: "fabric-api", Kind: Required, Range: "*"}},
+		Provides: []string{"fabric-api-base", "fabric-base"}, Game: ">=1.21"}
 	if info.Icon == "" {
 		t.Fatal("icon not stored")
 	}
@@ -171,24 +172,87 @@ func TestInvalidTOMLIsSalvaged(t *testing.T) {
 }
 
 func TestModInfoShapes(t *testing.T) {
-	for name, body := range map[string]string{
-		"array":   `[{"modid":"mod_ironchest","name":"Iron Chests","version":"6.0","authorList":["cpw"],"requiredMods":["required-after:Forge@[10,)","mod_codechicken"]}]`,
-		"wrapped": `{"modListVersion":2,"modList":[{"modid":"ironchest","name":"Iron Chests","version":"6.0","authorList":["cpw"],"dependencies":["codechicken"]}]}`,
+	codechicken := []Dep{{ID: "codechicken", Kind: Required}}
+	for name, c := range map[string]struct {
+		body string
+		deps []Dep
+	}{
+		"array": {`[{"modid":"mod_ironchest","name":"Iron Chests","version":"6.0","authorList":["cpw"],"requiredMods":["required-after:Forge@[10,)","mod_codechicken"]}]`, codechicken},
+		// "dependencies" only orders loading...
+		"wrapped": {`{"modListVersion":2,"modList":[{"modid":"ironchest","name":"Iron Chests","version":"6.0","authorList":["cpw"],"dependencies":["codechicken"]}]}`, nil},
+		// ...unless written the FML way.
+		"fml": {`[{"modid":"ironchest","name":"Iron Chests","version":"6.0","authorList":"cpw","dependencies":["after:jei","required-after:codechicken@[2.0,)"]}]`,
+			[]Dep{{ID: "codechicken", Kind: Required, Range: "[2.0,)"}}},
 	} {
-		info, err := Mod(jar(t, map[string]string{"mcmod.info": body}), nil)
+		info, err := Mod(jar(t, map[string]string{"mcmod.info": c.body}), nil)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if info.ID != "ironchest" || info.Name != "Iron Chests" || !reflect.DeepEqual(info.Loaders, []string{"forge"}) ||
-			!reflect.DeepEqual(info.Deps, []Dep{{ID: "codechicken", Kind: Required}}) {
+		if info.ID != "ironchest" || info.Name != "Iron Chests" || !reflect.DeepEqual(info.Loaders, []string{"forge"}) || !reflect.DeepEqual(info.Deps, c.deps) {
 			t.Fatalf("%s: %+v", name, info)
 		}
 	}
 }
 
+func TestDependencyRanges(t *testing.T) {
+	fabric := jar(t, map[string]string{"fabric.mod.json": `{"id":"sodium","version":"0.5.8","authors":"JellySquid",
+"depends":{"minecraft":["1.20.1","1.20.2"],"fabric-api":{"weird":true}},"breaks":{"iris":"<1.6.0"}}`})
+	info, err := Mod(fabric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Game != "1.20.1||1.20.2" || !reflect.DeepEqual(info.Deps, []Dep{{ID: "iris", Kind: Breaks, Range: "<1.6.0"}, {ID: "fabric-api", Kind: Required, Range: version.Unknown}}) {
+		t.Fatalf("fabric (authors of the wrong type must not hide the mod): %+v", info)
+	}
+	neo := jar(t, map[string]string{"META-INF/neoforge.mods.toml": `[[mods]]
+modId="embeddium"
+version="1.0"
+[[dependencies.embeddium]]
+modId="minecraft"
+type="required"
+versionRange="[1.21,1.21.2)"
+[[dependencies.embeddium]]
+modId="rubidium"
+type="incompatible"
+versionRange="[0.6,)"
+`})
+	info, err = Mod(neo, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Game != "[1.21,1.21.2)" || !reflect.DeepEqual(info.Deps, []Dep{{ID: "rubidium", Kind: Breaks, Range: "[0.6,)"}}) || info.RangeStyle() != version.Maven {
+		t.Fatalf("neoforge: %+v", info)
+	}
+}
+
 func TestNotAMod(t *testing.T) {
-	if _, err := Mod(jar(t, map[string]string{"a.class": "x"}), nil); !errors.Is(err, ErrNotContent) {
-		t.Fatalf("err = %v", err)
+	for name, files := range map[string]map[string]string{
+		"forge installer":  {"install_profile.json": "{}", "a.class": "x"},
+		"fabric installer": {"net/fabricmc/installer/Main.class": "x"},
+	} {
+		if _, err := Mod(jar(t, files), nil); !errors.Is(err, ErrNotContent) {
+			t.Fatalf("%s: err = %v", name, err)
+		}
+	}
+}
+
+func TestJarsWithoutADescriptor(t *testing.T) {
+	// OptiFine and old coremods: named by their manifest.
+	optifine := jar(t, map[string]string{"optifine/Config.class": "x",
+		"META-INF/MANIFEST.MF": "Manifest-Version: 1.0\nImplementation-Title: OptiFine\nImplementation-Version: HD_U_I6\n\nName: x\nImplementation-Title: other\n"})
+	info, err := Mod(optifine, nil)
+	if err != nil || info.Name != "OptiFine" || info.Version != "HD_U_I6" || !info.Partial {
+		t.Fatalf("manifest: %+v %v", info, err)
+	}
+	// A wrapper: described by the first mod nested in it.
+	wrapper := jar(t, map[string]string{"META-INF/jarjar/inner.jar": string(zipBytes(t, map[string][]byte{"META-INF/mods.toml": []byte("[[mods]]\nmodId=\"inner\"\nversion=\"2.0\"\n")}))})
+	info, err = Mod(wrapper, nil)
+	if err != nil || info.ID != "inner" || info.Version != "2.0" || !info.Partial {
+		t.Fatalf("wrapper: %+v %v", info, err)
+	}
+	// Nothing to go on: still a jar the game may load, listed by file name.
+	if info, err := Mod(jar(t, map[string]string{"a.class": "x"}), nil); err != nil || info.Name != "" {
+		t.Fatalf("plain jar: %+v %v", info, err)
 	}
 }
 

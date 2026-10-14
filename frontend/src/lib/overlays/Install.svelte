@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '../api';
-  import type { ContentKind, Src } from '../api/types';
+  import type { ContentKind, InstallDep, Src } from '../api/types';
   import { bytes, errorText, plural } from '../format';
   import { LOADER_NAMES, PROJECT_TYPES } from '../labels';
   import { artOf, suggestMemoryGb } from '../look';
@@ -34,7 +34,13 @@
 
   const p = $derived(plan.data);
   const noun = $derived(PROJECT_TYPES.find((t) => t.content === content)?.noun ?? 'mod');
-  const count = $derived(p ? 1 + p.deps.filter((d) => (d.required && !d.installed) || (!d.required && optional[d.id] !== false)).length : 1);
+  const count = $derived(p ? 1 + p.deps.filter((d) => (d.required && !d.installed && !d.unavailable) || (!d.required && optional[d.id] !== false)).length : 1);
+  function depNote(d: InstallDep): string {
+    if (!d.required) return d.summary ? `Optional, ${d.summary}` : 'Optional';
+    if (d.unavailable) return 'Required, no build for this version';
+    if (d.off) return 'Required, turned off; will be turned on';
+    return d.installed ? 'Required, already installed' : 'Required';
+  }
   const loader = $derived(inst.data?.loader ? `, ${LOADER_NAMES[inst.data.loader.kind]}` : '');
   // Composed: shown only when the mods after this install would want more memory than the instance has.
   const suggest = $derived(p && content === 'mods' && prefs.value?.java.suggestMemory !== false ? suggestMemoryGb(p.mods + count, info.data?.memoryMb ?? 0) : 0);
@@ -77,8 +83,8 @@
           <div class="dep">
             {#if d.required}<Check on={true} />{:else}<Check on={optional[d.id] !== false} label="Include {d.name}" onchange={(v) => (optional[d.id] = v)} />{/if}
             <Tile art={d.art ?? artOf(d.name, d.icon)} style="width: 28px; height: 28px; flex-basis: 28px" />
-            <span style="min-width: 0"><span class="trunc" style="display: block">{d.name}</span><span class="small faint trunc" style="display: block">{d.required ? (d.installed ? 'Required, already installed' : 'Required') : d.summary ? `Optional, ${d.summary}` : 'Optional'}</span></span>
-            {#if d.installed}<span class="badge badge-accent">Installed</span>{:else}<span class="mono small muted">{bytes(d.size)}</span>{/if}
+            <span style="min-width: 0"><span class="trunc" style="display: block">{d.name}</span><span class="small faint trunc" style="display: block">{depNote(d)}</span></span>
+            {#if d.unavailable}<span class="badge badge-warn">Missing</span>{:else if d.installed}<span class="badge badge-accent">Installed</span>{:else}<span class="mono small muted">{bytes(d.size)}</span>{/if}
           </div>
         {/each}
       </div>

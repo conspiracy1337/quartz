@@ -68,12 +68,12 @@ func (s *Store) Move(ctx context.Context, p MovePlan, progress func(done, total 
 		return Instance{}, err
 	}
 	_ = os.Remove(p.To) // an empty target folder is fine
-	if err := os.Rename(p.From, p.To); err != nil {
-		if err := copyTree(ctx, p.From, p.To, progress); err != nil {
+	renamed := os.Rename(p.From, p.To) == nil
+	if !renamed {
+		if err := copyTree(ctx, p.From, p.To, copyOpts{progress: progress}); err != nil {
 			_ = os.RemoveAll(p.To)
 			return Instance{}, err
 		}
-		defer func() { _ = os.RemoveAll(p.From) }()
 	}
 	loc := p.To
 	if p.Default {
@@ -82,13 +82,42 @@ func (s *Store) Move(ctx context.Context, p MovePlan, progress func(done, total 
 	} else {
 		writeMarker(p.To, p.ID)
 	}
-	return s.Update(p.ID, func(in *Instance) error { in.Location = loc; return nil })
+	in, err := s.Update(p.ID, func(in *Instance) error { in.Location = loc; return nil })
+	if err != nil {
+		// The instance still points at the old place: put it back as it was.
+		if renamed {
+			_ = os.Rename(p.To, p.From)
+			if p.Default {
+				writeMarker(p.From, p.ID)
+			} else {
+				_ = os.Remove(filepath.Join(p.From, markerName))
+			}
+		} else {
+			_ = os.RemoveAll(p.To)
+		}
+		return Instance{}, err
+	}
+	if !renamed {
+		_ = os.RemoveAll(p.From) // only once the instance points at the copy
+	}
+	return in, nil
 }
 
-// copyTree copies src into dst, keeping links as links, and checks that dst
-// ends up with every file at the same size. Both folders are opened as roots,
+// copyOpts tune copyTree.
+type copyOpts struct {
+	// skip leaves a file or folder (and all in it) out.
+	skip func(rel string) bool
+	// place may put a file in place another way (a link to its stored copy);
+	// it reports false to have it copied.
+	place    func(rel, dst string) (bool, error)
+	progress func(done, total int64)
+}
+
+// copyTree copies src into dst, keeping links as links (one pointing into src
+// now points to the same place in dst), and checks that dst ends up with
+// every file at the same size. Both folders are opened as roots,
 // so a link swapped in during the copy can't lead it outside either one.
-func copyTree(ctx context.Context, src, dst string, progress func(done, total int64)) error {
+func copyTree(ctx context.Context, src, dst string, o copyOpts) error {
 	if err := os.MkdirAll(dst, 0o700); err != nil {
 		return err
 	}
@@ -102,12 +131,25 @@ func copyTree(ctx context.Context, src, dst string, progress func(done, total in
 		return err
 	}
 	defer func() { _ = to.Close() }()
+	skipped := func(rel string, d fs.DirEntry) error {
+		if rel == "." || o.skip == nil || !o.skip(rel) {
+			return nil
+		}
+		if d.IsDir() {
+			return fs.SkipDir
+		}
+		return errSkip
+	}
 
 	var total, done int64
 	var files, copied int
-	_ = fs.WalkDir(from.FS(), ".", func(_ string, d fs.DirEntry, err error) error {
-		if err == nil && d.Type().IsRegular() {
-			if info, err := d.Info(); err == nil {
+	// Counting only: an unreadable entry fails the copy below instead.
+	_ = fs.WalkDir(from.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
+		if err == nil {
+			if serr := skipped(rel, d); serr != nil {
+				return ignoreSkip(serr)
+			}
+			if info, ierr := d.Info(); ierr == nil && d.Type().IsRegular() {
 				total += info.Size()
 				files++
 			}
@@ -121,6 +163,9 @@ func copyTree(ctx context.Context, src, dst string, progress func(done, total in
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if err := skipped(rel, d); err != nil {
+			return ignoreSkip(err)
+		}
 		switch {
 		case rel == ".":
 			return nil
@@ -131,13 +176,17 @@ func copyTree(ctx context.Context, src, dst string, progress func(done, total in
 			if err != nil {
 				return err
 			}
+			// A link into the old folder would dangle once it is deleted.
+			if r, err := filepath.Rel(src, link); err == nil && filepath.IsAbs(link) && filepath.IsLocal(r) {
+				link = filepath.Join(dst, r)
+			}
 			return to.Symlink(link, rel)
 		case d.Type().IsRegular():
-			n, err := copyFile(from, to, rel)
+			n, err := placeOrCopy(from, to, rel, filepath.Join(dst, filepath.FromSlash(rel)), o.place)
 			done += n
 			copied++
-			if progress != nil {
-				progress(done, total)
+			if o.progress != nil {
+				o.progress(done, total)
 			}
 			return err
 		}
@@ -150,6 +199,39 @@ func copyTree(ctx context.Context, src, dst string, progress func(done, total in
 		return fmt.Errorf("instance: the copy is incomplete (%d of %d files)", copied, files)
 	}
 	return nil
+}
+
+// errSkip leaves one file out of a walk.
+var errSkip = errors.New("skip")
+
+func ignoreSkip(err error) error {
+	if errors.Is(err, errSkip) {
+		return nil
+	}
+	return err
+}
+
+// placeOrCopy lets place put a file in place, else copies it; it returns the
+// size now at dst.
+func placeOrCopy(from, to *os.Root, rel, dst string, place func(rel, dst string) (bool, error)) (int64, error) {
+	if place != nil {
+		ok, err := place(rel, dst)
+		if err != nil {
+			return 0, err
+		}
+		if ok {
+			info, err := to.Lstat(rel)
+			if err != nil {
+				return 0, err
+			}
+			want, err := from.Lstat(rel)
+			if err == nil && want.Size() != info.Size() {
+				return info.Size(), io.ErrShortWrite
+			}
+			return info.Size(), err
+		}
+	}
+	return copyFile(from, to, rel)
 }
 
 func copyFile(from, to *os.Root, rel string) (int64, error) {

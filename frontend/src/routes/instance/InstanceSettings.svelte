@@ -41,6 +41,13 @@
   const javaOptions = $derived([{ value: '', label: `Automatic (${i.javaAuto})` }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
   const suggestGb = $derived(prefs.value?.java.suggestMemory ? suggestMemoryGb(i.counts.mods, info.data?.memoryMb ?? 0) : 0);
   const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${Math.round(info.data.memoryMb / 1024)} GB.${suggestGb ? ` ${suggestGb} GB suits ${plural(i.counts.mods, 'mod')}.` : ''}` : undefined);
+  // The account this instance always plays as (Prism, Pandora); one that was removed stays listed.
+  const accounts = query(() => api.accounts.list());
+  const accountOptions = $derived.by(() => {
+    const opts = [{ value: '', label: 'Default account' }, ...(accounts.data ?? []).map((a) => ({ value: a.id, label: a.name }))];
+    if (st.account && !opts.some((o) => o.value === st.account)) opts.push({ value: st.account, label: 'Removed account' });
+    return opts;
+  });
   const groupOptions = $derived([{ value: '', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
   let naming = $state(false);
   const onStart = $derived(st.window.onGameStart || prefs.value?.general.onGameStart || 'hide');
@@ -58,6 +65,21 @@
     fn();
     void save();
   }
+  // While Override is off the card shows, dimmed, the global values the
+  // instance inherits. Turning it on (or editing a field) starts from them.
+  const inherited = $derived.by(() => {
+    const g = prefs.value?.java;
+    return g ? { javaPath: g.autoPick ? '' : g.defaultPath, memoryMinMb: g.memoryMinMb, memoryMaxMb: g.memoryMaxMb, jvmArgs: g.jvmArgs } : null;
+  });
+  const java = $derived(st.java.override || !inherited ? st.java : { ...st.java, ...inherited });
+  function setOverride(on: boolean, fn?: () => void) {
+    change(() => {
+      if (on && !st.java.override && inherited) Object.assign(st.java, inherited);
+      st.java.override = on;
+      fn?.();
+    });
+  }
+  const editJava = (fn: () => void) => setOverride(true, fn);
   // "Open straight into": the instance's own worlds and servers.
   const worlds = query(() => api.worlds.list(i.id));
   const servers = query(() => api.servers.list(i.id));
@@ -99,13 +121,13 @@
 <div class="scroll">
   <div class="page set-grid" style="gap: 24px; padding-top: 18px">
     <section class="sec" aria-label="Java and memory">
-      <div class="sec-h"><h2 class="h3">Java and memory</h2><button class="ov" onclick={() => change(() => (st.java.override = !st.java.override))} aria-pressed={st.java.override}><span>Override global settings</span><span class="tg" class:on={st.java.override} aria-hidden="true"><span></span></span></button></div>
+      <div class="sec-h"><h2 class="h3">Java and memory</h2><button class="ov" onclick={() => setOverride(!st.java.override)} aria-pressed={st.java.override}><span>Override global settings</span><span class="tg" class:on={st.java.override} aria-hidden="true"><span></span></span></button></div>
       <div class="card" class:inherited={!st.java.override}>
-        <Setting title="Java runtime" desc="Automatic picks the version this Minecraft needs."><Select value={st.java.javaPath} options={javaOptions} label="Java runtime" onchange={(v) => change(() => (st.java.javaPath = v))} /></Setting>
+        <Setting title="Java runtime" desc="Automatic picks the version this Minecraft needs."><Select value={java.javaPath} options={javaOptions} label="Java runtime" onchange={(v) => editJava(() => (st.java.javaPath = v))} /></Setting>
         <div class="divider"></div>
-        <Setting title="Memory" desc={memoryDesc}><span style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"><label class="input"><span class="sr">Minimum</span><input value={st.java.memoryMinMb} class="tnum" inputmode="numeric" onchange={(e) => change(() => (st.java.memoryMinMb = num(e.currentTarget.value)))} /><span class="suffix">MB min</span></label><label class="input"><span class="sr">Maximum</span><input value={st.java.memoryMaxMb} class="tnum" inputmode="numeric" onchange={(e) => change(() => (st.java.memoryMaxMb = num(e.currentTarget.value)))} /><span class="suffix">MB max</span></label></span></Setting>
+        <Setting title="Memory" desc={memoryDesc}><span style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"><label class="input"><span class="sr">Minimum</span><input value={java.memoryMinMb} class="tnum" inputmode="numeric" onchange={(e) => { const v = num(e.currentTarget.value); editJava(() => (st.java.memoryMinMb = v)); }} /><span class="suffix">MB min</span></label><label class="input"><span class="sr">Maximum</span><input value={java.memoryMaxMb} class="tnum" inputmode="numeric" onchange={(e) => { const v = num(e.currentTarget.value); editJava(() => (st.java.memoryMaxMb = v)); }} /><span class="suffix">MB max</span></label></span></Setting>
         <div class="divider"></div>
-        <div style="padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 6px"><span class="setting-title">JVM arguments</span><textarea class="textarea" rows="2" aria-label="JVM arguments" value={st.java.jvmArgs} onchange={(e) => change(() => (st.java.jvmArgs = e.currentTarget.value))}></textarea></div>
+        <div style="padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 6px"><span class="setting-title">JVM arguments</span><textarea class="textarea" rows="2" aria-label="JVM arguments" value={java.jvmArgs} onchange={(e) => { const v = e.currentTarget.value; editJava(() => (st.java.jvmArgs = v)); }}></textarea></div>
       </div>
     </section>
     <section class="sec" aria-label="Game window">
@@ -118,6 +140,8 @@
         <Setting title="When the game starts"><Seg options={ON_GAME_START} value={onStart} label="When the game starts" onchange={(v) => change(() => (st.window.onGameStart = v))} /></Setting>
         <div class="divider"></div>
         <Setting title="Open straight into" desc="Skips the title screen."><Select value={into} options={intoOptions} label="Open straight into" onchange={setInto} /></Setting>
+        <div class="divider"></div>
+        <Setting title="Play as" desc="Right-click Play as still picks another for one launch."><Select value={st.account ?? ''} options={accountOptions} label="Play as" onchange={(v) => change(() => (st.account = v))} /></Setting>
       </div>
     </section>
     <section class="sec" aria-label="Syncing">

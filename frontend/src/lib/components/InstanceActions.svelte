@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '../api';
   import type { Instance } from '../api/types';
-  import { move, repair, trash } from '../instanceActions';
+  import { duplicate, move, repair, trash } from '../instanceActions';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
 
@@ -33,6 +33,7 @@
 {#if !header}
   <button class="mi" role="menuitem" onclick={() => act(() => api.instances.openFolder(i.id))}><Icon name="folder" size={14} /><span>Open folder</span><span></span></button>
 {/if}
+<button class="mi" role="menuitem" onclick={() => act(() => duplicate(i))}><Icon name="plus" size={14} /><span>Duplicate</span><span></span></button>
 <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'shortcut', instanceId: i.id }))}><Icon name="link" size={14} /><span>Create shortcut…</span><span></span></button>
 <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'export', instanceId: i.id }))}><Icon name="upload" size={14} /><span>Export…</span><span></span></button>
 <button class="mi" role="menuitem" onclick={() => act(() => repair(i))}><Icon name="refresh" size={14} /><span>Repair game files</span><span></span></button>

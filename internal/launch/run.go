@@ -409,7 +409,7 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	started := r.started.UTC()
 	if _, err := l.cfg.Instances.Update(r.instanceID, func(in *instance.Instance) error {
 		in.LastPlayed = &started
-		in.PlaytimeMin += r.record.LengthMin
+		in.AddPlaytime(ended.Sub(r.started))
 		return nil
 	}); err != nil {
 		l.cfg.Log.Error("updating playtime failed", "err", err)
@@ -435,6 +435,13 @@ func (l *Launcher) exited(r *run, waitErr error) {
 		vars["EXIT_CODE"] = strconv.Itoa(code)
 		if err := runCommand(context.Background(), r.postExit, gameDir, vars, append(r.env, "EXIT_CODE="+vars["EXIT_CODE"])); err != nil {
 			l.cfg.Log.Warn("after-exit command failed", "instance", r.instanceID, "err", err)
+			if l.cfg.Hooks.AfterExitFailed != nil {
+				name := r.instanceID
+				if in, err := l.cfg.Instances.Get(r.instanceID); err == nil {
+					name = in.Name
+				}
+				l.cfg.Hooks.AfterExitFailed(name, err)
+			}
 		}
 	}
 }
