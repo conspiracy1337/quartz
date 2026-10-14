@@ -54,8 +54,10 @@ var builtins = []Target{
 	{ID: "resourcepacks", Name: "Resource packs", Path: "resourcepacks", Group: Folders, Dir: true},
 	{ID: "shaderpacks", Name: "Shader packs", Path: "shaderpacks", Group: Folders, Dir: true},
 	{ID: "datapacks", Name: "Data packs", Path: "datapacks", Group: Folders, Dir: true},
+	{ID: "downloads", Name: "Server resource packs", Path: "downloads", Group: Folders, Dir: true},
 
 	{ID: "xaero", Name: "Xaero's Minimap", Path: "xaero", Group: Mods, Dir: true, ModIDs: []string{"xaerominimap", "xaeroworldmap", "xaerominimapfair"}},
+	{ID: "journeymap", Name: "JourneyMap", Path: "journeymap", Group: Mods, Dir: true, ModIDs: []string{"journeymap"}},
 	{ID: "dh", Name: "Distant Horizons", Path: "Distant_Horizons_server_data", Group: Mods, Dir: true, ModIDs: []string{"distanthorizons"}},
 	{ID: "voxy", Name: "Voxy", Path: ".voxy", Group: Mods, Dir: true, ModIDs: []string{"voxy"}},
 	{ID: "litematica", Name: "Litematica", Path: "schematics", Group: Mods, Dir: true, ModIDs: []string{"litematica"}},
