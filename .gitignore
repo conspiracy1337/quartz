@@ -8,6 +8,8 @@ frontend/node_modules/
 
 # Local tooling
 *.log
+# …except test fixtures
+!**/testdata/**/*.log
 .DS_Store
 # Release files (tools/release)
 dist/
