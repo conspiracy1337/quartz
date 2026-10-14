@@ -488,6 +488,11 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 		}
 		p.set(StageStart, "")
 	}
+	if p.eff.Performance.DedicatedGPU {
+		if err := sysinfo.PreferGPU(java.LaunchBinary(rt.Path)); err != nil {
+			l.cfg.Log.Warn("asking Windows for the high-performance GPU failed", "err", err)
+		}
+	}
 	r, err := l.start(ctx, sp)
 	if err != nil {
 		l.disassemble(&sp)
