@@ -214,3 +214,30 @@ func TestFinishRunNamesTheWorld(t *testing.T) {
 		t.Fatalf("world %q", rec.World)
 	}
 }
+
+// Newer versions keep the seed in data/minecraft/world_gen_settings.dat.
+func TestSeedFromWorldGenSettingsFile(t *testing.T) {
+	e := newEnv(t)
+	dir := filepath.Join(e.insts.GameDir(e.id), "saves", "New World")
+	e.world(t, "New World", "Northwatch", 0, false)
+	f, err := nbt.ReadFile(filepath.Join(dir, "level.dat"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Root.Get("Data").Comp.Delete("WorldGenSettings")
+	if err := nbt.WriteFile(filepath.Join(dir, "level.dat"), f); err != nil {
+		t.Fatal(err)
+	}
+	data := nbt.NewCompound()
+	data.Comp.Set("seed", nbt.NewLong(8675309))
+	root := nbt.NewCompound()
+	root.Comp.Set("data", data)
+	gen := filepath.Join(dir, "data", "minecraft", "world_gen_settings.dat")
+	_ = os.MkdirAll(filepath.Dir(gen), 0o755)
+	if err := nbt.WriteFile(gen, &nbt.File{Root: root, Gzip: true}); err != nil {
+		t.Fatal(err)
+	}
+	if seed, err := e.svc.Seed(e.id, "New World"); err != nil || seed != "8675309" {
+		t.Fatalf("seed %q %v", seed, err)
+	}
+}

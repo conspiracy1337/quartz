@@ -261,10 +261,17 @@ func (s *Service) Seed(id, folder string) (string, error) {
 	if data == nil {
 		return "", ErrNotWorld
 	}
-	if seed := data.Path("WorldGenSettings", "seed"); seed != nil {
-		return strconv.FormatInt(seed.Int(), 10), nil
+	seed := data.Path("WorldGenSettings", "seed")
+	if seed == nil {
+		seed = data.Get("RandomSeed")
 	}
-	return strconv.FormatInt(data.Get("RandomSeed").Int(), 10), nil
+	if seed == nil {
+		// Newer versions keep world generation out of level.dat.
+		if f, err := nbt.ReadFile(filepath.Join(d, "data", "minecraft", "world_gen_settings.dat")); err == nil {
+			seed = f.Root.Path("data", "seed")
+		}
+	}
+	return strconv.FormatInt(seed.Int(), 10), nil
 }
 
 // Rename changes the name the game shows (LevelName); the folder stays.
