@@ -23,20 +23,23 @@ func TestSandboxFacade(t *testing.T) {
 	a := NewSandbox(&Ctx{}, SandboxDeps{Service: sandbox.New(sandbox.Config{DataRoot: root}), Store: insts, Settings: st, Bus: events.NewBus(), Root: root})
 
 	v, err := a.View(in.ID)
-	if err != nil || !v.On || v.Preset != "standard" || len(v.Rows) != 8 {
+	if err != nil || !v.On || v.Preset != "standard" || len(v.Rows) != 9 {
 		t.Fatalf("%+v %v", v, err)
 	}
-	if v.Rows[0].Path != "instances/"+in.ID+"/" || v.Rows[3].Path != "None shared" || v.Rows[2].Path != "Picked when you play" {
+	if v.Rows[0].Path != "instances/"+in.ID+"/" || v.Rows[1].Path != "instances/"+in.ID+"/game/mods/" || v.Rows[4].Path != "None shared" || v.Rows[3].Path != "Picked when you play" {
 		t.Fatalf("paths %+v", v.Rows)
 	}
-	if v, err = a.SetLevel(in.ID, "internet", "no"); err != nil || v.Preset != "custom" || v.Rows[4].Level != "no" {
+	if v, err = a.SetLevel(in.ID, "internet", "no"); err != nil || v.Preset != "custom" || v.Rows[5].Level != "no" {
 		t.Fatalf("%+v %v", v, err)
 	}
-	if v, err = a.SetPreset(in.ID, "standard"); err != nil || v.Rows[4].Level != "on" {
+	if v, err = a.SetPreset(in.ID, "standard"); err != nil || v.Rows[5].Level != "on" {
 		t.Fatalf("%+v %v", v, err)
 	}
 	if _, err := a.SetLevel(in.ID, "instance", "ro"); !errors.Is(err, errBadSandbox) {
 		t.Fatal("the instance row is fixed")
+	}
+	if _, err := a.SetLevel(in.ID, "mods", "rw"); !errors.Is(err, errBadSandbox) {
+		t.Fatal("the mods row is fixed")
 	}
 	if _, err := a.SetPreset(in.ID, "lax"); !errors.Is(err, errBadSandbox) {
 		t.Fatal(err)
@@ -47,14 +50,14 @@ func TestSandboxFacade(t *testing.T) {
 	if _, err := a.addFolder(in.ID, root); !errors.Is(err, sandbox.ErrFolder) {
 		t.Fatal("the data folder was allowed")
 	}
-	if v, err = a.addFolder(in.ID, maps); err != nil || len(v.Rows) != 9 || !v.Rows[8].Folder || v.Rows[8].Level != "ro" {
+	if v, err = a.addFolder(in.ID, maps); err != nil || len(v.Rows) != 10 || !v.Rows[9].Folder || v.Rows[9].Level != "ro" {
 		t.Fatalf("%+v %v", v, err)
 	}
-	folder := v.Rows[8].ID
-	if v, err = a.SetFolder(in.ID, folder, "rw"); err != nil || v.Rows[8].Level != "rw" {
+	folder := v.Rows[9].ID
+	if v, err = a.SetFolder(in.ID, folder, "rw"); err != nil || v.Rows[9].Level != "rw" {
 		t.Fatalf("%+v %v", v, err)
 	}
-	if v, err = a.SetFolder(in.ID, folder, "remove"); err != nil || len(v.Rows) != 8 {
+	if v, err = a.SetFolder(in.ID, folder, "remove"); err != nil || len(v.Rows) != 9 {
 		t.Fatalf("%+v %v", v, err)
 	}
 	if v, err = a.SetOn(in.ID, false); err != nil || v.On {

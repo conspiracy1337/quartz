@@ -22,6 +22,7 @@ func TestRedact(t *testing.T) {
 		{"mail me at alice@example.com", "alice@example.com", Redacted},
 		{"/home/alice/.local/share/Quartz", "/home/alice", "/home/<user>"},
 		{`C:\Users\alice\AppData`, `\Users\alice`, `\Users\<user>`},
+		{`"path": "C:\\Users\\alice\\AppData"`, `\\Users\\alice`, `\\Users\\<user>`},
 	}
 	for _, tt := range tests {
 		got := r.Redact(tt.in)
@@ -75,5 +76,15 @@ func TestAddSecret(t *testing.T) {
 	r.RemoveSecret("hunter2-proxy")
 	if r.Redact("hunter2-proxy") != "hunter2-proxy" {
 		t.Fatal("secret not removed")
+	}
+}
+
+// BenchmarkRedact is one ordinary game log line, the common case.
+func BenchmarkRedact(b *testing.B) {
+	r := NewRedactor("alice")
+	r.AddSecret("eyJsecretsecret.payloadpayload.signaturesig")
+	line := "[12:01:22] [Render thread/INFO]: Loaded 1342 recipes from 214 mods in /home/alice/.minecraft"
+	for b.Loop() {
+		_ = r.Redact(line)
 	}
 }

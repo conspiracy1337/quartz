@@ -92,6 +92,12 @@ func (l *Launcher) sandboxRun(sp *spec, argv []string) sandbox.Run {
 	if sp.view != nil {
 		r.Mounts = sp.view.Mounts()
 	}
+	// Before 1.21.4 the game saves a skin under the assets and reads it back
+	// from there; the shared assets are read-only, so each instance gets its
+	// own skin cache.
+	if sp.res != nil && sp.res.AssetsRoot != "" {
+		r.Redirects = []sandbox.Redirect{{From: filepath.Join(r.Data, "skins"), To: filepath.Join(sp.res.AssetsRoot, "skins")}}
+	}
 	// Absolute programs in front of java (the player's wrapper, MangoHud).
 	for _, a := range argv {
 		if a == java.LaunchBinary(sp.rt.Path) {

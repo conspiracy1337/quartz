@@ -102,7 +102,9 @@ func TestPlayRejectsBadTargets(t *testing.T) {
 
 func TestLogDetection(t *testing.T) {
 	r := &run{}
-	r.logFile, _ = os.Create(filepath.Join(t.TempDir(), "x.log"))
+	if err := r.openLog(filepath.Join(t.TempDir(), "x.log")); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = r.logFile.Close() }()
 	r.add(gamelog.Line{Message: "Loading Minecraft 1.21.4 with Fabric Loader 0.16.10"})
 	if r.loaded.Load() {

@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"quartz/internal/content"
 	"quartz/internal/core/logging"
@@ -129,5 +131,42 @@ func TestUploadRefusesOddAnswers(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(game, "logs", "latest.log"), []byte("x"), 0o600)
 	if _, err := svc.UploadFile(context.Background(), id, "latest.log"); !errors.Is(err, ErrUpload) {
 		t.Fatalf("%v", err)
+	}
+}
+
+// A log over mclo.gs's limits keeps its start (versions, mods) and its end
+// (the crash), with the cut marked; a byte cut never splits a character.
+func TestUploadKeepsHeadAndTail(t *testing.T) {
+	svc, _, _ := setup(t, func(http.ResponseWriter, *http.Request) {})
+	var b strings.Builder
+	for i := range 30_000 {
+		fmt.Fprintf(&b, "line %d\n", i)
+	}
+	got := svc.forUpload(b.String())
+	if !strings.HasPrefix(got, "line 0\n") || !strings.Contains(got, "\nline 9999\n… 5101 lines left out …\nline 15101\n") || !strings.HasSuffix(got, "line 29999\n") {
+		t.Fatalf("cut: %d lines, around the gap %q", strings.Count(got, "\n"), got[len(got)/2-80:len(got)/2+80])
+	}
+	huge := strings.Repeat("ü", maxUpload)
+	if got := svc.forUpload(huge); len(got) > maxUpload || !utf8.ValidString(got) || !strings.Contains(got, "lines left out") {
+		t.Fatalf("byte cut: %d bytes, valid %v", len(got), utf8.ValidString(got))
+	}
+}
+
+// A run's upload starts with its summary, so the link alone says what ran.
+func TestUploadRunHasSummary(t *testing.T) {
+	var got string
+	svc, id, _ := setup(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		got = r.Form.Get("content")
+		_, _ = w.Write([]byte(`{"success":true,"id":"abc","url":"https://mclo.gs/abc"}`))
+	})
+	runs := svc.d.Instances.RunsDir(id)
+	p, _ := launch.EvidencePath(runs, "20250321-193340.000", launch.EvidenceLog)
+	_ = os.WriteFile(p, []byte("[12:00:00] [main/INFO]: the log\n"), 0o600)
+	if _, err := svc.UploadRun(context.Background(), id, ""); err != nil {
+		t.Fatal(err)
+	}
+	if i, j := strings.Index(got, "Mods: 2, 1 on"), strings.Index(got, "the log"); i < 0 || j < i {
+		t.Fatalf("upload: %q", got)
 	}
 }

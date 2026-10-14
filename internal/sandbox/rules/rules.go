@@ -30,6 +30,7 @@ type ID string
 // The rows of the Sandbox page, in its order.
 const (
 	Instance  ID = "instance"
+	Mods      ID = "mods"
 	Libraries ID = "libraries"
 	Java      ID = "java"
 	Synced    ID = "synced"
@@ -63,6 +64,9 @@ type Rule struct {
 // Table is every row, in page order.
 var Table = []Rule{
 	{ID: Instance, Standard: RW, Strict: RW, choices: []Level{RW}},
+	// The instance's mods are store files linked into every instance that
+	// uses them; a game that could write them would reach the others.
+	{ID: Mods, Standard: RO, Strict: RO, choices: []Level{RO}},
 	{ID: Libraries, Standard: RO, Strict: RO, choices: []Level{RO}},
 	{ID: Java, Standard: RO, Strict: RO, choices: []Level{RO}},
 	{ID: Synced, Standard: RW, Strict: RO, choices: []Level{RW, RO, Blocked}},

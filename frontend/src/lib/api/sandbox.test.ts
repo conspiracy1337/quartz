@@ -7,7 +7,7 @@ describe('the preview sandbox', () => {
   it('follows the presets and turns Custom on a change', async () => {
     let v = await sandboxApi.view('fo');
     expect(v.preset).toBe('standard');
-    expect(v.rows.map((r) => r.id)).toEqual(['instance', 'libraries', 'java', 'synced', 'internet', 'discord', 'graphics', 'home']);
+    expect(v.rows.map((r) => r.id)).toEqual(['instance', 'mods', 'libraries', 'java', 'synced', 'internet', 'discord', 'graphics', 'home']);
     v = await sandboxApi.setPreset('fo', 'strict');
     expect([level(v, 'internet'), level(v, 'discord'), level(v, 'synced'), level(v, 'graphics')]).toEqual(['no', 'no', 'ro', 'on']);
     v = await sandboxApi.setLevel('fo', 'internet', 'on');

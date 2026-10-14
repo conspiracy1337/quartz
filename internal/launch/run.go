@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"bufio"
 	"cmp"
 	"context"
 	"errors"
@@ -37,8 +38,11 @@ import (
 
 const (
 	consoleLines = 20_000
-	stopGrace    = 3 * time.Second
-	logBatch     = 100 * time.Millisecond
+	// stopGrace is how long Stop waits before killing the game. Quitting
+	// halts the singleplayer server, which saves the world first; a big one
+	// takes several seconds. A second Stop kills at once.
+	stopGrace = 15 * time.Second
+	logBatch  = 100 * time.Millisecond
 )
 
 // run is one running game.
@@ -48,8 +52,13 @@ type run struct {
 	child      *procx.Child
 	started    time.Time
 	con        *gamelog.Console
-	logFile    *os.File
 	accountID  string
+
+	// The run's log: lines are buffered and written out with each console
+	// batch, not one write per line.
+	lmu     sync.Mutex
+	logFile *os.File
+	logBuf  *bufio.Writer
 
 	stopping atomic.Bool
 	killed   atomic.Bool
@@ -146,8 +155,8 @@ func (l *Launcher) command(sp *spec) (procx.Spec, []byte, string, error) {
 	}
 	args = append(args, user...)
 	args = append(args, nativeLibraryArgs(eff)...)
-	// Defence in depth against Log4Shell on old versions, whatever the config says.
-	args = append(args, "-Dlog4j2.formatMsgNoLookups=true")
+	args = append(args, java.Properties...)
+	args = append(args, legacyLWJGLArgs(res)...)
 	if res.LogConfig != "" && res.LogArgument != "" {
 		args = append(args, mojang.Vars{"path": res.LogConfig}.Expand(res.LogArgument, unknown))
 	}
@@ -231,14 +240,14 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		r.record.Sandbox = sp.jail.Name
 	}
 	r.con = gamelog.NewConsole(consoleLines, l.cfg.Redactor, logBatch, r.add, func(lines []gamelog.Line) {
+		r.flushLog()
 		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, RunID: r.id, Lines: lines})
 	})
 	runsDir := l.cfg.Instances.RunsDir(inst.ID)
 	if err := os.MkdirAll(runsDir, 0o700); err != nil {
 		return nil, err
 	}
-	var err error
-	if r.logFile, err = os.OpenFile(filepath.Join(runsDir, r.id+".log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil { //nolint:gosec // our own runs folder
+	if err := r.openLog(filepath.Join(runsDir, r.id+".log")); err != nil {
 		return nil, err
 	}
 	// The token stays a secret for the launcher's lifetime: another run may
@@ -300,7 +309,26 @@ func (r *run) add(line gamelog.Line) {
 	if line.Thread != "" {
 		thread = line.Thread + "/"
 	}
-	_, _ = fmt.Fprintf(r.logFile, "[%s] [%s%s]: %s\n", line.Time, thread, line.Level, line.Message)
+	r.lmu.Lock()
+	_, _ = fmt.Fprintf(r.logBuf, "[%s] [%s%s]: %s\n", line.Time, thread, line.Level, line.Message)
+	r.lmu.Unlock()
+}
+
+// openLog creates the run's log.
+func (r *run) openLog(p string) error {
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // our own runs folder
+	if err != nil {
+		return err
+	}
+	r.logFile, r.logBuf = f, bufio.NewWriterSize(f, 64<<10)
+	return nil
+}
+
+// flushLog writes the buffered lines to the run's log.
+func (r *run) flushLog() {
+	r.lmu.Lock()
+	_ = r.logBuf.Flush()
+	r.lmu.Unlock()
 }
 
 // tailLines is how much of the console finishers see.
@@ -331,7 +359,7 @@ type LogBatch struct {
 	Lines      []gamelog.Line `json:"lines"`
 }
 
-// Stop asks every copy of the game to quit; after 3 seconds, or on a second
+// Stop asks every copy of the game to quit; after 15 seconds, or on a second
 // Stop, they are killed.
 func (l *Launcher) Stop(id string) error {
 	l.mu.Lock()
@@ -371,6 +399,7 @@ func (l *Launcher) stop(r *run) error {
 func (l *Launcher) exited(r *run, waitErr error) {
 	close(r.done)
 	r.con.Done()
+	r.flushLog()
 	_ = r.logFile.Close()
 
 	code, reaped := r.child.Result()
@@ -399,7 +428,8 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	kept := l.disassemble(&r.sp)
 	gameDir := l.cfg.Instances.GameDir(r.instanceID)
 	runsDir := l.cfg.Instances.RunsDir(r.instanceID)
-	f := &Finished{InstanceID: r.instanceID, GameDir: gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record, Tail: tail(r.con.Lines(), tailLines)}
+	f := &Finished{InstanceID: r.instanceID, GameDir: gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record,
+		Stopped: r.stopping.Load(), Tail: tail(r.con.Lines(), tailLines)}
 	for _, fin := range l.cfg.Finishers {
 		fin.FinishRun(f)
 	}
@@ -426,7 +456,8 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	none := len(l.running) == 0
 	l.mu.Unlock()
 	l.cfg.Bus.Emit(events.InstancesChanged, nil)
-	l.cfg.Bus.Emit(events.GameState, State{InstanceID: r.instanceID, RunID: r.id, State: "exited", ExitCode: code, Result: result, Copies: len(rest), Kept: kept})
+	// The finishers may have found a crash the exit code didn't show.
+	l.cfg.Bus.Emit(events.GameState, State{InstanceID: r.instanceID, RunID: r.id, State: "exited", ExitCode: code, Result: r.record.Result, Copies: len(rest), Kept: kept})
 	if none && l.cfg.Hooks.AllExited != nil {
 		l.cfg.Hooks.AllExited()
 	}

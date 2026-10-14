@@ -2,8 +2,11 @@
 // content-addressed, read-only folder of mods and packs, each kept once by
 // its sha1 however many instances use it. Instances get their files from it
 // by reflink or hardlink (a copy only across volumes), never by symlink.
-// Blobs are only ever added or deleted, never edited, which is what makes a
-// hardlink safe: no instance can change the bytes another one reads.
+// Blobs are only ever added or deleted, never edited, and sealed read-only.
+// A hardlink still shares the blob's inode, so anything able to chmod and
+// rewrite an instance's file would change it for every instance: the
+// launcher never does, and a sandboxed game can't (its mods folder is
+// protected, see package sandbox).
 package store
 
 import (

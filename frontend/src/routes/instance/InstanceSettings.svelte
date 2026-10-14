@@ -158,15 +158,18 @@
       <div class="sec-h"><h2 class="h3">Sandbox</h2></div>
       <Setting title="Run in a sandbox" desc={i.sandboxed ? `Mods can only reach this instance's folder. ${capitalize(i.sandboxPreset || 'standard')} access rules.` : 'Off. Mods can reach your files.'} href={sub('sandbox')} class="card"><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
     </section>
-{#if info.data?.os === 'linux'}
+{#if info.data?.os === 'linux' || info.data?.os === 'windows'}
+        {@const linux = info.data.os === 'linux'}
         <section class="sec" aria-label="Performance">
-      <div class="sec-h"><h2 class="h3">Performance</h2><span class="small faint">Linux</span></div>
+      <div class="sec-h"><h2 class="h3">Performance</h2><span class="small faint">{linux ? 'Linux' : 'Windows'}</span></div>
       <div class="card">
-        <Setting title="Use the dedicated GPU" desc={i.gpu || 'This PC has one GPU.'}><Toggle on={st.performance.dedicatedGpu} label="Use the dedicated GPU" onchange={(v) => change(() => (st.performance.dedicatedGpu = v))} /></Setting>
+        <Setting title="Use the dedicated GPU" desc={linux ? i.gpu || 'No other GPU to switch to.' : 'Asks Windows to run the game on its high-performance GPU.'}><Toggle on={st.performance.dedicatedGpu} label="Use the dedicated GPU" onchange={(v) => change(() => (st.performance.dedicatedGpu = v))} /></Setting>
+        {#if linux}
         <div class="divider"></div>
         <Setting title="Feral GameMode" desc="Asks the system for CPU and GPU performance while playing."><Toggle on={st.performance.gameMode} label="Feral GameMode" onchange={(v) => change(() => (st.performance.gameMode = v))} /></Setting>
         <div class="divider"></div>
         <Setting title="MangoHud overlay" desc="Shows FPS, frame times and temperatures."><Toggle on={st.performance.mangoHud} label="MangoHud overlay" onchange={(v) => change(() => (st.performance.mangoHud = v))} /></Setting>
+        {/if}
       </div>
     </section>
     {/if}

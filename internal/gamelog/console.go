@@ -2,7 +2,9 @@ package gamelog
 
 import (
 	"bufio"
+	"errors"
 	"io"
+	"strings"
 	"sync"
 	"time"
 )
@@ -65,13 +67,40 @@ func (c *Console) Start(stdout, stderr io.Reader) (wait func()) {
 func (c *Console) read(src io.Reader, stderr bool, wg *sync.WaitGroup) {
 	defer wg.Done()
 	p := NewParser(c.add, c.red, stderr)
-	sc := bufio.NewScanner(src)
-	sc.Buffer(make([]byte, 64<<10), 1<<20)
-	for sc.Scan() {
+	eachLine(src, func(line string) {
 		c.firstOnce.Do(func() { close(c.first) })
-		p.Feed(sc.Text())
-	}
+		p.Feed(line)
+	})
 	p.Close()
+}
+
+// maxLine is the longest line kept. The rest of a longer one is dropped, but
+// the stream is always read to its end: a process whose pipe nobody drains
+// blocks on its next write, so one huge line must never stop the reading.
+const maxLine = 64 << 10
+
+// lineCut ends a line cut at maxLine.
+const lineCut = " … (line cut)"
+
+// eachLine calls fn with every line of src, without its line ending, until
+// the stream ends.
+func eachLine(src io.Reader, fn func(string)) {
+	r := bufio.NewReaderSize(src, maxLine)
+	for {
+		chunk, err := r.ReadSlice('\n')
+		if errors.Is(err, bufio.ErrBufferFull) {
+			line := strings.ToValidUTF8(string(chunk), "") + lineCut
+			for errors.Is(err, bufio.ErrBufferFull) {
+				_, err = r.ReadSlice('\n')
+			}
+			fn(line)
+		} else if len(chunk) > 0 {
+			fn(strings.TrimSuffix(strings.TrimSuffix(string(chunk), "\n"), "\r"))
+		}
+		if err != nil {
+			return
+		}
+	}
 }
 
 // add takes lines from both streams; the hook sees them one at a time.

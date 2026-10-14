@@ -402,7 +402,7 @@ func serverArgs(res *install.Server, eff instance.Effective, srv *server) []stri
 	if user, err := shlex.Split(eff.JVMArgs); err == nil {
 		argv = append(argv, user...)
 	}
-	argv = append(argv, "-Dlog4j2.formatMsgNoLookups=true")
+	argv = append(argv, java.Properties...)
 	if res.LogConfig != "" && res.LogArgument != "" {
 		argv = append(argv, strings.ReplaceAll(res.LogArgument, "${path}", res.LogConfig))
 	}

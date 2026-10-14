@@ -36,6 +36,9 @@ type Run struct {
 	Read     []string
 	// Write are other read-write folders (a hosted server's worlds).
 	Write []string
+	// Redirects are folders inside read-only ones the game must write (its
+	// skin cache under the shared assets).
+	Redirects []Redirect
 	// Shared are the shared folders the run's view uses read-write; on
 	// Windows they need the container's access too.
 	Shared []string
@@ -46,6 +49,29 @@ type Run struct {
 	// GameMode registers the game with GameMode from outside (Linux).
 	GameMode bool
 }
+
+// protectedFolders are the game folders a run reads but never changes. A
+// mod's file in mods/ is its store blob, a hard link (where the disk can't
+// clone) in every instance that uses it, so a game able to write one would
+// change it for all of them, unsandboxed ones included.
+var protectedFolders = []string{"mods"}
+
+// Protected lists the run's protected folders that exist as real folders (a
+// mods folder linked to another launcher's holds no store files).
+func (r Run) Protected() []string {
+	var out []string
+	for _, f := range protectedFolders {
+		p := filepath.Join(r.GameDir, f)
+		if fi, err := os.Lstat(p); err == nil && fi.IsDir() {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// Redirect shows the instance's own From folder at To, read-write, where
+// the OS can mount it (Linux). Elsewhere To itself becomes writable.
+type Redirect struct{ From, To string }
 
 // Level is the run's level for a rule on this OS.
 func (r Run) Level(id rules.ID) rules.Level { return r.Rules.Level(id, runtime.GOOS) }
@@ -122,7 +148,11 @@ func (s *Service) Wrap(r Run, spec procx.Spec) (procx.Spec, *Jail, error) {
 			return procx.Spec{}, nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 	}
-	for _, d := range append([]string{r.Scratch, r.GameDir}, r.Write...) {
+	dirs := append([]string{r.Scratch, r.GameDir}, r.Write...)
+	for _, d := range r.Redirects {
+		dirs = append(dirs, d.From, d.To)
+	}
+	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return procx.Spec{}, nil, err
 		}

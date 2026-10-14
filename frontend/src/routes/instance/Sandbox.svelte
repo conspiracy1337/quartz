@@ -19,6 +19,7 @@
   // Each rule's name and icon, and the description shown when Go names no path.
   const RULES: Record<string, { name: string; icon: IconName; path: string }> = {
     instance: { name: 'This instance', icon: 'folder', path: '' },
+    mods: { name: 'Mods', icon: 'folder', path: '' },
     libraries: { name: 'Shared libraries and assets', icon: 'folder', path: '' },
     java: { name: 'Java runtime', icon: 'folder', path: '' },
     synced: { name: 'Synced folders', icon: 'folder', path: '' },
@@ -79,7 +80,7 @@
             </div>
           {/each}
         {:else}
-          {#each { length: 8 } as _, k (k)}<div class="row acc" aria-hidden="true"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk" style="height: 28px; border-radius: var(--radius)"></div></div>{/each}
+          {#each { length: 9 } as _, k (k)}<div class="row acc" aria-hidden="true"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk" style="height: 28px; border-radius: var(--radius)"></div></div>{/each}
         {/if}
       </div>
       <button class="btn" style="align-self: flex-start" onclick={addFolder}>Allow another folder</button>

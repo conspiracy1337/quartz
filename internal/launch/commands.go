@@ -14,6 +14,8 @@ import (
 
 	"quartz/internal/core/procx"
 	"quartz/internal/core/shlex"
+	"quartz/internal/core/sysinfo"
+	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
 	"quartz/internal/sandbox"
@@ -71,11 +73,8 @@ func gameEnv(vars map[string]string, eff instance.Effective, sandboxed bool) []s
 		base = sandbox.FilterEnv(base)
 	}
 	env := append(java.CleanEnv(base), envList(vars)...)
-	if runtime.GOOS == "linux" && eff.Performance.DedicatedGPU {
-		env = append(env, "DRI_PRIME=1")
-		if _, err := os.Stat("/proc/driver/nvidia"); err == nil {
-			env = append(env, "__NV_PRIME_RENDER_OFFLOAD=1", "__GLX_VENDOR_LIBRARY_NAME=nvidia", "__VK_LAYER_NV_optimus=NVIDIA_only")
-		}
+	if eff.Performance.DedicatedGPU {
+		env = append(env, sysinfo.OffloadEnv()...)
 	}
 	for _, e := range eff.Commands.Env {
 		env = append(env, e.Name+"="+e.Value)
@@ -126,6 +125,21 @@ func systemLibraries(eff instance.Effective) map[string]string {
 	}
 	return libs
 }
+
+// legacyLWJGLArgs keeps LWJGL 2 (Minecraft before 1.13) from crashing at
+// start on Linux without the xrandr program, which it runs to list display
+// modes (Prism does the same).
+func legacyLWJGLArgs(res *install.Resolved) []string {
+	if runtime.GOOS != "linux" || !slices.ContainsFunc(res.Classpath, isLWJGL2) {
+		return nil
+	}
+	if _, err := exec.LookPath("xrandr"); err == nil {
+		return nil
+	}
+	return []string{"-DLWJGL_DISABLE_XRANDR=true"}
+}
+
+func isLWJGL2(jar string) bool { return strings.HasPrefix(filepath.Base(jar), "lwjgl-2.") }
 
 // nativeLibraryArgs points LWJGL at the system's GLFW and OpenAL (Linux).
 func nativeLibraryArgs(eff instance.Effective) []string {

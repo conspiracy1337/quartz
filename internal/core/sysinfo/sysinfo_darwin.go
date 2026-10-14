@@ -7,7 +7,9 @@ func readMemory() (Memory, error) {
 	if err != nil {
 		return Memory{}, err
 	}
-	return Memory{Total: total}, nil
+	// kern.memorystatus_vm_pressure_level: 1 normal, 2 warning, 4 critical.
+	level, _ := unix.SysctlUint32("kern.memorystatus_vm_pressure_level")
+	return Memory{Total: total, Pressure: level >= 2}, nil
 }
 
 func osVersion() string {

@@ -488,6 +488,11 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 		}
 		p.set(StageStart, "")
 	}
+	if p.eff.Performance.DedicatedGPU {
+		if err := sysinfo.PreferGPU(java.LaunchBinary(rt.Path)); err != nil {
+			l.cfg.Log.Warn("asking Windows for the high-performance GPU failed", "err", err)
+		}
+	}
 	r, err := l.start(ctx, sp)
 	if err != nil {
 		l.disassemble(&sp)
@@ -640,13 +645,20 @@ func javaFits(have, need int, in instance.Instance) (string, error) {
 	return "", nil
 }
 
-// lowMemory warns when free RAM is below the maximum heap (if enabled).
+// lowMemory warns (if enabled) when free RAM is below 70% of the maximum
+// heap, which a game rarely fills at once (Prism's margin), or when macOS
+// reports memory pressure.
 func (l *Launcher) lowMemory(maxMB int) string {
 	if !l.cfg.Settings.Get().Java.WarnLowMemory {
 		return ""
 	}
 	mem, err := sysinfo.ReadMemory()
-	if err != nil || mem.Available == 0 || mem.Available>>20 >= uint64(maxMB) { //nolint:gosec // maxMB is a validated positive setting
+	switch {
+	case err != nil:
+		return ""
+	case mem.Pressure:
+		return "memory is under pressure"
+	case mem.Available == 0 || mem.Available>>20 >= uint64(maxMB)*7/10: //nolint:gosec // maxMB is a validated positive setting
 		return ""
 	}
 	return fmt.Sprintf("only %.1f GB free", float64(mem.Available)/(1<<30))

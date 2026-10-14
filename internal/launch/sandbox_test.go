@@ -61,7 +61,8 @@ func TestSandboxedRun(t *testing.T) {
 	st, _ := settings.Open(filepath.Join(dir, "settings.json"), bus, nil)
 	l := New(Config{Instances: insts, Settings: st, Bus: bus, BinDir: filepath.Join(dir, "store", "bin"), Redactor: logging.NewRedactor(""),
 		Views: runview.New(runview.Config{}), Sandbox: sb, StoreRead: []string{filepath.Join(dir, "store", "bin")}})
-	res := &install.Resolved{Version: v, Classpath: []string{"/a.jar"}, NativesDir: "/n", AssetsRoot: "/a", GameAssets: "/a", LibrariesDir: "/l"}
+	assets := filepath.Join(dir, "store", "assets")
+	res := &install.Resolved{Version: v, Classpath: []string{"/a.jar"}, NativesDir: "/n", AssetsRoot: assets, GameAssets: assets, LibrariesDir: "/l"}
 	sp := spec{inst: inst, eff: inst.Resolve(st.Get()), acc: accounts.Account{ID: "acc"}, sess: accounts.Session{Name: "Steve", AccessToken: "t"},
 		res: res, rt: java.Runtime{Path: fake}, mem: MemoryRange{Min: 256, Max: 512}, env: mojang.Env{OS: runtime.GOOS, Features: map[string]bool{}},
 		gameDir: game, runID: "20260101-000000.001", sandboxed: true}

@@ -8,11 +8,14 @@ import (
 
 // Finding is what a rule recognised, before it is turned into words.
 type Finding struct {
-	Rule   string // mixin | mod | dependency | duplicate | java | memory | graphics
+	Rule   string // mixin | mod | dependency | version | conflict | duplicate | java | java-new | jvm-memory | jvm-arg | memory | graphics | native
 	ModID  string // the mod at fault, if known
 	File   string // its jar's file name, if known
 	Target string // mixin: the class it changes
-	Dep    string // dependency: the missing mod
+	Dep    string // dependency: the missing mod; conflict: the other mod
+	Need   string // dependency, version: the version wanted ("1.20.4", "1.20.x")
+	Have   string // dependency, version: the version present
+	Arg    string // jvm-arg: the argument Java refused; native: the library
 	Files  []string
 	Java   int    // java: the major version needed
 	Ran    int    // java: the major version that ran
@@ -35,6 +38,13 @@ var (
 	transformRe   = regexp.MustCompile(`Mixin transformation of (\S+) failed`)
 	failureMsgRe  = regexp.MustCompile(`Failure message: ([^\n]+)`)
 	nameSeparator = strings.NewReplacer("-", "", "_", "", " ", "")
+)
+
+var (
+	// A Fabric mod named as "'Name' (id)", or just "id" or "'id'" (older loaders).
+	fabricMod = `(?:'[^'\n]*' \(([\w.-]+)\)|'?([\w.-]+)'?)`
+	// driverLibRe names graphics drivers in a native crash's top frame.
+	driverLibRe = regexp.MustCompile(`(?i)^(?:nvoglv(?:32|64)|nvwgf2um(?:x)?|nvd3dum|atio6axx|atioglxx|atig6pxx|amdxx(?:64|32)|ig\w*icd(?:32|64)|ig[0-9]+icd(?:32|64)|libnvidia-(?:glcore|eglcore|tls)|libGLX_nvidia|libEGL_nvidia|\w+_dri|libgallium\S*|amdvlk\S*|libvulkan_\w+|vulkan-1|opengl32)(?:\.|$)`)
 )
 
 var rules = []rule{
@@ -90,6 +100,30 @@ var rules = []rule{
 		},
 	},
 	{
+		// Fabric: "Mod 'Sodium' (sodium) 0.5.8 requires version 1.20.4 of 'Minecraft' (minecraft), but only the wrong
+		// version is present: 1.20.1!" (older loaders: "of minecraft"). Minecraft itself means the mod is for another
+		// version; any other mod is a dependency of the wrong version.
+		name: "version",
+		re:   regexp.MustCompile(`Mod '[^'\n]*' \(([\w.-]+)\)[^\n]*? requires (?:version |any )?([^\n]*?)(?: version)? of (?:mod )?` + fabricMod + `, but only the wrong version is present: ([^!\n]+)!`),
+		find: func(m []string, _ string) Finding {
+			dep := first(m[3], m[4])
+			f := Finding{Rule: "dependency", ModID: m[1], Dep: dep, Need: m[2], Have: m[5], Detail: m[1] + " needs " + dep + " " + m[2]}
+			if strings.EqualFold(dep, "minecraft") {
+				f.Rule, f.Dep, f.Detail = "version", "", m[1]+" is for Minecraft "+m[2]
+			}
+			return f
+		},
+	},
+	{
+		// Fabric: "Mod 'X' (x) 1.0 is incompatible with any version of mod 'Y' (y), but a matching version is present: 2.0!"
+		name: "conflict",
+		re:   regexp.MustCompile(`Mod '[^'\n]*' \(([\w.-]+)\)[^\n]*? is incompatible with [^\n]*? of (?:mod )?` + fabricMod),
+		find: func(m []string, _ string) Finding {
+			other := first(m[2], m[3])
+			return Finding{Rule: "conflict", ModID: m[1], Dep: other, Detail: m[1] + " doesn't work with " + other}
+		},
+	},
+	{
 		// Forge: "Found duplicate mods: Mod ID: 'jei' from mod files: a.jar, b.jar"; Fabric: "Mod ID x is provided by both".
 		name: "duplicate",
 		re:   regexp.MustCompile(`(?:[Dd]uplicate mods?[\s\S]{0,80}?Mod ID: '([^']+)' from mod files: ([^\n]+)|Mod ID '?([\w.-]+)'? (?:is )?provided by both)`),
@@ -129,6 +163,36 @@ var rules = []rule{
 		},
 	},
 	{
+		// Java refused to start: the heap it was asked for doesn't fit (a 32-bit Java, or more than the system has).
+		name: "jvm-memory",
+		re:   regexp.MustCompile(`Could not reserve enough space for (?:\d+KB )?object heap|Invalid maximum heap size|Initial heap size set to a larger value than the maximum heap size`),
+		find: func([]string, string) Finding {
+			return Finding{Rule: "jvm-memory", Detail: "Java couldn't get the memory it was given"}
+		},
+	},
+	{
+		// Java refused an argument: "Unrecognized VM option 'UseZGCC'", "Unrecognized option: --foo", "Invalid initial heap size: -Xms4".
+		name: "jvm-arg",
+		re:   regexp.MustCompile(`Unrecognized VM option '([^'\n]+)'|Unrecognized option: (\S+)|Invalid initial heap size: (\S+)|Improperly specified VM option '([^'\n]+)'`),
+		find: func(m []string, _ string) Finding {
+			arg := first(m[1], m[2], m[3], m[4])
+			return Finding{Rule: "jvm-arg", Arg: arg, Detail: "Java refused " + arg}
+		},
+	},
+	{
+		// The game's Java is newer than an old loader can read: ASM meets Java's own newer classes, or old
+		// ModLauncher expects Java 8's class loader.
+		name: "java-new",
+		re:   regexp.MustCompile(`Unsupported class file major version (\d+)|jdk\.internal\.loader\.ClassLoaders\$AppClassLoader cannot be cast to (?:class )?java\.net\.URLClassLoader`),
+		find: func(m []string, _ string) Finding {
+			ran := 0
+			if n, err := strconv.Atoi(m[1]); err == nil {
+				ran = n - 44
+			}
+			return Finding{Rule: "java-new", Ran: ran, Detail: "Needs an older Java"}
+		},
+	},
+	{
 		name: "java",
 		re:   classVerRe,
 		find: func(m []string, _ string) Finding {
@@ -139,9 +203,21 @@ var rules = []rule{
 	},
 	{
 		name: "memory",
-		re:   regexp.MustCompile(`java\.lang\.OutOfMemoryError(?:: ([^\n]+))?`),
+		re:   regexp.MustCompile(`java\.lang\.OutOfMemoryError(?:: ([^\n]+))?|There is insufficient memory for the Java Runtime Environment`),
 		find: func([]string, string) Finding {
 			return Finding{Rule: "memory", Detail: "Ran out of memory"}
+		},
+	},
+	{
+		// A native crash (hs_err_pid*.log): the library of the frame that crashed. A graphics driver's is the
+		// graphics cause; anything else is named.
+		name: "native",
+		re:   regexp.MustCompile(`Problematic frame:\s*\n#\s+C\s+\[([^+\]\s]+)`),
+		find: func(m []string, _ string) Finding {
+			if driverLibRe.MatchString(m[1]) {
+				return Finding{Rule: "graphics", Arg: m[1], Detail: "The graphics driver crashed (" + m[1] + ")"}
+			}
+			return Finding{Rule: "native", Arg: m[1], Detail: "Crashed in " + m[1]}
 		},
 	},
 	{

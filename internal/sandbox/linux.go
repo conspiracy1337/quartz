@@ -39,8 +39,10 @@ func (b *linuxBackend) status() Status {
 }
 
 // systemDirs are bound read-only, or recreated as the links they are
-// (/bin → usr/bin on merged-/usr systems).
-var systemDirs = []string{"/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32"}
+// (/bin → usr/bin on merged-/usr systems). NixOS and Guix keep the system,
+// its Java and its GPU drivers in their stores and link to them from /run.
+var systemDirs = []string{"/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32",
+	"/nix/store", "/gnu/store", "/run/current-system", "/run/opengl-driver", "/run/opengl-driver-32"}
 
 // etcFiles are the parts of /etc a game needs: name lookup, TLS roots,
 // fonts, time, the dynamic linker, drivers and system Java configuration.
@@ -116,6 +118,16 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 	for _, p := range r.Read {
 		bindRead(&a, p, &bound)
 	}
+	// Libraries the player's environment points the game at (outside the
+	// home folder and the launcher's data, which stay hidden).
+	for _, p := range filepath.SplitList(getEnv(spec.Env, "LD_LIBRARY_PATH")) {
+		if filepath.IsAbs(p) && (s.home == "" || !fsx.Within(p, s.home)) && (s.c.DataRoot == "" || !fsx.Within(p, s.c.DataRoot)) {
+			bindRead(&a, p, &bound)
+		}
+	}
+	for _, d := range r.Redirects {
+		a.Bind(d.From, d.To)
+	}
 	if r.Data != "" {
 		a.Bind(r.Data, r.Data)
 	}
@@ -124,6 +136,15 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 	}
 	a.Bind(r.GameDir, r.GameDir)
 	a.Add(r.Mounts...)
+	// Protected folders: writes land in a throwaway layer (a mod's own cache
+	// still works), or fail where overlays don't.
+	for _, p := range r.Protected() {
+		if sup.Overlay {
+			a.TmpOverlay(p, p)
+		} else {
+			a.RoBind(p, p)
+		}
+	}
 
 	env := spec.Env
 	if !r.Headless {
