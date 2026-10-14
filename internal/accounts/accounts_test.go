@@ -9,16 +9,13 @@ import (
 )
 
 func TestOfflineUUIDMatchesJava(t *testing.T) {
-	// From java.util.UUID.nameUUIDFromBytes("OfflinePlayer:" + name), with
-	// the parity of UUID.hashCode that picks the default skin.
-	cases := []struct {
-		name, uuid string
-		alex       bool
-	}{
-		{"Notch", "b50ad385-829d-3141-a216-7e7d7539ba7f", false},
-		{"jeb_", "a762f560-4fce-3236-812a-b80efff0b62b", true},
-		{"Steve", "5627dd98-e6be-3c21-b8a8-e92344183641", true},
-		{"Alex_2", "3a4192db-3a36-3ae7-9410-a2056ece9f53", false},
+	// From java.util.UUID.nameUUIDFromBytes("OfflinePlayer:" + name), with the
+	// default skin floorMod(UUID.hashCode(), 18) picks (computed in jshell).
+	cases := []struct{ name, uuid, skin string }{
+		{"Notch", "b50ad385-829d-3141-a216-7e7d7539ba7f", "slim-makena"},
+		{"jeb_", "a762f560-4fce-3236-812a-b80efff0b62b", "slim-ari"},
+		{"Steve", "5627dd98-e6be-3c21-b8a8-e92344183641", "wide-efe"},
+		{"Alex_2", "3a4192db-3a36-3ae7-9410-a2056ece9f53", "wide-sunny"},
 	}
 	for _, c := range cases {
 		got := OfflineUUID(c.name)
@@ -26,8 +23,8 @@ func TestOfflineUUIDMatchesJava(t *testing.T) {
 			t.Errorf("OfflineUUID(%q) = %s, want %s", c.name, got, c.uuid)
 		}
 		a := Account{ID: strings.ReplaceAll(got, "-", "")}
-		if (a.DefaultSkin() == alex) != c.alex {
-			t.Errorf("%s: default skin parity wrong", c.name)
+		if d := a.DefaultSkin(); d.Key != c.skin {
+			t.Errorf("%s: default skin %s, want %s", c.name, d.Key, c.skin)
 		}
 	}
 }

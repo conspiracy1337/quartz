@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"golang.org/x/image/draw"
-	"golang.org/x/sync/singleflight"
 
 	"quartz/internal/core/disklru"
+	"quartz/internal/core/flightx"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/pngx"
 )
@@ -58,7 +58,7 @@ type Registry struct {
 	files map[string]file
 	order []string // registration order, for the entry cap
 
-	flight singleflight.Group
+	flight flightx.Group[string]
 }
 
 // New keeps thumbnails in thumbDir.
@@ -126,11 +126,7 @@ func (r *Registry) Thumb(ctx context.Context, token string) (string, error) {
 	if hit := r.thumbs.Hit(p); hit != "" {
 		return hit, nil
 	}
-	v, err, _ := r.flight.Do(token, func() (any, error) { return r.makeThumb(ctx, f, p) })
-	if err != nil {
-		return "", err
-	}
-	return v.(string), nil
+	return r.flight.Do(ctx, token, func(ctx context.Context) (string, error) { return r.makeThumb(ctx, f, p) })
 }
 
 func (r *Registry) makeThumb(_ context.Context, f file, dest string) (string, error) {

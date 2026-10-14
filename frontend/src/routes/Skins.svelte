@@ -3,8 +3,9 @@
   import { api } from '$lib/api';
   import type { Skin } from '$lib/api/types';
   import PlayerModel from '$lib/components/PlayerModel.svelte';
+  import SkinFigure from '$lib/components/SkinFigure.svelte';
   import { searchIn } from '$lib/format';
-  import { capeLook, capeTile, figure, skinLook } from '$lib/look';
+  import { STEVE, accountLook, capeLook, capeTile, skinLook } from '$lib/look';
   import { query } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { session } from '$lib/session.svelte';
@@ -35,6 +36,8 @@
   const capeList = $derived(capes.data?.capes ?? []);
   const capeId = $derived(capeSel ?? capes.data?.worn ?? '');
   const cape = $derived(capeList.find((c) => c.id === capeId));
+  // With an empty library the model shows what the account wears: its default skin.
+  const shown = $derived(cur ? skinLook(cur) : me ? accountLook(me) : STEVE);
   const wearing = $derived(!!me && !!cur && me.skinHash === cur.hash && capeId === (capes.data?.worn ?? ''));
 
   /** Runs a library or account change, then reloads everything that shows it. */
@@ -90,9 +93,8 @@
         <h2 class="h3">Your skins <span class="count">{skins.data?.length ?? ''}</span></h2>
         <div class="wg" role="radiogroup" aria-label="Skin">
           {#each list as s (s.hash)}
-            {@const f = figure(s)}
             <button class="wc" class:on={cur?.hash === s.hash} onclick={() => (skinSel = s.hash)} role="radio" aria-checked={cur?.hash === s.hash}>
-              <span style="display: grid; place-items: center"><span class="fig" aria-hidden="true" style="grid-template-columns: {f.arm}px 8px {f.arm}px; width: {8 + 2 * f.arm}px"><span class="h" style="background: {f.h}"></span><span class="al" style="background: {f.al}"></span><span class="b" style="background: {f.b}"></span><span class="ar" style="background: {f.ar}"></span><span class="l"><span style="background: {f.ll}"></span><span style="background: {f.lr}"></span></span></span></span>
+              <span style="display: grid; place-items: center"><SkinFigure look={skinLook(s)} /></span>
               <span class="nm"><span class="trunc">{s.name}</span>{#if me?.skinHash === s.hash}<span class="badge badge-accent">Wearing</span>{/if}</span>
             </button>
           {/each}
@@ -117,11 +119,11 @@
   </section>
   <aside class="wd-prev" aria-label="Selected skin">
     <div class="wd-model">
-      {#if cur}<PlayerModel {...skinLook(cur)} {...capeLook(cape)} fill scale={tall.current ? 11 : short.current ? 6 : 8} />{/if}
+      {#if skins.data && accounts.data}<PlayerModel {...shown} {...capeLook(cape)} fill scale={tall.current ? 11 : short.current ? 6 : 8} />{/if}
     </div>
     <div class="wd-info">
-      <div style="min-width: 0"><div class="h2 trunc">{cur?.name ?? ''}</div><div class="small faint">{cape ? `${cape.name} cape` : 'No cape'}, {cur?.slim ? 'slim' : 'classic'} arms</div></div>
-      <Seg options={ARMS} value={cur?.slim ? 'slim' : 'classic'} label="Arm type" fill center onchange={setArms} />
+      <div style="min-width: 0"><div class="h2 trunc">{cur?.name ?? ''}</div><div class="small faint">{cape ? `${cape.name} cape` : 'No cape'}, {shown.slim ? 'slim' : 'classic'} arms</div></div>
+      <Seg options={ARMS} value={shown.slim ? 'slim' : 'classic'} label="Arm type" fill center onchange={setArms} />
       <button class="btn btn-accent btn-lg btn-block" disabled={!me || !cur || busy || wearing} onclick={wear}>{wearing ? 'Wearing this skin and cape' : 'Wear this skin and cape'}</button>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px">
         <button class="btn btn-sm" disabled={!cur} onclick={() => (prompt = 'rename')}>Rename</button>
@@ -159,8 +161,6 @@
   .wc .nm{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 12px;border-top:1px solid var(--line);font-size:12px;min-width:0}
   .wc .nm .trunc{min-width:0}
   .wc .nm .badge{flex:0 0 auto}
-  .fig{display:grid;grid-template-columns:4px 8px 4px;grid-template-rows:8px 12px 12px;width:16px;transform:scale(3.4);image-rendering:pixelated;margin:auto}
-  .fig .h{grid-column:2;grid-row:1}.fig .b{grid-column:2;grid-row:2}.fig .al{grid-column:1;grid-row:2}.fig .ar{grid-column:3;grid-row:2}.fig .l{grid-column:2;grid-row:3;display:grid;grid-template-columns:1fr 1fr}
   .cp{height:96px;border-radius:var(--radius-lg);border:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:0 12px;color:var(--text)}
   .cp:hover{border-color:var(--line-2)}
   .cp.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}

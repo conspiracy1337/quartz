@@ -1015,6 +1015,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - The local callback answers only `GET /`, so other local software can't probe or finish the flow.
   - The reply page in the browser is static and script-free with a strict CSP.
 - **Code:** device code with a QR code generated in Go. The QR pre-fills the code at microsoft.com/link. Copy code, with an expiry countdown.
+  - A code that expires while the dialog is open is replaced by a new one, up to 3 times (an hour), as in Prism.
 - **Token chain:** MSA → Xbox → XSTS → Minecraft → profile, with each step shown. Entitlements are checked only when there's no profile, so Game Pass accounts work.
 - **Clear error messages** with a link to the fix: banned, parental consent, no Xbox profile, Xbox terms, region, age verification, child account. [auth.go](internal/auth/auth.go)
 - **One sign-in at a time:** starting a new one cancels the previous.
@@ -1040,22 +1041,30 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 - **Account rows:** status (Signed in, Needs sign-in or Offline) and "refreshed automatically X ago".
 - **Remove:** with an inline confirm.
 
-**Skins and capes** ([Skins.svelte](frontend/src/routes/Skins.svelte), [skins/library.go](internal/skins/library.go), [canon.go](internal/skins/canon.go), [look.go](internal/accounts/look.go), [PlayerModel.svelte](frontend/src/lib/components/PlayerModel.svelte))
+**Skins and capes** ([Skins.svelte](frontend/src/routes/Skins.svelte), [skins/library.go](internal/skins/library.go), [canon.go](internal/skins/canon.go), [defaults.go](internal/skins/defaults.go), [look.go](internal/accounts/look.go), [PlayerModel.svelte](frontend/src/lib/components/PlayerModel.svelte), [skin3d.ts](frontend/src/lib/components/skin3d.ts))
 - **Local library:** skins are stored by the SHA-256 of a canonical PNG.
 - **Adding skins:** upload a file, from an https link, or copy another player's current skin by name.
 - **Canonicalising:**
   - At most 256 KB, 64×64 or 64×32.
   - Legacy 64×32 skins are upgraded the way Minecraft does it.
   - Slim arms are detected automatically.
+- **Default skins:** an account without a skin of its own wears one of Minecraft's 18 default skins (Steve, Alex, Ari, Efe, Kai, Makena, Noor, Sunny, Zuri, each with slim and wide arms).
+  - It is picked from the UUID as the game does: `floorMod(UUID.hashCode(), 18)`.
+  - The PNGs (17 KB) come from the client jar and are embedded in Go, served on `/tex/default/`.
+  - Avatars, the Home card and the Skins page all draw it; with no account, wide Steve.
 - **Managing:** rename, Classic or Slim, Default skin, remove with Undo.
+  - After Default skin, a Microsoft account shows the default Mojang put on (imported like a signed-in skin).
 - **Capes:** "No cape" plus every cape the account owns.
 - **Wear this skin and cape:**
   - Microsoft accounts: a real upload, cape change or reset.
   - Offline accounts: cosmetic, in the launcher only.
 - **Import of current skins:** the skin each account currently wears is added to the library automatically.
-- **3D preview:** CSS 3D, no WebGL, with overlays.
-  - Drag to rotate; Rotate left/right, Walk, Front and Back buttons.
-  - Scales with the window height.
+- **3D preview:** a small WebGL renderer of our own (2.5 KB, no three.js).
+  - Minecraft's box layout (as in Prism), its two-light entity shading (as in Pandora), the hat and jacket layer half a texel out and alpha-tested, and the cape.
+  - Drag to rotate, with the tilt clamped so it never flips; Rotate left/right, Walk, Front and Back buttons.
+  - Walk swings arms, legs and cape; on the Skins page the arms sway gently when idle.
+  - It draws only when something changes, and animates only while on screen. Reduce motion keeps it still.
+  - Scales with the window height. Without WebGL it shows the flat front view.
 
 ---
 
@@ -1088,6 +1097,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - LZMA decoding.
 - **Validation:** https only, no userinfo, the destination must stay inside its root, at most 2 GB.
 - **Sharing:** concurrent fetches of the same file share one transfer. An identical file found in the store is reused by hardlink.
+  - The shared transfer stops only when every job waiting on it has cancelled ([flightx](internal/core/flightx/flightx.go)), so cancelling one job never fails another. Merged metadata requests, pictures, pings and account refreshes work the same way.
 - **Verified index:** a file that passed verification is trusted after a stat, so thousands of game files check in milliseconds.
 
 **HTTP layer** ([netx.go](internal/core/netx/netx.go), [httpcache.go](internal/core/httpcache/httpcache.go), [network.go](internal/network/network.go))
@@ -1136,7 +1146,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 | | Reduce motion | System / On / Off |
 | Java | Pick Java automatically | toggle (on) |
 | | Download missing versions from | Temurin / Zulu / Mojang (Temurin) |
-| | Default memory | min/max MB (1024 / 4096) |
+| | Default memory | min/max MB (1024 / 4096; a new data folder gets two thirds of the RAM, 1–4 GB) |
 | | Default JVM arguments | text (`-XX:+UseG1GC -XX:+ParallelRefProcEnabled`) |
 | | Warn when free memory is low | toggle (on) |
 | Java › Instances | Suggest memory from mod count | toggle (on) |

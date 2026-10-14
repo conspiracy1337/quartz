@@ -38,9 +38,11 @@ type Server struct {
 	Revoked      bool          // refresh tokens answer invalid_grant
 	Down         bool          // every endpoint answers 503
 	PendingPolls int           // device polls answered "pending" before success
+	ExpiredCodes int           // device codes that expire before the user enters them
 	Uploads      int           // skins uploaded
 
-	n int // token counter
+	n     int // token counter
+	codes int // device codes handed out
 }
 
 // DefaultProfile is the player the fake signs in as.
@@ -86,7 +88,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		redirect.RawQuery = url.Values{"code": {"fake-code"}, "state": {q.Get("state")}}.Encode()
 		http.Redirect(w, r, redirect.String(), http.StatusFound) //nolint:gosec // only ever to localhost, checked above
 	case "POST /oauth/devicecode":
-		writeJSON(w, map[string]any{"device_code": "fake-device", "user_code": "QUARTZ42", "verification_uri": "https://www.microsoft.com/link", "expires_in": 900, "interval": 1})
+		s.codes++
+		writeJSON(w, map[string]any{"device_code": "fake-device", "user_code": fmt.Sprintf("QUARTZ%d", 41+s.codes), "verification_uri": "https://www.microsoft.com/link", "expires_in": 900, "interval": 1})
 	case "POST /oauth/token":
 		s.token(w, r)
 	case "POST /xbox/user":
@@ -117,7 +120,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case "POST /mc/minecraft/profile/skins":
 		s.upload(w, r)
 	case "DELETE /mc/minecraft/profile/skins/active":
-		s.Profile.Skins = nil
+		// Mojang puts one of its default skins on instead.
+		s.Profile.Skins = []mcapi.Skin{{ID: "default", State: "ACTIVE", Variant: "CLASSIC", URL: "http://textures.minecraft.net/texture/" + DefaultSkinTexture}}
 		writeJSON(w, s.Profile)
 	case "PUT /mc/minecraft/profile/capes/active":
 		var in struct {
@@ -143,6 +147,11 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "urn:ietf:params:oauth:grant-type:device_code":
+		if s.ExpiredCodes > 0 {
+			s.ExpiredCodes--
+			oauthError(w, "expired_token")
+			return
+		}
 		if s.PendingPolls > 0 {
 			s.PendingPolls--
 			oauthError(w, "authorization_pending")
@@ -191,6 +200,10 @@ func (s *Server) setCape(id string) {
 		}
 	}
 }
+
+// DefaultSkinTexture is the texture hash a reset skin gets; tests put a skin
+// at that name in the texture cache so nothing is downloaded.
+const DefaultSkinTexture = "d5c4ee5ce20aed9e33e866c66caa37178606234b3721084bf01d13320fb2eb3f"
 
 func oauthError(w http.ResponseWriter, code string) {
 	w.WriteHeader(http.StatusBadRequest)

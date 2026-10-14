@@ -8,11 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
 	"quartz/internal/auth"
 	"quartz/internal/auth/msa"
 	"quartz/internal/core/events"
+	"quartz/internal/core/flightx"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/secrets"
 	"quartz/internal/settings"
@@ -57,7 +56,7 @@ type Config struct {
 type Manager struct {
 	cfg    Config
 	now    func() time.Time
-	flight singleflight.Group // one refresh per account at a time
+	flight flightx.Group[Account] // one refresh per account at a time
 
 	mu     sync.Mutex
 	signin *flow // the interactive sign-in in progress, if any
@@ -221,9 +220,7 @@ func (m *Manager) token(ctx context.Context, a Account) (string, error) {
 // refusal (revoked token, changed password, Xbox problem) marks the account
 // as needing a new sign-in; network trouble changes nothing.
 func (m *Manager) Refresh(ctx context.Context, id string) (Account, error) {
-	v, err, _ := m.flight.Do(id, func() (any, error) { return m.refresh(ctx, id) })
-	a, _ := v.(Account)
-	return a, err
+	return m.flight.Do(ctx, id, func(ctx context.Context) (Account, error) { return m.refresh(ctx, id) })
 }
 
 func (m *Manager) refresh(ctx context.Context, id string) (Account, error) {

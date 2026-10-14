@@ -98,6 +98,42 @@ func (w *world) signIn(t *testing.T) Account {
 	}
 }
 
+func TestExpiredCodeIsRenewed(t *testing.T) {
+	w := newWorld(t)
+	w.srv.ExpiredCodes = 1
+	var codes []string
+	if _, err := w.m.SignInCode(); err != nil {
+		t.Fatal(err)
+	}
+	for e := range w.signin {
+		if e.Code != "" {
+			codes = append(codes, e.Code)
+		}
+		if e.Done {
+			if e.Error != nil {
+				t.Fatalf("sign-in failed: %+v", e.Error)
+			}
+			break
+		}
+	}
+	if len(codes) != 2 || codes[0] == codes[1] {
+		t.Fatalf("codes shown: %v", codes)
+	}
+	// Past the renewals, the expiry is reported.
+	w.srv.ExpiredCodes = maxCodeRenewals + 1
+	if _, err := w.m.SignInCode(); err != nil {
+		t.Fatal(err)
+	}
+	for e := range w.signin {
+		if e.Done {
+			if e.Error == nil || e.Error.Reason != "expired" {
+				t.Fatalf("want expired, got %+v", e.Error)
+			}
+			break
+		}
+	}
+}
+
 func TestSignInStoresTokensOnlyInTheKeychain(t *testing.T) {
 	w := newWorld(t)
 	a := w.signIn(t)
@@ -260,7 +296,12 @@ func TestWear(t *testing.T) {
 	if _, err := w.m.Wear(context.Background(), a.ID, sk.Hash, "not-owned"); !errors.Is(err, ErrNoCape) {
 		t.Fatalf("foreign cape: %v", err)
 	}
-	if got, err = w.m.ResetSkin(context.Background(), a.ID); err != nil || got.SkinHash != "" {
+	// A reset shows the default Mojang put on, imported like a signed-in skin.
+	_ = os.MkdirAll(filepath.Join(w.dir, "tex"), 0o700)
+	if err := os.WriteFile(filepath.Join(w.dir, "tex", authtest.DefaultSkinTexture+".png"), skinPattern(t, 9), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = w.m.ResetSkin(context.Background(), a.ID); err != nil || got.SkinHash == "" || got.SkinHash == sk.Hash || got.SkinTexture != authtest.DefaultSkinTexture {
 		t.Fatalf("reset: %+v %v", got, err)
 	}
 	off, _ := w.m.AddOffline("Steve")
@@ -292,12 +333,15 @@ func expire(t *testing.T, w *world, id string, in time.Duration) {
 	}
 }
 
-func testSkin(t *testing.T) []byte {
+func testSkin(t *testing.T) []byte { t.Helper(); return skinPattern(t, 7) }
+
+// skinPattern draws a valid 64×64 skin; different blues give different skins.
+func skinPattern(t *testing.T, blue uint8) []byte {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
 	for y := range 64 {
 		for x := range 64 {
-			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x), G: uint8(y), B: 7, A: 255}) //nolint:gosec // test pattern
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x), G: uint8(y), B: blue, A: 255}) //nolint:gosec // test pattern
 		}
 	}
 	var b bytes.Buffer

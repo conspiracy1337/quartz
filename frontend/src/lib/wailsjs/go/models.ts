@@ -1,34 +1,3 @@
-export namespace accounts {
-	
-	export class SkinColors {
-	    skin: string;
-	    hair: string;
-	    eye: string;
-	    mouth: string;
-	    top: string;
-	    topD: string;
-	    pants: string;
-	    shoes: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new SkinColors(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.skin = source["skin"];
-	        this.hair = source["hair"];
-	        this.eye = source["eye"];
-	        this.mouth = source["mouth"];
-	        this.top = source["top"];
-	        this.topD = source["topD"];
-	        this.pants = source["pants"];
-	        this.shoes = source["shoes"];
-	    }
-	}
-
-}
-
 export namespace api {
 	
 	export class AccountView {
@@ -38,7 +7,7 @@ export namespace api {
 	    status: string;
 	    detail: string;
 	    isDefault: boolean;
-	    skin: accounts.SkinColors;
+	    defaultSkin: skins.Default;
 	    skinHash: string;
 	    slim: boolean;
 	    refreshedAt: number;
@@ -55,7 +24,7 @@ export namespace api {
 	        this.status = source["status"];
 	        this.detail = source["detail"];
 	        this.isDefault = source["isDefault"];
-	        this.skin = this.convertValues(source["skin"], accounts.SkinColors);
+	        this.defaultSkin = this.convertValues(source["defaultSkin"], skins.Default);
 	        this.skinHash = source["skinHash"];
 	        this.slim = source["slim"];
 	        this.refreshedAt = source["refreshedAt"];
@@ -3173,6 +3142,25 @@ export namespace settings {
 	
 	
 	
+
+}
+
+export namespace skins {
+	
+	export class Default {
+	    key: string;
+	    slim: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Default(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.slim = source["slim"];
+	    }
+	}
 
 }
 

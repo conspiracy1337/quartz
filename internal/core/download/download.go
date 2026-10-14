@@ -15,8 +15,8 @@ import (
 	"sync"
 
 	"github.com/ulikunitz/xz/lzma"
-	"golang.org/x/sync/singleflight"
 
+	"quartz/internal/core/flightx"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/hashx"
 	"quartz/internal/core/linkx"
@@ -36,7 +36,7 @@ type Progress func(done int64)
 type Downloader struct {
 	doer  Doer
 	ver   *Verified
-	group singleflight.Group
+	group flightx.Group[struct{}]
 	bufs  sync.Pool
 }
 
@@ -91,7 +91,8 @@ func Discard(it Item) {
 
 // Fetch makes it.Dest hold the item's content, reusing a verified file, a
 // same-content file elsewhere, or a resumable partial download when possible.
-// Concurrent fetches of the same destination share one transfer.
+// Concurrent fetches of the same destination share one transfer, which
+// stops only when every caller has given up (the .part file stays).
 func (d *Downloader) Fetch(ctx context.Context, it Item, progress Progress) error {
 	if progress == nil {
 		progress = func(int64) {}
@@ -100,7 +101,10 @@ func (d *Downloader) Fetch(ctx context.Context, it Item, progress Progress) erro
 		progress(it.Total())
 		return nil
 	}
-	_, err, _ := d.group.Do(it.Dest, func() (any, error) { return nil, d.fetch(ctx, it, progress) })
+	_, err := d.group.Do(ctx, it.Dest, func(ctx context.Context) (struct{}, error) { return struct{}{}, d.fetch(ctx, it, progress) })
+	if err == nil {
+		progress(it.Total()) // a caller that joined another's transfer saw no progress yet
+	}
 	return err
 }
 

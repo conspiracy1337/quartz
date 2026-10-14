@@ -238,7 +238,6 @@ export interface LoaderVersion { id: string; name: string; released: number }
 export interface LoaderOption { kind: Loader | 'none'; name: string; note: string; stable: LoaderVersion[]; beta: LoaderVersion[] }
 
 // ---- accounts and skins ----
-export interface SkinColors { skin: string; hair: string; eye: string; mouth: string; top: string; topD: string; pants: string; shoes: string }
 export interface Account {
   id: string;
   name: string;
@@ -246,16 +245,16 @@ export interface Account {
   status: 'ok' | 'expired' | 'offline';
   detail: string;
   isDefault: boolean;
-  /** The flat drawing, used while there is no skin texture. */
-  skin: SkinColors;
-  /** The library skin worn ("" for the default Steve or Alex). */
+  /** The default skin it wears while skinHash is "": key names defaultURL(key). */
+  defaultSkin: { key: string; slim: boolean };
+  /** The library skin worn ("" for the default skin). */
   skinHash: string;
   slim: boolean;
   /** Last automatic sign-in refresh (unix ms), Microsoft accounts only. */
   refreshedAt: number;
 }
-/** A library skin. Its PNG is skinURL(hash); preview fixtures carry flat colours instead. */
-export interface Skin { hash: string; name: string; slim: boolean; added: number; source: string; colors?: SkinColors }
+/** A library skin. Its PNG is skinURL(hash). */
+export interface Skin { hash: string; name: string; slim: boolean; added: number; source: string }
 /** An owned cape. Its PNG is textureURL(texture); preview fixtures carry a CSS `art` instead. */
 export interface Cape { id: string; name: string; texture: string; art?: string }
 export interface Capes { capes: Cape[]; worn: string }

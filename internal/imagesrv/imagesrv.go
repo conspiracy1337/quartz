@@ -3,6 +3,7 @@
 //
 //	/tex/skin/<sha256>.png  a library skin
 //	/tex/mc/<hash>.png      a textures.minecraft.net texture (fetched once)
+//	/tex/default/<key>.png  the default skin, steve or alex
 //	/tex/icon/<sha256>.png  an instance icon
 //	/tex/remote/<token>.png a Modrinth or CurseForge picture (see remoteimg;
 //	                        served as its real type, which may not be PNG)

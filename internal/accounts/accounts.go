@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	"quartz/internal/core/jsonfile"
+	"quartz/internal/skins"
 )
 
 // Kind is the account type.
@@ -315,43 +316,5 @@ func (s Session) LegacySession() string {
 	return "token:" + s.AccessToken + ":" + s.UUID
 }
 
-// SkinColors are the flat colours of the avatar the UI draws.
-type SkinColors struct {
-	Skin  string `json:"skin"`
-	Hair  string `json:"hair"`
-	Eye   string `json:"eye"`
-	Mouth string `json:"mouth"`
-	Top   string `json:"top"`
-	TopD  string `json:"topD"`
-	Pants string `json:"pants"`
-	Shoes string `json:"shoes"`
-}
-
-var (
-	steve = SkinColors{Skin: "#c69c6d", Hair: "#3b2a1d", Eye: "#4a3d8f", Mouth: "#8b5a3c", Top: "#00a3a3", TopD: "#008585", Pants: "#3d3a9e", Shoes: "#4a4a4a"}
-	alex  = SkinColors{Skin: "#f0c49b", Hair: "#e3893c", Eye: "#3b6d2f", Mouth: "#c88d6b", Top: "#6a9a3c", TopD: "#557d30", Pants: "#6b4a2e", Shoes: "#3b3b3b"}
-)
-
-// DefaultSkin is Steve or Alex, picked from the UUID the way older Minecraft
-// versions pick a default skin (the parity of Java's UUID.hashCode).
-func (a Account) DefaultSkin() SkinColors {
-	if javaUUIDHash(a.ID)&1 == 1 {
-		return alex
-	}
-	return steve
-}
-
-// javaUUIDHash mirrors java.util.UUID.hashCode for an undashed hex UUID.
-func javaUUIDHash(id string) int32 {
-	b, err := hex.DecodeString(id)
-	if err != nil || len(b) != 16 {
-		return 0
-	}
-	var hi, lo uint64
-	for i := range 8 {
-		hi = hi<<8 | uint64(b[i])
-		lo = lo<<8 | uint64(b[8+i])
-	}
-	x := hi ^ lo
-	return int32(x>>32) ^ int32(x) //nolint:gosec // deliberate truncation, as in Java
-}
+// DefaultSkin is the skin the account wears when it has none of its own.
+func (a Account) DefaultSkin() skins.Default { return skins.DefaultFor(a.ID) }

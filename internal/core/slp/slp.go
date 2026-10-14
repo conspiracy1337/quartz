@@ -20,8 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/singleflight"
-
+	"quartz/internal/core/flightx"
 	"quartz/internal/core/pngx"
 )
 
@@ -352,7 +351,7 @@ type Pinger struct {
 	ping func(context.Context, Address, int) (*Status, error)
 
 	sem   chan struct{}
-	group singleflight.Group
+	group flightx.Group[Result]
 	mu    sync.Mutex
 	cache map[string]Result
 }
@@ -373,7 +372,7 @@ func (p *Pinger) Get(ctx context.Context, addr Address, protocol int, force bool
 			return r
 		}
 	}
-	v, _, _ := p.group.Do(key, func() (any, error) {
+	r, err := p.group.Do(ctx, key, func(ctx context.Context) (Result, error) {
 		select {
 		case p.sem <- struct{}{}:
 		case <-ctx.Done():
@@ -396,5 +395,8 @@ func (p *Pinger) Get(ctx context.Context, addr Address, protocol int, force bool
 		}
 		return r, nil
 	})
-	return v.(Result)
+	if err != nil {
+		return Result{Err: err, At: time.Now()} // this caller gave up; others may still wait
+	}
+	return r
 }
