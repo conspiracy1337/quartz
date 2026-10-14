@@ -8,6 +8,7 @@ import (
 
 	"quartz/internal/core/events"
 	"quartz/internal/core/jsonfile"
+	"quartz/internal/core/sysinfo"
 )
 
 // Store holds the current settings, persists changes with a short debounce, and
@@ -31,9 +32,24 @@ func Open(path string, bus *events.Bus, log *slog.Logger) (*Store, error) {
 	if errors.Is(statErr, fs.ErrNotExist) {
 		s := f.Get()
 		s.General.SetupDone = false
+		if mem, err := sysinfo.ReadMemory(); err == nil {
+			s.Java.MemoryMaxMB = SuggestedMaxMemoryMB(mem.Total, s.Java.MemoryMaxMB)
+		}
 		f.Set(s)
 	}
 	return &Store{file: f, bus: bus}, nil
+}
+
+// SuggestedMaxMemoryMB is the default most memory a game may use on a computer
+// with total bytes of RAM: two thirds of it, in steps of 512 MB, between 1 GB
+// and def (Prism's rule; a 4 GB laptop gets 2.5 GB instead of all of it). An
+// unknown total keeps def.
+func SuggestedMaxMemoryMB(total uint64, def int) int {
+	if total == 0 {
+		return def
+	}
+	mb := int(total/(1<<20)) * 2 / 3 / 512 * 512 //nolint:gosec // RAM in MB fits an int
+	return min(max(mb, 1024), def)
 }
 
 // Get returns a copy of the current settings.

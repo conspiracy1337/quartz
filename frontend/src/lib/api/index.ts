@@ -20,6 +20,7 @@ import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as SyncGo from '../wailsjs/go/api/Sync';
 import * as VersionsGo from '../wailsjs/go/api/Versions';
 import { accountsApi, signInAlerts } from './accounts';
+import { collectAlerts } from './alerts';
 import { browseApi, importsApi, manualApi, packsApi } from './browse';
 import { contentApi } from './content';
 import { bytes } from '../format';
@@ -99,9 +100,13 @@ export const api = {
   },
   content: contentApi,
   home: {
-    /** Sign-in alerts, missing mod dependencies, modpack updates and low disk space. */
+    /** "Needs attention": sign-ins, the data folder, disk space, missing mod dependencies,
+        modpack updates and newer releases, merged per kind (see alerts.ts). */
     alerts: () => (hasBridge()
-      ? Promise.all([accountsApi.list().then(signInAlerts), missingAlerts(), packAlerts(), followAlerts(), diskAlerts()]).then((lists) => lists.flat())
+      ? collectAlerts({
+        'sign-in': () => accountsApi.list().then(signInAlerts), folder: folderAlerts, disk: diskAlerts,
+        missing: missingAlerts, pack: packAlerts, follow: followAlerts,
+      })
       : serve(home.alerts)),
     ...homeApi,
   },
@@ -197,6 +202,17 @@ async function missingAlerts(): Promise<Alert[]> {
 async function followAlerts(): Promise<Alert[]> {
   const offers = await api.instances.followOffers();
   return offers.map((o): Alert => ({ tone: 'info', subject: o.name, text: `every mod supports ${o.minecraft}`, action: 'Switch', target: { kind: 'instance', id: o.instanceId, tab: 'version' } }));
+}
+
+const FOLDER_PROBLEMS: Record<string, string> = {
+  bang: 'has a "!" in its path, which breaks Java',
+  temp: 'is in a temporary folder the system may empty',
+};
+
+/** "Data folder is in a temporary folder…": where the data lives will cause trouble. */
+async function folderAlerts(): Promise<Alert[]> {
+  const text = FOLDER_PROBLEMS[await homeApi.folderProblem()];
+  return text ? [{ tone: 'warn', subject: 'Data folder', text, action: 'Review', target: { kind: 'settings', tab: 'storage' } }] : [];
 }
 
 /** "Low disk space 3.2 GB left", when the data folder's drive has under 5 GB free. */

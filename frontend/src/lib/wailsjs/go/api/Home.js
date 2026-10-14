@@ -6,6 +6,10 @@ export function Disk() {
   return window['go']['api']['Home']['Disk']();
 }
 
+export function FolderProblem() {
+  return window['go']['api']['Home']['FolderProblem']();
+}
+
 export function News() {
   return window['go']['api']['Home']['News']();
 }

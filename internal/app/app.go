@@ -43,6 +43,7 @@ import (
 	"quartz/internal/core/paths"
 	"quartz/internal/core/procx"
 	"quartz/internal/core/remoteimg"
+	"quartz/internal/core/safe"
 	"quartz/internal/core/secrets"
 	"quartz/internal/core/tasks"
 	"quartz/internal/crash"
@@ -131,8 +132,10 @@ type app struct {
 	drops     *api.Drops
 	opens     *api.Opens // things asked for from outside, waiting for the UI
 	args      intent.Args
-	flagDir   string      // --dir, passed on when the launcher restarts itself
-	hidden    atomic.Bool // the window was hidden because a game started
+	flagDir   string       // --dir, passed on when the launcher restarts itself
+	hidden    atomic.Bool  // the window was hidden because a game started
+	forceQuit atomic.Bool  // quit without asking about unfinished downloads
+	quitAsked atomic.Int64 // when closing last waited for downloads (unix ns)
 	ctx       *api.Ctx
 	// Worlds, servers, screenshots, crashes, logs and Home (M7).
 	gameImages  *localimg.Registry
@@ -151,6 +154,10 @@ type app struct {
 	presence  *discord.Presence
 	updater   *update.Updater
 	stopCheck func()
+	// crashed names the crash report the last run left ("" after a clean exit).
+	crashed string
+	// moveErr is why the data folder chosen in setup couldn't move (nil when it did).
+	moveErr error
 }
 
 // Run builds the app and blocks until the window closes.
@@ -164,7 +171,7 @@ func Run(o Options) error {
 
 	a.args, a.flagDir = o.Args, o.DataDir
 	appFacade := api.NewApp(a.ctx, a.paths, api.AppDeps{Opens: a.opens, Discord: a.presence.Ready(),
-		Pristine: func() bool { return len(a.instances.List()) == 0 }, Restart: a.restart})
+		Pristine: func() bool { return len(a.instances.List()) == 0 }, Restart: a.restart, Quit: a.quit})
 	return wails.Run(&options.App{
 		Title:            brand.Name,
 		Width:            1200,
@@ -178,6 +185,8 @@ func Run(o Options) error {
 		DragAndDrop: &options.DragAndDrop{EnableFileDrop: true, DisableWebViewDrop: true},
 		OnStartup:   a.startup,
 		OnShutdown:  a.shutdown,
+		// Unfinished downloads ask before the launcher closes.
+		OnBeforeClose: a.beforeClose,
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               lockID(a.paths.Root),
 			OnSecondInstanceLaunch: a.secondInstance,
@@ -250,7 +259,9 @@ func build(o Options) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	moveErr := paths.ApplyMove(p) // a data folder chosen in setup, before anything opens
+	// A data folder chosen in setup moves before anything opens; when that
+	// fails, this run keeps the old folder.
+	p, moveErr := paths.ApplyMove(p)
 	if err := p.Ensure(); err != nil {
 		return nil, fmt.Errorf("creating data folder: %w", err)
 	}
@@ -265,6 +276,10 @@ func build(o Options) (*app, error) {
 	}
 	if moveErr != nil {
 		log.Error("moving the data folder failed", "err", moveErr)
+	}
+	crashed, err := logging.Crashes(p.Logs(), redactor, time.Now())
+	if err != nil {
+		log.Warn("can't record launcher crashes", "err", err)
 	}
 	bus := events.NewBus()
 	store, err := settings.Open(p.Settings(), bus, log)
@@ -286,6 +301,7 @@ func build(o Options) (*app, error) {
 	a := &app{
 		paths: p, log: log, logFile: logFile, redactor: redactor, bus: bus, settings: store,
 		css: theme.NewCustomCSS(bus, log), secrets: secrets.NewKeychain(), http: httpClient, ctx: &api.Ctx{},
+		crashed: crashed, moveErr: moveErr,
 	}
 	a.network = network.New(httpClient, store.Get().Downloads, a.secrets, redactor, log)
 	if a.cache, err = httpcache.Open(p.Cache(), httpClient, log); err != nil {
@@ -538,10 +554,12 @@ func (a *app) checkPacks() func() {
 		t := time.NewTicker(6 * time.Hour)
 		defer t.Stop()
 		for {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			a.packs.CheckUpdates(ctx)
-			a.follow.Check(ctx)
-			cancel()
+			safe.Run(a.log, "modpack and follow-latest checks", func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				a.packs.CheckUpdates(ctx)
+				a.follow.Check(ctx)
+			})
 			select {
 			case <-t.C:
 			case <-done:
@@ -612,7 +630,13 @@ func (a *app) gameStarted(mode string) {
 		a.hidden.Store(true)
 		wruntime.WindowHide(ctx)
 	case "close":
-		wruntime.Quit(ctx)
+		if len(a.tasks.Snapshot().Active) > 0 {
+			// Closing would stop the downloads: hide until the game exits instead.
+			a.hidden.Store(true)
+			wruntime.WindowHide(ctx)
+			return
+		}
+		a.quit()
 	}
 }
 
@@ -675,20 +699,33 @@ func (a *app) startup(ctx context.Context) {
 	})
 	a.accounts.Start()
 	// Games that ran when the launcher last quit get merged back.
-	go a.launcher.Recover()
-	go a.host.Recover()
+	safe.Go(a.log, "recover games", a.launcher.Recover)
+	safe.Go(a.log, "recover hosted servers", a.host.Recover)
 	go func() {
 		st := a.sandbox.Status()
 		a.log.Info("sandbox", "available", st.Available, "backend", st.Name, "version", st.Version, "reason", st.Reason)
 	}()
 	a.watchDesktop()
-	go a.shortcuts.Refresh()
+	safe.Go(a.log, "refresh shortcuts", a.shortcuts.Refresh)
 	a.finishUpdate()
+	a.reportCrash()
 	a.stopCheck = a.scheduleUpdates()
 	a.stopPurge = a.purgeTrash()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
 	a.act(a.args)
+}
+
+// reportCrash tells the player once that the last run crashed, or that the
+// data folder couldn't move.
+func (a *app) reportCrash() {
+	if a.moveErr != nil {
+		a.opens.Fail("Couldn't move the data folder", a.moveErr)
+	}
+	if a.crashed != "" {
+		a.opens.Show(api.OpenTarget{Kind: api.OpenError, Subject: brand.Name + " closed unexpectedly last time",
+			Text: "The report is " + a.crashed + " in the logs folder."})
+	}
 }
 
 // startState starts the window minimized when the computer started the
@@ -710,7 +747,7 @@ func (a *app) restart() error {
 	if err := procx.Relaunch(exe, intent.WaitArgs(os.Getpid(), a.flagDir)); err != nil {
 		return err
 	}
-	wruntime.Quit(a.ctx.Get())
+	a.quit()
 	return nil
 }
 
@@ -736,15 +773,7 @@ func (a *app) purgeTrash() func() {
 		t := time.NewTicker(24 * time.Hour)
 		defer t.Stop()
 		for {
-			if n := a.instances.PurgeExpired(time.Now()); n > 0 {
-				a.log.Info("emptied old trash", "instances", n)
-			}
-			a.syncing.PurgeTrash(time.Now())
-			if freed, n, err := a.store.GC(a.content.Refs, storeGrace); err != nil {
-				a.log.Warn("cleaning the content store failed", "err", err)
-			} else if n > 0 {
-				a.log.Info("cleaned the content store", "files", n, "bytes", freed)
-			}
+			safe.Run(a.log, "daily cleanup", a.cleanup)
 			select {
 			case <-t.C:
 			case <-done:
@@ -753,6 +782,19 @@ func (a *app) purgeTrash() func() {
 		}
 	}()
 	return func() { close(done) }
+}
+
+// cleanup empties old trash and stored content nothing uses any more.
+func (a *app) cleanup() {
+	if n := a.instances.PurgeExpired(time.Now()); n > 0 {
+		a.log.Info("emptied old trash", "instances", n)
+	}
+	a.syncing.PurgeTrash(time.Now())
+	if freed, n, err := a.store.GC(a.content.Refs, storeGrace); err != nil {
+		a.log.Warn("cleaning the content store failed", "err", err)
+	} else if n > 0 {
+		a.log.Info("cleaned the content store", "files", n, "bytes", freed)
+	}
 }
 
 func (a *app) shutdown(context.Context) {

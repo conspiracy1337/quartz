@@ -29,6 +29,8 @@ export const app = {
   pending: bridged(AppGo.Pending, (): OpenTarget[] => []),
   /** Asks for a new data folder; the launcher restarts to move there ('' when cancelled). */
   changeDataFolder: bridged(AppGo.ChangeDataFolder, () => ''),
+  /** Closes the launcher even with downloads unfinished (they can be retried after the next start). */
+  quit: bridged(AppGo.Quit, () => undefined),
 };
 
 // The browser preview shows the design's ready banner (Launcher 1.4.0).

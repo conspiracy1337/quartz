@@ -44,7 +44,7 @@ export const MAP = {
   RevA: ['/instance/fo/mods/updates', click('text=Changelog >> nth=0')], RevB: ['/instance/cab/overview/update'],
   RevC: ['/browse', S("session.open({ kind: 'install', ref: 'distant-horizons', source: 'modrinth', instanceId: 'fo', content: 'mods' })")],
   SetA: ['/settings/general'], SetB: ['/settings/appearance'], SetC: ['/settings/java'], SetD: ['/settings/search/memory'],
-  SetupA: ['/setup/1'], SetupB: ['/setup/2'], SetupC: ['/setup/4'],
+  SetupA: ['/setup/1'], SetupB: ['/setup/2'], SetupC: ['/setup/3'],
   SyncB: ['/syncing'], VerA: ['/instance/fo/version'], VerB: ['/instance/fo/version/minecraft'], VerC: ['/instance/fo/version/loader'],
 };
 

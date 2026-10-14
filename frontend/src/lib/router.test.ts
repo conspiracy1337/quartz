@@ -18,7 +18,7 @@ describe('router', () => {
     { name: 'settings-search', query: 'memory use' },
     { name: 'instance', id: 'fo', tab: 'mods' },
     { name: 'instance', id: 'fo', tab: 'version', sub: 'loader' },
-    { name: 'setup', step: 4 },
+    { name: 'setup', step: 3 },
   ];
   it('round-trips every route', () => {
     for (const r of routes) expect(parse(path(r))).toEqual(r);

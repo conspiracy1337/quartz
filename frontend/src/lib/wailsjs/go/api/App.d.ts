@@ -11,3 +11,5 @@ export function OpenDataFolder():Promise<void>;
 export function OpenURL(arg1:string):Promise<void>;
 
 export function Pending():Promise<Array<api.OpenTarget>>;
+
+export function Quit():Promise<void>;

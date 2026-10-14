@@ -9,6 +9,7 @@ import (
 	"quartz/internal/api"
 	"quartz/internal/brand"
 	"quartz/internal/core/events"
+	"quartz/internal/core/safe"
 	"quartz/internal/desktop"
 	"quartz/internal/settings"
 	"quartz/internal/update"
@@ -81,9 +82,11 @@ func (a *app) scheduleUpdates() func() {
 			case <-t.C:
 			}
 			if a.settings.Get().Updates.AutoCheck {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-				_, _ = a.updater.Check(ctx)
-				cancel()
+				safe.Run(a.log, "launcher update check", func() {
+					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					defer cancel()
+					_, _ = a.updater.Check(ctx)
+				})
 			}
 			t.Reset(updateEvery)
 		}

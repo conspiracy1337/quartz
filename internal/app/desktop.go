@@ -6,6 +6,7 @@ import (
 
 	"quartz/internal/brand"
 	"quartz/internal/core/events"
+	"quartz/internal/core/safe"
 	"quartz/internal/desktop"
 	"quartz/internal/settings"
 )
@@ -43,9 +44,11 @@ func (a *app) watchDesktop() {
 			mu.Lock()
 			w := latest
 			mu.Unlock()
-			if err := reg.Sync(w); err != nil {
-				a.log.Warn("registering with the system failed", "err", err)
-			}
+			safe.Run(a.log, "register with the system", func() {
+				if err := reg.Sync(w); err != nil {
+					a.log.Warn("registering with the system failed", "err", err)
+				}
+			})
 		}
 	}()
 	kick <- struct{}{}

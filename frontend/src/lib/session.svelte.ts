@@ -53,6 +53,7 @@ export interface Toast {
 
 const STEP_MS = 700;
 const TOAST_MS = 8000;
+const TOAST_QUEUE = 3;
 const HOST_START_MS = 1600;
 
 class Session {
@@ -82,6 +83,12 @@ class Session {
 
   #launchTimer: ReturnType<typeof setInterval> | undefined;
   #toastTimer: ReturnType<typeof setTimeout> | undefined;
+  #toastQueue: Toast[] = [];
+  #toastLeft = TOAST_MS;
+  #toastStarted = 0;
+  #toastPaused = false;
+  /** Bumps for every toast shown, so its draining bar starts over. */
+  toastSeq = $state(0);
 
   open(o: Overlay) {
     this.overlay = o;
@@ -219,10 +226,43 @@ class Session {
     }
   }
 
+  /** Shows a toast. One carrying Undo or an action is never replaced: later toasts
+      wait their turn (at most TOAST_QUEUE). A plain notice gives way at once. */
   notify(t: Toast) {
+    const same = (o: Toast | null) => !!o && o.subject === t.subject && o.text === t.text;
+    if (same(this.toast) || this.#toastQueue.some(same)) return;
+    const cur = this.toast;
+    if (cur && (cur.undo || cur.action)) {
+      this.#toastQueue = [...this.#toastQueue, t].slice(-TOAST_QUEUE);
+      return;
+    }
+    this.#show(t);
+  }
+
+  #show(t: Toast) {
     clearTimeout(this.#toastTimer);
     this.toast = t;
-    this.#toastTimer = setTimeout(() => (this.toast = null), TOAST_MS);
+    this.toastSeq++;
+    this.#toastLeft = TOAST_MS;
+    this.#toastPaused = false;
+    this.#runToast();
+  }
+
+  #runToast() {
+    this.#toastStarted = Date.now();
+    this.#toastTimer = setTimeout(() => this.dismissToast(), this.#toastLeft);
+  }
+
+  /** Hover or focus holds the toast (and its draining bar) until it is left. */
+  holdToast(hold: boolean) {
+    if (!this.toast || hold === this.#toastPaused) return;
+    this.#toastPaused = hold;
+    if (hold) {
+      clearTimeout(this.#toastTimer);
+      this.#toastLeft = Math.max(0, this.#toastLeft - (Date.now() - this.#toastStarted));
+    } else {
+      this.#runToast();
+    }
   }
 
   /** Uploads to mclo.gs, copies the link and offers to open it. */
@@ -249,7 +289,10 @@ class Session {
 
   dismissToast() {
     clearTimeout(this.#toastTimer);
-    this.toast = null;
+    const [next, ...rest] = this.#toastQueue;
+    this.#toastQueue = rest;
+    if (next) this.#show(next);
+    else this.toast = null;
   }
 }
 

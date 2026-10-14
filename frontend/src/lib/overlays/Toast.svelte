@@ -10,7 +10,10 @@
   const icon = $derived(tone === 'trash' ? 'trash' : tone === 'error' ? 'warn' : 'info');
 </script>
 
-<div class="toast tst" role={tone === 'error' ? 'alert' : 'status'}>
+<!-- Hover or focus holds it; the bar pauses with it. -->
+<div class="toast tst" role={tone === 'error' ? 'alert' : 'status'}
+  onpointerenter={() => session.holdToast(true)} onpointerleave={() => session.holdToast(false)}
+  onfocusin={() => session.holdToast(true)} onfocusout={() => session.holdToast(false)}>
   <Icon name={icon} style="color: {tone === 'error' ? 'var(--warn)' : 'var(--muted)'}" />
   {#if tone === 'trash'}
     <span>Moved <span style="font-weight: 500">{subject}</span> {text}</span>
@@ -30,4 +33,5 @@
   @keyframes drain{from{width:100%}to{width:0%}}
   .tbar{position:absolute;left:8px;right:8px;bottom:0;height:2px;border-radius:1px;overflow:hidden}
   .tbar > span{display:block;height:100%;background:var(--muted);width:100%}
+  .tst:hover .tbar > span,.tst:focus-within .tbar > span{animation-play-state:paused}
 </style>

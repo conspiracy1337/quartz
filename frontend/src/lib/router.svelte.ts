@@ -12,7 +12,7 @@ export const SETTINGS_TABS = [
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
-export type SetupStep = 1 | 2 | 4;
+export type SetupStep = 1 | 2 | 3;
 
 /** Browse's tabs (Go's project types). */
 export const PROJECT_KINDS = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'] as const;
@@ -91,7 +91,8 @@ export function parse(p: string): Route {
       break;
     case 'setup': {
       const step = Number(b);
-      if (step === 1 || step === 2 || step === 4) return { name: 'setup', step };
+      if (step === 1 || step === 2 || step === 3) return { name: 'setup', step };
+      if (step === 4) return { name: 'setup', step: 3 }; // the old number of the last step
       return { name: 'setup', step: 1 };
     }
   }

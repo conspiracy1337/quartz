@@ -84,7 +84,7 @@ All paths are relative to this folder (`src/`). Frontend paths start with `front
 
 **Lifecycle** ([app.go](internal/app/app.go), [open.go](internal/app/open.go))
 - **Single copy per data folder.** The lock ID is `AppID + sha256(root)[:4]`, so a portable copy can run next to the installed one. A second launch focuses the window and forwards its arguments.
-- **When a game starts:** keep the launcher open, hide it (it reappears when every game has exited), or close it (the game keeps running).
+- **When a game starts:** keep the launcher open, hide it (it reappears when every game has exited), or close it (the game keeps running). While downloads run, close hides instead, so they aren't cut off.
 - **Start minimized** with `--minimized`, which autostart uses.
 - **Self-restart** with `--wait-pid`, used after updates and data-folder moves. [relaunch.go](internal/core/procx/relaunch.go)
 - **Background timers:**
@@ -92,15 +92,20 @@ All paths are relative to this folder (`src/`). Frontend paths start with `front
   - Modpack-update and follow-latest checks every 6 h.
   - A daily purge of the trash and unused store files.
 - **Graceful quit:**
+  - With downloads unfinished, closing asks first: a toast offers **Quit anyway**, and closing again while it shows quits. The launcher's own quits (restart, update) don't ask. [quit.go](internal/app/quit.go)
   - A hosted server gets up to 35 s to save.
   - Every store is flushed.
   - A downloaded update installs on quit.
 - **Crash recovery at start:**
   - Run views left behind by a dead launcher are merged back.
   - Orphaned hosted servers are stopped.
+- **Launcher crashes:**
+  - A fatal crash is written to `logs/launcher-crash.txt`. The next start keeps a redacted copy (the newest 5) and says the launcher closed unexpectedly. [crash.go](internal/core/logging/crash.go)
+  - Timers and watchers run each round under `safe.Run`, so a bug in one is logged instead of ending the launcher. [safe.go](internal/core/safe/safe.go)
 
 **Toasts** ([Toast.svelte](frontend/src/lib/overlays/Toast.svelte), [session.svelte.ts](frontend/src/lib/session.svelte.ts))
-- One toast at a time. It dismisses itself after 8 s and shows a draining bar.
+- One toast at a time. It dismisses itself after 8 s and shows a draining bar. Hover or focus holds it.
+- A toast with Undo or an action is never replaced: later toasts wait their turn (up to 3, duplicates dropped). A plain notice gives way at once.
 - Tones: trash (with Undo), info, and error (`role=alert`).
 - A toast can carry an action button such as Review, Open or Console.
 
@@ -123,7 +128,8 @@ All paths are relative to this folder (`src/`). Frontend paths start with `front
 | Go to Home / Library / Browse / Downloads | G then H / L / B / D (within 800 ms) | anywhere |
 | List: move / toggle / search / select all | J K / Space / `/` / Ctrl+A | content lists, update review |
 
-- Cmd counts as Ctrl.
+- Cmd counts as Ctrl. Shift counts on letters (Ctrl+Shift+K isn't Ctrl+K).
+- Chords follow the physical key when a layout types something else (Cyrillic, Greek, macOS Option), so they work on any layout. G sequences too.
 - Ctrl and Alt chords work while you type. While a dialog is open, only the palette and switcher work. Esc closes overlays.
 - **Rebinding** lives in Settings → General → Keyboard shortcuts:
   - A chord must use Ctrl or Alt, and a chord that is already taken is rejected.
@@ -133,13 +139,13 @@ All paths are relative to this folder (`src/`). Frontend paths start with `front
 - **Shortcut sheet:** four groups (Anywhere, Go to, Instance, Lists) showing the chords in effect. [Shortcuts.svelte](frontend/src/lib/overlays/Shortcuts.svelte)
 
 **Command palette** ([Palette.svelte](frontend/src/lib/overlays/Palette.svelte))
-- **Commands mode (Ctrl+K):** fuzzy filter, up to 8 results, matches highlighted.
+- **Commands mode (Ctrl+K):** fuzzy matching (the query's letters in order), ranked so substrings, word starts and runs come first. Up to 8 results, matched letters highlighted. [fuzzy.ts](frontend/src/lib/fuzzy.ts)
   - Check for updates in all instances. The result toast has a "Review" action.
   - Update N mods in the most recent instance (only when updates are pending).
   - Install launcher update, or Check for launcher updates.
   - On an instance page: Create shortcut…, Export instance….
   - Import from other launchers, Open data folder, Create a new instance, Show keyboard shortcuts.
-  - One command for every registry setting, labelled "Settings, &lt;Tab&gt;".
+  - One command for every registry setting, labelled "Settings, &lt;Tab&gt;". Settings are also found by their description and group, below label matches.
 - **Instances mode (Ctrl+P):**
   - Up to 5 instances, each with version, loader and "played X ago".
   - Enter plays the selected instance; Ctrl+Enter opens it.
@@ -154,6 +160,8 @@ Files: [routes/setup/](frontend/src/routes/setup/), [paths.go](internal/core/pat
 1. **Welcome:**
    - Language (English only for now).
    - "Where to keep instances": **Change** moves the data folder and restarts. This is disabled when the folder is fixed by a flag, env var or portable mode, or once instances exist.
+     - Folders with "!" in the path (it breaks Java) and temporary folders are refused.
+     - The move is all or nothing: renames are undone, and copies to another drive are staged until every one succeeds. If it fails, the launcher keeps the old folder and says why. [pointer.go](internal/core/paths/pointer.go)
    - Look: Dark, Light or System.
 2. **Sign in:**
    - Microsoft in the browser, a code on another device, or play offline.
@@ -164,6 +172,7 @@ Files: [routes/setup/](frontend/src/routes/setup/), [paths.go](internal/core/pat
    - A card shows which Java runtimes will download in the background, with their size.
    - **Import N and finish**.
 - Setup can be run again from Settings → General, and the palette jumps to step 3.
+- A fresh install sets the default most memory to two thirds of the RAM, between 1 and 4 GB. [store.go](internal/settings/store.go)
 
 ---
 
@@ -173,11 +182,15 @@ Files: [Home.svelte](frontend/src/routes/Home.svelte), [home.go](internal/home/h
 
 The page is a single "focus column" that never scrolls. Rows with nothing to show are removed.
 
-- **Alerts** ("Needs attention"), each with one action. [HomeAlerts.svelte](frontend/src/lib/components/HomeAlerts.svelte), [api/index.ts](frontend/src/lib/api/index.ts)
+- **Alerts** ("Needs attention"), each with one action. [alerts.ts](frontend/src/lib/api/alerts.ts)
+  - Each source is read on its own, so one that fails doesn't hide the rest.
+  - Several alerts of one kind merge into one ("Survival and 2 more are missing mods"), which acts on the first.
+  - Shown most urgent first, at most 3. [HomeAlerts.svelte](frontend/src/lib/components/HomeAlerts.svelte), [api/index.ts](frontend/src/lib/api/index.ts)
 
   | Alert | Action |
   |---|---|
   | Sign-in expired | **Sign in** |
+  | Data folder has "!" in its path, or is in a temporary folder | **Review** (Settings → Storage) |
   | Instance missing a dependency | **Fix** (opens the Mods tab) |
   | Modpack update available | **Review** |
   | Every mod supports the new Minecraft release | **Switch** |

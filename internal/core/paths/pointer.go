@@ -72,6 +72,12 @@ func (p Paths) MoveTo(root string) error {
 	if !filepath.IsAbs(root) || fsx.IsSystemRoot(root) || fsx.Within(root, p.Root) || fsx.Within(p.Root, root) {
 		return ErrBadRoot
 	}
+	switch Problem(root) {
+	case ProblemBang:
+		return fmt.Errorf("%w: Java can't use a folder with \"!\" in its path", ErrBadRoot)
+	case ProblemTemp:
+		return fmt.Errorf("%w: it's a temporary folder the system may empty", ErrBadRoot)
+	}
 	if err := os.MkdirAll(root, dirPerm); err != nil {
 		return fmt.Errorf("%w: %w", ErrBadRoot, err)
 	}
@@ -99,44 +105,44 @@ func (p Paths) MoveTo(root string) error {
 }
 
 // ApplyMove finishes a data folder change on startup, before anything is
-// opened: every entry of the old folder moves into the new one (a rename,
-// or a copy across drives), then the pointer forgets the move.
-func ApplyMove(p Paths) error {
+// opened. It is all or nothing: the old folder's entries are renamed into
+// the new one or, across drives, copied into a staging folder first and
+// renamed into place once every copy succeeded. When something fails, the
+// renames are undone, the change is cancelled and the returned Paths is the
+// old folder, so this run works from complete data.
+func ApplyMove(p Paths) (Paths, error) {
 	ptr, ok := pendingMove(p)
 	if !ok {
-		return nil
+		return p, nil
 	}
-	if err := os.MkdirAll(p.Root, dirPerm); err != nil {
-		return err
+	if err := moveData(ptr.MoveFrom, p.Root); err != nil {
+		old := p
+		old.Root = filepath.Clean(ptr.MoveFrom)
+		if old.Root == filepath.Clean(p.Default) {
+			old.Chosen = ByDefault
+		}
+		if cerr := writePointer(p.Default, pointer{Root: old.Root}); cerr != nil {
+			return p, errors.Join(err, cerr)
+		}
+		return old, fmt.Errorf("the data folder stays at %s: %w", old.Root, err)
 	}
-	entries, err := os.ReadDir(ptr.MoveFrom)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	for _, e := range entries {
-		if e.Name() == pointerFile {
-			continue
-		}
-		from, to := filepath.Join(ptr.MoveFrom, e.Name()), filepath.Join(p.Root, e.Name())
-		if _, err := os.Lstat(to); err == nil {
-			continue // the new folder has its own
-		}
-		if err := os.Rename(from, to); err == nil {
-			continue
-		}
-		if err := moveAcross(from, to, e.IsDir()); err != nil {
+	return p, writePointer(p.Default, pointer{Root: ptr.Root})
+}
+
+// writePointer records root as the data folder; the OS location needs no pointer.
+func writePointer(def string, ptr pointer) error {
+	path := filepath.Join(def, pointerFile)
+	if filepath.Clean(ptr.Root) == filepath.Clean(def) {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		return nil
 	}
-	if filepath.Clean(ptr.Root) == filepath.Clean(p.Default) {
-		return os.Remove(filepath.Join(p.Default, pointerFile))
-	}
-	ptr.MoveFrom = ""
 	b, err := json.Marshal(ptr)
 	if err != nil {
 		return err
 	}
-	return fsx.AtomicWrite(filepath.Join(p.Default, pointerFile), b, fsx.FilePerm)
+	return fsx.AtomicWrite(path, b, fsx.FilePerm)
 }
 
 // pendingMove is the pointer when it asks for data to move into p.Root.
@@ -155,15 +161,94 @@ func pendingMove(p Paths) (pointer, bool) {
 	return ptr, true
 }
 
-func moveAcross(from, to string, dir bool) error {
-	var err error
-	if dir {
-		err = linkx.CopyTree(from, to, linkx.Options{NoHardlink: true})
-	} else {
-		_, err = linkx.Place(from, to, linkx.Options{NoHardlink: true})
+// moveData is move (a variable for tests).
+var moveData = move
+
+// stagingDir holds copies across drives until every one has succeeded.
+const stagingDir = ".quartz-move"
+
+// move brings every entry of from into to (see ApplyMove).
+func move(from, to string) error {
+	if err := os.MkdirAll(to, dirPerm); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(from)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(from)
+	var names []string
+	for _, e := range entries {
+		if n := e.Name(); n != pointerFile && n != stagingDir {
+			names = append(names, n)
+		}
+	}
+	var renamed []string
+	undo := func() {
+		for _, n := range renamed {
+			_ = os.Rename(filepath.Join(to, n), filepath.Join(from, n))
+		}
+	}
+	for i, n := range names {
+		if _, err := os.Lstat(filepath.Join(to, n)); err == nil {
+			undo()
+			return fmt.Errorf("%s is already in the new folder", n)
+		}
+		if os.Rename(filepath.Join(from, n), filepath.Join(to, n)) == nil {
+			renamed = append(renamed, n)
+			continue
+		}
+		// Another drive: copy the rest.
+		if err := copyStaged(from, to, names[i:]); err != nil {
+			undo()
+			return err
+		}
+		return nil
+	}
+	return nil
+}
+
+// copyStaged copies names from from into to's staging folder, then renames
+// them into place and removes the originals. Nothing lands in to unless
+// every copy succeeded.
+func copyStaged(from, to string, names []string) error {
+	stage := filepath.Join(to, stagingDir)
+	if err := os.RemoveAll(stage); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(stage, dirPerm); err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(stage) }()
+	for _, n := range names {
+		src, dst := filepath.Join(from, n), filepath.Join(stage, n)
+		fi, err := os.Lstat(src)
+		if err != nil {
+			return err
+		}
+		if fi.IsDir() {
+			err = linkx.CopyTree(src, dst, linkx.Options{NoHardlink: true})
+		} else {
+			_, err = linkx.Place(src, dst, linkx.Options{NoHardlink: true})
+		}
+		if err != nil {
+			return err
+		}
+	}
+	for i, n := range names {
+		if err := os.Rename(filepath.Join(stage, n), filepath.Join(to, n)); err != nil {
+			// Half a data folder must not look like one later.
+			for _, placed := range names[:i] {
+				_ = os.RemoveAll(filepath.Join(to, placed))
+			}
+			return err
+		}
+	}
+	// Everything is in place; what can't be removed is only left behind.
+	for _, n := range names {
+		_ = os.RemoveAll(filepath.Join(from, n))
+	}
+	return nil
 }

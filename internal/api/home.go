@@ -36,5 +36,9 @@ func (h *Home) Servers(force bool) ([]servers.Merged, error) {
 // RecentShots is the newest screenshots across instances.
 func (h *Home) RecentShots() []screenshots.Shot { return asList(h.d.Screenshots.Recent(6)) }
 
+// FolderProblem is what is wrong with where the data folder is ("bang",
+// "temp"), or "".
+func (h *Home) FolderProblem() string { return h.d.Home.FolderProblem() }
+
 // Disk is the data drive's free space.
 func (h *Home) Disk() home.Disk { return h.d.Home.Disk() }
