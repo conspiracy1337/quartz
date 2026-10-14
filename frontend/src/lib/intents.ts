@@ -24,6 +24,10 @@ export function show(t: OpenTarget) {
     case 'error':
       session.notify({ tone: 'error', subject: t.subject ?? "Couldn't open that", text: t.text ?? '' });
       break;
+    case 'quit-blocked':
+      // Closing waits for downloads; closing again while this shows quits too.
+      session.notify({ subject: t.subject ?? '', text: t.text ?? '', action: { label: 'Quit anyway', run: () => void app.quit() } });
+      break;
   }
 }
 

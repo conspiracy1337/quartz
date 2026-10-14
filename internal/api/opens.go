@@ -32,6 +32,9 @@ const (
 	OpenInstance = "instance" // an instance's page
 	OpenError    = "error"    // an error toast
 	OpenNotice   = "notice"   // a plain toast
+	// OpenQuitBlocked: closing waits for unfinished downloads; the toast
+	// offers to quit anyway (App.Quit).
+	OpenQuitBlocked = "quit-blocked"
 )
 
 // OpenTarget is one thing for the UI to show.

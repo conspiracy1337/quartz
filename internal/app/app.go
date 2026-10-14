@@ -132,8 +132,10 @@ type app struct {
 	drops     *api.Drops
 	opens     *api.Opens // things asked for from outside, waiting for the UI
 	args      intent.Args
-	flagDir   string      // --dir, passed on when the launcher restarts itself
-	hidden    atomic.Bool // the window was hidden because a game started
+	flagDir   string       // --dir, passed on when the launcher restarts itself
+	hidden    atomic.Bool  // the window was hidden because a game started
+	forceQuit atomic.Bool  // quit without asking about unfinished downloads
+	quitAsked atomic.Int64 // when closing last waited for downloads (unix ns)
 	ctx       *api.Ctx
 	// Worlds, servers, screenshots, crashes, logs and Home (M7).
 	gameImages  *localimg.Registry
@@ -167,7 +169,7 @@ func Run(o Options) error {
 
 	a.args, a.flagDir = o.Args, o.DataDir
 	appFacade := api.NewApp(a.ctx, a.paths, api.AppDeps{Opens: a.opens, Discord: a.presence.Ready(),
-		Pristine: func() bool { return len(a.instances.List()) == 0 }, Restart: a.restart})
+		Pristine: func() bool { return len(a.instances.List()) == 0 }, Restart: a.restart, Quit: a.quit})
 	return wails.Run(&options.App{
 		Title:            brand.Name,
 		Width:            1200,
@@ -181,6 +183,8 @@ func Run(o Options) error {
 		DragAndDrop: &options.DragAndDrop{EnableFileDrop: true, DisableWebViewDrop: true},
 		OnStartup:   a.startup,
 		OnShutdown:  a.shutdown,
+		// Unfinished downloads ask before the launcher closes.
+		OnBeforeClose: a.beforeClose,
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               lockID(a.paths.Root),
 			OnSecondInstanceLaunch: a.secondInstance,
@@ -622,7 +626,13 @@ func (a *app) gameStarted(mode string) {
 		a.hidden.Store(true)
 		wruntime.WindowHide(ctx)
 	case "close":
-		wruntime.Quit(ctx)
+		if len(a.tasks.Snapshot().Active) > 0 {
+			// Closing would stop the downloads: hide until the game exits instead.
+			a.hidden.Store(true)
+			wruntime.WindowHide(ctx)
+			return
+		}
+		a.quit()
 	}
 }
 
@@ -729,7 +739,7 @@ func (a *app) restart() error {
 	if err := procx.Relaunch(exe, intent.WaitArgs(os.Getpid(), a.flagDir)); err != nil {
 		return err
 	}
-	wruntime.Quit(a.ctx.Get())
+	a.quit()
 	return nil
 }
 

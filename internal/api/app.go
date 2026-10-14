@@ -30,6 +30,8 @@ type AppDeps struct {
 	Pristine func() bool
 	// Restart starts the launcher again and quits this one.
 	Restart func() error
+	// Quit closes the launcher without asking about unfinished downloads.
+	Quit func()
 }
 
 // NewApp returns the facade.
@@ -38,6 +40,14 @@ func NewApp(ctx *Ctx, p paths.Paths, d AppDeps) *App { return &App{ctx: ctx, pat
 // Pending returns what the launcher was asked to open from outside since the
 // last call (see Opens).
 func (a *App) Pending() []OpenTarget { return asList(a.d.Opens.Pending()) }
+
+// Quit closes the launcher now, even with downloads unfinished (they can be
+// retried after the next start).
+func (a *App) Quit() {
+	if a.d.Quit != nil {
+		a.d.Quit()
+	}
+}
 
 // ErrNotPristine means instances exist, so the data folder stays put.
 var ErrNotPristine = errors.New("api: the data folder can only change before you have instances")
