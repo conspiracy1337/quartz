@@ -20,6 +20,7 @@ import (
 	"quartz/internal/core/events"
 	"quartz/internal/core/localimg"
 	"quartz/internal/core/logging"
+	"quartz/internal/core/nbt"
 	"quartz/internal/core/slp"
 	"quartz/internal/host"
 	"quartz/internal/icons"
@@ -44,6 +45,10 @@ func TestHost(t *testing.T) {
 		{"forge", "1.20.1", "forge"},
 		{"neoforge", "1.21.1", "neoforge"},
 		{"forge-legacy", "1.12.2", "forge"},
+	}
+	// QUARTZ_IT_HOST_LATEST=<version> adds a vanilla case on that release.
+	if v := os.Getenv("QUARTZ_IT_HOST_LATEST"); v != "" {
+		cases = append(cases, struct{ name, mc, loader string }{"vanilla-latest", v, ""})
 	}
 	h := newHarness(t)
 	bus := events.NewBus()
@@ -188,9 +193,11 @@ func TestHost(t *testing.T) {
 			if end.Result != "ok" {
 				t.Fatalf("stopped with %+v", end)
 			}
-			if _, err := os.Stat(filepath.Join(insts.Path(in.ID, "saves"), "New world", "level.dat")); err != nil {
+			world := filepath.Join(insts.Path(in.ID, "saves"), "New world")
+			if _, err := os.Stat(filepath.Join(world, "level.dat")); err != nil {
 				t.Fatalf("the new world was saved in the instance: %v", err)
 			}
+			hostAgainAsHard(t, svc, ws, states, in.ID, world, port)
 		})
 	}
 }
@@ -239,4 +246,67 @@ func fabricMod(t *testing.T, path, id, env string) {
 	_, _ = w.Write([]byte(`{"schemaVersion":1,"id":"` + id + `","version":"1.0.0","environment":"` + env + `"}`))
 	_ = zw.Close()
 	_ = f.Close()
+}
+
+// hostAgainAsHard hosts the world again after making it a Hard world with
+// cheats in singleplayer: the server must keep its difficulty (it forces
+// server.properties' onto the world) and make the host an operator.
+func hostAgainAsHard(t *testing.T, svc *host.Service, ws *worlds.Service, states <-chan host.State, id, world string, port int) {
+	t.Helper()
+	lvl := filepath.Join(world, "level.dat")
+	f, err := nbt.ReadFile(lvl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := f.Root.Get("Data")
+	t.Logf("level.dat Data keys: %v", data.Comp.Names)
+	if ds := data.Get("difficulty_settings"); ds != nil {
+		ds.Comp.Set("difficulty", nbt.NewString("hard"))
+	} else {
+		data.Comp.Set("Difficulty", nbt.NewByte(3))
+	}
+	data.Comp.Set("allowCommands", nbt.NewByte(1))
+	if err := nbt.WriteFile(lvl, f); err != nil {
+		t.Fatal(err)
+	}
+	if seed, err := ws.Seed(id, "New world"); err != nil || seed == "0" {
+		t.Errorf("seed %q %v", seed, err)
+	}
+	if err := svc.Start(id, host.Options{World: "New world", Port: port, MaxPlayers: 10, MemoryMB: 2048}); err != nil {
+		t.Fatal(err)
+	}
+	wait(t, states, "running", 5*time.Minute)
+	props, _ := os.ReadFile(filepath.Join(svc.Dir(id), "server.properties"))
+	if !strings.Contains(string(props), "difficulty=hard") && !strings.Contains(string(props), "difficulty=3") {
+		t.Errorf("server.properties:\n%s", props)
+	}
+	ops, _ := os.ReadFile(filepath.Join(svc.Dir(id), "ops.json"))
+	opsTxt, _ := os.ReadFile(filepath.Join(svc.Dir(id), "ops.txt"))
+	if !strings.Contains(string(ops), accounts.OfflineUUID("Quartz_Test")) && !strings.Contains(string(opsTxt), "Quartz_Test") {
+		t.Errorf("the host isn't an operator: %s %s", ops, opsTxt)
+	}
+	if err := svc.Stop(id); err != nil {
+		t.Fatal(err)
+	}
+	if end := wait(t, states, "stopped", time.Minute); end.Result != "ok" {
+		t.Fatalf("stopped with %+v", end)
+	}
+	after := worlds.LevelData(world)
+	d := after.Get("Difficulty").Int()
+	if ds := after.Get("difficulty_settings"); ds != nil {
+		if ds.Get("difficulty").Text() == "hard" {
+			d = 3
+		}
+	}
+	if d != 3 {
+		t.Errorf("the world isn't Hard any more: %v", after.Comp.Names)
+	}
+	for _, p := range []string{"playerdata", "players"} {
+		if entries, err := os.ReadDir(filepath.Join(world, p)); err == nil {
+			t.Logf("%s/: %d entries", p, len(entries))
+		}
+	}
+	if _, err := os.Stat(filepath.Join(world, "data", "minecraft", "world_gen_settings.dat")); err == nil {
+		t.Log("seed lives in data/minecraft/world_gen_settings.dat")
+	}
 }

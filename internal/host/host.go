@@ -26,6 +26,7 @@ import (
 	"quartz/internal/content"
 	"quartz/internal/content/store"
 	"quartz/internal/core/events"
+	"quartz/internal/core/fsx"
 	"quartz/internal/core/procx"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
@@ -48,6 +49,7 @@ var (
 	ErrBusy       = errors.New("host: close the game first")
 	ErrPortInUse  = errors.New("host: that port is in use")
 	ErrNoWorld    = errors.New("host: that world is gone")
+	ErrWorldOpen  = errors.New("host: that world is open in a game; close it first")
 	ErrBadPort    = errors.New("host: the port is a number from 1024 to 65535")
 	ErrBadPlayers = errors.New("host: max players is a number from 1 to 999")
 	ErrBadMemory  = errors.New("host: memory is at least 512 MB and at most what this computer has")
@@ -283,26 +285,54 @@ func (s *Service) current(id string) (*server, error) {
 // Dir is the instance's server folder.
 func (s *Service) Dir(id string) string { return filepath.Join(s.d.Instances.Dir(id), "server") }
 
-// pidFile records the running server's process, for Recover.
+// pidFile records the running server's process as "pid ident", for Recover.
 func pidFile(dir string) string { return filepath.Join(dir, ".quartz", "pid") }
 
-// Recover stops servers a launcher that died left running. A recorded pid
-// is only acted on when that process still runs in the server folder, so a
-// reused pid is never touched.
+// pidLine is what pidFile holds for a process.
+func pidLine(pid int) string {
+	ident, _ := procx.Ident(pid)
+	return strconv.Itoa(pid) + " " + strconv.FormatUint(ident, 10)
+}
+
+// recorded reports whether a pidFile line still names the server it was
+// written for, so a reused pid is never touched: by its start time, or for
+// files without one, by its working folder (Linux only).
+func recorded(line, dir string) (int, bool) {
+	f := strings.Fields(line)
+	if len(f) == 0 {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(f[0])
+	if err != nil {
+		return 0, false
+	}
+	if len(f) > 1 {
+		if ident, err := strconv.ParseUint(f[1], 10, 64); err == nil && ident != 0 {
+			return pid, procx.Same(pid, ident)
+		}
+	}
+	return pid, procx.Alive(pid) && procx.InDir(pid, dir)
+}
+
+// Recover stops servers a launcher that died left running, letting them
+// save first where the OS can ask.
 func (s *Service) Recover() {
 	for _, in := range s.d.Instances.List() {
 		dir := s.Dir(in.ID)
-		raw, err := os.ReadFile(pidFile(dir)) //nolint:gosec // inside the instance folder
+		raw, err := fsx.ReadCapped(pidFile(dir), 256)
 		if err != nil {
 			continue
 		}
-		pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
-		if procx.Alive(pid) && procx.InDir(pid, dir) {
+		pid, ours := recorded(string(raw), dir)
+		switch {
+		case ours:
 			if p, err := os.FindProcess(pid); err == nil {
 				s.d.Log.Warn("host: stopping a server left running", "instance", in.ID, "pid", pid)
-				_ = procx.Kill(p)
+				if procx.Terminate(p) != nil {
+					_ = procx.Kill(p)
+				}
 			}
-		} else if procx.Alive(pid) {
+		case procx.Alive(pid):
 			s.d.Log.Warn("host: a server may still run from before; its port stays taken until it stops", "instance", in.ID, "pid", pid)
 		}
 		_ = os.Remove(pidFile(dir))

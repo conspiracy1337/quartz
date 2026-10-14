@@ -158,7 +158,7 @@ func (s *Service) read(dir string) (World, bool) {
 		return World{}, false
 	}
 	w := World{Folder: filepath.Base(dir), Name: filepath.Base(dir), LastPlayed: fi.ModTime().UnixMilli()}
-	if data := levelData(dir); data != nil {
+	if data := LevelData(dir); data != nil {
 		if n := data.Get("LevelName").Text(); n != "" {
 			w.Name = n
 		}
@@ -175,8 +175,9 @@ func (s *Service) read(dir string) (World, bool) {
 	return w, true
 }
 
-// levelData reads level.dat's Data compound (level.dat_old as a fallback).
-func levelData(dir string) *nbt.Tag {
+// LevelData reads the Data compound of a world's level.dat (level.dat_old
+// as a fallback).
+func LevelData(dir string) *nbt.Tag {
 	for _, name := range []string{"level.dat", "level.dat_old"} {
 		if f, err := nbt.ReadFile(filepath.Join(dir, name)); err == nil {
 			if d := f.Root.Get("Data"); d != nil && d.Kind == nbt.Compound {
@@ -241,6 +242,25 @@ func (s *Service) dir(id, folder string) (string, error) {
 	return d, nil
 }
 
+// open reports whether a game, from this launcher or any other, has the
+// world in dir open: the game locks its session.lock while it plays.
+func playing(dir string) bool { return fsx.Locked(filepath.Join(dir, "session.lock")) }
+
+// editable returns a world's folder when nothing plays it.
+func (s *Service) editable(id, folder string) (string, error) {
+	if s.d.Busy(id) {
+		return "", ErrBusy
+	}
+	d, err := s.dir(id, folder)
+	if err != nil {
+		return "", err
+	}
+	if playing(d) {
+		return "", ErrBusy
+	}
+	return d, nil
+}
+
 // Folder is the instance's saves folder (made if missing, so it can be opened).
 func (s *Service) Folder(id string) string {
 	d := s.saves(id)
@@ -257,14 +277,21 @@ func (s *Service) Seed(id, folder string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data := levelData(d)
+	data := LevelData(d)
 	if data == nil {
 		return "", ErrNotWorld
 	}
-	if seed := data.Path("WorldGenSettings", "seed"); seed != nil {
-		return strconv.FormatInt(seed.Int(), 10), nil
+	seed := data.Path("WorldGenSettings", "seed")
+	if seed == nil {
+		seed = data.Get("RandomSeed")
 	}
-	return strconv.FormatInt(data.Get("RandomSeed").Int(), 10), nil
+	if seed == nil {
+		// Newer versions keep world generation out of level.dat.
+		if f, err := nbt.ReadFile(filepath.Join(d, "data", "minecraft", "world_gen_settings.dat")); err == nil {
+			seed = f.Root.Path("data", "seed")
+		}
+	}
+	return strconv.FormatInt(seed.Int(), 10), nil
 }
 
 // Rename changes the name the game shows (LevelName); the folder stays.
@@ -273,10 +300,7 @@ func (s *Service) Rename(id, folder, name string) error {
 	if name == "" || len([]rune(name)) > 64 || strings.ContainsAny(name, "\x00\n\r") {
 		return ErrName
 	}
-	if s.d.Busy(id) {
-		return ErrBusy
-	}
-	d, err := s.dir(id, folder)
+	d, err := s.editable(id, folder)
 	if err != nil {
 		return err
 	}
@@ -320,10 +344,7 @@ func Retitle(dir, suffix string) error {
 
 // Delete moves a world aside and returns the token Undo takes.
 func (s *Service) Delete(id, folder string) (string, error) {
-	if s.d.Busy(id) {
-		return "", ErrBusy
-	}
-	if _, err := s.dir(id, folder); err != nil {
+	if _, err := s.editable(id, folder); err != nil {
 		return "", err
 	}
 	root, err := os.OpenRoot(s.d.Instances.Base(id, "saves"))
@@ -366,6 +387,9 @@ func (s *Service) Export(id, folder, dest string) error {
 	if err != nil {
 		return err
 	}
+	if playing(d) {
+		return ErrBusy // a world mid-save would zip half written
+	}
 	if err := backup.ZipDir(d, dest, folder+"/"); err != nil {
 		if errors.Is(err, backup.ErrNoWorlds) {
 			return ErrNoWorld
@@ -377,10 +401,7 @@ func (s *Service) Export(id, folder, dest string) error {
 
 // CopyTo copies a world into another instance and returns its folder there.
 func (s *Service) CopyTo(id, folder, target string) (string, error) {
-	if s.d.Busy(id) {
-		return "", ErrBusy
-	}
-	d, err := s.dir(id, folder)
+	d, err := s.editable(id, folder)
 	if err != nil {
 		return "", err
 	}
@@ -525,7 +546,7 @@ func (s *Service) FinishRun(f *launch.Finished) {
 		}
 		latest = fi.ModTime()
 		f.Record.World = e.Name()
-		if data := levelData(filepath.Join(saves, e.Name())); data != nil {
+		if data := LevelData(filepath.Join(saves, e.Name())); data != nil {
 			if n := data.Get("LevelName").Text(); n != "" {
 				f.Record.World = n
 			}

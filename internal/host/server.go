@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -57,6 +58,7 @@ type server struct {
 	saves           string // where the instance's worlds are (--universe)
 	world           string // the world's folder in saves (--world)
 	uuid            string // the default account's player id, for its inventory
+	player          string // the default account's name
 	rules           rules.Settings
 	cancel          context.CancelFunc
 	jail            *sandbox.Jail
@@ -114,6 +116,8 @@ func (s *Service) Start(id string, o Options) error {
 		world = fsx.FreeName(saves, "New world", true)
 	} else if info, err := os.Stat(filepath.Join(saves, world)); err != nil || !info.IsDir() {
 		return ErrNoWorld
+	} else if fsx.Locked(filepath.Join(saves, world, "session.lock")) {
+		return ErrWorldOpen
 	}
 	if err := s.free(); err != nil {
 		return err
@@ -260,7 +264,7 @@ func (s *Service) prepare(ctx context.Context, srv *server, in instance.Instance
 		if err := backupWorld(world, filepath.Join(s.d.Instances.Dir(in.ID), "backups", "host", srv.world), time.Now()); err != nil {
 			return "", nil, fmt.Errorf("host: backing up %s: %w", srv.world, err)
 		}
-		srv.uuid = s.playerID(srv.opts)
+		srv.uuid, srv.player = s.player(srv.opts)
 		if srv.uuid != "" {
 			if err := carryIn(world, srv.uuid); err != nil {
 				s.d.Log.Warn("host: carrying the singleplayer inventory over failed", "err", err)
@@ -296,20 +300,20 @@ func (s *Service) runJob(ctx context.Context, spec *tasks.Spec) error {
 	return nil
 }
 
-// playerID is the default account's id as the server sees it: its offline
-// id when offline accounts are allowed, else its Minecraft id.
-func (s *Service) playerID(o Options) string {
+// player is the default account's id as the server sees it (its offline
+// id when offline accounts are allowed, else its Minecraft id) and name.
+func (s *Service) player(o Options) (string, string) {
 	if s.d.Accounts == nil {
-		return ""
+		return "", ""
 	}
 	acc, err := s.d.Accounts.Default()
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	if o.Offline || acc.Kind == accounts.Offline {
-		return accounts.OfflineUUID(acc.Name)
+		return accounts.OfflineUUID(acc.Name), acc.Name
 	}
-	return dashed(acc.ID)
+	return dashed(acc.ID), acc.Name
 }
 
 // layout fills the server folder: the mods that run on servers, newer mod
@@ -342,7 +346,16 @@ func (s *Service) layout(ctx context.Context, srv *server, in instance.Instance,
 	if err := res.PlaceInto(srv.dir); err != nil {
 		return err
 	}
-	return writeServerFiles(srv.dir, srv.opts, srv.world, in.Name)
+	rules, cheats := worldRules(filepath.Join(srv.saves, srv.world), in.Minecraft)
+	if err := writeServerFiles(srv.dir, srv.opts, srv.world, in.Name, rules); err != nil {
+		return err
+	}
+	if cheats && srv.uuid != "" {
+		if err := addOp(srv.dir, in.Minecraft, srv.uuid, srv.player); err != nil {
+			s.d.Log.Warn("host: making the host an operator failed", "err", err)
+		}
+	}
+	return nil
 }
 
 // placeMods makes the server's mods folder exactly the kept mods: it is the
@@ -380,8 +393,9 @@ func (s *Service) placeMods(dir string, keep []content.ServerMod) error {
 }
 
 // writeServerFiles writes server.properties (keeping the player's own
-// edits) and accepts the EULA, as Start server does for the player.
-func writeServerFiles(dir string, o Options, world, name string) error {
+// edits, except where the world's rules decide) and accepts the EULA, as
+// Start server does for the player.
+func writeServerFiles(dir string, o Options, world, name string, rules map[string]string) error {
 	set := map[string]string{
 		"server-port": strconv.Itoa(o.Port), "max-players": strconv.Itoa(o.MaxPlayers), "server-ip": bindHost(o),
 		"online-mode": strconv.FormatBool(!o.Offline), "enable-rcon": "false", "enable-query": "false", "level-name": world,
@@ -389,7 +403,10 @@ func writeServerFiles(dir string, o Options, world, name string) error {
 	if o.Offline {
 		set["enforce-secure-profile"] = "false"
 	}
-	if err := writeProps(filepath.Join(dir, "server.properties"), set, map[string]string{"motd": motd(name)}); err != nil {
+	maps.Copy(set, rules)
+	// As on LAN, an operator host doesn't stop friends building at spawn.
+	keep := map[string]string{"motd": motd(name), "spawn-protection": "0"}
+	if err := writeProps(filepath.Join(dir, "server.properties"), set, keep); err != nil {
 		return err
 	}
 	return fsx.AtomicWrite(filepath.Join(dir, "eula.txt"), []byte("# Accepted by Quartz when you chose Start server.\neula=true\n"), fsx.FilePerm)
@@ -444,7 +461,7 @@ func (s *Service) spawn(ctx context.Context, srv *server, javaPath string, argv 
 	srv.cmd, srv.stdin, srv.con, srv.started = cmd, cmd.Stdin, con, time.Now()
 	srv.mu.Unlock()
 	srv.jail.Started(cmd.Process.Pid)
-	if err := fsx.AtomicWrite(pidFile(srv.dir), []byte(strconv.Itoa(cmd.Process.Pid)), fsx.FilePerm); err != nil {
+	if err := fsx.AtomicWrite(pidFile(srv.dir), []byte(pidLine(cmd.Process.Pid)), fsx.FilePerm); err != nil {
 		s.d.Log.Warn("host: recording the server process failed", "err", err)
 	}
 	pings, stopPings := context.WithCancel(context.Background())

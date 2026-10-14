@@ -96,8 +96,8 @@ All paths are relative to this folder (`src/`). Frontend paths start with `front
   - A hosted server gets up to 35 s to save.
   - Every store is flushed.
   - A downloaded update installs on quit.
-- **Crash recovery at start:**
-  - Run views left behind by a dead launcher are merged back.
+- **Recovery at start:**
+  - Games the launcher didn't see end (it closed when they started, or crashed) are finished, or adopted while they still run. See [Launching](#12-launching).
   - Orphaned hosted servers are stopped.
 - **Launcher crashes:**
   - A fatal crash is written to `logs/launcher-crash.txt`. The next start keeps a redacted copy (the newest 5) and says the launcher closed unexpectedly. [crash.go](internal/core/logging/crash.go)
@@ -729,6 +729,13 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
   - Other files merge newest-wins. A deletion applies only if nobody changed the file meanwhile.
 - **Recovery:** view state is saved, so views left by a crash are merged back on the next start.
 
+**Games that outlive the launcher** ([adopt.go](internal/launch/adopt.go), [procx/ident.go](internal/core/procx/ident.go))
+- **Why:** "When a game starts: close" quits the launcher on purpose, and a launcher can crash. Without this, the run's option changes were overwritten by the shared ones on the next launch, its record and playtime were lost, and nothing counted it as running.
+- **Pending file:** each running game leaves `<runs>/<id>.pending.json` with its record, its process (pid plus start time, so a reused pid never counts), its view and its sync session. A normal exit removes it.
+- **Next start:**
+  - **Game gone:** the run is finished at once: merged back, synced files and options copied out, finishers run, record saved, playtime added. The end time is the last write to `logs/latest.log`.
+  - **Game still running:** it is adopted. It counts as running, so every guard works and its shared folders stay leased; Stop works; it is finished when it exits (checked every 2 s). Its console isn't available and its after-exit command doesn't run.
+
 **Run history** ([runs.go](internal/launch/runs.go))
 - **Each run records:** start, length, exit code, result, Java, memory, account, mod count, sandbox, world, server, screenshots and crash summary.
 - **Limits:** 200 records. The newest 50 keep their evidence: log, redacted command and redacted crash report.
@@ -869,11 +876,13 @@ Files: [Syncing.svelte](frontend/src/routes/Syncing.svelte), [syncing/service.go
 - **Two switches:** the Syncing page turns a target on, and each instance joins the targets it wants (from its settings or at creation).
 - **Folders** are assembled into each run by the run view: bind mount, clone or junction.
 - **Files** are copied in before launch and out after exit. Newest wins, and they are never linked. [syncing/files.go](internal/syncing/files.go), [session.go](internal/syncing/session.go)
+  - A server list the launcher edits goes to the shared copy straight away.
+  - The session is saved with the run, so a launcher that closed while the game ran still copies the run's changes out.
 
 **Targets**
 - **Files** ("Newest copy wins"): Game options (`options.txt`), Server list, Command history, Hotbars.
-- **Folders** ("Linked into each instance"): Worlds, Configs, Screenshots, Resource packs, Shader packs, Data packs.
-- **Mod data** (greyed out until some instance has the mod): Xaero's Minimap/World Map, Distant Horizons, Voxy, Litematica schematics, Flashback, Bobby.
+- **Folders** ("Linked into each instance"): Worlds, Configs, Screenshots, Resource packs, Shader packs, Data packs, Server resource packs (`downloads/`).
+- **Mod data** (greyed out until some instance has the mod): Xaero's Minimap/World Map, JourneyMap, Distant Horizons, Voxy, Litematica schematics, Flashback, Bobby.
 - **Custom paths:**
   - Up to 64 relative paths, added as a file or a folder.
   - Reserved folders (mods, logs, versions, libraries, …) are refused. [settings/syncing.go](internal/settings/syncing.go)
@@ -930,11 +939,14 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 - **Configs:** `config`, `defaultconfigs`, `kubejs` and `scripts` are copied one way; newer files win.
 - **`server.properties`:**
   - Your own edits and comments are kept, and values are escaped properly.
+  - **The world's own rules:** for an existing world, difficulty, hardcore and the game mode for new players come from its level.dat on every start, as Open to LAN does. Otherwise the server forces its own difficulty onto the world. Servers before 1.14 get numbers. [rules.go](internal/host/rules.go)
+  - `spawn-protection=0` unless you set it.
   - RCON and query are forced off. The MOTD is the instance name.
   - [props.go](internal/host/props.go)
 - **EULA:** accepted for you on Start, with a comment saying so.
+- **Cheats:** a world with cheats on makes the host an operator (`ops.json`, or `ops.txt` before 1.7.6). Entries already there are kept.
 - **World backup:** the world is zipped before hosting, keeping the 5 newest. [host/backup.go](internal/host/backup.go)
-- **Inventory carry:** your singleplayer player moves into `playerdata/<uuid>.dat` for the server and back afterwards (1.9+). [carry.go](internal/host/carry.go)
+- **Inventory carry:** your singleplayer player moves into `playerdata/<uuid>.dat` for the server and back afterwards (1.9+). From 26.1 every player is `players/data/<uuid>.dat` and level.dat names the singleplayer one; its file is copied to the id the server sees (an offline server with a Microsoft account) and back. [carry.go](internal/host/carry.go)
 
 **While running**
 - **Header:** a `localhost:<port>` chip toggles the panel.
@@ -944,7 +956,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - Join, Console, Stop.
 - **Console:** 20k lines. "Done (…)!" marks the server ready. Join and leave lines trigger a ping for the player count.
 - **Stop:** sends `stop`, then kills after 30 s or on a second Stop. Quitting the launcher stops the server gracefully, after it saves.
-- **Recover:** a server left running by a dead launcher is stopped only if its PID still runs in that server folder, so a reused PID is never hit. [procx/indir_linux.go](internal/core/procx/indir_linux.go)
+- **Recover:** a server left running by a dead launcher is asked to stop (then killed) only if its pid still has the start time recorded with it, so a reused pid is never hit. This works on every OS; old pid files fall back to the server folder check (Linux). [procx/ident.go](internal/core/procx/ident.go)
 
 ---
 
@@ -956,7 +968,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - Shows the world icon and the folder size.
 - **Play** opens straight into the world.
 - **Rename** changes `LevelName` only; the folder stays.
-- **Copy seed** returns it as text, since seeds don't fit a JS number.
+- **Copy seed** returns it as text, since seeds don't fit a JS number. Newer versions keep it in `data/minecraft/world_gen_settings.dat`, which is read when level.dat has none.
 - **Import** from a zip or a folder, by picker or drag-and-drop:
   - `level.dat` can be up to two folders deep.
   - Files are staged first, so a failed import leaves nothing behind.
@@ -965,6 +977,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 - **Copy to another instance** (the copy keeps its name).
 - **Delete with Undo,** Show in folder, Open the saves folder.
 - **Guard:** changes are refused while the world is in use.
+  - Rename, delete, copy and export also check `session.lock`, which the game locks while it plays (from 1.16), so a world open in another launcher's game is left alone too. Hosting and quick play into such a world are refused. [fsx/locked_unix.go](internal/core/fsx/locked_unix.go), [locked_windows.go](internal/core/fsx/locked_windows.go)
 
 **Servers** ([servers.go](internal/servers/servers.go), [slp.go](internal/core/slp/slp.go), [ServerDialog.svelte](frontend/src/lib/overlays/ServerDialog.svelte))
 - **Editing `servers.dat`:** add, edit, reorder, remove with Undo, copy address, join.
@@ -982,7 +995,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - Search by day or world. Chips: All, This week, and one per world.
   - **Select** mode to move several screenshots to the trash at once (with Undo).
   - Open folder.
-- **World tagging:** each screenshot is filed under the world played when it was taken.
+- **World tagging:** each screenshot is filed under the world played when it was taken. Instances sharing a screenshots folder see each other's tags.
 - **Viewer:**
   - Prev/next (also ← →) and a filmstrip.
   - Details: file, date, pixel size, file size, world.

@@ -120,6 +120,42 @@ func (se *Session) Finish() error {
 	return shared.Write(sharedPath)
 }
 
+// SessionState is a Session saved beside its run, so a launcher that quit
+// while the game ran can still finish it (see Resume).
+type SessionState struct {
+	ID      string               `json:"id"`
+	Files   []string             `json:"files,omitempty"` // target ids
+	Options bool                 `json:"options,omitempty"`
+	Before  map[string]string    `json:"before,omitempty"`
+	Stamps  map[string]time.Time `json:"stamps,omitempty"`
+}
+
+// State is what Resume needs to finish the session later.
+func (se *Session) State() SessionState {
+	st := SessionState{ID: se.id, Options: se.options, Before: se.before, Stamps: se.stamps}
+	for _, t := range se.files {
+		st.Files = append(st.Files, t.ID)
+	}
+	return st
+}
+
+// Resume rebuilds a saved session for its Finish. Targets turned off since
+// are left alone.
+func (s *Service) Resume(st SessionState) *Session {
+	y := s.settings()
+	se := &Session{s: s, id: st.ID, game: s.c.Instances.GameDir(st.ID), before: st.Before, stamps: st.Stamps,
+		options: st.Options && s.enabled(y, OptionsID)}
+	if se.stamps == nil {
+		se.stamps = map[string]time.Time{}
+	}
+	for _, id := range st.Files {
+		if t, ok := find(y, id); ok && s.enabled(y, id) {
+			se.files = append(se.files, t)
+		}
+	}
+	return se
+}
+
 func (se *Session) path(t Target) string {
 	return filepath.Join(se.game, filepath.FromSlash(t.Path))
 }

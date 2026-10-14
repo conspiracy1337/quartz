@@ -215,6 +215,9 @@ var ErrBadTarget = errors.New("launch: not a world or server to open")
 // ErrHosted means the world is being played by a local server right now.
 var ErrHosted = errors.New("launch: that world is hosted right now; join the server instead")
 
+// ErrWorldOpen means a game (from any launcher) has the world open.
+var ErrWorldOpen = errors.New("launch: that world is open in a game already")
+
 // Play starts the launch pipeline in the background with an account
 // (accountID "" means the default one; "Launch as" passes another, for this
 // launch only). into opens a world or server straight away; its zero value
@@ -227,6 +230,9 @@ func (l *Launcher) Play(id, accountID string, into instance.Into) error {
 	}
 	if into.Kind == "world" && l.cfg.Hosted != nil && l.cfg.Hosted(id, into.Target) {
 		return ErrHosted
+	}
+	if into.Kind == "world" && fsx.Locked(filepath.Join(l.cfg.Instances.Path(id, "saves"), into.Target, "session.lock")) {
+		return ErrWorldOpen
 	}
 	inst, err := l.cfg.Instances.Get(id)
 	if err != nil {

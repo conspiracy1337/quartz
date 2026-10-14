@@ -74,6 +74,9 @@ func TestTwoCopiesRunAndMergeBack(t *testing.T) {
 	if !l.Running(inst.ID) || len(l.running[inst.ID]) != 2 || !l.AccountInUse("acc") {
 		t.Fatal("two copies should run")
 	}
+	if left, _ := filepath.Glob(filepath.Join(insts.RunsDir(inst.ID), "*"+pendingExt)); len(left) != 2 {
+		t.Fatalf("each running copy is recorded for a later launcher: %v", left)
+	}
 	for range 2 {
 		select {
 		case st := <-exited:
@@ -93,5 +96,8 @@ func TestTwoCopiesRunAndMergeBack(t *testing.T) {
 	}
 	if views, _ := filepath.Glob(filepath.Join(insts.RunsDir(inst.ID), "*.view")); len(views) != 0 {
 		t.Fatalf("views left behind: %v", views)
+	}
+	if left, _ := filepath.Glob(filepath.Join(insts.RunsDir(inst.ID), "*"+pendingExt)); len(left) != 0 {
+		t.Fatalf("finished runs left pending: %v", left)
 	}
 }

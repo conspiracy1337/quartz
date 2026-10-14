@@ -60,6 +60,11 @@ type run struct {
 	logFile *os.File
 	logBuf  *bufio.Writer
 
+	// pid and ident are the game's process; an adopted run (see adopt.go)
+	// has no child and finds the game by them.
+	pid   int
+	ident uint64
+
 	stopping atomic.Bool
 	killed   atomic.Bool
 	// loaded is set once the game got far enough to log its user: a
@@ -261,11 +266,15 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		_ = r.logFile.Close()
 		return nil, err
 	}
-	r.child = child
+	r.child, r.pid = child, child.Process.Pid
+	r.ident, _ = procx.Ident(r.pid)
 	if sp.view != nil {
-		sp.view.Started(child.Process.Pid)
+		sp.view.Started(r.pid)
 	}
-	sp.jail.Started(child.Process.Pid)
+	sp.jail.Started(r.pid)
+	// Before anything can close the launcher: a run it doesn't see end is
+	// finished by the next one (see adopt.go).
+	l.savePending(r)
 	_, werr := child.Stdin.Write(script)
 	_ = child.Stdin.Close()
 	if werr != nil {
@@ -376,28 +385,45 @@ func (l *Launcher) Stop(id string) error {
 }
 
 func (l *Launcher) stop(r *run) error {
+	p, err := r.process()
+	if err != nil {
+		return err
+	}
 	if r.stopping.Swap(true) {
 		r.killed.Store(true)
-		return procx.Kill(r.child.Process)
+		return procx.Kill(p)
 	}
-	if err := procx.Terminate(r.child.Process); err != nil {
+	if err := procx.Terminate(p); err != nil {
 		r.killed.Store(true)
-		return procx.Kill(r.child.Process)
+		return procx.Kill(p)
 	}
 	go func() {
 		select {
 		case <-r.done:
 		case <-time.After(stopGrace):
 			r.killed.Store(true)
-			_ = procx.Kill(r.child.Process)
+			if p, err := r.process(); err == nil {
+				_ = procx.Kill(p)
+			}
 		}
 	}()
 	return nil
 }
 
+// process is the game's process. An adopted game is found by its pid, and
+// only while that pid still is the game.
+func (r *run) process() (*os.Process, error) {
+	if r.child != nil {
+		return r.child.Process, nil
+	}
+	if !procx.Same(r.pid, r.ident) {
+		return nil, ErrNotRunning
+	}
+	return os.FindProcess(r.pid)
+}
+
 // exited records the run, updates playtime and tells the UI.
 func (l *Launcher) exited(r *run, waitErr error) {
-	close(r.done)
 	r.con.Done()
 	r.flushLog()
 	_ = r.logFile.Close()
@@ -417,12 +443,18 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	case failed:
 		result = ResultCrash
 	}
-	ended := time.Now()
-	r.record.LengthMin = int(math.Round(ended.Sub(r.started).Minutes()))
-	r.record.ExitCode, r.record.Result = code, result
 	r.pmu.Lock()
 	r.record.Server = r.server
 	r.pmu.Unlock()
+	l.finish(r, time.Now(), code, result)
+}
+
+// finish ends a run, seen or adopted: its changes go back, the finishers
+// fill in its record, which is saved, and playtime and the UI are updated.
+func (l *Launcher) finish(r *run, ended time.Time, code int, result Result) {
+	close(r.done)
+	r.record.LengthMin = int(math.Round(ended.Sub(r.started).Minutes()))
+	r.record.ExitCode, r.record.Result = code, result
 	// The run's changes go back into the instance (and shared folders)
 	// before anything reads them.
 	kept := l.disassemble(&r.sp)
@@ -436,6 +468,7 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	if err := saveRecord(runsDir, r.record); err != nil {
 		l.cfg.Log.Error("saving run record failed", "err", err)
 	}
+	_ = os.Remove(pendingPath(runsDir, r.id))
 	started := r.started.UTC()
 	if _, err := l.cfg.Instances.Update(r.instanceID, func(in *instance.Instance) error {
 		in.LastPlayed = &started

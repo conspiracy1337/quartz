@@ -1,13 +1,17 @@
 package host
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
+	"quartz/internal/core/fsx"
 	"quartz/internal/core/nbt"
 )
 
@@ -15,6 +19,11 @@ import (
 // dedicated server keeps every player in playerdata/<uuid>.dat. Carrying the
 // one into the other lets you host a world you played alone and keep your
 // inventory, and play it alone again afterwards where the server left off.
+//
+// From 26.1 every player, the singleplayer one too, is players/data/<uuid>.dat
+// and level.dat names the singleplayer one (singleplayer_uuid). The server
+// then finds it by itself, unless it sees the host under another id (an
+// offline server with a Microsoft account): its file is copied across then.
 
 var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
@@ -40,6 +49,9 @@ func carryIn(world, uuid string) error {
 	pf, err := playerFile(world, uuid)
 	if err != nil {
 		return err
+	}
+	if host, ok := singleplayerID(world); ok {
+		return carryFile(world, host, uuid)
 	}
 	lvl := filepath.Join(world, "level.dat")
 	f, err := nbt.ReadFile(lvl)
@@ -69,6 +81,9 @@ func carryOut(world, uuid string, since time.Time) error {
 	pf, err := playerFile(world, uuid)
 	if err != nil {
 		return err
+	}
+	if host, ok := singleplayerID(world); ok {
+		return carryFileBack(world, host, uuid, since)
 	}
 	info, err := os.Stat(pf)
 	if err != nil || !info.ModTime().After(since) {
@@ -106,4 +121,69 @@ func ignoreMissing(err error) error {
 		return nil
 	}
 	return err
+}
+
+// singleplayerID is the singleplayer player's id in a 26.1+ world.
+func singleplayerID(world string) (string, bool) {
+	f, err := nbt.ReadFile(filepath.Join(world, "level.dat"))
+	if err != nil {
+		return "", false
+	}
+	t := f.Root.Path("Data", "singleplayer_uuid")
+	switch {
+	case t == nil:
+		return "", false
+	case t.Kind == nbt.IntArray && len(t.Ints) == 4:
+		var b [16]byte
+		for i, v := range t.Ints {
+			binary.BigEndian.PutUint32(b[i*4:], uint32(v)) //nolint:gosec // the int's bits
+		}
+		h := hex.EncodeToString(b[:])
+		return dashed(h), true
+	case t.Kind == nbt.String && uuidRe.MatchString(strings.ToLower(t.Text())):
+		return strings.ToLower(t.Text()), true
+	}
+	return "", false
+}
+
+// sharedPlayerFile is a player's file in a 26.1+ world.
+func sharedPlayerFile(world, uuid string) string {
+	return filepath.Join(world, "players", "data", uuid+".dat")
+}
+
+// carryFile gives the server's id the singleplayer player's file, unless
+// the server's own is newer.
+func carryFile(world, host, uuid string) error {
+	if host == uuid {
+		return nil
+	}
+	from, to := sharedPlayerFile(world, host), sharedPlayerFile(world, uuid)
+	if _, err := os.Stat(from); err != nil || newer(to, from) {
+		return ignoreMissing(err)
+	}
+	return copyPlayer(from, to)
+}
+
+// carryFileBack gives the singleplayer player what the server's id played.
+func carryFileBack(world, host, uuid string, since time.Time) error {
+	if host == uuid {
+		return nil
+	}
+	from := sharedPlayerFile(world, uuid)
+	info, err := os.Stat(from)
+	if err != nil || !info.ModTime().After(since) {
+		return ignoreMissing(err)
+	}
+	return copyPlayer(from, sharedPlayerFile(world, host))
+}
+
+func copyPlayer(from, to string) error {
+	data, err := fsx.ReadCapped(from, 16<<20)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(to), 0o700); err != nil {
+		return err
+	}
+	return fsx.AtomicWrite(to, data, fsx.FilePerm)
 }

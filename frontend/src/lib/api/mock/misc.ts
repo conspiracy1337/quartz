@@ -6,9 +6,9 @@ const S = (id: string, name: string, path: string, users: number, enabled: boole
 export const sync: SyncGroups = {
   total: 12,
   files: [S('options', 'Game options', 'options.txt', 8, true), S('servers', 'Server list', 'servers.dat', 12, true), S('history', 'Command history', 'command_history.txt', 5, true), S('hotbar', 'Hotbars', 'hotbar.nbt', 12, true)],
-  folders: [S('saves', 'Worlds', 'saves/', 2, false), S('config', 'Configs', 'config/', 0, false), S('screenshots', 'Screenshots', 'screenshots/', 6, true), S('resourcepacks', 'Resource packs', 'resourcepacks/', 9, true), S('shaderpacks', 'Shader packs', 'shaderpacks/', 4, true), S('datapacks', 'Data packs', 'datapacks/', 0, false)],
-  mods: [S('xaero', "Xaero's Minimap", 'xaero/', 4, true), S('dh', 'Distant Horizons', 'Distant_Horizons_server_data/', 0, false), S('voxy', 'Voxy', '.voxy/', 0, false), S('litematica', 'Litematica', 'schematics/', 3, true), S('flashback', 'Flashback', 'flashback/', 0, false, false), S('bobby', 'Bobby', '.bobby/', 0, false, false)],
-  custom: [S('c0', '', 'config/jei/', 3, true), S('c1', '', 'journeymap/data/', 0, false)],
+  folders: [S('saves', 'Worlds', 'saves/', 2, false), S('config', 'Configs', 'config/', 0, false), S('screenshots', 'Screenshots', 'screenshots/', 6, true), S('resourcepacks', 'Resource packs', 'resourcepacks/', 9, true), S('shaderpacks', 'Shader packs', 'shaderpacks/', 4, true), S('datapacks', 'Data packs', 'datapacks/', 0, false), S('downloads', 'Server resource packs', 'downloads/', 0, false)],
+  mods: [S('xaero', "Xaero's Minimap", 'xaero/', 4, true), S('journeymap', 'JourneyMap', 'journeymap/', 0, false, false), S('dh', 'Distant Horizons', 'Distant_Horizons_server_data/', 0, false), S('voxy', 'Voxy', '.voxy/', 0, false), S('litematica', 'Litematica', 'schematics/', 3, true), S('flashback', 'Flashback', 'flashback/', 0, false, false), S('bobby', 'Bobby', '.bobby/', 0, false, false)],
+  custom: [S('c0', '', 'config/jei/', 3, true), S('c1', '', 'replay_recordings/', 0, false)],
 };
 export const keybinds: Keybind[] = [
   { id: 'key.zoomify.zoom', name: 'Zoom (Zoomify)', key: 'C' }, { id: 'key.sprint', name: 'Sprint', key: 'Left Ctrl' }, { id: 'key.sneak', name: 'Sneak', key: 'Left Shift' },

@@ -65,6 +65,8 @@ type Deps struct {
 	// Runs is an instance's launch history, for "last used" on Home.
 	Runs     func(id string) []launch.Record
 	Favicons *Favicons
+	// Saved is told after the launcher wrote an instance's servers.dat.
+	Saved func(id string)
 	// Pinger asks servers for their status (slp.NewPinger when nil).
 	Pinger Pinger
 	Bus    *events.Bus
@@ -279,6 +281,9 @@ func (s *Service) edit(id string, fn func(list *nbt.ListTag) error) error {
 	}
 	if err := nbt.WriteFile(s.path(id), f); err != nil {
 		return err
+	}
+	if s.d.Saved != nil {
+		s.d.Saved(id)
 	}
 	s.changed(id)
 	return nil

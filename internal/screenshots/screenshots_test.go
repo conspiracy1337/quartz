@@ -74,3 +74,31 @@ func TestListFinishTrash(t *testing.T) {
 		t.Fatal("not restored")
 	}
 }
+
+// Instances sharing a screenshots folder see each other's world tags.
+func TestSharedFolderKeepsTags(t *testing.T) {
+	dir := t.TempDir()
+	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
+	a, _ := insts.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"})
+	b, _ := insts.Create(instance.CreateRequest{Name: "B", Minecraft: "1.21.4"})
+	shared := filepath.Join(dir, "shared")
+	insts.SetLocator(func(_, rel string) string {
+		if rel == "screenshots" {
+			return shared
+		}
+		return ""
+	})
+	svc := New(Deps{Instances: insts, Images: localimg.New(filepath.Join(dir, "thumbs"))})
+	now := time.Now()
+	shot(t, filepath.Join(shared, "screenshots"), "a.png", now.Add(-time.Minute))
+	rec := launch.Record{World: "Northwatch"}
+	svc.FinishRun(&launch.Finished{InstanceID: a.ID, Started: now.Add(-time.Hour), Ended: now, Record: &rec})
+	for _, id := range []string{a.ID, b.ID} {
+		if l, err := svc.List(id); err != nil || len(l) != 1 || l[0].World != "Northwatch" {
+			t.Fatalf("%s: %+v %v", id, l, err)
+		}
+	}
+	if r := svc.Recent(5); len(r) != 1 || r[0].World != "Northwatch" {
+		t.Fatalf("recent %+v", r)
+	}
+}

@@ -61,3 +61,17 @@ func leaveFile(game, shared string) error {
 	}
 	return nil
 }
+
+// Touched passes on a file the launcher changed in an instance (the server
+// list): when the instance shares it, the shared copy takes the change, so
+// the next instance to launch starts from it.
+func (s *Service) Touched(id, rel string) error {
+	unlock := s.Lock(id)
+	defer unlock()
+	for _, t := range s.Joined(id) {
+		if !t.Dir && t.ID != OptionsID && t.Path == rel {
+			return newest(filepath.Join(s.c.Instances.GameDir(id), filepath.FromSlash(rel)), s.SharedPath(t))
+		}
+	}
+	return nil
+}
