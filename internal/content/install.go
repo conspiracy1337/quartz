@@ -391,11 +391,6 @@ func (s *Service) presence(v *view) presence {
 // slugKey compares slugs and mod ids alike: "cloth_config" is "cloth-config".
 func slugKey(s string) string { return strings.ReplaceAll(strings.ToLower(s), "_", "-") }
 
-func (p presence) has(src modplatform.Source, id, slug string) bool {
-	_, ok := p.lookup(src, id, slug)
-	return ok
-}
-
 func (p presence) lookup(src modplatform.Source, id, slug string) (presenceItem, bool) {
 	if it, ok := p.byID[modplatform.Key(src, id)]; ok {
 		return it, true

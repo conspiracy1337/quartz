@@ -143,15 +143,13 @@ func copyTree(ctx context.Context, src, dst string, o copyOpts) error {
 
 	var total, done int64
 	var files, copied int
+	// Counting only: an unreadable entry fails the copy below instead.
 	_ = fs.WalkDir(from.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if err := skipped(rel, d); err != nil {
-			return ignoreSkip(err)
-		}
-		if d.Type().IsRegular() {
-			if info, err := d.Info(); err == nil {
+		if err == nil {
+			if serr := skipped(rel, d); serr != nil {
+				return ignoreSkip(serr)
+			}
+			if info, ierr := d.Info(); ierr == nil && d.Type().IsRegular() {
 				total += info.Size()
 				files++
 			}
