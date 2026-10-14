@@ -1235,6 +1235,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - **Windows:** HKCU classes, a ProgID, Default Apps capabilities and a Run value. Another app's handler is left alone.
   - **macOS:** Info.plist declarations and a LaunchAgent.
 - **Idempotent:** an unchanged start does no work. Turning a setting off removes only entries that point at this launcher. Dev builds never register.
+- **Data folder kept:** a data folder named only by `--dir` or `QUARTZ_DIR` is passed in every registered command, so links and the login start reach the same launcher.
 
 **Instance shortcuts** ([shortcuts/service.go](internal/shortcuts/service.go), [ShortcutDialog.svelte](frontend/src/lib/overlays/ShortcutDialog.svelte))
 - **Where:** Desktop, App menu, or both.
@@ -1246,6 +1247,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 - **Icon:** the instance's picture, or a drawn tile in its colour with its letter. [shortcuts/icon.go](internal/shortcuts/icon.go)
 - **Lifecycle:**
   - Shortcuts are hidden when the instance is trashed and come back on restore.
+  - A data folder named only by `--dir` or `QUARTZ_DIR` is passed too, so the shortcut opens the same launcher.
   - If the exe moves, they're rewritten.
   - Only files this launcher wrote are ever removed.
 
@@ -1265,18 +1267,22 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - On the next start a toast says "Updated to X" or reports that the update failed.
   - An interrupted swap restores the old binary.
   - macOS swaps the whole `.app`.
-  - The updater never elevates.
+  - The updater never elevates, and the Windows manifest declares `asInvoker`.
 - **Off** for dev builds and builds without a signing key.
 
 **Data folder** ([paths.go](internal/core/paths/paths.go), [pointer.go](internal/core/paths/pointer.go))
 - **Priority:** `--dir`, then `QUARTZ_DIR`, then **portable mode** (`portable.txt` next to the exe), then the folder chosen in setup, then the OS default. On Windows the default is LocalAppData, so game files don't roam.
-- **Moving it** is applied on the next start, before anything opens. Across drives it copies.
+- **Moving it** is applied on the next start, before anything opens. Across drives it copies, but only after checking the new drive has room. [linkx.Mirror](internal/core/linkx/tree.go)
+  - The copy keeps modification times and read-only marks, so nothing has to be verified again.
+  - Store files stay shared with the instances that hardlink them.
+  - Links inside the data folder (in Java runtimes) are made again.
 
 **Image server** ([imagesrv.go](internal/imagesrv/imagesrv.go), [remoteimg.go](internal/core/remoteimg/remoteimg.go), [localimg.go](internal/core/localimg/localimg.go))
 - **Route:** same-origin `/tex/<kind>/<name>.png` serves skins, icons, content icons, screenshots, thumbnails, world icons, favicons and remote pictures.
   - GET and HEAD only, image types only, `nosniff`, cached immutable.
 - **Remote pictures:** proxied from an allowlist of hosts (Modrinth CDN, forgecdn, Mojang, imgur, GitHub uploads). A redirect may only lead to another allowed host. The UI holds only tokens, so it isn't an open proxy.
   - The real file type is sniffed.
+  - A picture that failed isn't fetched again for a while: 10 minutes if retrying can't help, 1 minute otherwise.
   - At most 10 MB per file; the disk cache is an LRU of 256 MB. [disklru.go](internal/core/disklru/disklru.go)
 - **Local pictures:** tokens tied to path, size and mtime; thumbnails are made on demand.
 
@@ -1289,7 +1295,7 @@ Gathered here from the sections above for quick review.
 - **Tokens and secrets**
   - **Storage:** OS keychain only (Secret Service, Credential Manager, macOS Keychain). There is no file fallback, and long values are chunked for Windows. [secrets.go](internal/core/secrets/secrets.go)
   - **Never on argv:** the access token goes to the game over stdin through the wrapper jar. [wrapperjar.go](internal/wrapperjar/wrapperjar.go)
-  - **Redactor:** one redactor covers the launcher log, game logs, saved commands and mclo.gs uploads. It removes JWTs, `--accessToken` arguments, `*_token` pairs, Authorization headers, `code=`/`token=` in URLs, emails, the home user name, and registered literal secrets. [redact.go](internal/core/logging/redact.go)
+  - **Redactor:** one redactor covers the launcher log, game logs, saved commands and mclo.gs uploads. It removes JWTs, `--accessToken` arguments, `*_token` pairs, Authorization headers, `code=`/`token=` in URLs, emails, the home user name (in any case and with any slashes), and registered literal secrets. [redact.go](internal/core/logging/redact.go)
   - **Sign-in events:** `accounts:signin` events never carry tokens.
   - **Proxy password:** keychain only, never sent back to the UI.
 - **OAuth**
@@ -1301,6 +1307,7 @@ Gathered here from the sections above for quick review.
     - `fsx.SafeJoin` and `os.Root` for every extraction and read.
     - Archive caps: 100k files, 1 GB per file, 4 GB total; links must stay inside.
     - Modpack `CleanPath` refuses traversal, drive letters, launcher folders and reserved names.
+    - Pack paths that differ only in case take one spelling, so Windows, macOS and Linux end with the same files.
     - [archive.go](internal/core/archive/archive.go), [fsx.go](internal/core/fsx/fsx.go), [modpack/pack.go](internal/modpack/pack.go)
   - **Paths never come from the page:**
     - Drops, file opens and dialogs give the UI opaque, single-use, expiring ids.
@@ -1315,6 +1322,7 @@ Gathered here from the sections above for quick review.
 - **Network**
   - **https only for downloads.** No https→http redirects.
   - **Host allowlists:** mrpack hosts, platform CDNs (`ValidURL`) and image proxy hosts.
+  - **No requests to local addresses from links:** a direct pack link (which any web page can send) can't reach this computer or a private network. The host is checked before the request and each redirect, and the address again when it is dialled, which stops DNS rebinding. [public.go](internal/core/netx/public.go)
   - **API key scoping:** the CurseForge key is sent only to its own host.
   - **Integrity:** every file is hash-verified, and SHA-1-pinned metadata is checked.
   - [netx.go](internal/core/netx/netx.go), [modplatform.go](internal/modplatform/modplatform.go)
@@ -1325,6 +1333,7 @@ Gathered here from the sections above for quick review.
   - **Imports never take commands:** commands and JVM args from other launchers and instance zips are never imported.
   - **Unknown jars flagged:** jars from unrecognised hosts in pack overrides are flagged.
   - **Sandbox:** bwrap + seccomp, Seatbelt or AppContainer, and it fails closed.
+    - The sandboxed game can't change store files: `mods/` is protected, and so is each store file in resource pack, shader pack and data pack folders. Its own files beside them still work. [sandbox.go](internal/sandbox/sandbox.go)
 - **Updates and files**
   - **Self-update:** the minisign signature is checked before the manifest is parsed. [update.go](internal/update/update.go)
   - **Store integrity:** blobs are read-only, and a sha1 collision is refused.
@@ -1349,7 +1358,7 @@ Gathered here from the sections above for quick review.
   - Natives and client jars are shared across loaders and versions where possible.
 - **Caching:**
   - HTTP metadata cache with merged in-flight requests and offline serving.
-  - Disk LRU caches for images.
+  - Disk LRU caches for images, plus a short negative cache for pictures that failed.
   - TTL caches in Browse.
   - Java probes cached by size and mtime.
 - **Concurrency:**
