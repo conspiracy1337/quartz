@@ -42,6 +42,10 @@ func TestAllowed(t *testing.T) {
 		"https://cdn.modrinth.com:8443/x.png":                   false,
 		"https://cdn.modrinth.com/a b.png":                      false,
 		"https://cdn.modrinth.com/" + strings.Repeat("a", 3000): false,
+		"https://i.imgur.com/abc.png":                           true,
+		"https://github.com/user-attachments/assets/1-2-3":      true,
+		"https://github.com/someone/repo/raw/main/x.png":        false,
+		"https://github.com/user-attachments/../login":          false,
 	} {
 		if Allowed(raw) != want {
 			t.Errorf("Allowed(%q) = %v", raw, !want)
@@ -114,5 +118,21 @@ func TestEvictsLeastRecentlyUsed(t *testing.T) {
 	}
 	if _, err := os.Stat(recent); err != nil {
 		t.Fatal("recent file evicted")
+	}
+}
+
+func TestRedirectMustStayAllowed(t *testing.T) {
+	var reached atomic.Bool
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Store(true)
+		_, _ = w.Write(webp)
+	}))
+	t.Cleanup(other.Close)
+	c, srv := newCache(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/x.webp", http.StatusFound)
+	})
+	tok := c.Token(srv.URL + "/pic")
+	if _, err := c.Path(context.Background(), tok); err == nil || reached.Load() {
+		t.Fatalf("followed a redirect to a host that isn't allowed (err %v)", err)
 	}
 }

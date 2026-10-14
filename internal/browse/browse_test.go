@@ -313,3 +313,23 @@ func TestSearchNamesFailedPlatformsAndMarksInstalled(t *testing.T) {
 		t.Fatalf("CurseForge asked %d times for a side it can't filter", n)
 	}
 }
+
+func TestProjectLinks(t *testing.T) {
+	for href, want := range map[string]string{
+		"https://modrinth.com/mod/sodium":                             "modrinth/mod/sodium",
+		"https://modrinth.com/plugin/sodium/versions":                 "modrinth/mod/sodium",
+		"https://www.curseforge.com/minecraft/mc-mods/jei":            "curseforge/mod/jei",
+		"https://www.curseforge.com/minecraft/texture-packs/faithful": "curseforge/resourcepack/faithful",
+		"https://modrinth.com/user/jellysquid3":                       "",
+		"http://modrinth.com/mod/sodium":                              "",
+		"https://modrinth.com.evil.example/mod/sodium":                "",
+	} {
+		if got := projectLink(href); got != want {
+			t.Errorf("projectLink(%q) = %q, want %q", href, got, want)
+		}
+	}
+	s := newService(&fake{src: modplatform.Modrinth}, &fake{src: modplatform.CurseForge}, nil)
+	if _, err := s.Resolve(context.Background(), "modrinth/mod/../x"); err == nil {
+		t.Fatal("bad link resolved")
+	}
+}

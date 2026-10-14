@@ -1505,10 +1505,27 @@ export namespace crash {
 
 export namespace docs {
 	
+	export class Pic {
+	    src: string;
+	    alt?: string;
+	    href?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Pic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.src = source["src"];
+	        this.alt = source["alt"];
+	        this.href = source["href"];
+	    }
+	}
 	export class Span {
 	    text: string;
 	    code?: boolean;
 	    href?: string;
+	    project?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Span(source);
@@ -1519,6 +1536,7 @@ export namespace docs {
 	        this.text = source["text"];
 	        this.code = source["code"];
 	        this.href = source["href"];
+	        this.project = source["project"];
 	    }
 	}
 	export class Block {
@@ -1527,6 +1545,7 @@ export namespace docs {
 	    items?: Span[][];
 	    src?: string;
 	    alt?: string;
+	    pics?: Pic[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Block(source);
@@ -1539,6 +1558,7 @@ export namespace docs {
 	        this.items = this.convertValues(source["items"], Span);
 	        this.src = source["src"];
 	        this.alt = source["alt"];
+	        this.pics = this.convertValues(source["pics"], Pic);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1559,6 +1579,7 @@ export namespace docs {
 		    return a;
 		}
 	}
+	
 
 }
 

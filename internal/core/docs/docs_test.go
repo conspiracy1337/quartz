@@ -28,7 +28,7 @@ func TestMarkdown(t *testing.T) {
 		`{"type":"p","spans":[{"text":"Sodium is a free and "},{"text":"open-source","href":"https://github.com/CaffeineMC/sodium"},` +
 		`{"text":" rendering engine. Needs "},{"text":"Fabric API","code":true},{"text":"."}]},` +
 		`{"type":"h2","spans":[{"text":"Features"}]},{"type":"ul","items":[[{"text":"Faster chunks"}],[{"text":"Fewer stutters"}],[{"text":"nested"}]]},` +
-		`{"type":"p","spans":[{"text":"code block","code":true}]},{"type":"p","spans":[{"text":"a · b"}]},{"type":"p","spans":[{"text":"1 · 2"}]},` +
+		`{"type":"pre","spans":[{"text":"code block","code":true}]},{"type":"p","spans":[{"text":"a · b"}]},{"type":"p","spans":[{"text":"1 · 2"}]},` +
 		`{"type":"p","spans":[{"text":"Raw html"}]},{"type":"p","spans":[{"text":"bad"}]}]`
 	if got != want {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
@@ -59,5 +59,30 @@ func TestCaps(t *testing.T) {
 	}
 	if HTML("", nil) != nil {
 		t.Fatal("empty input")
+	}
+}
+
+func TestListsCodeAndBadges(t *testing.T) {
+	src := "1. First\n2. Second\n\n```\nline one\n  line two\n```\n\n" +
+		"[![Discord](https://cdn.modrinth.com/b1.png)](https://discord.gg/x) ![CI](https://cdn.modrinth.com/b2.png)\n\n" +
+		"<img src=\"https://cdn.modrinth.com/tiny.png\" width=\"20\">\n\n![Big](https://cdn.modrinth.com/shot.png)\n\n" +
+		"![A](https://cdn.modrinth.com/a.png)\n\n![B](https://cdn.modrinth.com/b.png)"
+	got := dump(Markdown(src, func(u string) string { return u }))
+	want := `[{"type":"ol","items":[[{"text":"First"}],[{"text":"Second"}]]},{"type":"pre","spans":[{"text":"line one\n  line two","code":true}]},` +
+		`{"type":"badges","pics":[{"src":"https://cdn.modrinth.com/b1.png","alt":"Discord","href":"https://discord.gg/x"},{"src":"https://cdn.modrinth.com/b2.png","alt":"CI"}]},` +
+		`{"type":"badges","pics":[{"src":"https://cdn.modrinth.com/tiny.png"}]},{"type":"img","src":"https://cdn.modrinth.com/shot.png","alt":"Big"},` +
+		`{"type":"img","src":"https://cdn.modrinth.com/a.png","alt":"A"},{"type":"img","src":"https://cdn.modrinth.com/b.png","alt":"B"}]`
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestCurseForgeLinkout(t *testing.T) {
+	src := `<p><a href="https://www.curseforge.com/linkout?remoteUrl=https%253a%252f%252fgithub.com%252fx%252fy">Source</a> ` +
+		`<a href="https://www.curseforge.com/linkout?remoteUrl=javascript%253aalert(1)">bad</a></p>`
+	got := dump(HTML(src, nil))
+	want := `[{"type":"p","spans":[{"text":"Source","href":"https://github.com/x/y"},{"text":" bad"}]}]`
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}
 }

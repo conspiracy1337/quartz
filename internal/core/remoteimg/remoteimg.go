@@ -41,7 +41,14 @@ var Hosts = map[string]bool{
 	"cdn.modrinth.com": true, "media.forgecdn.net": true, "edge.forgecdn.net": true, "mediafilez.forgecdn.net": true,
 	// The official launcher's news pictures (Home's news strip).
 	"launchercontent.mojang.com": true,
+	// Where project descriptions commonly keep their pictures.
+	"i.imgur.com": true, "raw.githubusercontent.com": true, "user-images.githubusercontent.com": true,
+	"private-user-images.githubusercontent.com": true, "media.githubusercontent.com": true,
 }
+
+// pathHosts are hosts that serve pictures only under one path; GitHub's
+// uploads redirect from there to private-user-images.githubusercontent.com.
+var pathHosts = map[string]string{"github.com": "/user-attachments/"}
 
 // ErrUnknown is returned for a token the launcher never handed out.
 var ErrUnknown = errors.New("remoteimg: unknown picture")
@@ -80,7 +87,14 @@ func Allowed(raw string) bool {
 		return false
 	}
 	u, err := url.Parse(raw)
-	return err == nil && u.Scheme == "https" && u.User == nil && Hosts[strings.ToLower(u.Hostname())] && (u.Port() == "" || u.Port() == "443")
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Port() != "" && u.Port() != "443") {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if prefix, ok := pathHosts[host]; ok {
+		return strings.HasPrefix(u.EscapedPath(), prefix) && !strings.Contains(u.Path, "..")
+	}
+	return Hosts[host]
 }
 
 // Token registers raw and returns the name the UI asks for it by ("" when
@@ -138,6 +152,9 @@ func (c *Cache) cached(token string) string {
 }
 
 func (c *Cache) fetch(ctx context.Context, token, raw string) (string, error) {
+	// A redirect may only lead to another allowed address, so no picture
+	// can point the launcher at a host it wouldn't fetch directly.
+	ctx = netx.WithRedirects(ctx, func(u *url.URL) bool { return c.allowed(u.String()) })
 	resp, err := c.http.Get(ctx, raw, nil)
 	if err != nil {
 		return "", err

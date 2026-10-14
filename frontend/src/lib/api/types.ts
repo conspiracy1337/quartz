@@ -303,10 +303,16 @@ export interface BrowseResults {
   /** Platforms that couldn't be searched for this page. */
   failed: Src[];
 }
-/** A run of description text: plain, code, or a link. */
-export interface Span { text: string; code?: boolean; href?: string }
+/** A run of description text: plain, code, or a link; `project` names the project a link points at ("modrinth/mod/sodium"). */
+export interface Span { text: string; code?: boolean; href?: string; project?: string }
+/** A picture in a badge row; `href` is the link around it. */
+export interface DocPic { src: string; alt?: string; href?: string }
 /** A block of project description text. Never raw HTML. */
-export type DocBlock = { type: 'p' | 'h2'; spans: Span[] } | { type: 'ul'; items: Span[][] } | { type: 'img'; src: string; alt?: string };
+export type DocBlock =
+  | { type: 'p' | 'h2' | 'pre'; spans: Span[] }
+  | { type: 'ul' | 'ol'; items: Span[][] }
+  | { type: 'img'; src: string; alt?: string }
+  | { type: 'badges'; pics: DocPic[] };
 /** A gallery picture: a same-origin picture, or (in the preview) a painted stand-in. */
 export interface GalleryItem { src?: string; art?: string; title: string }
 export interface ProjectLink { icon: string; label: string; url: string }

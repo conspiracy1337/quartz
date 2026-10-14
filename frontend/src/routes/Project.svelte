@@ -10,7 +10,7 @@
   import Empty from '$lib/ui/Empty.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import SplitButton from '$lib/ui/SplitButton.svelte';
-  import Inline from '$lib/ui/Inline.svelte';
+  import Inline, { follow } from '$lib/ui/Inline.svelte';
   import type { IconName } from '$lib/ui/icons';
   import Menu from '$lib/ui/Menu.svelte';
   import Tabs from '$lib/ui/Tabs.svelte';
@@ -102,9 +102,12 @@
             {#if side.gallery[0]}{@const g = side.gallery[0]}<div class="thumb" style="height: 200px; margin-bottom: 18px; background: {g.art ?? `url(${g.src}) center/cover no-repeat, var(--raise)`}" role="img" aria-label={g.title}></div>{/if}
             {#each side.body as b, bi (bi)}
               {#if b.type === 'ul'}<ul>{#each b.items as it, ii (ii)}<li><Inline spans={it} /></li>{/each}</ul>
+              {:else if b.type === 'ol'}<ol>{#each b.items as it, ii (ii)}<li><Inline spans={it} /></li>{/each}</ol>
               {:else if b.type === 'h2'}<h2><Inline spans={b.spans} /></h2>
+              {:else if b.type === 'pre'}<pre><code>{b.spans.map((x) => x.text).join('')}</code></pre>
               {:else if b.type === 'img'}<div class="thumb" style="height: 200px; margin-bottom: 12px; background: url({b.src}) center/contain no-repeat, var(--raise)" role="img" aria-label={b.alt}></div>
-              {:else}<p><Inline spans={b.spans} /></p>{/if}
+              {:else if b.type === 'badges'}<p class="badges">{#each b.pics as pic, pi (pi)}{#if pic.href}{@const url = pic.href}<button class="tlink" onclick={() => follow(url)}><img src={pic.src} alt={pic.alt ?? ''} /></button>{:else}<img src={pic.src} alt={pic.alt ?? ''} />{/if}{/each}</p>
+              {:else if b.type === 'p'}<p><Inline spans={b.spans} /></p>{/if}
             {/each}
           </article>
           <aside style="display: flex; flex-direction: column; gap: 18px">
@@ -199,7 +202,11 @@
   .md{max-width:68ch;color:var(--muted);font-size:14px;line-height:22px}
   .md h2{color:var(--text);font-size:16px;line-height:22px;margin:22px 0 8px;font-weight:600}
   .md p{margin:0 0 12px}
-  .md ul{margin:0 0 12px;padding-left:18px}
+  .md ul,.md ol{margin:0 0 12px;padding-left:18px}
+  .md pre{margin:0 0 12px;padding:10px 12px;background:var(--raise);border-radius:var(--radius);overflow:auto;white-space:pre-wrap}
+  .md pre :global(code){padding:0;background:none}
+  .badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .badges img{display:block;height:20px;width:auto;max-width:100%}
   .md li{margin:4px 0}
   .md :global(code){font-family:var(--mono);font-size:12px;background:var(--raise);padding:1px 5px;border-radius:4px;color:var(--text)}
   .lk{display:flex;align-items:center;gap:10px;height:32px;color:var(--muted);text-decoration:none}

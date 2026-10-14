@@ -189,6 +189,7 @@ func (s *Service) side(d modplatform.Detail) Side {
 	if out.Body == nil {
 		out.Body = []docs.Block{}
 	}
+	linkProjects(out.Body)
 	for _, g := range d.Gallery {
 		if src := pic(g.URL); src != "" {
 			out.Gallery = append(out.Gallery, Picture{Src: src, Title: g.Title})

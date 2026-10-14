@@ -115,3 +115,12 @@ func (b *Browse) Changelog(ref, source string, ids []string) ([]browse.Notes, er
 	}
 	return asListErr(b.svc.Changelog(b.ctx.Get(), r, src, ids))
 }
+
+// Resolve opens a project a description links to ("modrinth/mod/sodium"):
+// its reference for the project page.
+func (b *Browse) Resolve(link string) (string, error) {
+	if len(link) > 128 {
+		return "", browse.ErrLink
+	}
+	return b.svc.Resolve(b.ctx.Get(), link)
+}

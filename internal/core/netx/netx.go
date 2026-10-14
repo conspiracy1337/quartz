@@ -30,6 +30,7 @@ var UserAgent = brand.Slug + "-launcher/" + brand.Version
 var (
 	ErrInsecureRedirect = errors.New("netx: refusing redirect from https to http")
 	ErrTooManyRedirects = errors.New("netx: too many redirects")
+	ErrRedirectRefused  = errors.New("netx: refusing redirect to a host the request may not reach")
 	ErrIdleTimeout      = errors.New("netx: connection stalled")
 )
 
@@ -183,7 +184,19 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 	if req.URL.Scheme != "https" && via[0].URL.Scheme == "https" {
 		return ErrInsecureRedirect
 	}
+	if allow, ok := req.Context().Value(redirectKey{}).(func(*url.URL) bool); ok && !allow(req.URL) {
+		return ErrRedirectRefused
+	}
 	return nil
+}
+
+type redirectKey struct{}
+
+// WithRedirects lets requests made with the returned context follow only
+// redirects to addresses allow accepts, for fetches whose first address was
+// checked against an allowlist.
+func WithRedirects(ctx context.Context, allow func(*url.URL) bool) context.Context {
+	return context.WithValue(ctx, redirectKey{}, allow)
 }
 
 // headerTransport sets the User-Agent and the per-host injected headers on

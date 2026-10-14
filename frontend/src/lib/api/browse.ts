@@ -27,6 +27,8 @@ export const browseApi = {
   project: (ref: string, instance: string) => revs.load('content', bridged(() => BrowseGo.Project(ref, instance), (): ProjectPage => mock.iris)),
   versions: (ref: string, src: Src, instance: string, compatible: boolean) =>
     revs.load('content', bridged(() => BrowseGo.Versions(ref, src, instance, compatible), (): ProjectVersion[] => mock.versions(compatible))),
+  /** The project a description links to ("modrinth/mod/sodium"), as a reference for its page. */
+  resolve: bridged(BrowseGo.Resolve, (_link: string) => 'mr:AANobbMI'),
   /** Changes of the given versions, or of the newest four. */
   changelog: bridged(BrowseGo.Changelog, (_ref: string, _src: Src, ids: string[]): VersionNotes[] => mock.changelog(ids)),
   /** RevC: the version to install into an instance and its dependencies ("" version for the newest that fits). */
