@@ -194,3 +194,37 @@ func TestHandlerServesOnlyHexNames(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaults(t *testing.T) {
+	// Indexes from jshell: Math.floorMod(UUID.fromString(u).hashCode(), 18).
+	for id, want := range map[string]Default{
+		"069a79f444e94726a5befca90e38aaf5": {Key: "slim-alex", Slim: true},
+		"853c80ef3c3749fdaa49938b674adae6": {Key: "slim-ari", Slim: true},
+		"5627dd98e6be3c21b8a8e92344183641": {Key: "wide-efe"},
+		"not-a-uuid":                       {Key: "slim-alex", Slim: true},
+	} {
+		if got := DefaultFor(id); got != want {
+			t.Errorf("DefaultFor(%s) = %+v, want %+v", id, got, want)
+		}
+	}
+	if Steve != (Default{Key: "wide-steve"}) {
+		t.Errorf("Steve = %+v", Steve)
+	}
+	tex := NewTextures(t.TempDir(), nil)
+	for _, n := range defaultNames {
+		for _, v := range []string{"slim", "wide"} {
+			p, err := tex.DefaultPath(v + "-" + n)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if data, _ := os.ReadFile(p); !isPNG(data) { //nolint:gosec // test temp dir
+				t.Errorf("%s-%s is not a PNG", v, n)
+			}
+		}
+	}
+	for _, bad := range []string{"", "steve", "wide-", "wide-../x", "tall-steve", "wide-steve/../../x"} {
+		if _, err := tex.DefaultPath(bad); err == nil {
+			t.Errorf("DefaultPath(%q) accepted", bad)
+		}
+	}
+}

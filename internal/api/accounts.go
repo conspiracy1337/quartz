@@ -25,19 +25,19 @@ func NewAccounts(ctx *Ctx, m *accounts.Manager, lib *skins.Library, bus *events.
 	return &Accounts{ctx: ctx, m: m, lib: lib, bus: bus}
 }
 
-// AccountView is an account as the UI shows it. Skin colours are the
-// fallback drawing when there is no skin texture.
+// AccountView is an account as the UI shows it. DefaultSkin is what it
+// wears while SkinHash is "".
 type AccountView struct {
-	ID          string              `json:"id"`
-	Name        string              `json:"name"`
-	Kind        string              `json:"kind"`   // offline | microsoft
-	Status      string              `json:"status"` // ok | expired | offline
-	Detail      string              `json:"detail"` // set for offline accounts and problems
-	IsDefault   bool                `json:"isDefault"`
-	Skin        accounts.SkinColors `json:"skin"`
-	SkinHash    string              `json:"skinHash"` // library skin worn, "" for the default
-	Slim        bool                `json:"slim"`
-	RefreshedAt int64               `json:"refreshedAt"` // unix ms, Microsoft accounts
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Kind        string        `json:"kind"`   // offline | microsoft
+	Status      string        `json:"status"` // ok | expired | offline
+	Detail      string        `json:"detail"` // set for offline accounts and problems
+	IsDefault   bool          `json:"isDefault"`
+	DefaultSkin skins.Default `json:"defaultSkin"`
+	SkinHash    string        `json:"skinHash"` // library skin worn, "" for the default
+	Slim        bool          `json:"slim"`
+	RefreshedAt int64         `json:"refreshedAt"` // unix ms, Microsoft accounts
 }
 
 // CapeView is an owned cape; Texture names /tex/mc/<texture>.png.
@@ -83,7 +83,7 @@ func checkAccount(id string) error {
 
 func view(a accounts.Account, def string) AccountView {
 	v := AccountView{
-		ID: a.ID, Name: a.Name, Kind: string(a.Kind), IsDefault: a.ID == def, Skin: a.DefaultSkin(),
+		ID: a.ID, Name: a.Name, Kind: string(a.Kind), IsDefault: a.ID == def, DefaultSkin: a.DefaultSkin(),
 		SkinHash: a.SkinHash, Slim: a.Slim, Status: "ok",
 	}
 	switch {

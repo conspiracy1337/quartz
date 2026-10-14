@@ -1,34 +1,28 @@
-import type { Account, Capes, SignInEvent, Skin, SkinColors } from '../types';
+import type { Account, Capes, SignInEvent, Skin } from '../types';
 
-export const palettes: Record<'kestrel' | 'ember' | 'frost' | 'moss', SkinColors> = {
-  kestrel: { skin: '#c99a72', hair: '#4a3426', eye: '#2b4f8f', mouth: '#a8775a', top: '#2f6f73', topD: '#25585b', pants: '#2b2f3a', shoes: '#1b1d22' },
-  ember: { skin: '#e0b088', hair: '#7a2e1c', eye: '#3a6b35', mouth: '#b9805f', top: '#b8432f', topD: '#8f3324', pants: '#3a3a40', shoes: '#22201e' },
-  frost: { skin: '#f0d2b8', hair: '#d9dde4', eye: '#3c79c4', mouth: '#c99c84', top: '#e9eef5', topD: '#c4ccd8', pants: '#3d5a80', shoes: '#28344a' },
-  moss: { skin: '#8d6447', hair: '#1c1a17', eye: '#5a3b1e', mouth: '#6d4a33', top: '#5d7a3a', topD: '#4a6230', pants: '#4b3b2a', shoes: '#2a2119' },
-};
-
-const withColors = (base: SkinColors, c: Partial<SkinColors>): SkinColors => ({ ...base, ...c });
-
+// Preview fixtures use Minecraft's default skins as their textures: the dev server serves
+// /tex/skin/<key>.png and /tex/default/<key>.png from Go's embedded copies (vite.config.ts).
 const minutesAgo = (m: number) => Date.now() - m * 60_000;
+const def = (key: string) => ({ key, slim: key.startsWith('slim-') });
 
 export const accounts: Account[] = [
-  { id: 'a1', name: 'Kestrel_Vane', kind: 'microsoft', status: 'ok', detail: '', isDefault: true, skin: palettes.kestrel, skinHash: 'kestrel', slim: false, refreshedAt: minutesAgo(12) },
-  { id: 'a2', name: 'NightOwl_42', kind: 'microsoft', status: 'ok', detail: '', isDefault: false, skin: palettes.moss, skinHash: 'moss', slim: false, refreshedAt: minutesAgo(300) },
-  { id: 'a3', name: 'BuilderBea', kind: 'microsoft', status: 'expired', detail: 'Automatic refresh failed: the password was changed', isDefault: false, skin: palettes.ember, skinHash: 'ember', slim: false, refreshedAt: minutesAgo(4000) },
-  { id: 'a4', name: 'TestDummy', kind: 'offline', status: 'offline', detail: 'Offline account, for local testing', isDefault: false, skin: withColors(palettes.frost, { hair: '#3a3a40', skin: '#9aa3ad' }), skinHash: '', slim: false, refreshedAt: 0 },
+  { id: 'a1', name: 'Kestrel_Vane', kind: 'microsoft', status: 'ok', detail: '', isDefault: true, defaultSkin: def('wide-steve'), skinHash: 'wide-kai', slim: false, refreshedAt: minutesAgo(12) },
+  { id: 'a2', name: 'NightOwl_42', kind: 'microsoft', status: 'ok', detail: '', isDefault: false, defaultSkin: def('slim-alex'), skinHash: 'slim-noor', slim: true, refreshedAt: minutesAgo(300) },
+  { id: 'a3', name: 'BuilderBea', kind: 'microsoft', status: 'expired', detail: 'Automatic refresh failed: the password was changed', isDefault: false, defaultSkin: def('wide-efe'), skinHash: 'slim-makena', slim: true, refreshedAt: minutesAgo(4000) },
+  { id: 'a4', name: 'TestDummy', kind: 'offline', status: 'offline', detail: 'Offline account, for local testing', isDefault: false, defaultSkin: def('slim-zuri'), skinHash: '', slim: false, refreshedAt: 0 },
 ];
 
-const skin = (hash: string, name: string, colors: SkinColors, days: number): Skin => ({ hash, name, colors, slim: false, added: minutesAgo(days * 1440), source: 'file' });
+const skin = (hash: string, name: string, days: number): Skin => ({ hash, name, slim: hash.startsWith('slim-'), added: minutesAgo(days * 1440), source: 'file' });
 
 export const skins: Skin[] = [
-  skin('kestrel', 'Kestrel hoodie', palettes.kestrel, 1),
-  skin('ember', 'Ember jacket', palettes.ember, 2),
-  skin('frost', 'Frost', palettes.frost, 3),
-  skin('moss', 'Moss ranger', palettes.moss, 4),
-  skin('night', 'Night shift', withColors(palettes.kestrel, { hair: '#111', top: '#23232b', topD: '#1a1a20', pants: '#15151a' }), 5),
-  skin('nomad', 'Desert nomad', withColors(palettes.ember, { hair: '#6b4a2a', skin: '#d8a878', top: '#d9b56b', topD: '#b8944f', pants: '#7a5a3a' }), 6),
-  skin('lab', 'Lab coat', withColors(palettes.frost, { hair: '#3a2a1a', top: '#f4f4f5', topD: '#d4d4d8', pants: '#2b3a4a' }), 7),
-  skin('guard', 'Forest guard', withColors(palettes.moss, { hair: '#3a2a14', skin: '#a87a52', top: '#2f5a2f', topD: '#244824', pants: '#3a2a1a' }), 8),
+  skin('wide-kai', 'Kestrel hoodie', 1),
+  skin('slim-makena', 'Ember jacket', 2),
+  skin('wide-sunny', 'Frost', 3),
+  skin('slim-noor', 'Moss ranger', 4),
+  skin('wide-ari', 'Night shift', 5),
+  skin('slim-efe', 'Desert nomad', 6),
+  skin('wide-zuri', 'Lab coat', 7),
+  skin('slim-steve', 'Forest guard', 8),
 ];
 
 export const capes: Capes = {
@@ -45,7 +39,7 @@ export const capes: Capes = {
 export const mockAccounts = {
   list: () => accounts,
   addOffline: (name: string): Account => {
-    const a: Account = { id: `o${accounts.length + 1}`.padEnd(32, '0'), name, kind: 'offline', status: 'offline', detail: 'Offline account, for local testing', isDefault: !accounts.length, skin: palettes.frost, skinHash: '', slim: false, refreshedAt: 0 };
+    const a: Account = { id: `o${accounts.length + 1}`.padEnd(32, '0'), name, kind: 'offline', status: 'offline', detail: 'Offline account, for local testing', isDefault: !accounts.length, defaultSkin: def('wide-ari'), skinHash: '', slim: false, refreshedAt: 0 };
     accounts.push(a);
     return a;
   },
@@ -59,9 +53,8 @@ export const mockAccounts = {
   capes: (_accountId: string) => capes,
   wear: (accountId: string, skinHash: string, capeId: string): Account => {
     const a = accounts.find((x) => x.id === accountId) ?? accounts[0]!;
-    const s = skins.find((x) => x.hash === skinHash);
     a.skinHash = skinHash;
-    if (s?.colors) a.skin = s.colors;
+    a.slim = skins.find((x) => x.hash === skinHash)?.slim ?? false;
     capes.worn = capeId;
     return a;
   },

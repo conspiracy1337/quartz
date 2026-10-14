@@ -240,7 +240,9 @@ func (a *app) images() http.Handler {
 	return imagesrv.Handler(map[string]imagesrv.Resolver{
 		"skin": func(_ context.Context, h string) (string, error) { return a.skins.Path(h) },
 		"mc":   a.textures.Path,
-		"icon": func(_ context.Context, h string) (string, error) { return a.icons.Path(h) },
+		// The default skins, for accounts without one of their own.
+		"default": func(_ context.Context, k string) (string, error) { return a.textures.DefaultPath(k) },
+		"icon":    func(_ context.Context, h string) (string, error) { return a.icons.Path(h) },
 		// Icons read from mods and packs, re-encoded when they were stored.
 		"content": func(_ context.Context, h string) (string, error) { return a.modIcons.Path(h) },
 		// Project icons and pictures from Modrinth and CurseForge, and news pictures.

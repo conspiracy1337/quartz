@@ -117,7 +117,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case "POST /mc/minecraft/profile/skins":
 		s.upload(w, r)
 	case "DELETE /mc/minecraft/profile/skins/active":
-		s.Profile.Skins = nil
+		// Mojang puts one of its default skins on instead.
+		s.Profile.Skins = []mcapi.Skin{{ID: "default", State: "ACTIVE", Variant: "CLASSIC", URL: "http://textures.minecraft.net/texture/" + DefaultSkinTexture}}
 		writeJSON(w, s.Profile)
 	case "PUT /mc/minecraft/profile/capes/active":
 		var in struct {
@@ -191,6 +192,10 @@ func (s *Server) setCape(id string) {
 		}
 	}
 }
+
+// DefaultSkinTexture is the texture hash a reset skin gets; tests put a skin
+// at that name in the texture cache so nothing is downloaded.
+const DefaultSkinTexture = "d5c4ee5ce20aed9e33e866c66caa37178606234b3721084bf01d13320fb2eb3f"
 
 func oauthError(w http.ResponseWriter, code string) {
 	w.WriteHeader(http.StatusBadRequest)

@@ -2,7 +2,7 @@
   import { api } from '../api';
   import { hmLoose } from '../format';
   import { query } from '../query.svelte';
-  import { accountLook, capeLook, skinLook } from '../look';
+  import { STEVE, accountLook, capeLook } from '../look';
   import PlayerModel from './PlayerModel.svelte';
 
   /** The current skin in 3D next to this week's play activity. */
@@ -17,7 +17,7 @@
   const me = $derived(accounts.data?.find((a) => a.isDefault));
   const capes = query(() => (me ? api.accounts.capes(me.id) : Promise.resolve({ capes: [], worn: '' })));
   // With no account yet, the default skin stands in (as on the Skins page).
-  const look = $derived(me && skins.data ? accountLook(me, skins.data) : accounts.data && !me ? skinLook(undefined) : undefined);
+  const look = $derived(me && skins.data ? accountLook(me, skins.data) : accounts.data && !me ? STEVE : undefined);
   const cape = $derived(capeLook(capes.data?.capes.find((c) => c.id === capes.data?.worn)));
 
   const total = $derived((week.data ?? []).reduce((n, d) => n + d.minutes, 0));

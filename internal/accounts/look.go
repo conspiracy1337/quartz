@@ -98,9 +98,11 @@ func (m *Manager) ResetSkin(ctx context.Context, id string) (Account, error) {
 	if err != nil {
 		return Account{}, err
 	}
+	// Mojang picks the default; show the one it picked, as after a sign-in.
+	look := a
+	m.syncLook(ctx, &look, p)
 	return m.patchLook(id, func(x *Account) {
-		applyProfile(x, p)
-		x.SkinHash, x.Slim = "", false
+		x.Capes, x.SkinHash, x.SkinTexture, x.Slim = look.Capes, look.SkinHash, look.SkinTexture, look.Slim
 	})
 }
 

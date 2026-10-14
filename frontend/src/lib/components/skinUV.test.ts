@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { crop, faceRects, uvBox } from './skinUV';
+import { buildPlayer } from './skin3d';
+import { crop, faceRects } from './skinUV';
 
 describe('skin UV layout', () => {
   it('maps the head box like Minecraft', () => {
@@ -18,8 +19,25 @@ describe('skin UV layout', () => {
 
   it('scales the texture so one texel fills the face', () => {
     expect(crop('/s.png', 8, 8, 8, 8, 40, 40)).toBe('url("/s.png") -40px -40px / 320px 320px no-repeat');
-    // A 0.5-texel inflated overlay face stretches to the larger box.
-    const [front] = uvBox('/s.png', [8, 12, 4], [16, 32], [64, 64], 10, 0.5);
-    expect(front).toBe(crop('/s.png', 20, 36, 8, 12, 85, 125));
+  });
+
+  it('puts every texture corner on the right corner of the 3D box', () => {
+    const { data, parts } = buildPlayer(false);
+    // Vertex k of a part: [x, y, z, u·64, v·64].
+    const at = (part: string, k: number) => {
+      const i = (parts[part]!.first + k) * 8;
+      return [data[i], data[i + 1], data[i + 2], Math.round(data[i + 3]! * 64), Math.round(data[i + 4]! * (part === 'cape' ? 32 : 64))];
+    };
+    // Head front: the texture's top-left (8,8) is the viewer's top-left, facing the viewer (+z).
+    expect(at('head', 0)).toEqual([-4, 8, 4, 8, 8]);
+    // The player's right side (-x) keeps its front edge (u = 8) next to the face.
+    expect(at('head', 6 * 3 + 1)).toEqual([-4, 8, 4, 8, 8]);
+    // The hat layer is half a texel bigger on every side.
+    expect(at('head+', 0)).toEqual([-4.5, 8.5, 4.5, 40, 8]);
+    // Slim arms are 3 texels wide.
+    const slim = buildPlayer(true);
+    expect(slim.data[(slim.parts['rarm']!.first) * 8]).toBe(-1.5);
+    // The cape's outer side (texture front, (1,1)) faces backwards, away from the body.
+    expect(at('cape', 0)).toEqual([5, 0, -1, 1, 1]);
   });
 });
