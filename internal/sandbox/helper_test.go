@@ -63,6 +63,7 @@ func helper() {
 		}
 		return os.WriteFile(mod, []byte("infected"), 0o600)
 	}())
+	say("write-skin", os.WriteFile(filepath.Join(os.Getenv("SKINS"), "ab.png"), []byte("x"), 0o600))
 	say("add-mod", os.WriteFile(filepath.Join(os.Getenv("GAME"), "mods", "new.jar"), []byte("x"), 0o600))
 	say("dial", func() error {
 		c, err := net.DialTimeout("tcp", os.Getenv("LISTEN"), 2*time.Second)
@@ -134,6 +135,9 @@ func newJailFixture(t *testing.T) *jailFixture {
 	return f
 }
 
+// skins is the skin cache inside the shared (read-only) assets.
+func (f *jailFixture) skins() string { return filepath.Join(f.root, "store", "assets", "skins") }
+
 func (f *jailFixture) runArgs(t *testing.T, set rules.Settings, mode string) (procx.Spec, *Jail) {
 	t.Helper()
 	exe, err := os.Executable()
@@ -142,9 +146,10 @@ func (f *jailFixture) runArgs(t *testing.T, set rules.Settings, mode string) (pr
 	}
 	set.Folders = []rules.Folder{{ID: "a1", Path: f.ro, Level: rules.RO}, {ID: "b2", Path: f.rw, Level: rules.RW}}
 	r := Run{Instance: "sandbox-test", Rules: set, GameDir: f.game, Scratch: f.scratch, Data: f.data,
-		Read: []string{filepath.Dir(exe), filepath.Join(f.root, "store", "libraries")}}
+		Read:      []string{filepath.Dir(exe), filepath.Join(f.root, "store", "libraries"), filepath.Join(f.root, "store", "assets")},
+		Redirects: []Redirect{{From: filepath.Join(f.data, "skins"), To: f.skins()}}}
 	env := append(FilterEnv(os.Environ()), "QUARTZ_SANDBOX_HELPER="+mode, "GAME="+f.game, "OTHER="+f.other, "SECRET="+f.secret,
-		"PARENT="+fmt.Sprint(os.Getpid()), "RO="+f.ro, "RW="+f.rw, "STORE="+f.store, "LISTEN="+f.listen)
+		"PARENT="+fmt.Sprint(os.Getpid()), "RO="+f.ro, "RW="+f.rw, "STORE="+f.store, "LISTEN="+f.listen, "SKINS="+f.skins())
 	spec, j, err := f.s.Wrap(r, procx.Spec{Argv: []string{exe}, Dir: f.game, Env: env})
 	if err != nil {
 		t.Fatal(err)
@@ -207,6 +212,15 @@ func TestJailStandard(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(f.game, "mods", "new.jar")); err == nil {
 		t.Error("the game added a file to its mods folder")
 	}
+	// The skin cache is the instance's own: the write lands in its data.
+	if got["write-skin"] != "ok" {
+		t.Errorf("write-skin = %q", got["write-skin"])
+	}
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat(filepath.Join(f.data, "skins", "ab.png")); err != nil {
+			t.Error("the skin didn't land in the instance's own cache")
+		}
+	}
 	checkPlatform(t, got)
 }
 
@@ -247,8 +261,8 @@ func TestJailStopReachesGame(t *testing.T) {
 
 func TestFilterEnv(t *testing.T) {
 	got := FilterEnv([]string{"PATH=/usr/bin", "SSH_AUTH_SOCK=/run/agent", "DBUS_SESSION_BUS_ADDRESS=unix:x", "LC_ALL=C",
-		"GITHUB_TOKEN=secret", "DISPLAY=:0", "__GL_SYNC_TO_VBLANK=0", "broken"})
-	if strings.Join(got, " ") != "PATH=/usr/bin LC_ALL=C DISPLAY=:0 __GL_SYNC_TO_VBLANK=0" {
+		"GITHUB_TOKEN=secret", "DISPLAY=:0", "__GL_SYNC_TO_VBLANK=0", "broken", "XCURSOR_SIZE=48", "GBM_BACKEND=nvidia-drm", "__EGL_VENDOR_LIBRARY_FILENAMES=/x.json"})
+	if strings.Join(got, " ") != "PATH=/usr/bin LC_ALL=C DISPLAY=:0 __GL_SYNC_TO_VBLANK=0 XCURSOR_SIZE=48 GBM_BACKEND=nvidia-drm __EGL_VENDOR_LIBRARY_FILENAMES=/x.json" {
 		t.Fatal(got)
 	}
 	if e := setEnv([]string{"A=1", "B=2"}, "A=3"); strings.Join(e, " ") != "B=2 A=3" {

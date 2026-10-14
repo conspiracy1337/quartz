@@ -13,6 +13,9 @@ var envNames = map[string]bool{
 	"DISPLAY": true, "XAUTHORITY": true, "WAYLAND_DISPLAY": true, "XDG_RUNTIME_DIR": true, "XDG_SESSION_TYPE": true,
 	"XDG_CURRENT_DESKTOP": true, "XDG_SESSION_DESKTOP": true, "DESKTOP_SESSION": true, "PULSE_SERVER": true,
 	"TMPDIR": true, "__CF_USER_TEXT_ENCODING": true,
+	// Cursor theme and size, the GBM backend (NVIDIA on Wayland), and the
+	// libraries the player points programs at (only bound folders resolve).
+	"XCURSOR_THEME": true, "XCURSOR_SIZE": true, "GBM_BACKEND": true, "LD_LIBRARY_PATH": true,
 	// Windows
 	"SYSTEMROOT": true, "WINDIR": true, "SYSTEMDRIVE": true, "TEMP": true, "TMP": true, "APPDATA": true, "LOCALAPPDATA": true,
 	"USERPROFILE": true, "PROGRAMFILES": true, "PROGRAMFILES(X86)": true, "PROGRAMDATA": true, "COMMONPROGRAMFILES": true,
@@ -20,7 +23,7 @@ var envNames = map[string]bool{
 }
 
 // envPrefixes pass too: locale, graphics drivers and overlays.
-var envPrefixes = []string{"LC_", "__GL_", "__NV_", "__GLX_", "MESA_", "LIBGL_", "DRI_", "VK_", "MANGOHUD", "SDL_", "GTK_THEME", "QT_"}
+var envPrefixes = []string{"LC_", "__GL_", "__NV_", "__GLX_", "__EGL_", "__VK_", "MESA_", "LIBGL_", "LIBVA_", "DRI_", "VK_", "MANGOHUD", "SDL_", "GTK_THEME", "QT_"}
 
 // FilterEnv keeps only the variables a sandboxed game may see.
 func FilterEnv(environ []string) []string {

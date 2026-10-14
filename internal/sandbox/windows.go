@@ -228,6 +228,9 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 	for _, p := range r.Write {
 		grants = append(grants, grant{p, sid, accessModify})
 	}
+	for _, d := range r.Redirects {
+		grants = append(grants, grant{d.To, sid, accessModify})
+	}
 	for _, p := range r.Read {
 		grants = append(grants, grant{p, store, accessRead})
 	}

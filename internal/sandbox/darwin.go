@@ -82,6 +82,9 @@ func canonAll(ps []string) []string {
 func (b *darwinBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Jail, error) {
 	sb := seatbelt{Network: r.Headless || r.Level(rules.Internet) == rules.Allowed}
 	write := append([]string{r.GameDir, r.Data}, r.Write...)
+	for _, d := range r.Redirects {
+		write = append(write, d.To)
+	}
 	read := slices.Clone(r.Read)
 	for _, f := range r.Rules.Folders {
 		if f.Level == rules.RW {

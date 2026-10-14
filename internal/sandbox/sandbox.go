@@ -36,6 +36,9 @@ type Run struct {
 	Read     []string
 	// Write are other read-write folders (a hosted server's worlds).
 	Write []string
+	// Redirects are folders inside read-only ones the game must write (its
+	// skin cache under the shared assets).
+	Redirects []Redirect
 	// Shared are the shared folders the run's view uses read-write; on
 	// Windows they need the container's access too.
 	Shared []string
@@ -65,6 +68,10 @@ func (r Run) Protected() []string {
 	}
 	return out
 }
+
+// Redirect shows the instance's own From folder at To, read-write, where
+// the OS can mount it (Linux). Elsewhere To itself becomes writable.
+type Redirect struct{ From, To string }
 
 // Level is the run's level for a rule on this OS.
 func (r Run) Level(id rules.ID) rules.Level { return r.Rules.Level(id, runtime.GOOS) }
@@ -141,7 +148,11 @@ func (s *Service) Wrap(r Run, spec procx.Spec) (procx.Spec, *Jail, error) {
 			return procx.Spec{}, nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 		}
 	}
-	for _, d := range append([]string{r.Scratch, r.GameDir}, r.Write...) {
+	dirs := append([]string{r.Scratch, r.GameDir}, r.Write...)
+	for _, d := range r.Redirects {
+		dirs = append(dirs, d.From, d.To)
+	}
+	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return procx.Spec{}, nil, err
 		}
