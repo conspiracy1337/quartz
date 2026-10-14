@@ -9,6 +9,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -85,13 +86,31 @@ func (s *Service) folder(id string) string {
 }
 
 // indexFile maps screenshot file names to the world they were taken in.
-func (s *Service) indexFile(id string) string { return filepath.Join(s.d.Instances.Dir(id), "shots.json") }
+func (s *Service) indexFile(id string) string {
+	return filepath.Join(s.d.Instances.Dir(id), "shots.json")
+}
 
 func (s *Service) index(id string) map[string]string {
 	m := map[string]string{}
 	if data, err := fsx.ReadCapped(s.indexFile(id), 4<<20); err == nil {
 		_ = json.Unmarshal(data, &m)
 	}
+	return m
+}
+
+// worlds maps the screenshots in id's folder to their worlds. A shared
+// folder holds every sharing instance's pictures, so their indexes count
+// too; the instance's own wins a clash.
+func (s *Service) worlds(id string) map[string]string {
+	m := map[string]string{}
+	if dir := s.folder(id); dir != filepath.Join(s.d.Instances.GameDir(id), "screenshots") {
+		for _, in := range s.d.Instances.List() {
+			if in.ID != id && s.folder(in.ID) == dir {
+				maps.Copy(m, s.index(in.ID))
+			}
+		}
+	}
+	maps.Copy(m, s.index(id))
 	return m
 }
 
@@ -108,7 +127,7 @@ func (s *Service) List(id string) ([]Shot, error) {
 	if err != nil {
 		return nil, err
 	}
-	worlds := s.index(id)
+	worlds := s.worlds(id)
 	out := make([]Shot, 0, len(entries))
 	for _, e := range entries {
 		if !e.Type().IsRegular() || !ValidName(e.Name()) {
