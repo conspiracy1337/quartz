@@ -23,6 +23,10 @@ func TestRedact(t *testing.T) {
 		{"/home/alice/.local/share/Quartz", "/home/alice", "/home/<user>"},
 		{`C:\Users\alice\AppData`, `\Users\alice`, `\Users\<user>`},
 		{`"path": "C:\\Users\\alice\\AppData"`, `\\Users\\alice`, `\\Users\\<user>`},
+		{`java.io.tmpdir=c:\users\ALICE\appdata`, "ALICE", `c:\users\<user>\`},
+		{"C:/Users/alice/x", "/alice", "/Users/<user>/"},
+		{"cd /var/home/alice", "alice", "/var/home/<user>"},
+		{"cwd /Users/alice", "alice", "/Users/<user>"},
 	}
 	for _, tt := range tests {
 		got := r.Redact(tt.in)
@@ -30,8 +34,10 @@ func TestRedact(t *testing.T) {
 			t.Errorf("Redact(%q) = %q", tt.in, got)
 		}
 	}
-	if got := r.Redact("exit code=1 on 1.21.4"); got != "exit code=1 on 1.21.4" {
-		t.Errorf("changed harmless text: %q", got)
+	for _, keep := range []string{"exit code=1 on 1.21.4", "/home/alicebob/x", `C:\Users\alice.old\x`} {
+		if got := r.Redact(keep); got != keep {
+			t.Errorf("changed harmless text: %q", got)
+		}
 	}
 }
 
