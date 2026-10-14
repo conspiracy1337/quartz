@@ -47,7 +47,8 @@ func (s *Service) Watch(id string) {
 	for _, k := range Kinds {
 		dir := s.abs(id, k.top())
 		dirs[dir] = k
-		_ = w.Add(dir)
+		_ = w.Add(dir) // may not exist yet: its parent's watch adds it once it does
+		_ = w.Add(filepath.Dir(dir))
 	}
 	saves := s.base(id, DataPacks)
 	for _, f := range worldsAt(saves) {
@@ -76,10 +77,13 @@ func (s *Service) watchLoop(w *fsnotify.Watcher, id string) {
 				return
 			}
 			s.touched(id, ev.Name)
-		case _, ok := <-w.Errors:
+		case err, ok := <-w.Errors:
 			if !ok {
 				return
 			}
+			// Events were lost (the kernel's queue overflowed): look at everything.
+			s.d.Log.Debug("content: folder watch lost events", "err", err)
+			s.touchedAll(id)
 		}
 	}
 }
@@ -100,6 +104,9 @@ func (s *Service) touched(id, name string) {
 	if !ok {
 		return
 	}
+	if _, top := s.watch.dirs[name]; top && s.watch.w != nil {
+		_ = s.watch.w.Add(name) // a content folder that was just created
+	}
 	if k == DataPacks && s.watch.w != nil {
 		// A new world: start following its datapacks folder too.
 		saves := s.base(id, DataPacks)
@@ -108,6 +115,24 @@ func (s *Service) touched(id, name string) {
 		}
 	}
 	s.watch.dirty[k] = true
+	s.scheduleWatch(id)
+}
+
+// touchedAll schedules a scan of every kind.
+func (s *Service) touchedAll(id string) {
+	s.watch.mu.Lock()
+	defer s.watch.mu.Unlock()
+	if s.watch.id != id {
+		return
+	}
+	for _, k := range Kinds {
+		s.watch.dirty[k] = true
+	}
+	s.scheduleWatch(id)
+}
+
+// scheduleWatch (re)starts the debounce; the caller holds watch.mu.
+func (s *Service) scheduleWatch(id string) {
 	if s.watch.timer == nil {
 		s.watch.timer = time.AfterFunc(watchDelay, func() { s.flushWatch(id) })
 	} else {

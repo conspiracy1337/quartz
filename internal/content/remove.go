@@ -3,6 +3,7 @@ package content
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,6 +15,10 @@ import (
 
 // ErrUndoExpired means the removed items are already gone for good.
 var ErrUndoExpired = errors.New("content: these items can't be brought back any more")
+
+// ErrLinkedFolder refuses to remove from a content folder that is a link to
+// another place (another launcher's): remove the file there instead.
+var ErrLinkedFolder = errors.New("content: this folder is a link to another launcher's folder. Remove the file there")
 
 // Remove moves items aside and returns a token for Undo. They are deleted
 // for good after a while; the store keeps their blobs a week longer.
@@ -36,6 +41,11 @@ func (s *Service) remove(id string, k Kind, items []string) (string, []string, e
 	v, err := s.view(id)
 	if err != nil {
 		return "", nil, err
+	}
+	if k != DataPacks {
+		if info, err := os.Lstat(filepath.Join(s.base(id, k), k.top())); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+			return "", nil, ErrLinkedFolder
+		}
 	}
 	root, err := os.OpenRoot(s.base(id, k))
 	if err != nil {

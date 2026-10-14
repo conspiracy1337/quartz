@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -113,16 +114,22 @@ func (s *Service) rename(ctx context.Context, id string, e Entry, on bool) error
 	return s.Scan(ctx, id, e.Kind)
 }
 
-// renameIn renames inside the item's folder only; a link can't lead out.
+// renameIn renames inside the item's folder only (that folder may itself be
+// a link, which scans follow); a link inside can't lead out.
 func (s *Service) renameIn(id, from, to string) error {
 	if from == to {
 		return nil
 	}
-	root, err := os.OpenRoot(s.d.Instances.Base(id, from))
+	dir := filepath.Join(s.d.Instances.Base(id, from), filepath.FromSlash(path.Dir(from)))
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = root.Close() }()
+	from, to = path.Base(from), path.Base(to)
 	if _, err := root.Lstat(to); err == nil {
 		return ErrNameTaken
 	}

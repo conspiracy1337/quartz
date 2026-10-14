@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"quartz/internal/content/packwiz"
 	"quartz/internal/content/store"
@@ -550,5 +551,74 @@ func TestSharedFolderItems(t *testing.T) {
 	}
 	if !e.svc.AnyHasMod("SODIUM") || e.svc.AnyHasMod("xaerominimap") {
 		t.Fatal("AnyHasMod")
+	}
+}
+
+func TestLinkedModsFolderIsListedAndLeftAlone(t *testing.T) {
+	e := newEnv(t)
+	elsewhere := filepath.Join(t.TempDir(), "prism-mods")
+	writeZip(t, filepath.Join(elsewhere, "a.jar"), map[string]string{"fabric.mod.json": `{"id":"a","name":"A","version":"1.0"}`})
+	if err := os.Symlink(elsewhere, filepath.Join(e.game, "mods")); err != nil {
+		t.Skip("no symlinks here")
+	}
+	rows := e.list(Mods)
+	if len(rows) != 1 || rows[0].Name != "A" {
+		t.Fatalf("a linked mods folder must be listed: %+v", rows)
+	}
+	if info, err := os.Lstat(filepath.Join(elsewhere, "a.jar")); err != nil || info.Mode().Perm()&0o200 == 0 {
+		t.Fatal("a file in a linked folder must not be adopted into the store (sealed)")
+	}
+	ctx := context.Background()
+	if err := e.svc.SetEnabled(ctx, e.id, Mods, rows[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(elsewhere, "a.jar.disabled")); err != nil {
+		t.Fatal("turning off in a linked folder")
+	}
+	if _, err := e.svc.Remove(ctx, e.id, Mods, []string{rows[0].ID}); !errors.Is(err, ErrLinkedFolder) {
+		t.Fatalf("remove from a linked folder: %v", err)
+	}
+}
+
+func TestMetadataOfAFileDeletedOutsideGoesToo(t *testing.T) {
+	e := newEnv(t)
+	e.mod("alpha.jar", "alpha", "Alpha", "")
+	e.mod("beta.jar", "beta", "Beta", "")
+	index := filepath.Join(e.game, "mods", ".index")
+	for _, n := range []string{"alpha", "beta"} {
+		if err := packwiz.Write(index, packwiz.Meta{Slug: n, Name: n, Filename: n + ".jar"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(e.list(Mods)) != 2 {
+		t.Fatal("setup")
+	}
+	_ = os.Remove(filepath.Join(e.game, "mods", "alpha.jar"))
+	e.list(Mods)
+	got, _ := packwiz.ReadDir(index)
+	if _, ok := got["alpha.jar"]; ok {
+		t.Fatal("the deleted mod's .pw.toml was left behind")
+	}
+	if _, ok := got["beta.jar"]; !ok {
+		t.Fatal("another mod's .pw.toml went too")
+	}
+}
+
+func TestWatchSeesAFolderCreatedLater(t *testing.T) {
+	e := newEnv(t)
+	_ = os.RemoveAll(filepath.Join(e.game, "mods"))
+	e.svc.Watch(e.id)
+	t.Cleanup(func() { e.svc.Watch("") })
+	_ = os.MkdirAll(filepath.Join(e.game, "mods"), 0o700)
+	time.Sleep(100 * time.Millisecond) // let the new folder's watch be added
+	e.mod("late.jar", "late", "Late", "")
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		ix, _ := e.svc.idx.get(e.id)
+		if len(entriesOf(ix.Get(), Mods)) == 1 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a mod added to a folder created after the watch began was never seen")
+		}
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"quartz/internal/content/meta"
+	"quartz/internal/content/packwiz"
 	"quartz/internal/core/archive"
 	"quartz/internal/core/hashx"
 )
@@ -58,22 +59,28 @@ func (s *Service) scan(ctx context.Context, id string, k Kind) error {
 	s.purgeRemovals(id, cur)
 	next := map[string]Entry{}
 	var jobs []job
+	linked := false
 	if root, err := os.OpenRoot(game); err == nil {
-		jobs = s.walk(root, k, sp, cur, next)
+		jobs, linked = s.walk(root, game, k, sp, cur, next)
 		_ = root.Close()
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	for _, e := range s.read(ctx, game, k, sp, jobs, !s.inPlace(id)) {
+	// Files in a folder linked from elsewhere (another launcher's) are
+	// listed but left as they are, like an in-place instance's.
+	for _, e := range s.read(ctx, game, k, sp, jobs, !s.inPlace(id) && !linked) {
 		next[itemID(k, e.Rel)] = e
 	}
 	changed := false
+	var gone []Entry
 	_, err = ix.Update(func(i *Index) error {
+		gone = gone[:0]
 		for eid, e := range i.Entries {
 			if e.Kind == k {
 				if _, ok := next[eid]; !ok {
 					delete(i.Entries, eid)
 					delete(i.Updates, eid)
+					gone = append(gone, e)
 					changed = true
 				}
 			}
@@ -95,6 +102,7 @@ func (s *Service) scan(ctx context.Context, id string, k Kind) error {
 	if err != nil {
 		return err
 	}
+	s.dropOrphanMeta(game, k, gone)
 	if changed {
 		s.emit(id, k)
 	}
@@ -102,14 +110,40 @@ func (s *Service) scan(ctx context.Context, id string, k Kind) error {
 	return ctx.Err()
 }
 
+// dropOrphanMeta deletes the .pw.toml of items deleted outside the launcher,
+// or packwiz and Prism would think they are still installed and fetch them
+// again (Prism cleans these up too). Removing through Quartz takes the file
+// along already. An item that is still there but couldn't be read this time
+// keeps its metadata.
+func (s *Service) dropOrphanMeta(game string, k Kind, gone []Entry) {
+	for _, e := range gone {
+		rel := strings.TrimSuffix(e.Rel, Disabled)
+		on := filepath.Join(game, filepath.FromSlash(rel))
+		if _, err := os.Lstat(on); err == nil {
+			continue
+		}
+		if _, err := os.Lstat(on + Disabled); err == nil {
+			continue
+		}
+		dir := filepath.Join(game, filepath.FromSlash(path.Join(path.Dir(rel), specs[k].indexIn)))
+		m, _ := packwiz.ReadDir(dir)
+		if pw, ok := m[strings.ToLower(path.Base(rel))]; ok {
+			_ = packwiz.Remove(dir, pw.Slug)
+		}
+	}
+}
+
 // walk lists every item; unchanged ones go straight into next, the rest
-// become jobs.
-func (s *Service) walk(root *os.Root, k Kind, sp spec, cur Index, next map[string]Entry) []job {
-	var jobs []job
+// become jobs. A content folder that is a link to another place (Prism's
+// "copy with symlinks") is followed; linked reports it.
+func (s *Service) walk(root *os.Root, game string, k Kind, sp spec, cur Index, next map[string]Entry) (jobs []job, linked bool) {
 	for _, f := range sp.folders(root) {
 		dir, err := root.Open(f.Rel)
 		if err != nil {
-			continue
+			if dir, err = openLinked(game, f.Rel); err != nil {
+				continue
+			}
+			linked = true
 		}
 		entries, _ := dir.ReadDir(-1)
 		_ = dir.Close()
@@ -144,7 +178,22 @@ func (s *Service) walk(root *os.Root, k Kind, sp spec, cur Index, next map[strin
 			jobs = append(jobs, j)
 		}
 	}
-	return jobs
+	return jobs, linked
+}
+
+// openLinked opens a content folder that os.Root refused because it is a
+// link leading out of the game folder. Only that one link is followed: the
+// items inside are listed, never opened through further links.
+func openLinked(game, rel string) (*os.File, error) {
+	p := filepath.Join(game, filepath.FromSlash(rel))
+	if info, err := os.Lstat(p); err != nil || info.Mode()&fs.ModeSymlink == 0 {
+		return nil, fs.ErrNotExist
+	}
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return nil, err
+	}
+	return os.Open(real) //nolint:gosec // the player's own link, resolved
 }
 
 // partial names files still being written by a browser or the launcher.
