@@ -62,7 +62,22 @@ type Target struct {
 	Minecraft     string
 	Loader        loader.Kind // "" for vanilla
 	LoaderVersion string
+	// ClientJar runs in place of vanilla's client jar (nil: vanilla). It
+	// can't be downloaded again, so it is only verified, and never takes a
+	// loader: Forge's processors patch the vanilla jar by its checksum.
+	ClientJar *ClientJar
 }
+
+// ClientJar is a client jar the player supplied, pinned by its checksum.
+type ClientJar struct {
+	Path string
+	SHA1 string
+	Size int64
+}
+
+// ErrClientJarChanged names a custom client jar that is gone or was edited
+// since it was picked.
+var ErrClientJarChanged = errors.New("install: the instance's custom jar was changed or removed. Remove it under Version and pick it again")
 
 // Resolved is everything a launch needs to know about a version.
 type Resolved struct {
@@ -73,8 +88,8 @@ type Resolved struct {
 	Index        mojang.AssetIndex
 	indexData    []byte
 	Libraries    []mojang.ResolvedLibrary
-	ClientJar    string
-	Classpath    []string // libraries and the client jar, absolute
+	ClientJar    string   // vanilla's, which loaders and pack readers use even under a custom jar
+	Classpath    []string // libraries and the client jar the game runs, absolute
 	NativesDir   string
 	AssetsRoot   string
 	GameAssets   string // the folder legacy versions read assets from by name
@@ -110,6 +125,16 @@ func (in *Installer) Resolve(ctx context.Context, t Target, gameDir string, env 
 	if r.ClientJar, err = fsx.SafeJoin(in.dirs.Versions, filepath.Join(id, id+".jar")); err != nil {
 		return nil, err
 	}
+	game := r.ClientJar
+	if j := t.ClientJar; j != nil {
+		if t.Loader != "" {
+			return nil, errors.New("install: a custom client jar runs without a mod loader")
+		}
+		if err := in.dl.Verify(item(nil, j.Path, j.Size, j.SHA1)); err != nil {
+			return nil, fmt.Errorf("%w (%w)", ErrClientJarChanged, err)
+		}
+		game = j.Path
+	}
 	var prof *loader.Profile
 	if t.Loader != "" {
 		prof, err = in.loaders.Profile(ctx, t.Loader, loader.Request{Minecraft: id, Env: env, Parent: parent, ClientJar: r.ClientJar}, t.LoaderVersion)
@@ -141,7 +166,7 @@ func (in *Installer) Resolve(ctx context.Context, t Target, gameDir string, env 
 		r.Classpath = append(r.Classpath, p)
 	}
 	if prof == nil || !prof.NoClientJar {
-		r.Classpath = append(r.Classpath, r.ClientJar)
+		r.Classpath = append(r.Classpath, game)
 	}
 	r.NativesDir = filepath.Join(in.dirs.Natives, nativesKey(id, natives))
 	switch {

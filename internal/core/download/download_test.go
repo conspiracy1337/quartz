@@ -369,3 +369,26 @@ func TestUnhashedFileIsReadyAfterFirstFetch(t *testing.T) {
 		t.Fatal("unhashed file offered by FindBySum")
 	}
 }
+
+func TestVerifyLocalFile(t *testing.T) {
+	e := newEnv(t)
+	it := e.item("client.jar", payload(4_000))
+	it.URLs = nil // a file only the player has
+	if err := e.dl.Verify(it); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing = %v", err)
+	}
+	_ = os.MkdirAll(filepath.Dir(it.Dest), 0o700)
+	_ = os.WriteFile(it.Dest, payload(4_000), 0o600)
+	if err := e.dl.Verify(it); err != nil || !e.dl.Ready(it) {
+		t.Fatalf("good file = %v, ready %v", err, e.dl.Ready(it))
+	}
+	tampered := payload(4_000)
+	tampered[0] = 'X'
+	_ = os.WriteFile(it.Dest, tampered, 0o600)
+	if err := e.dl.Verify(it); !errors.Is(err, hashx.ErrMismatch) {
+		t.Fatalf("changed file = %v", err)
+	}
+	if err := e.dl.Verify(Item{Dest: it.Dest}); err == nil {
+		t.Fatal("verified against no checksum")
+	}
+}

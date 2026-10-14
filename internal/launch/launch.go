@@ -398,7 +398,7 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	}
 	env := mojang.CurrentEnv(sysinfo.OSVersion())
 	env.Features["has_custom_resolution"] = p.eff.Width > 0 && p.eff.Height > 0
-	res, err := l.cfg.Installer.Resolve(ctx, target(p.inst), gameDir, env)
+	res, err := l.cfg.Installer.Resolve(ctx, l.target(p.inst), gameDir, env)
 	if err != nil {
 		return StageJava, err
 	}
@@ -508,8 +508,12 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 }
 
 // target is what an instance plays.
-func target(in instance.Instance) install.Target {
-	return install.Target{Minecraft: in.Minecraft, Loader: loader.Kind(in.Loader), LoaderVersion: in.LoaderVersion}
+func (l *Launcher) target(in instance.Instance) install.Target {
+	t := install.Target{Minecraft: in.Minecraft, Loader: loader.Kind(in.Loader), LoaderVersion: in.LoaderVersion}
+	if j := in.ClientJar; j != nil {
+		t.ClientJar = &install.ClientJar{Path: l.cfg.Instances.ClientJarPath(in.ID), SHA1: j.SHA1, Size: j.Size}
+	}
+	return t
 }
 
 // subtitle names what an instance plays: "Fabric 0.16.10 for Minecraft 1.21.1".
@@ -685,7 +689,7 @@ func (l *Launcher) Repair(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 	meta := tasks.Meta{Title: inst.Name, Subtitle: "Repairing game files", Art: tasks.Art{Background: inst.Art.Background, Initial: inst.Art.Initial}, Kind: "repair"}
-	spec, err := l.Prepare(ctx, target(inst), l.cfg.Instances.GameDir(id), meta, true)
+	spec, err := l.Prepare(ctx, l.target(inst), l.cfg.Instances.GameDir(id), meta, true)
 	if err != nil || spec == nil {
 		return "", err
 	}

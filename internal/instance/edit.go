@@ -65,7 +65,7 @@ func (s *Store) SetTags(id string, tags []string) (Instance, error) {
 // SetVersionOptions stores the two Version-tab switches.
 func (s *Store) SetVersionOptions(id string, keepLoaderUpdated, followLatest bool) (Instance, error) {
 	return s.Update(id, func(in *Instance) error {
-		in.KeepLoaderUpdated, in.FollowLatest = keepLoaderUpdated, followLatest
+		in.KeepLoaderUpdated, in.FollowLatest = keepLoaderUpdated, followLatest && in.ClientJar == nil
 		return nil
 	})
 }

@@ -89,6 +89,9 @@ func (l *Launcher) sandboxRun(sp *spec, argv []string) sandbox.Run {
 		Read:     append(slices.Clone(l.cfg.StoreRead), sandbox.JavaRoot(sp.rt.Path)),
 		GameMode: sp.eff.Performance.GameMode && runtime.GOOS == "linux",
 	}
+	if sp.inst.ClientJar != nil {
+		r.Read = append(r.Read, l.cfg.Instances.ClientJarPath(id))
+	}
 	if sp.view != nil {
 		r.Mounts = sp.view.Mounts()
 	}

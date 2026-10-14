@@ -142,6 +142,9 @@ type Instance struct {
 	Shortcuts []Shortcut `json:"shortcuts,omitempty"`
 	// Export is what the last pack export was called, offered again next time.
 	Export *ExportMeta `json:"export,omitempty"`
+	// ClientJar is a custom client jar that runs in place of vanilla's (nil:
+	// vanilla). Such an instance never has a mod loader.
+	ClientJar *ClientJar `json:"clientJar,omitempty"`
 }
 
 // ExportMeta names an exported pack (Prism's export fields).
@@ -331,6 +334,9 @@ func normalize(in Instance) Instance {
 	}
 	if !iconRe.MatchString(in.Icon) {
 		in.Icon = ""
+	}
+	if in.ClientJar = in.ClientJar.normalize(); in.ClientJar != nil {
+		in.Loader, in.LoaderVersion, in.FollowLatest = "", "", false
 	}
 	in.Sync, in.Shares = in.Sync.normalize(in.Shares), nil
 	in.Sandbox = in.Sandbox.Normalize()
@@ -600,6 +606,9 @@ type CreateRequest struct {
 	// Shares are the sync targets to join ("keys" for the shared keybinds);
 	// the caller joins them once the instance exists (syncing.JoinAll).
 	Shares []string `json:"shares"`
+	// ClientJar is the sha1 of a picked client jar ("" for vanilla); the
+	// caller places it once the instance exists (SetClientJar).
+	ClientJar string `json:"clientJar"`
 }
 
 // Create makes a new instance folder. The Minecraft version and loader build
@@ -616,6 +625,9 @@ func (s *Store) Create(req CreateRequest) (Instance, error) {
 	}
 	if err := checkLoader(req.Loader, req.LoaderVersion); err != nil {
 		return Instance{}, err
+	}
+	if req.ClientJar != "" && req.Loader != "" {
+		return Instance{}, ErrClientJarLocked
 	}
 	if !versionRe.MatchString(req.Minecraft) {
 		return Instance{}, fmt.Errorf("%w: version", ErrInvalidSettings)
@@ -748,6 +760,9 @@ func (s *Store) SetVersion(id, minecraft, kind, ver string) (Instance, error) {
 		return Instance{}, err
 	}
 	return s.Update(id, func(in *Instance) error {
+		if in.ClientJar != nil && (minecraft != in.Minecraft || kind != "") {
+			return ErrClientJarLocked
+		}
 		in.Minecraft, in.Loader, in.LoaderVersion = minecraft, kind, ver
 		return nil
 	})
