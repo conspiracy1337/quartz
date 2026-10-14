@@ -15,6 +15,7 @@ import (
 	"quartz/internal/core/procx"
 	"quartz/internal/core/shlex"
 	"quartz/internal/core/sysinfo"
+	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
 	"quartz/internal/sandbox"
@@ -124,6 +125,21 @@ func systemLibraries(eff instance.Effective) map[string]string {
 	}
 	return libs
 }
+
+// legacyLWJGLArgs keeps LWJGL 2 (Minecraft before 1.13) from crashing at
+// start on Linux without the xrandr program, which it runs to list display
+// modes (Prism does the same).
+func legacyLWJGLArgs(res *install.Resolved) []string {
+	if runtime.GOOS != "linux" || !slices.ContainsFunc(res.Classpath, isLWJGL2) {
+		return nil
+	}
+	if _, err := exec.LookPath("xrandr"); err == nil {
+		return nil
+	}
+	return []string{"-DLWJGL_DISABLE_XRANDR=true"}
+}
+
+func isLWJGL2(jar string) bool { return strings.HasPrefix(filepath.Base(jar), "lwjgl-2.") }
 
 // nativeLibraryArgs points LWJGL at the system's GLFW and OpenAL (Linux).
 func nativeLibraryArgs(eff instance.Effective) []string {

@@ -149,8 +149,8 @@ func (l *Launcher) command(sp *spec) (procx.Spec, []byte, string, error) {
 	}
 	args = append(args, user...)
 	args = append(args, nativeLibraryArgs(eff)...)
-	// Defence in depth against Log4Shell on old versions, whatever the config says.
-	args = append(args, "-Dlog4j2.formatMsgNoLookups=true")
+	args = append(args, java.Properties...)
+	args = append(args, legacyLWJGLArgs(res)...)
 	if res.LogConfig != "" && res.LogArgument != "" {
 		args = append(args, mojang.Vars{"path": res.LogConfig}.Expand(res.LogArgument, unknown))
 	}

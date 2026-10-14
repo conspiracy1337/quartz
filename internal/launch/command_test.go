@@ -3,7 +3,9 @@ package launch
 import (
 	"encoding/base64"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -58,7 +60,7 @@ func TestCommandKeepsTokenOffTheCommandLine(t *testing.T) {
 	if strings.Contains(argv, "SECRET_TOKEN") || strings.Contains(argv, "Steve") {
 		t.Fatalf("game arguments leaked onto the command line: %s", argv)
 	}
-	for _, want := range []string{"-Xms1024M", "-Xmx4096M", "-Dfoo=a b", "-XX:+UseZGC", "-Dlog4j2.formatMsgNoLookups=true", "-Dlog4j.configurationFile=/store/logconfigs/client-1.12.xml", "wrapper.Main"} {
+	for _, want := range []string{"-Xms1024M", "-Xmx4096M", "-Dfoo=a b", "-XX:+UseZGC", "-Dlog4j2.formatMsgNoLookups=true", "-Dstdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8", "-Dlog4j.configurationFile=/store/logconfigs/client-1.12.xml", "wrapper.Main"} {
 		if !slices.Contains(cmd.Argv, want) {
 			t.Errorf("missing %q in %v", want, cmd.Argv)
 		}
@@ -119,5 +121,23 @@ func TestBeforeLaunchCommandFailureStopsTheLaunch(t *testing.T) {
 	}
 	if err := runCommand(t.Context(), `/bin/sh -c "exit 0"`, t.TempDir(), nil, os.Environ()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// LWJGL 2 runs xrandr to list display modes and crashes without it on Linux.
+func TestLegacyLWJGLArgs(t *testing.T) {
+	modern := &install.Resolved{Classpath: []string{"/l/org/lwjgl/lwjgl/3.3.3/lwjgl-3.3.3.jar"}}
+	old := &install.Resolved{Classpath: []string{"/l/org/lwjgl/lwjgl/lwjgl/2.9.4-nightly-20150209/lwjgl-2.9.4-nightly-20150209.jar"}}
+	if a := legacyLWJGLArgs(modern); a != nil {
+		t.Fatalf("LWJGL 3 got %v", a)
+	}
+	_, err := exec.LookPath("xrandr")
+	want := runtime.GOOS == "linux" && err != nil
+	if got := slices.Contains(legacyLWJGLArgs(old), "-DLWJGL_DISABLE_XRANDR=true"); got != want {
+		t.Fatalf("LWJGL 2: %v, want %v", got, want)
+	}
+	t.Setenv("PATH", t.TempDir())
+	if runtime.GOOS == "linux" && !slices.Contains(legacyLWJGLArgs(old), "-DLWJGL_DISABLE_XRANDR=true") {
+		t.Fatal("no xrandr on PATH, no flag")
 	}
 }

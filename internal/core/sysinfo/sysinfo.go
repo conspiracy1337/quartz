@@ -7,6 +7,9 @@ package sysinfo
 type Memory struct {
 	Total     uint64 `json:"total"`
 	Available uint64 `json:"available"`
+	// Pressure is set where the system reports memory pressure instead of a
+	// meaningful free figure (macOS, which keeps "free" memory near zero).
+	Pressure bool `json:"-"`
 }
 
 // ReadMemory returns the current memory figures.
