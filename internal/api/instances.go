@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"quartz/internal/content"
+	"quartz/internal/content/store"
 	"quartz/internal/core/events"
 	"quartz/internal/core/procx"
 	"quartz/internal/core/sysinfo"
@@ -51,6 +53,8 @@ type InstanceDeps struct {
 	Follow *follow.Checker
 	// Opens shows toasts for work that ends after the call returns; nil in tests.
 	Opens *Opens
+	// Blobs holds picked client jars until an instance takes them; nil in tests.
+	Blobs *store.Store
 }
 
 // Counter counts one kind of thing an instance has.
@@ -60,6 +64,9 @@ type Counter interface{ Count(id string) int }
 type Instances struct {
 	ctx *Ctx
 	d   InstanceDeps
+
+	jarMu sync.Mutex
+	jars  map[string]ClientJarPick // checked by ChooseClientJar, by sha1
 }
 
 func NewInstances(ctx *Ctx, d InstanceDeps) *Instances { return &Instances{ctx: ctx, d: d} }
@@ -87,6 +94,8 @@ type InstanceSummary struct {
 	Created     int64        `json:"created"`              // unix ms
 	PlaytimeMin int          `json:"playtimeMin"`
 	Running     bool         `json:"running"`
+	// ClientJar is the custom client jar it runs in place of vanilla's.
+	ClientJar *ClientJarRef `json:"clientJar,omitempty"`
 }
 
 // MemoryRange is in MB.
@@ -154,7 +163,7 @@ func (s *Instances) summary(in instance.Instance) InstanceSummary {
 	v := InstanceSummary{
 		ID: in.ID, Name: in.Name, Art: in.Art, Icon: in.Icon, Minecraft: in.Minecraft, Kind: "vanilla",
 		Group: in.Group, Tags: in.Tags, PlaytimeMin: in.PlaytimeMin, Running: s.d.Running(in.ID), Created: in.Created.UnixMilli(),
-		HasServers: s.d.Servers != nil && s.d.Servers.Count(in.ID) > 0,
+		HasServers: s.d.Servers != nil && s.d.Servers.Count(in.ID) > 0, ClientJar: clientJarRef(in),
 	}
 	if v.Tags == nil {
 		v.Tags = []string{}
@@ -285,7 +294,20 @@ func (s *Instances) Create(req instance.CreateRequest) (InstanceView, error) {
 	if len(req.Shares) > 32 {
 		return InstanceView{}, fmt.Errorf("%w: shares", instance.ErrInvalidSettings)
 	}
+	var jar ClientJarPick
+	if req.ClientJar != "" {
+		if req.Loader != "" {
+			return InstanceView{}, instance.ErrClientJarLocked
+		}
+		var err error
+		if jar, err = s.pickedJar(ctx, req.ClientJar, req.Minecraft); err != nil {
+			return InstanceView{}, err
+		}
+	}
 	in, err := s.d.Store.Create(req)
+	if err == nil && req.ClientJar != "" {
+		in, err = s.attachJar(in, jar)
+	}
 	if err == nil && s.d.Syncing != nil && len(req.Shares) > 0 {
 		// A new instance has nothing to merge in; a target that can't be
 		// joined just stays off for it.
@@ -489,6 +511,12 @@ func (s *Instances) SetVersion(id, minecraft, kind, loaderVersion string) (Insta
 	}
 	if kind == "none" {
 		kind = ""
+	}
+	// Refused before the mods' job starts, not only when it applies.
+	if in, err := s.d.Store.Get(id); err != nil {
+		return InstanceView{}, err
+	} else if in.ClientJar != nil && (minecraft != in.Minecraft || kind != "") {
+		return InstanceView{}, instance.ErrClientJarLocked
 	}
 	if kind != "" {
 		v, err := s.loaderBuild(ctx, kind, minecraft, loaderVersion)

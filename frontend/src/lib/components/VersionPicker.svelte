@@ -8,8 +8,9 @@
 
   /** Version families on the left, that family's releases on the right. Both lists share one
       fixed height and scroll, so their edges line up and nothing moves when you pick. */
-  interface Props { current?: string; onpick?: (id: string) => void }
-  let { current = '', onpick }: Props = $props();
+  /** `start` opens on that exact release (snapshots too) and marks it with `startBadge`. */
+  interface Props { current?: string; start?: string; startBadge?: string; onpick?: (id: string) => void }
+  let { current = '', start = '', startBadge = '', onpick }: Props = $props();
 
   // Retry reloads after an offline failure (reading tries re-runs the query).
   let tries = $state(0);
@@ -18,11 +19,23 @@
   let v = $state(0);
   let snapshots = $state(false);
 
-  // Once the list arrives, start on the newest release of the family that holds `current`
-  // (or of the newest family) and report it, so the form never shows one version and submits another.
+  // Once the list arrives, start on `start`, else on the newest release of the family that holds
+  // `current` (or of the newest family), and report it, so the form never shows one version and submits another.
+  // A later `start` (a picked jar naming its version) moves the pick again; clearing it keeps the pick.
+  let started = '';
   $effect.pre(() => {
     const d = families.data;
-    if (!d?.length || m >= 0) return;
+    if (!start) started = '';
+    if (!d?.length || (m >= 0 && (!start || start === started))) return;
+    started = start;
+    const si = start ? d.findIndex((f) => f.releases.some((r) => r.id === start) || f.snapshots.some((r) => r.id === start)) : -1;
+    if (si >= 0) {
+      const f = d[si]!;
+      const snap = !f.releases.some((r) => r.id === start);
+      untrack(() => choose(si, [...f.releases, ...(snap ? f.snapshots : [])].findIndex((r) => r.id === start), snap));
+      return;
+    }
+    if (m >= 0) return;
     const fi = Math.max(0, d.findIndex((f) => f.releases.some((r) => r.id === current)));
     untrack(() => choose(fi, 0, false));
   });
@@ -64,7 +77,7 @@
       {#each list as r, i (r.id)}
         <button class="prow min" class:on={vi === i} onclick={() => choose(m, i, snapshots)} role="radio" aria-checked={vi === i}>
           <span class="radio" class:on={vi === i} aria-hidden="true"></span>
-          <span style="display: flex; gap: 8px; align-items: center; min-width: 0"><span class="mono">{r.id}</span>{#if current !== '' && r.id === current}<span class="badge">Current</span>{/if}{#if r.snapshot}<span class="badge badge-warn">Snapshot</span>{/if}</span>
+          <span style="display: flex; gap: 8px; align-items: center; min-width: 0"><span class="mono">{r.id}</span>{#if current !== '' && r.id === current}<span class="badge">Current</span>{/if}{#if startBadge && r.id === start}<span class="badge badge-accent">{startBadge}</span>{/if}{#if r.snapshot}<span class="badge badge-warn">Snapshot</span>{/if}</span>
           <span class="small faint">Java {r.java}</span>
           <span class="small faint tnum vp-date">{shortDate(r.released)}</span>
         </button>

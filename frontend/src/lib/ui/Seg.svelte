@@ -2,7 +2,8 @@
   /** Segmented control. `fill` stretches it and its buttons to the full width; `center` centres
    *  their labels (New instance's loaders) instead of starting them at the left (Add account's tabs). */
   interface Props {
-    options: readonly { value: T; label: string }[];
+    /** A disabled option dims like a disabled button and can't be picked. */
+    options: readonly { value: T; label: string; disabled?: boolean }[];
     value: T;
     label?: string;
     fill?: boolean;
@@ -25,6 +26,7 @@
       class:on={value === o.value}
       role="radio"
       aria-checked={value === o.value}
+      disabled={o.disabled}
       style={fill ? `flex: 1 1 0${center ? '; justify-content: center' : ''}` : undefined}
       onclick={() => pick(o.value)}>{o.label}</button>
   {/each}

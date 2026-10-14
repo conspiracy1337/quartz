@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/linkx"
 )
 
 // Rebuilt are top-level folders of a game folder that the launcher or the
@@ -70,6 +71,11 @@ func (s *Store) Duplicate(ctx context.Context, id string, place func(rel, dst st
 			return Instance{}, err
 		}
 		if err := fsx.AtomicWrite(filepath.Join(stage, name), data, fsx.FilePerm); err != nil {
+			return Instance{}, err
+		}
+	}
+	if src.ClientJar != nil {
+		if _, err := linkx.Place(s.ClientJarPath(id), filepath.Join(stage, clientJarFile), linkx.Options{NoHardlink: true, Perm: 0o600}); err != nil {
 			return Instance{}, err
 		}
 	}

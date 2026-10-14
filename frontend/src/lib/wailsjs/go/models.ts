@@ -155,6 +155,38 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class ClientJarPick {
+	    sha1: string;
+	    name: string;
+	    size: number;
+	    minecraft: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClientJarPick(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sha1 = source["sha1"];
+	        this.name = source["name"];
+	        this.size = source["size"];
+	        this.minecraft = source["minecraft"];
+	    }
+	}
+	export class ClientJarRef {
+	    name: string;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClientJarRef(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.size = source["size"];
+	    }
+	}
 	export class ExistingPack {
 	    id: string;
 	    name: string;
@@ -268,6 +300,7 @@ export namespace api {
 	    created: number;
 	    playtimeMin: number;
 	    running: boolean;
+	    clientJar?: ClientJarRef;
 	
 	    static createFrom(source: any = {}) {
 	        return new InstanceSummary(source);
@@ -289,6 +322,7 @@ export namespace api {
 	        this.created = source["created"];
 	        this.playtimeMin = source["playtimeMin"];
 	        this.running = source["running"];
+	        this.clientJar = this.convertValues(source["clientJar"], ClientJarRef);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -354,6 +388,7 @@ export namespace api {
 	    created: number;
 	    playtimeMin: number;
 	    running: boolean;
+	    clientJar?: ClientJarRef;
 	    sandboxed: boolean;
 	    counts: Record<string, number>;
 	    java: string;
@@ -393,6 +428,7 @@ export namespace api {
 	        this.created = source["created"];
 	        this.playtimeMin = source["playtimeMin"];
 	        this.running = source["running"];
+	        this.clientJar = this.convertValues(source["clientJar"], ClientJarRef);
 	        this.sandboxed = source["sandboxed"];
 	        this.counts = source["counts"];
 	        this.java = source["java"];
@@ -1969,6 +2005,7 @@ export namespace instance {
 	    group: string;
 	    sandbox: boolean;
 	    shares: string[];
+	    clientJar: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new CreateRequest(source);
@@ -1985,6 +2022,7 @@ export namespace instance {
 	        this.group = source["group"];
 	        this.sandbox = source["sandbox"];
 	        this.shares = source["shares"];
+	        this.clientJar = source["clientJar"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

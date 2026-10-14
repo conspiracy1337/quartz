@@ -52,6 +52,34 @@ func (d *Downloader) Ready(it Item) bool {
 	return d.ver.Has(it.Dest, size, sum)
 }
 
+// Verify checks a file the launcher holds but can't download again against
+// its sum, hashing it only when it changed since the last check.
+func (d *Downloader) Verify(it Item) error {
+	if d.Ready(it) {
+		return nil
+	}
+	size, sum := it.final()
+	if sum.IsZero() {
+		return fmt.Errorf("download: no checksum to verify %s against", filepath.Base(it.Dest))
+	}
+	info, err := os.Stat(it.Dest)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || (size > 0 && info.Size() != size) {
+		return fmt.Errorf("%w (%s)", hashx.ErrMismatch, filepath.Base(it.Dest))
+	}
+	got, err := hashx.File(it.Dest, sum.Algo)
+	if err != nil {
+		return err
+	}
+	if err := sum.Check(got); err != nil {
+		return err
+	}
+	d.ver.Add(it.Dest, sum)
+	return nil
+}
+
 // Forget makes the next Fetch of it verify the file again (used by Repair).
 func (d *Downloader) Forget(it Item) { d.ver.Forget(it.Dest) }
 
