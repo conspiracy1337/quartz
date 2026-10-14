@@ -17,7 +17,7 @@
   import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import IconDialog from '$lib/overlays/IconDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
-  import type { Art } from '$lib/api/types';
+  import type { Art, ClientJarPick } from '$lib/api/types';
 
   // The loader segment, in the design's order. Fabric and Quilt name their newest stable
   // build; NeoForge and Forge keep the design's wording.
@@ -29,10 +29,12 @@
     { value: 4, kind: 'forge', label: 'Forge', short: 'Forge' },
   ] as const;
 
-  // The name follows the picked version until the user types their own.
+  // A custom client jar runs without a mod loader, on the version it was built from.
+  let jar = $state<ClientJarPick | null>(null);
+  // The name follows the picked jar or version until the user types their own.
   let typed = $state<string | null>(null);
   let version = $state('');
-  const name = $derived(typed ?? version);
+  const name = $derived(typed ?? (jar ? jar.name.replace(/\.jar$/i, '').slice(0, 64) : version));
   let loader = $state(1); // Fabric, as the design starts
   let creating = $state(false);
   let more = $state(false);
@@ -47,6 +49,7 @@
   let icon = $state('');
   let picking = $state(false);
   const l = $derived(LOADERS[loader]!);
+  const loaderOptions = $derived(LOADERS.map((o) => ({ ...o, disabled: !!jar && o.kind !== 'none' })));
   const options = query(() => (version ? api.versions.loaders(version) : Promise.resolve([])));
   const groups = query(() => api.instances.groups());
   const opt = $derived(options.data?.find((o) => o.kind === l.kind));
@@ -72,6 +75,17 @@
     }
   }
 
+  async function pickJar() {
+    try {
+      const p = await api.instances.chooseClientJar();
+      if (!p.sha1) return;
+      jar = p;
+      loader = 0;
+    } catch (e) {
+      session.fail('Custom jar', e);
+    }
+  }
+
   async function create() {
     creating = true;
     try {
@@ -79,6 +93,7 @@
       const made = await api.instances.create({
         name: n, art: { background: art.background, initial }, icon, minecraft: version,
         loader: l.kind === 'none' ? '' : l.kind, loaderVersion, group: group === 'none' ? '' : group, sandbox, shares: NEW_INSTANCE_SHARES.filter((_, i) => shares[i]).map((s) => s.id),
+        clientJar: jar?.sha1 ?? '',
       });
       revs.bump('instances');
       revs.bump('sync');
@@ -98,10 +113,10 @@
       <button class="ico" style="width: 56px; height: 56px; border-radius: 12px; background: {art.background}; border: 0; font-size: 22px" aria-label="Change icon" onclick={() => (picking = true)}><InstanceMark art={{ background: art.background, initial }} {icon} /></button>
       <label class="field"><span class="sr">Name</span><input class="name" value={name} oninput={(e) => (typed = e.currentTarget.value)} maxlength="64" /></label>
     </div>
-    <div class="field"><span class="field-label">Minecraft version</span><VersionPicker onpick={(v) => (version = v)} /></div>
+    <div class="field"><span class="field-label">Minecraft version</span><VersionPicker start={jar?.minecraft ?? ''} startBadge="From jar" onpick={(v) => (version = v)} /></div>
     <div class="field"><span class="field-label">Mod loader</span>
-      <Seg options={LOADERS} bind:value={loader} label="Mod loader" fill center />
-      <span class="small faint">{line} You can change it later under Version and loader.</span>
+      <Seg options={loaderOptions} bind:value={loader} label="Mod loader" fill center />
+      <span class="small faint">{jar ? 'Custom jars run without a mod loader.' : `${line} You can change it later under Version and loader.`}</span>
     </div>
     <section class="field" aria-label="Share with other instances">
       <span class="field-label">Share with other instances</span>
@@ -118,10 +133,14 @@
         <Setting title="Memory"><span class="muted">{memory}</span></Setting>
         <div class="divider"></div>
         <Setting title="Sandbox" desc="Recommended for mods from unknown sources."><Toggle bind:on={sandbox} label="Sandbox" /></Setting>
+        <div class="divider"></div>
+        <Setting title="Game jar" oneLine desc={jar ? `${jar.name} · ${bytes(jar.size)}${jar.minecraft ? `, built for ${jar.minecraft}` : ''}` : 'Vanilla. Pick a modified client jar to use instead.'}>
+          {#if jar}<button class="btn btn-sm btn-ghost" onclick={() => (jar = null)}>Remove</button>{:else}<button class="btn btn-sm" onclick={pickJar}>Choose jar</button>{/if}
+        </Setting>
       </div>
     {/if}
     <button class="btn btn-accent btn-lg btn-block" disabled={creating || !name.trim() || !version || noBuild} onclick={create}>Create</button>
-    <p class="small faint" style="margin: 0; text-align: center">Minecraft {version}, {l.short}. {download}</p>
+    <p class="small faint" style="margin: 0; text-align: center">Minecraft {version}{jar ? ` with ${jar.name}, no mod loader` : `, ${l.short}`}. {download}</p>
   </div>
 </div>
 

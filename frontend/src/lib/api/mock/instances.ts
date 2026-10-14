@@ -1,4 +1,4 @@
-import type { ActivityEvent, Art, CreateInstance, Group, Instance, InstanceSettings, Loader, PendingUpdate, TrashEntry } from '../types';
+import type { ActivityEvent, Art, ClientJarPick, CreateInstance, Group, Instance, InstanceSettings, Loader, PendingUpdate, TrashEntry } from '../types';
 import { daysAgo, date } from './time';
 
 type Seed = [id: string, name: string, initial: string, tint: string, mc: string, loader: Omit<NonNullable<Instance['loader']>, 'id'> | undefined, kind: Instance['kind'], lastDays: number | undefined, hours: number];
@@ -70,6 +70,9 @@ const edit = (id: string, fn: (i: Instance) => void): Instance => {
   return inst;
 };
 
+/** What the preview's jar dialog "picks". */
+export const mockClientJar: ClientJarPick = { sha1: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', name: 'optifine-client.jar', size: 25_270_000, minecraft: '1.21.1' };
+
 /** Preview stand-in for Go's instance store: changes live until the page reloads. */
 export const mockInstances = {
   create: (req: CreateInstance): Instance => {
@@ -82,6 +85,8 @@ export const mockInstances = {
     delete inst.lastPlayed;
     if (req.loader && req.loader !== 'none') inst.loader = { kind: req.loader as Loader, version: req.loaderVersion || 'latest', id: req.loaderVersion || 'latest' };
     else delete inst.loader;
+    if (req.clientJar) inst.clientJar = { name: mockClientJar.name, size: mockClientJar.size };
+    else delete inst.clientJar;
     instances.unshift(inst);
     return inst;
   },
@@ -110,6 +115,7 @@ export const mockInstances = {
     else delete i.loader;
     i.kind = i.loader ? 'modded' : 'vanilla';
   }),
+  removeClientJar: (id: string) => edit(id, (i) => { delete i.clientJar; }),
   setVersionOptions: (id: string, keep: boolean, follow: boolean) => edit(id, (i) => { i.keepLoaderUpdated = keep; i.followLatest = follow; }),
   trash: (id: string): TrashEntry => {
     const at = instances.findIndex((i) => i.id === id);

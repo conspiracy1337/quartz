@@ -113,6 +113,7 @@ a{color:inherit}
 .seg button{height:26px;padding:0 10px;border:0;border-radius:4px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .seg button.on{background:var(--hover);color:var(--text)}
 .seg button:hover{color:var(--text)}
+.seg button:disabled{opacity:.45;cursor:default;color:var(--muted)}
 
 /* ---------- page header: a title row over a tab strip, built like the instance header ---------- */
 .phead{flex:0 0 auto;padding:20px 28px 0;background:var(--bg)}

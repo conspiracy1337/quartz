@@ -26,7 +26,14 @@ export interface InstanceSummary {
   created: number;
   playtimeMin: number;
   running: boolean;
+  /** A custom client jar it runs in place of vanilla's. */
+  clientJar?: ClientJarRef;
 }
+
+/** An instance's custom client jar, as its pages show it. */
+export interface ClientJarRef { name: string; size: number }
+/** A client jar picked for New instance: checked and stored; `minecraft` is the version it says it was built from ("" when it doesn't say). */
+export interface ClientJarPick extends ClientJarRef { sha1: string; minecraft: string }
 
 export interface EnvVar { name: string; value: string }
 /** Per-instance settings (mirrors Go's instance.Settings). */
@@ -40,7 +47,7 @@ export interface InstanceSettings {
   account?: string;
 }
 /** What the New instance screen sends; an empty loaderVersion means the newest stable build. */
-export interface CreateInstance { name: string; art: Art; icon: string; minecraft: string; loader: string; loaderVersion: string; group: string; sandbox: boolean; shares: string[] }
+export interface CreateInstance { name: string; art: Art; icon: string; minecraft: string; loader: string; loaderVersion: string; group: string; sandbox: boolean; shares: string[]; clientJar: string }
 export interface Instance extends InstanceSummary {
   sandboxed: boolean;
   /** The sandbox's rules: standard | strict | custom. */

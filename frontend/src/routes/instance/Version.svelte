@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
-  import { fullDate } from '$lib/format';
+  import { bytes, fullDate } from '$lib/format';
   import { switchVersion } from '$lib/instanceActions';
   import { LOADER_NAMES, LOADER_PRODUCTS } from '$lib/labels';
   import { prefs } from '$lib/prefs.svelte';
@@ -72,12 +72,16 @@
 <div class="scroll">
   <div class="page page-narrow" style="gap: 20px; padding-top: 18px">
     <section class="card" aria-label="Components">
-      <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="brand" size={20} /></span><span><span class="h3" style="display: block">Minecraft {i.minecraft}</span><span class="small faint" style="display: block">{mcLine}</span></span><a href={to('minecraft')} class="btn btn-sm">Change</a></div>
+      <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="brand" size={20} /></span><span><span class="h3" style="display: block">Minecraft {i.minecraft}</span><span class="small faint" style="display: block">{mcLine}</span></span>{#if i.clientJar}<button class="btn btn-sm" disabled title="Remove the custom jar to change the version">Change</button>{:else}<a href={to('minecraft')} class="btn btn-sm">Change</a>{/if}</div>
+      {#if i.clientJar}
+        <div class="divider"></div>
+        <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="file" size={20} sw={1.8} /></span><span style="min-width: 0"><span class="h3 trunc" style="display: block">{i.clientJar.name}</span><span class="small faint" style="display: block">Custom jar, {bytes(i.clientJar.size)}. Runs in place of the vanilla game jar.</span></span><button class="btn btn-sm btn-ghost" onclick={() => edit(() => api.instances.removeClientJar(i.id), 'Custom jar')}>Remove</button></div>
+      {/if}
       <div class="divider"></div>
       {#if i.loader}
         <div class="comp">{#if i.loader.kind === 'fabric'}<span class="cbox" style="background: #dbc18e; color: #0a0a0b" aria-hidden="true"><Icon name="fabric" size={20} sw={1.8} /></span>{:else}<span class="cbox lk" aria-hidden="true">{LOADER_NAMES[i.loader.kind].charAt(0)}</span>{/if}<span><span class="h3" style="display: block">{LOADER_PRODUCTS[i.loader.kind]} {i.loader.version}</span><span class="small faint" style="display: block">{loaderLine}</span></span><span style="display: flex; gap: 6px"><button class="btn btn-sm btn-ghost" onclick={() => switchVersion(i, i.minecraft, '', '', 'Vanilla')}>Remove</button><a href={to('loader')} class="btn btn-sm">Change</a></span></div>
       {:else}
-        <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="plus" size={20} sw={1.8} /></span><span><span class="h3" style="display: block">No mod loader</span><span class="small faint" style="display: block">Vanilla. Add a loader to use mods.</span></span><a href={to('loader')} class="btn btn-sm">Add</a></div>
+        <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="plus" size={20} sw={1.8} /></span><span><span class="h3" style="display: block">No mod loader</span><span class="small faint" style="display: block">{i.clientJar ? 'Custom jars run without a mod loader.' : 'Vanilla. Add a loader to use mods.'}</span></span>{#if i.clientJar}<button class="btn btn-sm" disabled>Add</button>{:else}<a href={to('loader')} class="btn btn-sm">Add</a>{/if}</div>
       {/if}
       <div class="divider"></div>
       <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="java" size={20} /></span><span><span class="h3" style="display: block">{java.title}</span><span class="small faint" style="display: block">{java.line}</span></span><a href={href({ name: 'settings', tab: 'java' })} class="btn btn-sm">Manage</a></div>
@@ -85,9 +89,9 @@
     <section class="card" aria-label="Updates">
       <Setting title="Keep the loader up to date" desc="Installs new stable {i.loader ? LOADER_PRODUCTS[i.loader.kind] : 'loader'} versions when you launch."><Toggle on={i.keepLoaderUpdated} label="Keep the loader up to date" onchange={(v) => edit(() => api.instances.setVersionOptions(i.id, v, i.followLatest), 'Version settings')} /></Setting>
       <div class="divider"></div>
-      <Setting title="Follow the latest Minecraft release" desc="Moves to new releases once every mod has a matching version."><Toggle on={i.followLatest} label="Follow the latest Minecraft release" onchange={(v) => edit(() => api.instances.setVersionOptions(i.id, i.keepLoaderUpdated, v), 'Version settings')} /></Setting>
+      <Setting title="Follow the latest Minecraft release" desc={i.clientJar ? 'A custom jar stays on the version it was built for.' : 'Moves to new releases once every mod has a matching version.'}><Toggle on={i.followLatest} disabled={!!i.clientJar} label="Follow the latest Minecraft release" onchange={(v) => edit(() => api.instances.setVersionOptions(i.id, i.keepLoaderUpdated, v), 'Version settings')} /></Setting>
     </section>
-    {#if newer}
+    {#if newer && !i.clientJar}
       <section class="card card-pad" aria-label="Available" style="display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: center">
         <span><span class="h3" style="display: block">Minecraft {newer.id} is available</span><span class="small faint" style="display: block">{compat.data ? `${compat.data.matching} of ${compat.data.total} mods already support it. We will check the rest before switching.` : 'Mods are checked before switching.'}</span></span>
         <a href={to('minecraft')} class="btn btn-accent">Check and switch</a>

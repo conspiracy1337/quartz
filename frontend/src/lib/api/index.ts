@@ -69,6 +69,10 @@ export const api = {
     setIcon: bridged(InstancesGo.SetIcon, inst.mockInstances.setIcon),
     /** A picture for an instance not created yet; "" when cancelled. */
     chooseIcon: bridged(InstancesGo.ChooseIcon, () => ''),
+    /** A modified client jar for an instance not created yet, checked and stored; sha1 "" when cancelled. */
+    chooseClientJar: bridged(InstancesGo.ChooseClientJar, () => inst.mockClientJar),
+    /** Puts the instance back on the vanilla client jar. */
+    removeClientJar: bridged(InstancesGo.RemoveClientJar, inst.mockInstances.removeClientJar),
     setNotes: bridged(InstancesGo.SetNotes, inst.mockInstances.setNotes),
     /** Joins or leaves a shared target (its own items merge in; leaving keeps a copy). */
     setSync: bridged(InstancesGo.SetSync, inst.mockInstances.setSync),
