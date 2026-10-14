@@ -155,10 +155,11 @@ func readMrpack(zr *archive.Reader) (*Pack, error) {
 			foreign++
 			continue
 		}
-		if f.Env != nil && f.Env.Client == "optional" {
+		optional := f.Env != nil && f.Env.Client == "optional"
+		if optional {
 			rel += ".disabled"
 		}
-		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, SHA512: sha512, Size: f.FileSize, URLs: urls})
+		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, SHA512: sha512, Size: f.FileSize, URLs: urls, Optional: optional})
 	}
 	if foreign > 0 {
 		p.Warnings = append(p.Warnings, fmt.Sprintf("%d %s from addresses Modrinth packs may not use %s left out", foreign, plural(foreign, "file"), were(foreign)))
@@ -285,7 +286,7 @@ func (r *Reader) resolveCurse(ctx context.Context, p *Pack, refs []cfRef) error 
 			rel += ".disabled"
 		}
 		f := File{Path: rel, SHA1: v.File.SHA1, Size: v.File.Size, Name: v.Number, Page: v.File.Page,
-			Project: modplatform.Key(modplatform.CurseForge, v.ProjectID), Version: v.Number}
+			Project: modplatform.Key(modplatform.CurseForge, v.ProjectID), Version: v.Number, Optional: ref.optional}
 		if v.File.URL != "" {
 			if !modplatform.ValidURL(v.File.URL) {
 				return fmt.Errorf("modpack: CurseForge gave an unexpected address for %s", name)

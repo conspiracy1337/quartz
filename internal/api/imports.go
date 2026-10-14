@@ -42,6 +42,8 @@ type ImportPreview struct {
 	Icon      string        `json:"icon,omitempty"`
 	Stats     modpack.Stats `json:"stats"`
 	Warnings  []string      `json:"warnings"`
+	// Optional are files the pack lets the player choose (off by default).
+	Optional []modpack.OptionalFile `json:"optional"`
 }
 
 // ErrBadLink is returned for links that are too long to be real.
@@ -56,7 +58,7 @@ func (im *Imports) preview(p *modpack.Pack, err error) (*ImportPreview, error) {
 		return nil, err
 	}
 	v := &ImportPreview{Token: im.d.Packs.Stage(p), Name: p.Name, Version: p.Version, Minecraft: p.Minecraft, Source: p.Format,
-		Stats: st, Warnings: append([]string{}, p.Warnings...)}
+		Stats: st, Warnings: append([]string{}, p.Warnings...), Optional: p.Optional()}
 	if k, err := loader.ParseKind(p.Loader); err == nil {
 		v.Loader = k.Name()
 	}
@@ -149,11 +151,12 @@ func (im *Imports) InspectProject(ref, source, version string) (*ImportPreview, 
 	return im.preview(im.d.Reader.Project(im.ctx.Get(), src, r.ID(src), version))
 }
 
-// Install creates the instance from an inspected pack and returns its job.
-func (im *Imports) Install(token, name string, art instance.Art) (string, error) {
+// Install creates the instance from an inspected pack, with the optional
+// files in enable turned on, and returns its job.
+func (im *Imports) Install(token, name string, art instance.Art, enable []string) (string, error) {
 	name = strings.TrimSpace(name)
-	if len(name) > 64 {
+	if len(name) > 64 || len(enable) > 20_000 {
 		return "", instance.ErrBadName
 	}
-	return im.d.Packs.Install(im.ctx.Get(), token, name, art)
+	return im.d.Packs.Install(im.ctx.Get(), token, name, art, enable)
 }

@@ -9,6 +9,7 @@
   import { tasks } from '$lib/tasks.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Tile from '$lib/ui/Tile.svelte';
+  import ToggleRow from '$lib/ui/ToggleRow.svelte';
 
   /** Opened with a pack from Browse, or empty to drop a file or paste a link. */
   interface Props { ref?: string | undefined; source?: Src | undefined; version?: string | undefined; open?: string | undefined }
@@ -19,6 +20,8 @@
   let link = $state(START);
   let name = $state('');
   let pack = $state<ImportPreview | null>(null);
+  /** The optional files picked (Prism asks the same; all off by default). */
+  let enable = $state<Record<string, boolean>>({});
   let inspecting = $state(false);
   let busy = $state(false);
   let seq = 0;
@@ -32,6 +35,7 @@
       if (p) {
         pack = p;
         name = p.name;
+        enable = {};
       }
     } catch (e) {
       if (n === seq) session.notify({ tone: 'error', subject: "Couldn't read that pack", text: errorText(e) });
@@ -83,7 +87,7 @@
     busy = true;
     try {
       // The tile is a tint and a letter; Go sets the pack's own icon when it has one.
-      const job = await api.imports.install(pack.token, name.trim(), artOf(name.trim()));
+      const job = await api.imports.install(pack.token, name.trim(), artOf(name.trim()), Object.keys(enable).filter((k) => enable[k]));
       if (job) await tasks.load();
       go({ name: 'downloads' });
     } catch (e) {
@@ -123,6 +127,13 @@
               <span class="small"><span style="display: block; font-weight: 500">{w.title}</span>{#if w.detail}<span class="faint" style="display: block">{w.detail}</span>{/if}</span>
             </div>
           {/each}
+          {#if pack.optional?.length}
+            <div class="field"><span class="field-label">Optional files</span>
+              <div class="card tgl-grid one">
+                {#each pack.optional as f (f.path)}<ToggleRow name={f.name} on={!!enable[f.path]} onchange={(v) => (enable[f.path] = v)} />{/each}
+              </div>
+            </div>
+          {/if}
           <label class="field"><span class="field-label">Instance name</span><span class="input"><input bind:value={name} maxlength="64" /></span></label>
           <button class="btn btn-accent btn-block" disabled={!name.trim() || busy} onclick={install}>Install</button>
         </div>

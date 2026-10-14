@@ -193,6 +193,9 @@ button.chip:hover{color:var(--text)}
 .tgl-grid > *{border-top:1px solid var(--line)}
 .tgl-grid > :nth-child(-n+2){border-top:0}
 .tgl-grid > :nth-child(odd){border-right:1px solid var(--line)}
+.tgl-grid.one{grid-template-columns:minmax(0,1fr)}
+.tgl-grid.one > *{border-right:0}
+.tgl-grid.one > :nth-child(2){border-top:1px solid var(--line)}
 @media (max-width:900px){
   .tgl-grid{grid-template-columns:minmax(0,1fr)}
   .tgl-grid > :nth-child(2){border-top:1px solid var(--line)}

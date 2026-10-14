@@ -130,14 +130,16 @@ func (s *Service) take(token string) (*Pack, error) {
 }
 
 // Install creates an instance from a staged pack as one job: the game and
-// loader, the pack's files, any manual downloads, then the instance itself.
+// loader, the pack's files (the optional ones in enable turned on), any
+// manual downloads, then the instance itself.
 // The instance appears only when everything is in place; a failed or
 // cancelled job leaves nothing behind.
-func (s *Service) Install(ctx context.Context, token, name string, art instance.Art) (string, error) {
+func (s *Service) Install(ctx context.Context, token, name string, art instance.Art, enable []string) (string, error) {
 	p, err := s.take(token)
 	if err != nil {
 		return "", err
 	}
+	p.Enable(enable)
 	target, err := s.target(ctx, p)
 	if err != nil {
 		return "", err

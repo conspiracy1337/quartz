@@ -22,6 +22,6 @@ export function InspectProject(arg1, arg2, arg3) {
   return window['go']['api']['Imports']['InspectProject'](arg1, arg2, arg3);
 }
 
-export function Install(arg1, arg2, arg3) {
-  return window['go']['api']['Imports']['Install'](arg1, arg2, arg3);
+export function Install(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['Imports']['Install'](arg1, arg2, arg3, arg4);
 }

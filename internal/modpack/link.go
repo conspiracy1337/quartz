@@ -333,7 +333,7 @@ func (r *Reader) ftb(ctx context.Context, id, version string) (*Pack, error) {
 		if f.Optional {
 			rel += ".disabled"
 		}
-		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, Size: f.Size, URLs: []string{f.URL}})
+		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, Size: f.Size, URLs: []string{f.URL}, Optional: f.Optional})
 	}
 	if err := r.resolveCurse(ctx, p, curse); err != nil {
 		return nil, err

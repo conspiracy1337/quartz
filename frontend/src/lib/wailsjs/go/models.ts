@@ -179,6 +179,7 @@ export namespace api {
 	    icon?: string;
 	    stats: modpack.Stats;
 	    warnings: string[];
+	    optional: modpack.OptionalFile[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ImportPreview(source);
@@ -195,6 +196,7 @@ export namespace api {
 	        this.icon = source["icon"];
 	        this.stats = this.convertValues(source["stats"], modpack.Stats);
 	        this.warnings = source["warnings"];
+	        this.optional = this.convertValues(source["optional"], modpack.OptionalFile);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2481,6 +2483,20 @@ export namespace modpack {
 		}
 	}
 	
+	export class OptionalFile {
+	    path: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OptionalFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.name = source["name"];
+	    }
+	}
 	export class PackVersion {
 	    id: string;
 	    number: string;

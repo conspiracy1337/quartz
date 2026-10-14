@@ -48,7 +48,7 @@ export const importsApi = {
   /** A pack the launcher was asked to open from outside (a link or a file), by its open id. */
   inspectOpened: bridged(ImportsGo.InspectOpened, (_openId: string): ImportPreview | null => misc.importPreview),
   /** Creates the instance as a job; resolves with its id. */
-  install: bridged(ImportsGo.Install, (_token: string, _name: string, _art: Art) => ''),
+  install: bridged(ImportsGo.Install, (_token: string, _name: string, _art: Art, _enable: string[]) => ''),
 };
 
 type GoDiff = Omit<ModpackDiff, 'rows'> & { rows: { name: string; version: string; kind: string }[] | null };

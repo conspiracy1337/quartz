@@ -42,6 +42,40 @@ type File struct {
 	Page   string   `json:"page,omitempty"` // blocked on CurseForge: where to get it by hand
 	// Extract unpacks the download into the game folder (Technic Solder mods).
 	Extract bool `json:"extract,omitempty"`
+	// Optional is a file the pack lets the player leave out; it installs
+	// turned off (Path ends in .disabled) unless the player picks it.
+	Optional bool `json:"optional,omitempty"`
+}
+
+// OptionalFile is a file the player may choose on the Import screen.
+type OptionalFile struct {
+	Path string `json:"path"` // as the game folder names it when turned on
+	Name string `json:"name"`
+}
+
+// Optional lists the files the pack lets the player choose.
+func (p *Pack) Optional() []OptionalFile {
+	out := []OptionalFile{}
+	for _, f := range p.Files {
+		if f.Optional {
+			on := strings.TrimSuffix(f.Path, ".disabled")
+			out = append(out, OptionalFile{Path: on, Name: orElse(f.Name, path.Base(on))})
+		}
+	}
+	return out
+}
+
+// Enable turns on the optional files at paths (as Optional names them).
+func (p *Pack) Enable(paths []string) {
+	want := map[string]bool{}
+	for _, on := range paths {
+		want[on] = true
+	}
+	for i, f := range p.Files {
+		if on := strings.TrimSuffix(f.Path, ".disabled"); f.Optional && want[on] {
+			p.Files[i].Path = on
+		}
+	}
 }
 
 // Blocked reports whether the file must be downloaded by hand.

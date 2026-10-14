@@ -13,4 +13,4 @@ export function InspectOpened(arg1:string):Promise<api.ImportPreview>;
 
 export function InspectProject(arg1:string,arg2:string,arg3:string):Promise<api.ImportPreview>;
 
-export function Install(arg1:string,arg2:string,arg3:instance.Art):Promise<string>;
+export function Install(arg1:string,arg2:string,arg3:instance.Art,arg4:Array<string>):Promise<string>;

@@ -86,6 +86,15 @@ func TestReadMrpack(t *testing.T) {
 	if len(p.Files) != 2 || p.Files[1].Path != "mods/extra.jar.disabled" || len(p.Warnings) != 1 {
 		t.Fatalf("files %+v warnings %v", p.Files, p.Warnings)
 	}
+	if opt := p.Optional(); len(opt) != 1 || opt[0] != (OptionalFile{Path: "mods/extra.jar", Name: "extra.jar"}) {
+		t.Fatalf("optional %+v", opt)
+	}
+	q := *p
+	q.Files = slices.Clone(p.Files)
+	q.Enable([]string{"mods/extra.jar", "mods/cobblemon.jar"})
+	if q.Files[1].Path != "mods/extra.jar" || q.Files[0].Path != "mods/cobblemon.jar" || p.Files[1].Path != "mods/extra.jar.disabled" {
+		t.Fatalf("enabled %+v", q.Files)
+	}
 	st, err := p.Stats()
 	if err != nil || st.Mods != 3 || st.Files != 2 || !slices.Contains(st.Foreign, "mods/hotfix.jar") || !slices.Contains(st.Foreign, "extra.jar.disabled") {
 		t.Fatalf("stats %+v %v", st, err)

@@ -356,6 +356,8 @@ export interface PackStats { mods: number; modBytes: number; files: number; fold
 export interface ImportPreview {
   token: string; name: string; version: string; minecraft: string; loader: string; source: string;
   icon?: string; art?: Art; stats: PackStats; warnings: string[];
+  /** Files the pack lets the player choose; they install turned off unless picked. */
+  optional: { path: string; name: string }[];
 }
 export interface PackUpdate { instanceId: string; name: string; version: string }
 export interface ManualItem { id: string; name: string; fileName: string; size: number; state: 'waiting' | 'fetching' | 'found' | 'skipped'; twin: boolean; page?: string; art?: Art }

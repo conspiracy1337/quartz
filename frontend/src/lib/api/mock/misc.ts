@@ -137,6 +137,7 @@ export const importPreview: ImportPreview = {
   art: { background: '#f2a25c', initial: 'C' },
   stats: { mods: 74, modBytes: 71_000_000, files: 212, folders: ['config'], blocked: 0, foreign: ['mods/cobblemon-extras-hotfix.jar'] },
   warnings: [],
+  optional: [],
 };
 
 /** DlgBlocked: three files waiting for a manual download. */

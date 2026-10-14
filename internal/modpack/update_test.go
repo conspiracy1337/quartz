@@ -123,7 +123,7 @@ func packUpdate(t *testing.T) (context.Context, *installEnv, instance.Instance, 
 		t.Fatal(err)
 	}
 	p.Origin = Origin{Source: "modrinth", Project: "PACK", Version: "V1"}
-	job, err := env.svc.Install(ctx, env.svc.Stage(p), "Pack", instance.Art{Background: "#3ecf8e"})
+	job, err := env.svc.Install(ctx, env.svc.Stage(p), "Pack", instance.Art{Background: "#3ecf8e"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
