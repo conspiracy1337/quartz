@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"quartz/internal/core/httpcache"
+	"quartz/internal/core/paths"
 	"quartz/internal/core/remoteimg"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/instance"
@@ -210,6 +211,10 @@ func articleURL(raw string) bool {
 	h := strings.ToLower(u.Hostname())
 	return h == "minecraft.net" || h == "www.minecraft.net"
 }
+
+// FolderProblem names what is wrong with where the data folder is ("bang",
+// "temp"), or "" (see paths.Problem).
+func (s *Service) FolderProblem() string { return paths.Problem(s.d.DataDir) }
 
 // Disk reports the free space on the data folder's drive.
 func (s *Service) Disk() Disk {

@@ -120,6 +120,8 @@ export const homeApi = {
   servers: (force = false) => revs.load('servers', bridged(() => HomeGo.Servers(force).then((l) => l.map(toMerged)), () => home.servers)),
   recentShots: () => revs.load('screenshots', bridged(() => HomeGo.RecentShots().then((l) => l.map(toShot)), () => home.recentShots)),
   disk: bridged(HomeGo.Disk, (): DiskSpace => ({ free: 120e9, low: false })),
+  /** What's wrong with where the data folder is: "bang" ("!" in the path), "temp", or "". */
+  folderProblem: bridged(HomeGo.FolderProblem, () => ''),
 };
 
 export const logFilesApi = {

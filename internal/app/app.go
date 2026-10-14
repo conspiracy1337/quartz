@@ -156,6 +156,8 @@ type app struct {
 	stopCheck func()
 	// crashed names the crash report the last run left ("" after a clean exit).
 	crashed string
+	// moveErr is why the data folder chosen in setup couldn't move (nil when it did).
+	moveErr error
 }
 
 // Run builds the app and blocks until the window closes.
@@ -257,7 +259,9 @@ func build(o Options) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	moveErr := paths.ApplyMove(p) // a data folder chosen in setup, before anything opens
+	// A data folder chosen in setup moves before anything opens; when that
+	// fails, this run keeps the old folder.
+	p, moveErr := paths.ApplyMove(p)
 	if err := p.Ensure(); err != nil {
 		return nil, fmt.Errorf("creating data folder: %w", err)
 	}
@@ -297,7 +301,7 @@ func build(o Options) (*app, error) {
 	a := &app{
 		paths: p, log: log, logFile: logFile, redactor: redactor, bus: bus, settings: store,
 		css: theme.NewCustomCSS(bus, log), secrets: secrets.NewKeychain(), http: httpClient, ctx: &api.Ctx{},
-		crashed: crashed,
+		crashed: crashed, moveErr: moveErr,
 	}
 	a.network = network.New(httpClient, store.Get().Downloads, a.secrets, redactor, log)
 	if a.cache, err = httpcache.Open(p.Cache(), httpClient, log); err != nil {
@@ -712,8 +716,12 @@ func (a *app) startup(ctx context.Context) {
 	a.act(a.args)
 }
 
-// reportCrash tells the player once that the last run crashed.
+// reportCrash tells the player once that the last run crashed, or that the
+// data folder couldn't move.
 func (a *app) reportCrash() {
+	if a.moveErr != nil {
+		a.opens.Fail("Couldn't move the data folder", a.moveErr)
+	}
 	if a.crashed != "" {
 		a.opens.Show(api.OpenTarget{Kind: api.OpenError, Subject: brand.Name + " closed unexpectedly last time",
 			Text: "The report is " + a.crashed + " in the logs folder."})

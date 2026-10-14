@@ -13,6 +13,10 @@ import (
 
 func realEnv(t *testing.T) (Env, string) {
 	t.Helper()
+	// Tests run in the temporary folder, which Problem refuses.
+	old := tempDir
+	tempDir = func() string { return "/nonexistent-temp" }
+	t.Cleanup(func() { tempDir = old })
 	home := t.TempDir()
 	env := SystemEnv("linux")
 	env.Getenv = func(k string) string {
@@ -52,8 +56,8 @@ func TestMoveToAndApply(t *testing.T) {
 	if next.Root != target || next.Chosen != ByPointer {
 		t.Fatalf("%+v", next)
 	}
-	if err := ApplyMove(next); err != nil {
-		t.Fatal(err)
+	if moved, err := ApplyMove(next); err != nil || moved.Root != target {
+		t.Fatal(moved, err)
 	}
 	if b, err := os.ReadFile(filepath.Join(target, "logs", "a.log")); err != nil || string(b) != "log" {
 		t.Fatal("logs not moved")
@@ -62,7 +66,7 @@ func TestMoveToAndApply(t *testing.T) {
 		t.Fatal("the old folder still has settings")
 	}
 	// Applying again does nothing.
-	if err := ApplyMove(next); err != nil {
+	if _, err := ApplyMove(next); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,7 +75,7 @@ func TestMoveToAndApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	back, _ := Resolve("", env)
-	if err := ApplyMove(back); err != nil {
+	if _, err := ApplyMove(back); err != nil {
 		t.Fatal(err)
 	}
 	if back.Root != p.Default || !IsDataFolder(p.Default) {
@@ -92,6 +96,80 @@ func TestMoveToRefuses(t *testing.T) {
 	}
 	fixed, _ := Resolve(filepath.Join(home, "x"), env)
 	if err := fixed.MoveTo(filepath.Join(home, "y")); !errors.Is(err, ErrFixedRoot) {
+		t.Fatal(err)
+	}
+}
+
+// A move that fails half way is cancelled: the old folder stays the data
+// folder.
+func TestApplyMoveCancelsOnFailure(t *testing.T) {
+	env, home := realEnv(t)
+	p, _ := Resolve("", env)
+	if err := p.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(p.Settings(), []byte("{}"), 0o600)
+	target := filepath.Join(home, "elsewhere")
+	if err := p.MoveTo(target); err != nil {
+		t.Fatal(err)
+	}
+	old := moveData
+	moveData = func(string, string) error { return errors.New("disk full") }
+	t.Cleanup(func() { moveData = old })
+
+	next, _ := Resolve("", env)
+	got, err := ApplyMove(next)
+	if err == nil || got.Root != p.Root || got.Chosen != ByDefault {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if again, _ := Resolve("", env); again.Root != p.Root || again.Chosen != ByDefault {
+		t.Fatalf("the move wasn't cancelled: %+v", again)
+	}
+}
+
+// move is all or nothing: a copy that fails leaves both folders as they were.
+func TestMoveUndoes(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads every file")
+	}
+	from, to := filepath.Join(t.TempDir(), "from"), filepath.Join(t.TempDir(), "to")
+	_ = os.MkdirAll(filepath.Join(from, "store"), 0o700)
+	_ = os.WriteFile(filepath.Join(from, "settings.json"), []byte("{}"), 0o600)
+	locked := filepath.Join(from, "store", "locked")
+	_ = os.WriteFile(locked, []byte("x"), 0)
+	// Renames out of a read-only folder fail, so it copies, and can't read "locked".
+	_ = os.Chmod(from, 0o500)
+	t.Cleanup(func() { _ = os.Chmod(from, 0o700) })
+	if err := move(from, to); err == nil {
+		t.Fatal("moved an unreadable file")
+	}
+	if !IsDataFolder(from) {
+		t.Fatal("the old folder lost its data")
+	}
+	if entries, _ := os.ReadDir(to); len(entries) != 0 {
+		t.Fatalf("the new folder kept %v", entries)
+	}
+}
+
+func TestProblem(t *testing.T) {
+	old := tempDir
+	tempDir = func() string { return "/tmp" }
+	t.Cleanup(func() { tempDir = old })
+	for root, want := range map[string]string{
+		"/home/a/.local/share/Quartz": "",
+		"/home/a!b/Quartz":            ProblemBang,
+		"/tmp/Quartz":                 ProblemTemp,
+		"/tmpfoo/Quartz":              "",
+		`C:\Users\a\AppData\Local\Temp\Rar$EXa1.2\data`: ProblemTemp,
+		"/x/TempState/Quartz":                           ProblemTemp,
+	} {
+		if got := Problem(root); got != want {
+			t.Errorf("%s: %q, want %q", root, got, want)
+		}
+	}
+	env, home := realEnv(t)
+	p, _ := Resolve("", env)
+	if err := p.MoveTo(filepath.Join(home, "a!b")); !errors.Is(err, ErrBadRoot) {
 		t.Fatal(err)
 	}
 }

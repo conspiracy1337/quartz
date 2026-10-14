@@ -6,6 +6,8 @@ import {servers} from '../models';
 
 export function Disk():Promise<home.Disk>;
 
+export function FolderProblem():Promise<string>;
+
 export function News():Promise<home.News>;
 
 export function RecentShots():Promise<Array<screenshots.Shot>>;
