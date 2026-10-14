@@ -480,29 +480,39 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 
 **Browse** ([Browse.svelte](frontend/src/routes/Browse.svelte), [browse/search.go](internal/browse/search.go), [browse/categories.go](internal/browse/categories.go))
 - **Types:** Mods, Modpacks, Resource packs, Shaders, Data packs. Every type uses the same layout.
-- **"Adding to":** picks the target instance and is remembered for the session.
+- **"Adding to":**
+  - Picks the target instance and is remembered for the session.
+  - Modpacks have no target: a pack becomes a new instance, so no instance's version, loader or content filters it.
 - **Merged search:**
   - Modrinth and CurseForge results become one row per project, matched by normalised title and author.
   - Relevance interleaves both sources by rank. A row never jumps once it's shown.
   - Downloads are summed and the newer update date is shown.
+  - When one platform can't be reached, a line says so ("CurseForge couldn't be reached; showing Modrinth only") instead of the results looking complete.
 - **Sort:** Relevance, Downloads, Recently updated. Search waits 300 ms after typing stops.
 - **Filters pane** (an overlay under 1100px):
-  - Version and loader chips taken from the target instance.
-  - Curated categories mapped to both platforms; a category CurseForge lacks drops CurseForge results.
+  - Version and loader chips taken from the target instance. For modpacks, a Minecraft version picker instead ("Any version" by default).
+  - Curated categories mapped to both platforms; a category CurseForge lacks drops CurseForge results. Two or more categories mean all of them on both platforms (CurseForge's "any of" answer is narrowed).
+  - **Runs on:** Client only or Server only (Modrinth's side facets; CurseForge publishes no sides, so it is left out).
   - Hide AI-generated content (on by default), Hide ads/telemetry, Hide already installed (on by default).
 - **Results:** infinite scroll, loading the next page 400px ahead.
   - **Install** opens the Install dialog. For modpacks it opens Import.
+  - A project the target already has says **Installed** instead.
 
-**Project page** ([Project.svelte](frontend/src/routes/Project.svelte), [browse/project.go](internal/browse/project.go))
+**Project page** ([Project.svelte](frontend/src/routes/Project.svelte), [browse/project.go](internal/browse/project.go), [browse/links.go](internal/browse/links.go))
 - **Source switch** (Modrinth or CurseForge): defaults to whichever was updated more recently and says why. Single-platform projects are matched to their twin by title and author.
 - **Install:** a split button with an "Install into" instance menu.
 - **Description:**
-  - Rich text: headings, lists, images, code, links.
-  - A side panel showing the installed version in the target instance, with **Update to Y**.
+  - Rich text: headings, paragraphs, bulleted and numbered lists, images, code blocks (line breaks kept), links. [docs.go](internal/core/docs/docs.go)
+  - Badges (pictures sized 64px or less, or two or more in one paragraph) sit in one row, each still a link.
+  - Pictures load from the Modrinth and CurseForge CDNs, imgur and GitHub, always through the launcher's picture proxy. A redirect may only lead to another allowed host. [remoteimg.go](internal/core/remoteimg/remoteimg.go)
+  - CurseForge's `linkout?remoteUrl=` wrapper is unwrapped to the real address.
+  - Links to a Modrinth or CurseForge project open its page in the launcher; other links open the browser.
+  - A side panel showing the installed version in the target instance, with **Update to Y** (only a version the update channel allows).
   - Links, and View on &lt;source&gt;.
 - **Versions:**
-  - Only-for-this-instance toggle and Release/Beta/Alpha chips.
+  - Only-for-this-instance toggle and Release/Beta/Alpha chips. Modpacks list every version, with no instance filter.
   - Table of version, channel, Minecraft, date, size and an action (Install, Update or Installed).
+  - Installing an older modpack version imports that version.
   - Clicking a version expands its changelog.
 - **Gallery** and **Changelog** tabs.
 - **Privacy:** the UI only gets plain data, same-origin pictures and opaque refs. It never gets raw URLs. [browse/browse.go](internal/browse/browse.go), [docs.go](internal/core/docs/docs.go)
@@ -515,10 +525,13 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 - **Input:** drop a file, choose a file, or paste a link. The link is read 600 ms after typing stops.
 - **Preview card:**
   - Name, version, loader, Minecraft, source, mod count and size, overrides.
+  - **Already installed:** when an instance came from the same pack, "You have &lt;name&gt;" with **Update it instead**, which opens that instance's update page with this version picked.
   - Warnings:
     - jars in overrides that aren't from the source
     - jars downloaded from outside the source
     - files that need a manual download
+    - files CurseForge no longer has, left out
+  - **Optional files** (Modrinth `env` optional, CurseForge and FTB optional): one toggle each, off by default as Prism does. The ones picked install turned on.
   - The new instance's name.
 
 **Formats** ([modpack/read.go](internal/modpack/read.go), [modpack/link.go](internal/modpack/link.go), [modpack/folder.go](internal/modpack/folder.go))
@@ -526,8 +539,8 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 | Source | Notes |
 |---|---|
 | Modrinth `.mrpack` | Downloads only from `cdn.modrinth.com`, `github.com`, `raw.githubusercontent.com` or `gitlab.com` over https; sha1 + sha512 required |
-| CurseForge zip | File ids resolved through the API; resource packs and shaders go to their own folders; blocked files go to manual download |
-| Prism / MultiMC zip | Game and loader from `mmc-pack.json`; jar mods and LiteLoader are dropped with a warning; **commands and JVM args are never read** |
+| CurseForge zip | File ids resolved through the API; resource packs and shaders go to their own folders; a file CurseForge removed is left out with a warning; blocked files Modrinth has by sha1 download from Modrinth, the rest go to manual download |
+| Prism / MultiMC zip | Game and loader from `mmc-pack.json`; jar mods and LiteLoader are dropped with a warning; the pack Prism installed it from is read; **commands and JVM args are never read** |
 | Technic | Zip or Solder; loader found from `bin/` files; md5-checked mod zips |
 | FTB | Public API |
 | Links | Modrinth or CurseForge page (optionally one version), FTB or Technic page, or a direct https pack (≤1 GB) |
@@ -545,19 +558,23 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Extraction runs through `os.Root` and never creates links.
   - [modpack/pack.go](internal/modpack/pack.go), [modpack/layers.go](internal/modpack/layers.go)
 
-**Modpack updates** ([modpack/update.go](internal/modpack/update.go), [ModpackUpdate.svelte](frontend/src/routes/instance/ModpackUpdate.svelte), [backup.go](internal/backup/backup.go))
+**Modpack updates** ([modpack/update.go](internal/modpack/update.go), [modpack/swap.go](internal/modpack/swap.go), [ModpackUpdate.svelte](frontend/src/routes/instance/ModpackUpdate.svelte), [backup.go](internal/backup/backup.go))
 - **Checks:** Modrinth, CurseForge and FTB packs are checked on the update channel, and feed the Home alert.
+  - Only versions for the instance's Minecraft version and loader are offered, so a pack published for several Minecraft versions stays on its line.
+- **Any version:** the update page lists every version of the pack (installed, channel, Minecraft). The player can pick another Minecraft line or go back to an older version. Overview's Details links to it as **Change version**.
 - **Diff review:**
-  - Added, Updated and Removed lists, paired by project or by file-name stem.
-  - Release notes, including whether the Minecraft version changes.
+  - Added, Updated and Removed lists of mods, resource packs and shader packs, paired by project or by file-name stem.
+  - Release notes, including whether the Minecraft version or loader changes.
 - **Three-way merge:**
   - A file you edited is kept ("Your edits — Kept").
   - A mod you removed stays removed.
   - A file the pack dropped is deleted only if you never changed it.
+- **All or nothing:** every new file is staged beside its target first, then swapped in. A failure at any point puts every file back and leaves the manifest, version and pack record unchanged.
 - **Back up worlds first** is optional and zips every world.
 - The update is disabled while the game is running.
 
 **Manual downloads for blocked CurseForge files** ([manual.go](internal/manual/manual.go), [Blocked.svelte](frontend/src/lib/overlays/Blocked.svelte))
+- Files Modrinth has by sha1 never get here: they download from Modrinth when the pack is read.
 - **Waiting:** the job pauses on a warning step that holds no worker slot. The Downloads page shows a **Download** link for it.
 - **Downloads-folder watch:**
   - Finds the folder from XDG user-dirs, the Windows Known Folder, or `~/Downloads`.
@@ -577,34 +594,46 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Modrinth App: reads `app.db` with a pure-Go read-only SQLite reader, old and new schemas, custom folder. [sqlitero](internal/core/sqlitero/sqlitero.go)
   - CurseForge app
   - ATLauncher (including `disabledmods/`)
-- **Imported:** name, Minecraft, loader, icon, playtime, last played, memory.
+- **Imported:** name, Minecraft, loader, icon, playtime, last played, memory, and the modpack the instance came from: Prism's `ManagedPack*`, the CurseForge app's `projectID`/`fileID`, the Modrinth App's linked project.
 - **Never imported:** commands, JVM args or wrappers.
 - **Copy or play in place:**
   - Copying clones or copies; it never hardlinks, keeps mtimes, and skips links and devices.
-  - In place, nothing in the original folder changes.
+  - In place, nothing in the original folder changes, and the instance is never linked to a pack or updated.
+- **Recognising the pack** ([modpack/recognise.go](internal/modpack/recognise.go)):
+  - A copied instance with no recorded pack is looked for in the background. Packs named like the instance are searched on Modrinth and CurseForge (top 3).
+  - Their versions for the instance's Minecraft version and loader are compared by the sha1 of their mods, walking back while the match rises (at most 5 per pack).
+  - At 85% or more, the instance is linked to that pack and version and the activity feed says "Recognised as …".
+  - The update baseline is built from that version (also for a recorded link, at the first review), so changes the player made since count as their edits.
 - Missing Java runtimes download first.
 
 ---
 
 ## 11. Exporting
 
-Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/list.go), [ExportDialog.svelte](frontend/src/lib/overlays/ExportDialog.svelte)
+Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/list.go), [write.go](internal/modpack/write.go), [ExportDialog.svelte](frontend/src/lib/overlays/ExportDialog.svelte)
 
 - **Formats:**
-  - **.mrpack:** links files Modrinth serves and bundles the rest.
+  - **Modrinth (.mrpack):** links files Modrinth serves and bundles the rest.
+  - **CurseForge zip:** names every file CurseForge identified by project and file id, with the loader id the app expects (NeoForge 1.20.1 included), the instance's memory as `recommendedRam` and an escaped `modlist.html`. The rest goes in `overrides/`.
   - **Full zip:** everything bundled; Quartz, Prism and the Modrinth App can import it.
-  - **Mod list:** Markdown or CSV.
+  - **Mod list:** Markdown, CSV or HTML.
+- **Name, version, summary** (author for CurseForge), remembered per instance. The instance's private notes are never exported.
 - **Include toggles:** options and keybinds, server list, mod settings (config), worlds, screenshots. Mods, resource packs and shaders are always included.
-- **Live estimate:** "N download from Modrinth; M bundled", or "N files, X MB".
+- **Linking:**
+  - Files nobody identified yet are looked up on both platforms first.
+  - A missing sha512 is hashed on the spot.
+  - A content folder that is a link (Prism's copy with links) is followed.
+- **Sides:** client-only mods get `env` client required, server unsupported. Bundled ones go to `client-overrides/`. Turned-off mods are optional.
+- **Live estimate:** "N download from Modrinth (or CurseForge); M bundled", or "N files, X MB".
 - **Never exported:**
   - Launcher data: `.quartz`, logs, crash reports, natives, versions, libraries, assets, caches, temp files.
   - Private files: usercache, command history, Realms data.
-  - Accounts, settings, `instance.json` and launch history.
+  - Accounts, settings, `instance.json`, notes and launch history.
 - **Hardening:**
   - Reads go through `os.Root`, regular files only.
   - The destination can't be inside the exported folders.
   - Written beside the target, then renamed.
-  - CSV formula injection is guarded and Markdown escaped.
+  - CSV formula injection is guarded; Markdown and HTML are escaped.
 - Available from the instance menus and the palette.
 
 ---
@@ -1202,7 +1231,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 **Image server** ([imagesrv.go](internal/imagesrv/imagesrv.go), [remoteimg.go](internal/core/remoteimg/remoteimg.go), [localimg.go](internal/core/localimg/localimg.go))
 - **Route:** same-origin `/tex/<kind>/<name>.png` serves skins, icons, content icons, screenshots, thumbnails, world icons, favicons and remote pictures.
   - GET and HEAD only, image types only, `nosniff`, cached immutable.
-- **Remote pictures:** proxied from an allowlist of hosts (Modrinth CDN, forgecdn, Mojang). The UI holds only tokens, so it isn't an open proxy.
+- **Remote pictures:** proxied from an allowlist of hosts (Modrinth CDN, forgecdn, Mojang, imgur, GitHub uploads). A redirect may only lead to another allowed host. The UI holds only tokens, so it isn't an open proxy.
   - The real file type is sniffed.
   - At most 10 MB per file; the disk cache is an LRU of 256 MB. [disklru.go](internal/core/disklru/disklru.go)
 - **Local pictures:** tokens tied to path, size and mtime; thumbnails are made on demand.
