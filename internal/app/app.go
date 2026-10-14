@@ -524,7 +524,7 @@ func (a *app) buildBrowse(dl *download.Downloader) {
 			return instance.JavaSettings{MemoryMinMB: g.MemoryMinMB, MemoryMaxMB: g.MemoryMaxMB, JVMArgs: g.JVMArgs}
 		},
 		Sandboxed: func() bool { return a.sandbox.Status().Available },
-		GetIcon:   modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log,
+		GetIcon:   modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log, Recognise: true,
 	}, modpack.UpdateDeps{Known: a.content.Known, Record: a.content.Record, Channel: channel})
 	a.follow = follow.New(follow.Deps{
 		Instances: a.instances.List, Latest: a.behind, Running: func(id string) bool { return a.launcher.Busy(id) }, Bus: a.bus,

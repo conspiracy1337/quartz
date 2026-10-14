@@ -53,7 +53,8 @@ func TestPrismFlatpakWithCustomInstanceDir(t *testing.T) {
 	root := filepath.Join(env.Home, ".var", "app", "org.prismlauncher.PrismLauncher", "data", "PrismLauncher")
 	write(t, filepath.Join(root, "prismlauncher.cfg"), "[General]\nInstanceDir=my instances\n")
 	inst := filepath.Join(root, "my instances", "Survival")
-	write(t, filepath.Join(inst, "instance.cfg"), "[General]\nname=\"My \\\"Survival\\\"\"\ntotalTimePlayed=7260\nlastLaunchTime=1760000000000\nOverrideMemory=true\nMaxMemAlloc=6144\niconKey=custom\nPreLaunchCommand=rm -rf ~\nJvmArgs=-Devil\n")
+	write(t, filepath.Join(inst, "instance.cfg"), "[General]\nname=\"My \\\"Survival\\\"\"\ntotalTimePlayed=7260\nlastLaunchTime=1760000000000\nOverrideMemory=true\nMaxMemAlloc=6144\niconKey=custom\nPreLaunchCommand=rm -rf ~\nJvmArgs=-Devil\n"+
+		"ManagedPack=true\nManagedPackType=modrinth\nManagedPackID=1KVo5zza\nManagedPackName=Fabulously Optimized\nManagedPackVersionID=tVXXFk2Z\nManagedPackVersionName=6.2.0\n")
 	write(t, filepath.Join(inst, "mmc-pack.json"), mmcPack)
 	write(t, filepath.Join(inst, ".minecraft", "options.txt"), "fov:0.5\n")
 	write(t, filepath.Join(root, "icons", "custom.png"), "png")
@@ -68,6 +69,15 @@ func TestPrismFlatpakWithCustomInstanceDir(t *testing.T) {
 		s.PlaytimeMin != 121 || s.MemoryMB != 6144 || s.LastPlayed == nil || s.LastPlayed.Unix() != 1760000000 ||
 		s.GameDir != filepath.Join(inst, ".minecraft") || s.Icon != filepath.Join(root, "icons", "custom.png") {
 		t.Fatalf("%+v", s)
+	}
+	if m := s.Managed; m == nil || m.Origin != (modpack.Origin{Source: "modrinth", Project: "1KVo5zza", Version: "tVXXFk2Z"}) || m.Name != "Fabulously Optimized" || m.VersionName != "6.2.0" {
+		t.Fatalf("managed pack %+v", s.Managed)
+	}
+	if p := s.Pack(f, false); p.Managed != s.Managed || !p.Copied {
+		t.Fatalf("pack %+v", p)
+	}
+	if p := s.Pack(f, true); p.Managed == nil {
+		t.Fatal("in place drops the link (the install skips it instead)")
 	}
 }
 
@@ -116,11 +126,15 @@ func TestCurseForge(t *testing.T) {
 	env := testEnv(t)
 	inst := filepath.Join(env.Home, "curseforge", "minecraft", "Instances", "Pack")
 	write(t, filepath.Join(inst, "minecraftinstance.json"), `{"name":"Pack","gameVersion":"1.20.1","baseModLoader":{"type":1,"forgeVersion":"47.2.0","name":"forge-47.2.0"},
-		"lastPlayed":"2026-09-01T10:00:00Z","isMemoryOverride":true,"allocatedMemory":8192}`)
+		"lastPlayed":"2026-09-01T10:00:00Z","isMemoryOverride":true,"allocatedMemory":8192,
+		"installedModpack":{"addonID":520914,"installedFile":{"id":5012345}},"manifest":{"name":"All the Mods 9","version":"0.2.60"}}`)
 	write(t, filepath.Join(inst, "profileImage", "a.png"), "png")
 	s := find(t, env, "curseforge").Instances[0]
 	if s.Loader != "forge" || s.LoaderVersion != "47.2.0" || s.MemoryMB != 8192 || s.LastPlayed == nil || s.Icon == "" || s.GameDir != inst {
 		t.Fatalf("%+v", s)
+	}
+	if m := s.Managed; m == nil || m.Origin != (modpack.Origin{Source: "curseforge", Project: "520914", Version: "5012345"}) || m.Name != "All the Mods 9" || m.VersionName != "0.2.60" {
+		t.Fatalf("managed pack %+v", s.Managed)
 	}
 }
 

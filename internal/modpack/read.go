@@ -401,16 +401,20 @@ func readMMC(zr *archive.Reader) (*Pack, error) {
 			return nil, ErrUnsafePath
 		}
 	}
-	p := &Pack{Origin: Origin{Source: "file"}, Format: "Prism or MultiMC"}
-	// Only the name is read: commands, JVM arguments and the environment an
-	// instance file may carry are never taken over.
+	p := &Pack{Origin: Origin{Source: "file"}, Format: "Prism or MultiMC", Copied: true}
+	// Only the name and the pack Prism installed it from are read: commands,
+	// JVM arguments and the environment an instance file may carry are never
+	// taken over.
 	if b, err := zr.Read(cfg, 1<<20); err == nil {
+		vals := map[string]string{}
 		sc := bufio.NewScanner(bytes.NewReader(b))
 		for sc.Scan() {
-			if v, ok := strings.CutPrefix(sc.Text(), "name="); ok {
-				p.Name = clip(strings.TrimSpace(v), 80)
+			if k, v, ok := strings.Cut(sc.Text(), "="); ok {
+				vals[strings.TrimSpace(k)] = strings.TrimSpace(v)
 			}
 		}
+		p.Name = clip(vals["name"], 80)
+		p.Managed = ManagedFromPrism(vals)
 	}
 	data, err := zr.Read(root+"mmc-pack.json", maxManifest)
 	if err != nil {
@@ -426,6 +430,21 @@ func readMMC(zr *archive.Reader) (*Pack, error) {
 		}
 	}
 	return p, nil
+}
+
+// ManagedFromPrism reads the pack a Prism instance.cfg says the instance
+// was installed from (nil for none).
+func ManagedFromPrism(cfg map[string]string) *Managed {
+	src := map[string]string{"modrinth": "modrinth", "flame": "curseforge"}[cfg["ManagedPackType"]]
+	if cfg["ManagedPack"] != "true" || src == "" {
+		return nil
+	}
+	m := &Managed{Origin: Origin{Source: src, Project: cfg["ManagedPackID"], Version: cfg["ManagedPackVersionID"]},
+		Name: clip(cfg["ManagedPackName"], 80), VersionName: clip(cfg["ManagedPackVersionName"], 40)}
+	if !m.Valid() {
+		return nil
+	}
+	return m
 }
 
 // --- Technic ---

@@ -11,6 +11,8 @@ import (
 	"errors"
 	"path"
 	"strings"
+
+	"quartz/internal/modplatform"
 )
 
 // Origin is where a pack comes from, for its updates.
@@ -39,7 +41,7 @@ type File struct {
 	// file when the pack says (CurseForge and FTB list projects).
 	Project string `json:"project,omitempty"`
 	Version string `json:"version,omitempty"`
-	Page   string   `json:"page,omitempty"` // blocked on CurseForge: where to get it by hand
+	Page    string `json:"page,omitempty"` // blocked on CurseForge: where to get it by hand
 	// Extract unpacks the download into the game folder (Technic Solder mods).
 	Extract bool `json:"extract,omitempty"`
 	// Optional is a file the pack lets the player leave out; it installs
@@ -108,6 +110,46 @@ type Pack struct {
 	// of Archive), and Imported what else came with it.
 	Folder   *Folder
 	Imported *Imported
+	// Copied is an instance (another launcher's folder or an instance zip)
+	// rather than a pack: its files aren't a pack version's own.
+	Copied bool
+	// Managed is the pack the other launcher says the instance came from.
+	Managed *Managed
+}
+
+// Managed is the pack another launcher recorded an instance was installed
+// from (Prism's ManagedPack, the Modrinth App's linked project, the
+// CurseForge app's projectID). It is plain data: ids, never commands.
+type Managed struct {
+	Origin      Origin
+	Name        string
+	VersionName string
+}
+
+// Valid reports whether the ids look like the platform's own.
+func (m *Managed) Valid() bool {
+	if m == nil || !m.Origin.Updatable() || m.Origin.Version == "" {
+		return false
+	}
+	switch m.Origin.Source {
+	case "modrinth":
+		return modplatform.ValidID(m.Origin.Project) && modplatform.ValidID(m.Origin.Version)
+	case "curseforge":
+		return digits(m.Origin.Project) && digits(m.Origin.Version)
+	}
+	return false
+}
+
+func digits(s string) bool {
+	if s == "" || len(s) > 12 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // Errors for broken or hostile packs.

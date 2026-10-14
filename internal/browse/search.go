@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"quartz/internal/content"
 	"quartz/internal/core/netx"
@@ -389,19 +388,10 @@ func setStats(r *Row, src modplatform.Source, st *Stats) {
 // author, lower case, letters and digits only ("Xaero's Minimap" by
 // "xaero96" → "xaerosminimap/xaero96").
 func matchKey(title, author string) string {
-	t := normalize(title)
+	t := modplatform.Normalize(title)
 	if t == "" {
 		return "" // nothing to match on
 	}
-	return t + "/" + normalize(author)
+	return t + "/" + modplatform.Normalize(author)
 }
 
-func normalize(s string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(s) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}

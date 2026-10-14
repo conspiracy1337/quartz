@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -58,7 +59,7 @@ type Available struct {
 func (s *Service) CheckUpdates(ctx context.Context) []Available {
 	var out []Available
 	for _, in := range s.d.Instances.List() {
-		if in.Pack == nil {
+		if in.Pack == nil || in.InPlace {
 			continue
 		}
 		o := Origin{Source: in.Pack.Source, Project: in.Pack.Project, Version: in.Pack.Version}
@@ -293,16 +294,16 @@ func (s *Service) Diff(ctx context.Context, id, version string) (*Diff, error) {
 	if err != nil {
 		return nil, err
 	}
-	if in.Pack == nil {
-		return nil, ErrNoPack
+	if in.Pack == nil || in.InPlace {
+		return nil, ErrNoPack // an in-place instance's files are another launcher's
 	}
 	next, err := s.next(ctx, in, version)
 	if err != nil {
 		return nil, err
 	}
-	old, err := ReadManifest(s.d.Instances.Dir(id))
+	old, err := s.manifest(ctx, in)
 	if err != nil {
-		return nil, ErrNoPack
+		return nil, err
 	}
 	want, err := s.wanted(next, nil)
 	if err != nil {
@@ -345,14 +346,7 @@ func (s *Service) next(ctx context.Context, in instance.Instance, version string
 	if cached && time.Since(p.at) < stagedLife && p.pack.Origin.Version == version {
 		return p.pack, nil
 	}
-	var pack *Pack
-	var err error
-	switch in.Pack.Source {
-	case "ftb":
-		pack, err = s.d.Reader.ftb(ctx, in.Pack.Project, version)
-	default:
-		pack, err = s.d.Reader.Project(ctx, modplatform.Source(in.Pack.Source), in.Pack.Project, version)
-	}
+	pack, err := s.readVersion(ctx, in.Pack.Source, in.Pack.Project, version)
 	if err != nil {
 		return nil, err
 	}
@@ -716,7 +710,7 @@ func (s *Service) Update(ctx context.Context, id, version string, backupWorlds b
 	if err != nil {
 		return "", err
 	}
-	if in.Pack == nil {
+	if in.Pack == nil || in.InPlace {
 		return "", ErrNoPack
 	}
 	next, err := s.next(ctx, in, version)
@@ -810,9 +804,51 @@ func (s *Service) commit(in instance.Instance, next *Pack, t install.Target, old
 	return err
 }
 
+// readVersion reads one version of a pack from its platform.
+func (s *Service) readVersion(ctx context.Context, src, project, version string) (*Pack, error) {
+	if src == "ftb" {
+		return s.d.Reader.ftb(ctx, project, version)
+	}
+	return s.d.Reader.Project(ctx, modplatform.Source(src), project, version)
+}
+
+// manifest reads what the pack put where. An instance linked to its pack
+// after the fact (imported from another launcher) has none yet: it is
+// built from the installed version the first time, so the player's changes
+// since count as their edits (XMCL rebuilds its baseline the same way).
+func (s *Service) manifest(ctx context.Context, in instance.Instance) (Manifest, error) {
+	dir := s.d.Instances.Dir(in.ID)
+	m, err := ReadManifest(dir)
+	if !errors.Is(err, fs.ErrNotExist) {
+		if err != nil {
+			return m, ErrNoPack
+		}
+		return m, nil
+	}
+	p, err := s.readVersion(ctx, in.Pack.Source, in.Pack.Project, in.Pack.Version)
+	if err != nil {
+		return m, err
+	}
+	defer s.d.Reader.Discard(p)
+	return s.baseline(dir, p)
+}
+
+// baseline writes the manifest of pack version p as installed at dir.
+func (s *Service) baseline(dir string, p *Pack) (Manifest, error) {
+	want, err := s.wanted(p, nil)
+	if err != nil {
+		return Manifest{}, err
+	}
+	m := Manifest{Origin: p.Origin, Name: p.Name, Version: p.Version, Files: map[string]ManifestFile{}}
+	for rel, w := range want {
+		m.Files[rel] = ManifestFile{SHA1: w.SHA1, Layer: w.Layer, Off: w.Off}
+	}
+	return m, writeManifest(dir, m)
+}
+
 // apply runs the three-way update in the game folder and records the new version.
-func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, files []planned, set *manual.Set, t install.Target, work string) error {
-	old, err := ReadManifest(s.d.Instances.Dir(in.ID))
+func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, files []planned, set *manual.Set, t install.Target, work string) error {
+	old, err := s.manifest(ctx, in)
 	if err != nil {
 		return err
 	}

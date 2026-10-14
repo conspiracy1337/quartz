@@ -87,6 +87,7 @@ func readMMCInstance(root, inst string) (Source, bool) {
 		}
 	}
 	s.Icon = mmcIcon(root, inst, cfg["iconKey"])
+	s.Managed = modpack.ManagedFromPrism(cfg)
 	return s, true
 }
 

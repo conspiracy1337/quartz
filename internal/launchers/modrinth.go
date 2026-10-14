@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"quartz/internal/core/sqlitero"
+	"quartz/internal/modpack"
 )
 
 func modrinthRoots(e Env) []string {
@@ -32,7 +33,7 @@ func readModrinth(root string) ([]Source, error) {
 		rows, err = modrinthInstances(db)
 	} else {
 		rows, err = scanRows(db, "profiles", "path", []string{"icon_path", "game_version", "mod_loader", "mod_loader_version", "name",
-			"last_played", "submitted_time_played", "recent_time_played", "override_mc_memory_max"})
+			"last_played", "submitted_time_played", "recent_time_played", "override_mc_memory_max", "linked_project_id", "linked_version_id"})
 	}
 	if err != nil {
 		return nil, err
@@ -48,7 +49,7 @@ func readModrinth(root string) ([]Source, error) {
 
 // modrinthInstances joins instances to their applied content set.
 func modrinthInstances(db *sqlitero.DB) ([]map[string]any, error) {
-	sets, err := scanRows(db, "instance_content_sets", "id", []string{"game_version", "loader", "loader_version"})
+	sets, err := scanRows(db, "instance_content_sets", "id", []string{"game_version", "loader", "loader_version", "linked_project_id", "linked_version_id"})
 	if err != nil {
 		return nil, err
 	}
@@ -57,13 +58,18 @@ func modrinthInstances(db *sqlitero.DB) ([]map[string]any, error) {
 		byID[s["id"]] = s
 	}
 	rows, err := scanRows(db, "instances", "path", []string{"icon_path", "applied_content_set_id", "name", "last_played",
-		"submitted_time_played", "recent_time_played", "override_mc_memory_max"})
+		"submitted_time_played", "recent_time_played", "override_mc_memory_max", "linked_project_id", "linked_version_id"})
 	if err != nil {
 		return nil, err
 	}
 	for _, r := range rows {
 		if s := byID[r["applied_content_set_id"]]; s != nil {
 			r["game_version"], r["mod_loader"], r["mod_loader_version"] = s["game_version"], s["loader"], s["loader_version"]
+			for _, k := range []string{"linked_project_id", "linked_version_id"} {
+				if str(r[k]) == "" {
+					r[k] = s[k]
+				}
+			}
 		}
 	}
 	return rows, nil
@@ -103,6 +109,11 @@ func modrinthSource(r map[string]any, dirs []string) (Source, bool) {
 	}
 	if mb := num(r["override_mc_memory_max"]); mb > 0 && mb < 1<<20 {
 		s.MemoryMB = int(mb)
+	}
+	// The pack the app installed it from (column names are a guess at
+	// both schemas; a missing column reads as none).
+	if m := (&modpack.Managed{Origin: modpack.Origin{Source: "modrinth", Project: str(r["linked_project_id"]), Version: str(r["linked_version_id"])}, Name: s.Name}); m.Valid() {
+		s.Managed = m
 	}
 	return s, true
 }

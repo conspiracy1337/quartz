@@ -5,7 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
+
+	"quartz/internal/modpack"
 )
 
 func curseForgeRoots(e Env) []string {
@@ -34,6 +37,20 @@ func readCurseForge(root string) ([]Source, error) {
 			LastPlayed       string `json:"lastPlayed"`
 			IsMemoryOverride bool   `json:"isMemoryOverride"`
 			AllocatedMemory  int    `json:"allocatedMemory"`
+			// The pack the instance was installed from (0 for none).
+			ProjectID        int64 `json:"projectID"`
+			FileID           int64 `json:"fileID"`
+			InstalledModpack *struct {
+				AddonID       int64 `json:"addonID"`
+				InstalledFile *struct {
+					ID          int64  `json:"id"`
+					DisplayName string `json:"displayName"`
+				} `json:"installedFile"`
+			} `json:"installedModpack"`
+			Manifest *struct {
+				Name    string `json:"name"`
+				Version string `json:"version"`
+			} `json:"manifest"`
 		}
 		if json.Unmarshal(b, &m) != nil || m.GameVersion == "" {
 			continue
@@ -55,6 +72,16 @@ func readCurseForge(root string) ([]Source, error) {
 			s.MemoryMB = m.AllocatedMemory
 		}
 		s.Icon = firstFile(filepath.Join(inst, "profileImage"))
+		project, file := m.ProjectID, m.FileID
+		if im := m.InstalledModpack; im != nil && im.InstalledFile != nil && project == 0 {
+			project, file = im.AddonID, im.InstalledFile.ID
+		}
+		if project > 0 && file > 0 {
+			s.Managed = &modpack.Managed{Origin: modpack.Origin{Source: "curseforge", Project: strconv.FormatInt(project, 10), Version: strconv.FormatInt(file, 10)}, Name: s.Name}
+			if mf := m.Manifest; mf != nil {
+				s.Managed.Name, s.Managed.VersionName = clean(mf.Name, s.Name), clean(mf.Version, "")
+			}
+		}
 		out = append(out, s)
 	}
 	return out, nil
