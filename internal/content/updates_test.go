@@ -244,3 +244,41 @@ func TestCheckAllSkipsInstancesWithoutMods(t *testing.T) {
 		t.Fatalf("check all = %+v, %v", got, err)
 	}
 }
+
+func TestUpdateUnderTheSameName(t *testing.T) {
+	e := newEnv(t)
+	e.mod("alpha.jar", "alpha", "Alpha", "")
+	rows := e.list(Mods)
+	ix, _ := e.svc.idx.get(e.id)
+	oldSHA := ix.Get().Entries[rows[0].ID].SHA1
+	newer := jarBytes(t, "alpha")
+	f := fileOf("alpha.jar", "https://cdn.modrinth.com/data/PA/alpha.jar", newer)
+	a1 := modplatform.Version{Source: modplatform.Modrinth, ProjectID: "PA", ID: "a1", Number: "1.0", Type: "release", Published: day}
+	a2 := modplatform.Version{Source: modplatform.Modrinth, ProjectID: "PA", ID: "a2", Number: "2.0", Type: "release", Published: day.AddDate(0, 0, 1), File: f}
+	e.svc.d.Platforms = []modplatform.Provider{&fakePlatform{src: modplatform.Modrinth, byHash: map[string]modplatform.Version{oldSHA: a1},
+		projects: map[string]modplatform.Project{"PA": {Slug: "alpha", Title: "Alpha"}}, latest: map[string]modplatform.Version{"PA": a2},
+		versions: map[string][]modplatform.Version{"PA": {a2, a1}}}}
+	eng := e.withTasks(cdn{f.URL: newer})
+	ctx := context.Background()
+	rev, err := e.svc.CheckUpdates(ctx, e.id, Mods, modplatform.Release)
+	if err != nil || len(rev.Updates) != 1 {
+		t.Fatalf("%+v %v", rev, err)
+	}
+	job, err := e.svc.ApplyUpdates(rev.CheckID, []string{rev.Updates[0].ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := eng.Wait(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(filepath.Join(e.game, "mods", "alpha.jar")) //nolint:gosec // test temp dir
+	if !bytes.Equal(got, newer) {
+		t.Fatal("the new file didn't take the old one's place")
+	}
+	if _, err := os.Stat(filepath.Join(e.game, "mods", "alpha.jar.quartz.part")); err == nil {
+		t.Fatal("the temporary file was left behind")
+	}
+	if info, err := os.Stat(e.svc.d.Store.Path(oldSHA)); err == nil && info.Mode().Perm()&0o222 != 0 {
+		t.Fatal("the old blob must stay sealed")
+	}
+}

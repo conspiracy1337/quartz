@@ -17,6 +17,7 @@ import (
 	"quartz/internal/content/store"
 	"quartz/internal/core/download"
 	"quartz/internal/core/hashx"
+	"quartz/internal/core/linkx"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/tasks"
 	"quartz/internal/manual"
@@ -223,7 +224,7 @@ func (s *Service) CheckUpdates(ctx context.Context, id string, k Kind, ch modpla
 		}
 		ups, err := modplatform.Check(ctx, p, items, q)
 		if err != nil {
-			rev.Failed = append(rev.Failed, fmt.Sprintf("%s could not be reached for every item", platformName(src)))
+			rev.Failed = append(rev.Failed, fmt.Sprintf("%s couldn't be reached, so some updates may be missing. Try again later.", platformName(src)))
 		}
 		var projectIDs []string
 		for key, up := range ups {
@@ -317,6 +318,9 @@ func (pi *planned) review(k Kind, known map[string]Known) ReviewItem {
 	if pi.item == "" {
 		r.Dependency = true
 		r.Note += ", a dependency"
+	}
+	if r.Blocked {
+		r.Note += ", download by hand"
 	}
 	if page := projectURL(k, identOf(pi.v, pi.p)); page != "" {
 		r.Versions = page + map[modplatform.Source]string{modplatform.Modrinth: "/versions", modplatform.CurseForge: "/files"}[pi.v.Source]
@@ -567,15 +571,20 @@ func (s *Service) install(inst string, k Kind, pi *planned) error {
 		rel += Disabled
 	}
 	abs := s.abs(v.in.ID, rel)
-	if had && rel == old.Rel {
-		_ = s.d.Store.Unlink(abs, old.SHA1)
-	} else if _, err := os.Lstat(abs); err == nil {
+	same := had && rel == old.Rel
+	if _, err := os.Lstat(abs); err == nil && !same {
 		return fmt.Errorf("%s: %w", name, ErrNameTaken)
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
 		return err
 	}
-	if err := s.place(v.in.ID, sha1, abs); err != nil {
+	if same {
+		// The new file takes the old one's name: place it beside, then swap,
+		// so a failure leaves the old file working.
+		if err := s.swapIn(v.in.ID, sha1, abs, old.SHA1); err != nil {
+			return err
+		}
+	} else if err := s.place(v.in.ID, sha1, abs); err != nil {
 		return err
 	}
 	if had && rel != old.Rel {
@@ -606,6 +615,23 @@ func (s *Service) install(inst string, k Kind, pi *planned) error {
 		_, _ = ix.Update(func(i *Index) error { delete(i.Updates, pi.item); return nil })
 	}
 	return nil
+}
+
+// swapIn replaces the file at abs (blob oldSHA1) with blob sha1 in one
+// rename. The temporary name is a partial download's, which scans skip.
+func (s *Service) swapIn(inst, sha1, abs, oldSHA1 string) error {
+	tmp := abs + ".quartz.part"
+	_ = os.Remove(tmp)
+	if err := s.place(inst, sha1, tmp); err != nil {
+		return err
+	}
+	_ = linkx.SetReadOnly(abs, false) // Windows won't replace a read-only file
+	err := os.Rename(tmp, abs)
+	if err != nil {
+		_ = s.d.Store.Unlink(tmp, sha1)
+	}
+	_ = s.d.Store.Reseal(oldSHA1)
+	return err
 }
 
 // movePW replaces an item's .pw.toml with one for the new file.
