@@ -1,6 +1,9 @@
 // Fuzzy matching for the command palette: the query's letters in order, not
-// necessarily side by side ("ncs" finds "New instance… Create shortcut"), ranked so
-// a plain substring beats scattered letters, and word starts and runs score higher.
+// necessarily side by side ("cfu" finds "Check for updates"), ranked so a plain
+// substring beats scattered letters, and word starts and runs score higher. Letters
+// strewn through the middle of words don't count ("ram" isn't "Proxy user name"):
+// the first must start a word, and at most a third may land loose (neither at a word
+// start nor right after the letter before).
 
 export interface FuzzyMatch {
   score: number;
@@ -23,6 +26,8 @@ export function fuzzy(needle: string, hay: string): FuzzyMatch | null {
   const at: number[] = [];
   let score = 0;
   let from = 0;
+  let loose = 0;
+  const letters = n.replace(/ /g, '').length;
   for (const ch of n) {
     if (ch === ' ') continue;
     // Prefer the next word start holding this letter, else its next occurrence.
@@ -36,7 +41,10 @@ export function fuzzy(needle: string, hay: string): FuzzyMatch | null {
     const next = h.indexOf(ch, from);
     if (next < 0) return null;
     if (i < 0 || (at.length && next === at[at.length - 1]! + 1)) i = next;
-    score += 10 + (boundary(hay, i) ? 8 : 0) + (at.length && i === at[at.length - 1]! + 1 ? 5 : 0) - Math.min(5, i - from);
+    const start = boundary(hay, i);
+    const run = at.length > 0 && i === at[at.length - 1]! + 1;
+    if (!start && !run && (at.length === 0 || ++loose > Math.floor(letters / 3))) return null;
+    score += 10 + (start ? 8 : 0) + (run ? 5 : 0) - Math.min(5, i - from);
     at.push(i);
     from = i + 1;
   }

@@ -6,6 +6,11 @@ describe('fuzzy', () => {
     expect(fuzzy('cfu', 'Check for updates')?.at).toEqual([0, 6, 10]);
     expect(fuzzy('xyz', 'Check for updates')).toBeNull();
     expect(fuzzy('dc', 'Create shortcut')).toBeNull();
+    expect(fuzzy('chkup', 'Check for updates')).not.toBeNull();
+  });
+  it('ignores letters strewn through the middle of words', () => {
+    expect(fuzzy('ram', 'Proxy user name')).toBeNull();
+    expect(fuzzy('oxy', 'Proxy user name')?.at).toEqual([2, 3, 4]); // a substring still counts
   });
   it('ranks a substring above scattered letters, and a word start above the middle', () => {
     const sub = fuzzy('update', 'Check for updates')!.score;
