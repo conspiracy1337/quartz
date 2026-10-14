@@ -302,3 +302,30 @@ func TestBusyCountsSharers(t *testing.T) {
 		t.Fatal("A shares worlds with B, which runs; its packs are its own")
 	}
 }
+
+// A server list the launcher edits in one instance reaches the next launch
+// of another.
+func TestTouchedSharesLauncherEdits(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.enable("servers")
+	for _, id := range []string{e.a, e.b} {
+		if err := e.svc.Join(ctx, id, "servers"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put(t, e.game(e.a, "servers.dat"), "edited")
+	_ = os.Chtimes(e.game(e.a, "servers.dat"), time.Now().Add(time.Second), time.Now().Add(time.Second))
+	if err := e.svc.Touched(e.a, "servers.dat"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Prepare(e.b); err != nil {
+		t.Fatal(err)
+	}
+	if body(t, e.game(e.b, "servers.dat")) != "edited" {
+		t.Fatal("B didn't get A's edit")
+	}
+	if err := e.svc.Touched(e.a, "hotbar.nbt"); err != nil { // not shared: nothing to do
+		t.Fatal(err)
+	}
+}

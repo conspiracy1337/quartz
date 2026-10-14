@@ -450,6 +450,11 @@ func (a *app) buildGame() {
 	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: worldsBusy, Bus: a.bus, Log: a.log})
 	a.servers = servers.New(servers.Deps{
 		Instances: a.instances, Busy: busy, Runs: runs, Favicons: a.favicons, Bus: a.bus, Log: a.log,
+		Saved: func(id string) {
+			if err := a.syncing.Touched(id, "servers.dat"); err != nil {
+				a.log.Warn("sharing the server list failed", "instance", id, "err", err)
+			}
+		},
 		Protocol: func(mc string) int {
 			return contentmeta.ClientProtocol(filepath.Join(a.paths.Versions(), mc, mc+".jar"))
 		},
