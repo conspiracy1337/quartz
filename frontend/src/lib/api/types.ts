@@ -408,8 +408,8 @@ export interface FollowOffer { instanceId: string; name: string; minecraft: stri
 export interface BulkCheck { instanceId: string; name: string; updates: number }
 
 // ---- export ----
-export type ExportFormat = 'mrpack' | 'zip' | 'list';
-export type ExportListFormat = 'md' | 'csv';
+export type ExportFormat = 'mrpack' | 'curseforge' | 'zip' | 'list';
+export type ExportListFormat = 'md' | 'csv' | 'html';
 export interface ExportInclude { worlds: boolean; screenshots: boolean; options: boolean; servers: boolean; config: boolean }
 /** What an exported pack is called (remembered per instance). */
 export interface ExportMeta { name: string; version: string; summary?: string; author?: string }

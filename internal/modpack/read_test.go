@@ -339,3 +339,11 @@ func TestCurseForgeGoneAndBlockedFiles(t *testing.T) {
 		t.Fatalf("a copy from an address that isn't Modrinth's CDN was used: %+v", p.Files[1])
 	}
 }
+
+func TestCurseLoaderIDRoundTrip(t *testing.T) {
+	for _, c := range [][3]string{{"neoforge", "1.20.1", "47.1.106"}, {"neoforge", "1.21.1", "21.1.77"}, {"forge", "1.20.1", "47.3.0"}, {"fabric", "1.21.1", "0.16.9"}} {
+		if k, v, ok := cfLoader(CurseLoaderID(c[0], c[1], c[2]), c[1]); !ok || k != c[0] || v != c[2] {
+			t.Errorf("%v → %s %s", c, k, v)
+		}
+	}
+}

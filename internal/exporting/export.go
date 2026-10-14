@@ -20,6 +20,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"quartz/internal/content"
@@ -35,9 +36,10 @@ import (
 type Format string
 
 const (
-	Mrpack Format = "mrpack" // links what Modrinth serves, bundles the rest
-	Zip    Format = "zip"    // the same index, every file bundled
-	List   Format = "list"   // the enabled mods as a table
+	Mrpack     Format = "mrpack"     // links what Modrinth serves, bundles the rest
+	CurseForge Format = "curseforge" // a CurseForge zip: links what CurseForge serves
+	Zip        Format = "zip"        // the .mrpack index, every file bundled
+	List       Format = "list"       // the enabled mods as a table
 )
 
 // ListFormat is a mod list's file type.
@@ -46,6 +48,7 @@ type ListFormat string
 const (
 	Markdown ListFormat = "md"
 	CSV      ListFormat = "csv"
+	HTML     ListFormat = "html"
 )
 
 // Include chooses the optional parts of a pack. Mods, resource packs,
@@ -70,10 +73,10 @@ type Plan struct {
 // Valid reports whether p names a known format.
 func (p Plan) Valid() bool {
 	switch p.Format {
-	case Mrpack, Zip:
+	case Mrpack, CurseForge, Zip:
 		return true
 	case List:
-		return p.List == Markdown || p.List == CSV
+		return p.List == Markdown || p.List == CSV || p.List == HTML
 	}
 	return false
 }
@@ -83,7 +86,7 @@ func (p Plan) Ext() string {
 	switch p.Format {
 	case Mrpack:
 		return ".mrpack"
-	case Zip:
+	case Zip, CurseForge:
 		return ".zip"
 	}
 	return "." + string(p.List)
@@ -149,7 +152,8 @@ func (s *Service) Preview(ctx context.Context, id string, p Plan) (Preview, erro
 	}
 	var pv Preview
 	for _, f := range files {
-		if _, ok := pc.links[f.rel]; ok {
+		_, mr := pc.links[f.rel]
+		if _, cf := pc.curse[f.rel]; mr || cf {
 			pv.Linked++
 			continue
 		}
@@ -339,19 +343,20 @@ func keepFile(rel string, inc Include) bool {
 	return true
 }
 
-// packContent is what a pack export knows about the content: the files an
-// .mrpack may link (a full zip links nothing), by path, and the client-only
-// mods.
+// packContent is what a pack export knows about the content, by path: the
+// files an .mrpack may link, the files a CurseForge zip may name (a full zip
+// links nothing), and the client-only mods.
 type packContent struct {
 	links  map[string]modpack.IndexFile
+	curse  map[string]modpack.CurseFile
 	client map[string]bool
 }
 
 func (s *Service) content(ctx context.Context, id string, p Plan) (packContent, error) {
-	pc := packContent{links: map[string]modpack.IndexFile{}, client: map[string]bool{}}
+	pc := packContent{links: map[string]modpack.IndexFile{}, curse: map[string]modpack.CurseFile{}, client: map[string]bool{}}
 	var items []content.ManifestItem
 	var err error
-	if p.Format == Mrpack {
+	if p.Format == Mrpack || p.Format == CurseForge {
 		items, err = s.items(ctx, id)
 	} else {
 		items, err = s.d.Content.Manifest(ctx, id)
@@ -362,6 +367,12 @@ func (s *Service) content(ctx context.Context, id string, p Plan) (packContent, 
 	for _, it := range items {
 		if it.ClientOnly {
 			pc.client[it.Rel] = true
+		}
+		if p.Format == CurseForge {
+			if cf, ok := curseFile(it); ok {
+				pc.curse[it.Rel] = cf
+			}
+			continue
 		}
 		if p.Format != Mrpack {
 			continue
@@ -381,6 +392,20 @@ func (s *Service) content(ctx context.Context, id string, p Plan) (packContent, 
 	return pc, nil
 }
 
+// curseFile is a file CurseForge identified, by its project and file ids.
+func curseFile(it content.ManifestItem) (modpack.CurseFile, bool) {
+	id := it.CurseForge
+	if id == nil {
+		return modpack.CurseFile{}, false
+	}
+	project, err1 := strconv.ParseInt(id.ProjectID, 10, 64)
+	file, err2 := strconv.ParseInt(id.VersionID, 10, 64)
+	if err1 != nil || err2 != nil || project <= 0 || file <= 0 {
+		return modpack.CurseFile{}, false
+	}
+	return modpack.CurseFile{Project: project, File: file, Required: it.Enabled}, true
+}
+
 // items lists the instance's content after asking the platforms about
 // files nobody identified yet, so a file Modrinth or CurseForge serves is
 // named rather than carried (Prism looks files up when it exports too).
@@ -390,8 +415,6 @@ func (s *Service) items(ctx context.Context, id string) ([]content.ManifestItem,
 	}
 	return s.d.Content.Manifest(ctx, id)
 }
-
-
 
 func (s *Service) writePack(ctx context.Context, w io.Writer, in instance.Instance, p Plan) error {
 	files, err := s.files(in.ID, p.Include)
@@ -405,39 +428,41 @@ func (s *Service) writePack(ctx context.Context, w io.Writer, in instance.Instan
 	meta := p.Meta.Clean()
 	// The instance's notes are the player's own and never go in a pack.
 	ix := modpack.Index{Name: orElse(meta.Name, in.Name), Version: meta.Version, Summary: meta.Summary, Minecraft: in.Minecraft}
+	cm := modpack.CurseManifest{Name: ix.Name, Version: meta.Version, Author: meta.Author, Minecraft: in.Minecraft}
 	if k, err := loader.ParseKind(in.Loader); err == nil && in.Loader != "" {
 		ix.Loader, ix.LoaderVersion = in.Loader, loader.Display(k, in.Minecraft, in.LoaderVersion)
+		cm.Loader, cm.LoaderVersion = ix.Loader, ix.LoaderVersion
+	}
+	if j := in.Settings.Java; j.Override && j.MemoryMaxMB > 0 {
+		cm.MemoryMB = j.MemoryMaxMB
 	}
 	zw := zip.NewWriter(w)
 	var bundled []file
 	for _, f := range files {
 		if l, ok := pc.links[f.rel]; ok {
 			ix.Files = append(ix.Files, l)
+		} else if c, ok := pc.curse[f.rel]; ok {
+			cm.Files = append(cm.Files, c)
 		} else {
 			bundled = append(bundled, f)
 		}
 	}
-	var buf bytes.Buffer
-	if err := modpack.WriteIndex(&buf, ix); err != nil {
-		return err
+	if p.Format == CurseForge {
+		err = s.curseIndex(ctx, zw, in.ID, cm)
+	} else {
+		err = s.mrIndex(zw, in, ix)
 	}
-	if err := put(zw, "modrinth.index.json", bytes.NewReader(buf.Bytes())); err != nil {
+	if err != nil {
 		return err
-	}
-	if s.d.Icons != nil && in.Icon != "" {
-		if p, err := s.d.Icons.Path(in.Icon); err == nil {
-			if err := copyInto(zw, "icon.png", filepath.Dir(p), filepath.Base(p)); err != nil {
-				return err
-			}
-		}
 	}
 	for _, f := range bundled {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		// A client-only mod stays out of a server built from the pack.
+		// A client-only mod stays out of a server built from an .mrpack;
+		// CurseForge zips have one overrides folder.
 		layer := "overrides/"
-		if pc.client[f.rel] {
+		if pc.client[f.rel] && p.Format != CurseForge {
 			layer = "client-overrides/"
 		}
 		if err := copyInto(zw, layer+f.rel, f.dir, f.in); err != nil {
@@ -447,11 +472,44 @@ func (s *Service) writePack(ctx context.Context, w io.Writer, in instance.Instan
 	return zw.Close()
 }
 
-func orElse(a, b string) string {
-	if a != "" {
-		return a
+// mrIndex writes an .mrpack's (or full zip's) index and the instance's icon.
+func (s *Service) mrIndex(zw *zip.Writer, in instance.Instance, ix modpack.Index) error {
+	var buf bytes.Buffer
+	if err := modpack.WriteIndex(&buf, ix); err != nil {
+		return err
 	}
-	return b
+	if err := put(zw, "modrinth.index.json", bytes.NewReader(buf.Bytes())); err != nil {
+		return err
+	}
+	if s.d.Icons != nil && in.Icon != "" {
+		if p, err := s.d.Icons.Path(in.Icon); err == nil {
+			return copyInto(zw, "icon.png", filepath.Dir(p), filepath.Base(p))
+		}
+	}
+	return nil
+}
+
+// curseIndex writes a CurseForge zip's manifest.json and modlist.html.
+func (s *Service) curseIndex(ctx context.Context, zw *zip.Writer, id string, cm modpack.CurseManifest) error {
+	var buf bytes.Buffer
+	if err := modpack.WriteCurseManifest(&buf, cm); err != nil {
+		return err
+	}
+	if err := put(zw, "manifest.json", bytes.NewReader(buf.Bytes())); err != nil {
+		return err
+	}
+	rows, err := s.listRows(ctx, id)
+	if errors.Is(err, ErrNoMods) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	buf.Reset()
+	if err := writeHTML(&buf, rows); err != nil {
+		return err
+	}
+	return put(zw, "modlist.html", bytes.NewReader(buf.Bytes()))
 }
 
 // copyInto adds one file read through a root at dir, so a link swapped in
@@ -484,4 +542,11 @@ func put(zw *zip.Writer, name string, r io.Reader) error {
 	}
 	_, err = io.Copy(dst, r)
 	return err
+}
+
+func orElse(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

@@ -14,13 +14,15 @@
   let { instanceId }: Props = $props();
 
   const FORMATS = [
-    { value: 'mrpack', label: 'Modpack (.mrpack)' },
+    { value: 'mrpack', label: 'Modrinth' },
+    { value: 'curseforge', label: 'CurseForge' },
     { value: 'zip', label: 'Full zip' },
     { value: 'list', label: 'Mod list' },
   ] as const;
   const LISTS = [
     { value: 'md', label: 'Markdown' },
     { value: 'csv', label: 'CSV' },
+    { value: 'html', label: 'HTML' },
   ] as const;
   const PARTS: { key: keyof ExportInclude; label: string }[] = [
     { key: 'options', label: 'Options and keybinds' },
@@ -38,7 +40,7 @@
   /** The pack's name, version and summary (Prism's export fields); never the instance's private notes. */
   let meta = $state<ExportMeta>({ name: '', version: '' });
   // svelte-ignore state_referenced_locally
-  void api.exports.meta(instanceId).then((m) => (meta = { summary: '', ...m }));
+  void api.exports.meta(instanceId).then((m) => (meta = { summary: '', author: '', ...m }));
 
   const plan = $derived({ format, list, include: { ...include } });
   const preview = query(() => (plan.format === 'list' ? Promise.resolve(null) : api.exports.preview(instanceId, plan)));
@@ -47,7 +49,7 @@
     const p = preview.data;
     if (!p) return '';
     if (format === 'zip') return `${plural(p.bundled, 'file')} bundled, ${bytes(p.bytes)}. Imports without downloading anything.`;
-    return `${plural(p.linked, 'file')} ${p.linked === 1 ? 'downloads' : 'download'} from Modrinth; ${p.bundled} ${p.bundled === 1 ? 'is' : 'are'} bundled.`;
+    return `${plural(p.linked, 'file')} ${p.linked === 1 ? 'downloads' : 'download'} from ${format === 'curseforge' ? 'CurseForge' : 'Modrinth'}; ${p.bundled} ${p.bundled === 1 ? 'is' : 'are'} bundled.`;
   });
 
   async function run() {
@@ -80,7 +82,11 @@
       <label class="field"><span class="field-label">Name</span><span class="input"><input bind:value={meta.name} maxlength="64" placeholder={inst.data?.name} /></span></label>
       <label class="field"><span class="field-label">Version</span><span class="input"><input bind:value={meta.version} maxlength="32" placeholder="1.0.0" /></span></label>
     </div>
-    <label class="field"><span class="field-label">Summary</span><span class="input"><input bind:value={meta.summary} maxlength="500" placeholder="Optional" /></span></label>
+    {#if format === 'curseforge'}
+      <label class="field"><span class="field-label">Author</span><span class="input"><input bind:value={meta.author} maxlength="64" placeholder="Optional" /></span></label>
+    {:else}
+      <label class="field"><span class="field-label">Summary</span><span class="input"><input bind:value={meta.summary} maxlength="500" placeholder="Optional" /></span></label>
+    {/if}
     <div class="field"><span class="field-label">Include</span>
       <div class="card tgl-grid">
         {#each PARTS as part (part.key)}<ToggleRow name={part.label} on={include[part.key]} onchange={(v) => (include[part.key] = v)} />{/each}

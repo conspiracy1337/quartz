@@ -70,7 +70,7 @@ func sums(b []byte) (string, string) {
 }
 
 func (m *manifest) Manifest(context.Context, string) ([]content.ManifestItem, error) { return *m, nil }
-func (m *manifest) Identify(context.Context, string, content.Kind) (int, error)       { return 0, nil }
+func (m *manifest) Identify(context.Context, string, content.Kind) (int, error)      { return 0, nil }
 
 func names(t *testing.T, file string) []string {
 	t.Helper()
@@ -252,5 +252,51 @@ func TestMrpackMetaSidesAndLinkedFolder(t *testing.T) {
 	}
 	if strings.Contains(index, "private") {
 		t.Fatal("the instance's notes were exported")
+	}
+}
+
+func TestCurseForgeZip(t *testing.T) {
+	e := newEnv(t)
+	jei, own := []byte("jei jar"), []byte("own jar")
+	j1, _ := sums(jei)
+	o1, _ := sums(own)
+	e.write(e.game, "mods/jei.jar", jei)
+	e.write(e.game, "mods/own.jar", own)
+	e.items = manifest{
+		{Kind: content.Mods, Rel: "mods/jei.jar", Enabled: true, SHA1: j1, Name: "JEI <3", Version: "15.2", Page: "https://www.curseforge.com/minecraft/mc-mods/jei",
+			CurseForge: &content.Ident{ProjectID: "238222", VersionID: "5101366"}},
+		{Kind: content.Mods, Rel: "mods/own.jar", Enabled: true, SHA1: o1, Name: "Own"},
+	}
+	if _, err := e.svc.d.Instances.SetVersion(e.in.ID, "1.20.1", "neoforge", "1.20.1-47.1.106"); err != nil {
+		t.Fatal(err)
+	}
+	p := Plan{Format: CurseForge, Meta: instance.ExportMeta{Name: "Pack", Version: "1.0", Author: "me"}}
+	if pv, err := e.svc.Preview(context.Background(), e.in.ID, p); err != nil || pv.Linked != 1 || pv.Bundled != 1 {
+		t.Fatalf("preview %+v %v", pv, err)
+	}
+	dest := filepath.Join(t.TempDir(), "Pack.zip")
+	if err := e.svc.Write(context.Background(), e.in.ID, p, dest); err != nil {
+		t.Fatal(err)
+	}
+	got := names(t, dest)
+	if !slices.Equal(got, []string{"manifest.json", "modlist.html", "overrides/mods/own.jar"}) {
+		t.Fatalf("zip %v", got)
+	}
+	zr, _ := zip.OpenReader(dest)
+	defer func() { _ = zr.Close() }()
+	read := func(name string) string {
+		f, _ := zr.Open(name)
+		var b bytes.Buffer
+		_, _ = b.ReadFrom(f)
+		return b.String()
+	}
+	m := read("manifest.json")
+	for _, want := range []string{`"manifestType": "minecraftModpack"`, `"id": "neoforge-1.20.1-47.1.106"`, `"projectID": 238222`, `"fileID": 5101366`, `"author": "me"`, `"overrides": "overrides"`} {
+		if !strings.Contains(m, want) {
+			t.Errorf("manifest lacks %s:\n%s", want, m)
+		}
+	}
+	if h := read("modlist.html"); !strings.Contains(h, `<a href="https://www.curseforge.com/minecraft/mc-mods/jei">JEI &lt;3</a>`) {
+		t.Fatalf("modlist.html:\n%s", h)
 	}
 }
