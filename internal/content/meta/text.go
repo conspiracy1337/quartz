@@ -3,6 +3,7 @@ package meta
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"unicode/utf8"
 )
@@ -97,7 +98,16 @@ func lenientJSON(b []byte) []byte {
 	return out
 }
 
-func decodeJSON(b []byte, v any) error { return json.Unmarshal(lenientJSON(b), v) }
+// decodeJSON reads lenient JSON. A field of the wrong type (an "authors"
+// string instead of a list) stays empty while the rest is still read, so one
+// slip doesn't hide the whole mod.
+func decodeJSON(b []byte, v any) error {
+	err := json.Unmarshal(lenientJSON(b), v)
+	if _, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
+		return nil
+	}
+	return err
+}
 
 // component flattens a Minecraft text component (a string, an object with
 // text and extra, or a list of them) to plain text.

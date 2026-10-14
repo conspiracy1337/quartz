@@ -3,6 +3,7 @@ package content
 import (
 	"context"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -118,7 +119,7 @@ func (s *Service) rows(v view, k Kind) []Row {
 	entries := entriesOf(v.idx, k)
 	var problems map[string]Problem
 	if k == Mods {
-		problems = analyze(s.facts(v.idx))
+		_, problems = s.problems(v.in.ID, v.idx)
 	}
 	rank := map[string]int{}
 	for i, name := range v.packs {
@@ -162,7 +163,7 @@ func (s *Service) row(v *view, id string, e Entry, problems map[string]Problem) 
 		Group: e.Group, Locked: hasPW && pw.Pin}
 	switch e.Kind {
 	case ResourcePacks:
-		r.Enabled = contains(v.packs, base(e))
+		r.Enabled = slices.Contains(v.packs, base(e))
 	case Shaders:
 		r.Enabled = v.shader != "" && v.shader == base(e)
 	default:

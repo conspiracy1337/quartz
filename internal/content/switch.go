@@ -3,6 +3,7 @@ package content
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -65,7 +66,7 @@ func (s *Service) compatibility(ctx context.Context, id, mc, loader string, ch m
 	}
 	// Locked mods keep their version: they match only if it already supports mc.
 	for _, l := range locked {
-		if kn := v.known[v.idx.Entries[l.ID].SHA1]; kn.Ident() != nil && contains(kn.Ident().Game, mc) {
+		if kn := v.known[v.idx.Entries[l.ID].SHA1]; kn.Ident() != nil && slices.Contains(kn.Ident().Game, mc) {
 			found[l.ID] = modplatform.Version{}
 		}
 	}

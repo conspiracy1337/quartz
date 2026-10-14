@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"quartz/internal/core/httpcache"
+	"quartz/internal/core/version"
 	"quartz/internal/meta"
 )
 
@@ -94,7 +95,7 @@ func (f *forgeLike) forgeList(ctx context.Context, mc string) ([]Version, error)
 		if !ok || !ValidVersionID(id) {
 			continue
 		}
-		out = append(out, Version{ID: id, Name: name, Stable: stable == "" || compareVersions(name, stable) <= 0})
+		out = append(out, Version{ID: id, Name: name, Stable: stable == "" || version.Compare(name, stable) <= 0})
 	}
 	return out, nil
 }
@@ -194,5 +195,5 @@ func neoForgePrefix(mc string) ([]int, bool) {
 
 // sortNewest orders builds newest first by their displayed version.
 func sortNewest(vs []Version) {
-	slices.SortStableFunc(vs, func(a, b Version) int { return compareVersions(b.Name, a.Name) })
+	slices.SortStableFunc(vs, func(a, b Version) int { return version.Compare(b.Name, a.Name) })
 }

@@ -25,6 +25,7 @@ import (
 	"quartz/internal/core/logging"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
+	"quartz/internal/core/version"
 	"quartz/internal/gamelog"
 	"quartz/internal/install"
 	"quartz/internal/instance"
@@ -525,7 +526,7 @@ func (p *pipeline) updateLoader(ctx context.Context) string {
 	if in.KeepLoaderUpdated && p.l.cfg.Loaders != nil {
 		latest, err := p.l.cfg.Loaders.Latest(ctx, k, in.Minecraft)
 		cur := loader.Display(k, in.Minecraft, in.LoaderVersion)
-		if err == nil && latest.ID != in.LoaderVersion && loader.Compare(latest.Name, cur) > 0 {
+		if err == nil && latest.ID != in.LoaderVersion && version.Compare(latest.Name, cur) > 0 {
 			if updated, err := p.l.cfg.Instances.Update(in.ID, func(i *instance.Instance) error { i.LoaderVersion = latest.ID; return nil }); err == nil {
 				p.inst = updated
 				p.l.cfg.Bus.Emit(events.InstancesChanged, nil)

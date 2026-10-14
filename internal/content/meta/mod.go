@@ -13,6 +13,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"quartz/internal/core/archive"
+	"quartz/internal/core/version"
 )
 
 // Nested jars (Fabric's jar-in-jar, Forge's JarJar) are read one level deep
@@ -94,6 +95,7 @@ func modInfo(r Source) (Info, string, error) {
 	info.Description = clean(info.Description, maxDesc)
 	info.Authors = cleanList(info.Authors, maxAuthors)
 	info.Deps = cleanDeps(info.Deps)
+	info.Game = cleanRange(info.Game)
 	return info, iconFile, nil
 }
 
@@ -122,18 +124,50 @@ func parseFabric(data []byte, _ Source) (Info, string, error) {
 	if err := decodeJSON(data, &f); err != nil {
 		return Info{}, "", err
 	}
+	if f.ID == "" {
+		return Info{}, "", ErrNotContent
+	}
 	info := Info{ID: f.ID, Name: f.Name, Version: f.Version, Description: f.Description, Provides: f.Provides,
 		Library: slices.Contains(f.Custom.ModMenu.Badges, "library"), Side: side(f.Environment)}
 	for _, a := range f.Authors {
 		info.Authors = append(info.Authors, person(a))
 	}
-	for id := range f.Depends {
-		info.Deps = append(info.Deps, Dep{ID: id, Kind: Required})
+	for id, raw := range f.Depends {
+		info.addDep(id, Required, fabricRange(raw))
 	}
-	for id := range f.Breaks {
-		info.Deps = append(info.Deps, Dep{ID: id, Kind: Breaks})
+	for id, raw := range f.Breaks {
+		info.addDep(id, Breaks, fabricRange(raw))
 	}
 	return info, iconPath(f.Icon), nil
+}
+
+// addDep records a relation; a requirement on Minecraft itself is the range
+// of game versions the mod runs on.
+func (i *Info) addDep(id string, k DepKind, r string) {
+	if k == Required && strings.EqualFold(id, "minecraft") {
+		i.Game = r
+		return
+	}
+	i.Deps = append(i.Deps, Dep{ID: id, Kind: k, Range: r})
+}
+
+// fabricRange reads a version predicate: a string, or a list of
+// alternatives. Anything else can't be judged.
+func fabricRange(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return strings.TrimSpace(s)
+	}
+	var list []string
+	if json.Unmarshal(raw, &list) != nil {
+		return version.Unknown
+	}
+	for i, v := range list {
+		if list[i] = strings.TrimSpace(v); list[i] == version.Any {
+			return version.Any
+		}
+	}
+	return strings.Join(list, "||")
 }
 
 // person reads an author: a name, or an object with a name.
@@ -196,6 +230,9 @@ func parseQuilt(data []byte, _ Source) (Info, string, error) {
 		return Info{}, "", err
 	}
 	l := q.Loader
+	if l.ID == "" {
+		return Info{}, "", ErrNotContent
+	}
 	info := Info{ID: l.ID, Name: l.Metadata.Name, Version: l.Version, Description: l.Metadata.Description, Side: side(q.Minecraft.Environment)}
 	names := make([]string, 0, len(l.Metadata.Contributors))
 	for name := range l.Metadata.Contributors {
@@ -204,18 +241,18 @@ func parseQuilt(data []byte, _ Source) (Info, string, error) {
 	sort.Strings(names)
 	info.Authors = names
 	for _, p := range l.Provides {
-		if id, _ := quiltRef(p); id != "" {
-			info.Provides = append(info.Provides, id)
+		if ref := quiltRef(p); ref.ID != "" {
+			info.Provides = append(info.Provides, ref.ID)
 		}
 	}
 	for _, d := range l.Depends {
-		if id, optional := quiltRef(d); id != "" && !optional {
-			info.Deps = append(info.Deps, Dep{ID: id, Kind: Required})
+		if ref := quiltRef(d); ref.ID != "" && !ref.Optional {
+			info.addDep(ref.ID, Required, ref.versions())
 		}
 	}
 	for _, d := range l.Breaks {
-		if id, _ := quiltRef(d); id != "" {
-			info.Deps = append(info.Deps, Dep{ID: id, Kind: Breaks})
+		if ref := quiltRef(d); ref.ID != "" {
+			info.addDep(ref.ID, Breaks, ref.versions())
 		}
 	}
 	return info, iconPath(l.Metadata.Icon), nil
@@ -233,18 +270,31 @@ func side(env string) string {
 	return ""
 }
 
-// quiltRef reads "id" or {"id": …, "optional": …}.
-func quiltRef(raw json.RawMessage) (string, bool) {
+// quiltDep is a dependency reference: "id", or an object with versions.
+type quiltDep struct {
+	ID       string          `json:"id"`
+	Optional bool            `json:"optional"`
+	Versions json.RawMessage `json:"versions"`
+}
+
+// quiltRef reads "id" or {"id": …, "optional": …, "versions": …}.
+func quiltRef(raw json.RawMessage) quiltDep {
 	var s string
 	if json.Unmarshal(raw, &s) == nil {
-		return s, false
+		return quiltDep{ID: s}
 	}
-	var o struct {
-		ID       string `json:"id"`
-		Optional bool   `json:"optional"`
-	}
+	var o quiltDep
 	_ = json.Unmarshal(raw, &o)
-	return o.ID, o.Optional
+	return o
+}
+
+// versions is the reference's range; Quilt's {"any": …}/{"all": …} objects
+// can't be judged.
+func (d quiltDep) versions() string {
+	if len(d.Versions) == 0 {
+		return ""
+	}
+	return fabricRange(d.Versions)
 }
 
 // ---- Forge and NeoForge (mods.toml) ----
@@ -278,7 +328,9 @@ func parseForgeTOML(data []byte, r Source) (Info, string, error) {
 			info.Provides = append(info.Provides, str(mm["modId"]))
 		}
 	}
-	info.Deps = forgeDeps(doc["dependencies"], info.ID)
+	for _, d := range forgeDeps(doc["dependencies"], info.ID) {
+		info.addDep(d.ID, d.Kind, d.Range)
+	}
 	if only, _ := pick("clientSideOnly").(bool); only {
 		info.Side = SideClient
 	}
@@ -323,13 +375,13 @@ func forgeDeps(v any, self string) []Dep {
 	var deps []Dep
 	for _, e := range list {
 		d, _ := e.(map[string]any)
-		id := str(d["modId"])
+		id, r := str(d["modId"]), str(d["versionRange"])
 		mandatory, _ := d["mandatory"].(bool)
 		switch typ := strings.ToLower(str(d["type"])); {
 		case typ == "required" || (typ == "" && mandatory):
-			deps = append(deps, Dep{ID: id, Kind: Required})
+			deps = append(deps, Dep{ID: id, Kind: Required, Range: r})
 		case typ == "incompatible":
-			deps = append(deps, Dep{ID: id, Kind: Breaks})
+			deps = append(deps, Dep{ID: id, Kind: Breaks, Range: r})
 		}
 	}
 	return deps
@@ -386,14 +438,13 @@ type modInfoEntry struct {
 }
 
 func parseModInfo(data []byte, _ Source) (Info, string, error) {
-	data = lenientJSON(data)
 	var list []modInfoEntry
-	if err := json.Unmarshal(data, &list); err != nil {
+	if err := decodeJSON(data, &list); err != nil || len(list) == 0 {
 		var wrapped struct {
 			ModList  []modInfoEntry `json:"modList"`
 			Modlist2 []modInfoEntry `json:"modlist"`
 		}
-		if err := json.Unmarshal(data, &wrapped); err != nil {
+		if err := decodeJSON(data, &wrapped); err != nil {
 			return Info{}, "", err
 		}
 		list = append(wrapped.ModList, wrapped.Modlist2...)
@@ -407,17 +458,20 @@ func parseModInfo(data []byte, _ Source) (Info, string, error) {
 	if info.Name == "Example Mod" {
 		info.Name = ""
 	}
-	reqs := e.RequiredMods
-	if len(reqs) == 0 {
-		reqs = e.Dependencies
+	// requiredMods are hard requirements; "dependencies" only order loading,
+	// unless written FML's way ("required-after:Baubles@[1.5,)").
+	reqs := slices.Clone(e.RequiredMods)
+	for _, d := range e.Dependencies {
+		if strings.HasPrefix(d, "required-") {
+			reqs = append(reqs, d)
+		}
 	}
 	for _, d := range reqs {
-		// "required-after:Forge@[10.13,)" → "Forge"
 		if _, after, ok := strings.Cut(d, ":"); ok {
 			d = after
 		}
-		d, _, _ = strings.Cut(d, "@")
-		info.Deps = append(info.Deps, Dep{ID: strings.TrimPrefix(d, "mod_"), Kind: Required})
+		d, r, _ := strings.Cut(d, "@")
+		info.addDep(strings.TrimPrefix(d, "mod_"), Required, r)
 	}
 	for _, m := range list[1:] {
 		info.Provides = append(info.Provides, m.ModID)
@@ -476,6 +530,16 @@ func cleanIDs(ids []string) []string {
 	return out
 }
 
+// cleanRange keeps a version range short and printable; a stranger one is
+// kept as unreadable rather than dropped (dropping would mean "any").
+func cleanRange(r string) string {
+	r = strings.TrimSpace(r)
+	if len(r) > 128 || strings.ContainsFunc(r, func(c rune) bool { return c < ' ' || c > '~' }) {
+		return version.Unknown
+	}
+	return r
+}
+
 // Dependencies every instance satisfies by itself.
 var builtin = map[string]bool{"minecraft": true, "java": true, "fabricloader": true, "quilt_loader": true,
 	"forge": true, "neoforge": true, "fml": true, "mcp": true, "mod_minecraftforge": true}
@@ -485,6 +549,7 @@ func cleanDeps(in []Dep) []Dep {
 	seen := map[Dep]bool{}
 	for _, d := range in {
 		d.ID = cleanID(d.ID)
+		d.Range = cleanRange(d.Range)
 		if d.ID == "" || builtin[d.ID] || seen[d] {
 			continue
 		}

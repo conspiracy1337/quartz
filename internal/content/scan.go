@@ -85,7 +85,7 @@ func (s *Service) scan(ctx context.Context, id string, k Kind) error {
 			i.Entries[eid] = e
 		}
 		if k == Mods {
-			miss := s.missing(*i)
+			miss := s.missing(id, *i)
 			if !sameMissing(i.Missing, miss) {
 				i.Missing, changed = miss, true
 			}
@@ -271,18 +271,29 @@ func hashStable(abs string, j job) (hashx.Multi, error) {
 }
 
 // ensureKnown parses a blob the catalog hasn't seen.
-func (s *Service) ensureKnown(abs, sha1 string, sp spec) {
-	if k, ok := s.cat.get(sha1); ok && (k.Info != nil || k.Bad) {
-		return
+func (s *Service) ensureKnown(abs, sha1 string, sp spec) { s.current(abs, sha1, sp) }
+
+// current is a blob's catalog entry, parsed (again) when the catalog hasn't
+// seen it or an older parser read it. abs is a copy of the blob on disk.
+func (s *Service) current(abs, sha1 string, sp spec) Known {
+	if k, ok := s.cat.get(sha1); ok && (k.Info != nil || k.Bad) && k.Rev >= metaRev {
+		return k
+	}
+	if _, err := os.Stat(abs); err != nil {
+		k, _ := s.cat.get(sha1)
+		return k // nothing to read now; keep what is known
 	}
 	info, err := parseFile(abs, sp, s.d.Icons)
 	s.cat.update(sha1, func(k *Known) {
 		if err != nil {
-			k.Bad = true
-			return
+			k.Info, k.Bad = nil, true
+		} else {
+			k.Info, k.Bad = &info, false
 		}
-		k.Info, k.Bad, k.Rev = &info, false, metaRev
+		k.Rev = metaRev
 	})
+	k, _ := s.cat.get(sha1)
+	return k
 }
 
 func parseFile(abs string, sp spec, ic meta.Icons) (meta.Info, error) {
