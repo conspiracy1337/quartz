@@ -347,3 +347,35 @@ func TestCurseLoaderIDRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// Paths differing only in case are one file on Windows and macOS: the first
+// spelling wins everywhere, so each system ends with the same files and one
+// hash per file.
+func TestCaseInsensitivePaths(t *testing.T) {
+	index := js(map[string]any{"formatVersion": 1, "game": "minecraft", "versionId": "1", "name": "P",
+		"dependencies": map[string]string{"minecraft": "1.21.1"},
+		"files": []any{
+			mrFile("mods/Sodium.jar", "https://cdn.modrinth.com/data/x/a.jar", nil),
+			mrFile("mods/sodium.jar", "https://cdn.modrinth.com/data/x/b.jar", nil),
+		}})
+	file := zipOf(t, entry{name: "modrinth.index.json", body: index},
+		entry{name: "overrides/config/A.toml", body: "a=1"}, entry{name: "client-overrides/config/a.toml", body: "a=2"},
+		entry{name: "overrides/mods/SODIUM.jar", body: "jar"})
+	p, err := NewReader(Deps{}).File(context.Background(), file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Files) != 1 || p.Files[0].Path != "mods/Sodium.jar" || len(p.Warnings) != 1 {
+		t.Fatalf("files %+v warnings %v", p.Files, p.Warnings)
+	}
+	dir := t.TempDir()
+	root, _ := os.OpenRoot(dir)
+	defer func() { _ = root.Close() }()
+	got, err := p.Extract(root)
+	if err != nil || len(got) != 2 || got["config/A.toml"] == "" || got["mods/Sodium.jar"] == "" {
+		t.Fatalf("extracted %v %v", got, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "config", "A.toml")); string(b) != "a=2" {
+		t.Fatalf("the later layer didn't win: %q", b)
+	}
+}

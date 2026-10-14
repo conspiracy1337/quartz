@@ -129,7 +129,8 @@ func readMrpack(zr *archive.Reader) (*Pack, error) {
 	if len(ix.Files) > maxFiles {
 		return nil, fmt.Errorf("modpack: the pack lists too many files")
 	}
-	foreign := 0
+	foreign, twice := 0, 0
+	seen := map[string]bool{}
 	for _, f := range ix.Files {
 		if f.Env != nil && f.Env.Client == "unsupported" {
 			continue
@@ -159,10 +160,20 @@ func readMrpack(zr *archive.Reader) (*Pack, error) {
 		if optional {
 			rel += ".disabled"
 		}
+		// Windows and macOS see one file where a pack names it twice (in any
+		// case); the first entry wins everywhere.
+		if seen[foldPath(rel)] {
+			twice++
+			continue
+		}
+		seen[foldPath(rel)] = true
 		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, SHA512: sha512, Size: f.FileSize, URLs: urls, Optional: optional})
 	}
 	if foreign > 0 {
 		p.Warnings = append(p.Warnings, fmt.Sprintf("%d %s from addresses Modrinth packs may not use %s left out", foreign, plural(foreign, "file"), were(foreign)))
+	}
+	if twice > 0 {
+		p.Warnings = append(p.Warnings, fmt.Sprintf("%d %s the pack lists twice %s left out", twice, plural(twice, "file"), were(twice)))
 	}
 	return p, nil
 }

@@ -213,6 +213,10 @@ func CleanPath(p string) (string, error) {
 	return path.Clean(p), nil
 }
 
+// foldPath is the key two pack paths share when a case-insensitive disk
+// (Windows, macOS) would make them one file.
+func foldPath(rel string) string { return strings.ToLower(rel) }
+
 // Stats are the Detected card's numbers.
 type Stats struct {
 	Mods       int      `json:"mods"`

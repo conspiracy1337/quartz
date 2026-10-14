@@ -134,11 +134,23 @@ func extractZip(file string, layers []string, p *Pack, root *os.Root, out map[st
 	defer func() { _ = zr.Close() }()
 	var total int64
 	count := 0
+	// Names differing only in case are one file on Windows and macOS: each
+	// takes the first spelling, so every system ends with the same files and
+	// one hash per file.
+	spelling := map[string]string{}
+	for _, f := range p.Files {
+		spelling[foldPath(f.Path)] = f.Path
+	}
 	for _, layer := range layers {
 		for _, e := range zr.Entries(layer) {
 			rel, ok := p.layerPath(layer, e)
 			if !ok {
 				continue
+			}
+			if first, ok := spelling[foldPath(rel)]; ok {
+				rel = first
+			} else {
+				spelling[foldPath(rel)] = rel
 			}
 			if count++; count > 5*maxFiles {
 				return ErrTooBig
