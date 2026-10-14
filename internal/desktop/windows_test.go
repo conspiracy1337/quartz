@@ -46,3 +46,13 @@ func TestWindowsRegisterAndUnregister(t *testing.T) {
 		t.Fatal("another app's handler was removed")
 	}
 }
+
+func TestWindowsCommandsKeepDataFolder(t *testing.T) {
+	w := Want{Exe: `C:\Q\quartz.exe`, Dir: `D:\Games\Q`}
+	if got := openCommand(w); got != `"C:\Q\quartz.exe" "--dir" "D:\Games\Q" "%1"` {
+		t.Errorf("open command %q", got)
+	}
+	if got := runValue(w); got != `"C:\Q\quartz.exe" "--dir" "D:\Games\Q" --minimized` {
+		t.Errorf("run value %q", got)
+	}
+}

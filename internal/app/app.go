@@ -618,7 +618,7 @@ func (a *app) buildContent() error {
 	if err != nil {
 		a.log.Warn("can't find the launcher's program file: no shortcuts", "err", err)
 	}
-	a.shortcuts = shortcuts.New(a.paths.Shortcuts(), a.instances, a.icons, exe, a.log)
+	a.shortcuts = shortcuts.New(a.paths.Shortcuts(), a.instances, a.icons, exe, a.paths.FixedDir(), a.log)
 	a.watchDiscord()
 	a.buildUpdater()
 	a.drops = api.NewDrops(a.bus)

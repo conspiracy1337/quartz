@@ -36,14 +36,23 @@ const mrpackProgID = "Quartz.mrpack"
 func quoteArg(s string) string { return `"` + s + `"` }
 
 // openCommand is the shell\open\command each class gets.
-func openCommand(exe string) string { return quoteArg(exe) + ` "%1"` }
+// command quotes every argument of argv into one command line.
+func command(argv []string) string {
+	q := make([]string, len(argv))
+	for i, a := range argv {
+		q[i] = quoteArg(a)
+	}
+	return strings.Join(q, " ")
+}
+
+func openCommand(w Want) string { return command(w.Argv()) + ` "%1"` }
 
 func (w winSys) apply(was, want Want) error {
 	ours := func(cmd string) bool {
-		return cmd != "" && (cmd == openCommand(want.Exe) || (was.Exe != "" && cmd == openCommand(was.Exe)))
+		return cmd != "" && (cmd == openCommand(want) || (was.Exe != "" && cmd == openCommand(was)))
 	}
 	if want.Links {
-		if err := w.register(want.Exe); err != nil {
+		if err := w.register(want); err != nil {
 			return err
 		}
 	} else if was.Links {
@@ -60,9 +69,9 @@ func (w winSys) apply(was, want Want) error {
 	return nil
 }
 
-func (w winSys) register(exe string) error {
-	cmd := openCommand(exe)
-	icon := quoteArg(exe) + ",0"
+func (w winSys) register(want Want) error {
+	cmd := openCommand(want)
+	icon := quoteArg(want.Exe) + ",0"
 	for _, s := range Schemes {
 		base := w.classes + `\` + s
 		if err := w.set(base, map[string]string{"": "URL:" + s + " link", "URL Protocol": ""}); err != nil {
@@ -130,14 +139,14 @@ func (w winSys) unregister(ours func(cmd string) bool) error {
 }
 
 // runValue is the Run entry: the launcher, started minimized.
-func runValue(exe string) string { return quoteArg(exe) + " " + intent.MinimizedFlag }
+func runValue(w Want) string { return command(w.Argv()) + " " + intent.MinimizedFlag }
 
 func (w winSys) autostart(was, want Want) error {
 	if want.Autostart {
-		return w.set(w.run, map[string]string{brand.Name: runValue(want.Exe)})
+		return w.set(w.run, map[string]string{brand.Name: runValue(want)})
 	}
 	cur := w.get(w.run, brand.Name)
-	if cur != "" && (cur == runValue(want.Exe) || cur == runValue(was.Exe)) {
+	if cur != "" && (cur == runValue(want) || cur == runValue(was)) {
 		return w.deleteValue(w.run, brand.Name)
 	}
 	return nil

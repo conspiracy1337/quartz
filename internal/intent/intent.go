@@ -268,11 +268,18 @@ func (l Launch) Argv() []string {
 // WaitArgs are the arguments a restarted launcher gets: the old process id,
 // the data folder when one was given, and nothing else.
 func WaitArgs(pid int, dir string) []string {
-	out := []string{"--wait-pid", strconv.Itoa(pid)}
-	if dir != "" {
-		out = append(out, "--dir", dir)
+	return append([]string{"--wait-pid", strconv.Itoa(pid)}, DirArgs(dir)...)
+}
+
+// DirArgs select the data folder dir (none for ""): what every command this
+// launcher leaves behind (shortcuts, link handlers, autostart) starts with
+// when its folder was given by --dir or QUARTZ_DIR, which nothing else
+// would find again.
+func DirArgs(dir string) []string {
+	if dir == "" {
+		return nil
 	}
-	return out
+	return []string{"--dir", dir}
 }
 
 // Forward is what a second launch passes to the open launcher: the launch

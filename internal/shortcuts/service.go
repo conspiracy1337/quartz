@@ -24,14 +24,16 @@ type Service struct {
 	store    *instance.Store
 	pictures *icons.Library
 	exe      string
+	lead     []string // arguments every shortcut starts with (the data folder)
 	log      *slog.Logger
 
 	mu sync.Mutex // one shortcut change at a time
 }
 
-// New returns the service; dir is <data>/shortcuts, exe the launcher.
-func New(dir string, store *instance.Store, pictures *icons.Library, exe string, log *slog.Logger) *Service {
-	return &Service{w: newWriter(), dir: dir, store: store, pictures: pictures, exe: exe, log: log}
+// New returns the service; dir is <data>/shortcuts, exe the launcher and
+// dataDir the data folder to pass it (intent.DirArgs; "" for none).
+func New(dir string, store *instance.Store, pictures *icons.Library, exe, dataDir string, log *slog.Logger) *Service {
+	return &Service{w: newWriter(), dir: dir, store: store, pictures: pictures, exe: exe, lead: intent.DirArgs(dataDir), log: log}
 }
 
 // Create makes a shortcut in each place and records them on the instance.
@@ -75,7 +77,7 @@ func (s *Service) Create(id string, where []Where, account string, into instance
 
 func (s *Service) spec(in instance.Instance, rec instance.Shortcut, pic []byte) Spec {
 	l := intent.Launch{Instance: in.ID, Account: rec.Account, Into: rec.Into}
-	return Spec{ID: in.ID, Name: in.Name, Exe: s.exe, Args: l.Argv(), Icon: pic, Where: Where(rec.Where)}
+	return Spec{ID: in.ID, Name: in.Name, Exe: s.exe, Args: append(slices.Clone(s.lead), l.Argv()...), Icon: pic, Where: Where(rec.Where)}
 }
 
 func (s *Service) removeAll(id string, recs []instance.Shortcut) {

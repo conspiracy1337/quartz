@@ -83,7 +83,7 @@ const mrpackMimeXML = `<?xml version="1.0" encoding="UTF-8"?>
 
 func (l linux) entry(want Want) Entry {
 	e := Entry{
-		Name: brand.Name, Comment: "Minecraft launcher", Exec: []string{want.Exe}, ExecSuffix: "%U",
+		Name: brand.Name, Comment: "Minecraft launcher", Exec: want.Argv(), ExecSuffix: "%U",
 		Icon: brand.AppID, Categories: []string{"Game"},
 		Extra: []string{"StartupWMClass=" + brand.Slug},
 	}
@@ -126,7 +126,7 @@ func (l linux) apply(was, want Want) error {
 	}
 	_ = l.run("update-desktop-database", l.applications())
 	if want.Autostart {
-		a := Entry{Name: brand.Name, Exec: []string{want.Exe, intent.MinimizedFlag}, Icon: brand.AppID, NoDisplay: true,
+		a := Entry{Name: brand.Name, Exec: want.Argv(intent.MinimizedFlag), Icon: brand.AppID, NoDisplay: true,
 			Extra: []string{"X-GNOME-Autostart-enabled=true"}}
 		return writeFile(l.autostartPath(), a.Marshal(), 0o644)
 	}

@@ -28,13 +28,17 @@ func (d darwin) apply(_, want Want) error {
 	if !want.Autostart {
 		return removeIfExists(d.agentPath())
 	}
-	return writeFile(d.agentPath(), launchAgent(want.Exe), 0o644)
+	return writeFile(d.agentPath(), launchAgent(want.Argv(intent.MinimizedFlag)), 0o644)
 }
 
-// launchAgent is a plist that runs exe at login.
-func launchAgent(exe string) []byte {
-	var esc bytes.Buffer
-	_ = xml.EscapeText(&esc, []byte(exe))
+// launchAgent is a plist that runs argv at login.
+func launchAgent(argv []string) []byte {
+	var args bytes.Buffer
+	for _, a := range argv {
+		args.WriteString("<string>")
+		_ = xml.EscapeText(&args, []byte(a))
+		args.WriteString("</string>")
+	}
 	var id bytes.Buffer
 	_ = xml.EscapeText(&id, []byte(brand.AppID))
 	return []byte(`<?xml version="1.0" encoding="UTF-8"?>
@@ -42,7 +46,7 @@ func launchAgent(exe string) []byte {
 <plist version="1.0">
 <dict>
   <key>Label</key><string>` + id.String() + `</string>
-  <key>ProgramArguments</key><array><string>` + esc.String() + `</string><string>` + intent.MinimizedFlag + `</string></array>
+  <key>ProgramArguments</key><array>` + args.String() + `</array>
   <key>RunAtLoad</key><true/>
 </dict>
 </plist>

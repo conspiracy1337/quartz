@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"quartz/internal/instance"
+	"quartz/internal/intent"
 )
 
 func testService(t *testing.T, exe string) (*Service, *instance.Store, linux) {
@@ -106,5 +107,25 @@ func TestRefreshRewritesAfterAMove(t *testing.T) {
 	data, _ := os.ReadFile(paths[0])
 	if !strings.Contains(string(data), `Exec="/new/quartz"`) {
 		t.Fatalf("not rewritten:\n%s", data)
+	}
+}
+
+// A launcher started with --dir or QUARTZ_DIR gives its shortcuts the data
+// folder, or they would open another one.
+func TestShortcutKeepsDataFolder(t *testing.T) {
+	s, store, _ := testService(t, "/opt/quartz/quartz")
+	s.lead = intent.DirArgs("/mnt/games/quartz")
+	in, err := store.Create(instance.CreateRequest{Name: "Pack", Minecraft: "1.21.4"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths, err := s.Create(in.ID, []Where{Desktop}, "", instance.Into{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(paths[0])
+	want := `Exec="/opt/quartz/quartz" "--dir" "/mnt/games/quartz" "--launch" "` + in.ID + `"`
+	if !strings.Contains(string(data), want) {
+		t.Fatalf("missing %q in\n%s", want, data)
 	}
 }

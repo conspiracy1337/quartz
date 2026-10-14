@@ -115,3 +115,21 @@ func TestLinuxRealTools(t *testing.T) {
 		t.Error("still the modrinth handler after links were turned off")
 	}
 }
+
+// A data folder only --dir or QUARTZ_DIR names goes into every command, so
+// links and the login start reach the same launcher.
+func TestRegisterKeepsDataFolder(t *testing.T) {
+	r, l, _ := testLinux(t)
+	if err := os.MkdirAll(filepath.Dir(r.path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Sync(Want{Exe: "/opt/quartz/quartz", Dir: "/mnt/q", Links: true, Autostart: true}); err != nil {
+		t.Fatal(err)
+	}
+	if e := read(t, l.entryPath()); !strings.Contains(e, `Exec="/opt/quartz/quartz" "--dir" "/mnt/q" %U`) {
+		t.Errorf("entry:\n%s", e)
+	}
+	if a := read(t, l.autostartPath()); !strings.Contains(a, `Exec="/opt/quartz/quartz" "--dir" "/mnt/q" "--minimized"`) {
+		t.Errorf("autostart:\n%s", a)
+	}
+}

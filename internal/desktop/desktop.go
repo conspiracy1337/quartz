@@ -17,6 +17,7 @@ import (
 
 	"quartz/internal/brand"
 	"quartz/internal/core/jsonfile"
+	"quartz/internal/intent"
 )
 
 // Icon is the launcher's icon (512 px PNG).
@@ -36,9 +37,16 @@ const (
 // Want is what should be registered.
 type Want struct {
 	Exe       string `json:"exe"`       // the launcher binary (absolute)
+	Dir       string `json:"dir"`       // the data folder to pass, when only --dir or QUARTZ_DIR names it
 	Links     bool   `json:"links"`     // link schemes and .mrpack
 	Autostart bool   `json:"autostart"` // start with the computer
 	Version   string `json:"version"`   // re-registers after an update changes the entries
+}
+
+// Argv is the command the system runs: the launcher, its data folder when
+// fixed, then extra.
+func (w Want) Argv(extra ...string) []string {
+	return append(append([]string{w.Exe}, intent.DirArgs(w.Dir)...), extra...)
 }
 
 // Registrar keeps the system's registration in step with Want.

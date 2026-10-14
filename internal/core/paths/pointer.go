@@ -47,6 +47,15 @@ var (
 	ErrBadRoot = errors.New("paths: that folder can't hold the launcher's data")
 )
 
+// FixedDir is the data folder when only this start's --dir or QUARTZ_DIR
+// names it (other starts would use another one), else "".
+func (p Paths) FixedDir() string {
+	if p.Chosen == ByFlag || p.Chosen == ByEnv {
+		return p.Root
+	}
+	return ""
+}
+
 // IsDataFolder reports whether dir already holds launcher data.
 func IsDataFolder(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, "settings.json"))

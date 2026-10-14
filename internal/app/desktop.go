@@ -16,8 +16,8 @@ import (
 const envRegister = "QUARTZ_REGISTER"
 
 // desktopWant is what the settings ask to be registered.
-func desktopWant(s settings.Settings, exe string) desktop.Want {
-	return desktop.Want{Exe: exe, Links: s.Integrations.HandleLinks, Autostart: s.General.StartWithComputer, Version: brand.Version}
+func desktopWant(s settings.Settings, exe, dir string) desktop.Want {
+	return desktop.Want{Exe: exe, Dir: dir, Links: s.Integrations.HandleLinks, Autostart: s.General.StartWithComputer, Version: brand.Version}
 }
 
 // watchDesktop registers the launcher with the system now (in the
@@ -36,7 +36,7 @@ func (a *app) watchDesktop() {
 	// lands out of order.
 	var (
 		mu     sync.Mutex
-		latest = desktopWant(a.settings.Get(), exe)
+		latest = desktopWant(a.settings.Get(), exe, a.paths.FixedDir())
 		kick   = make(chan struct{}, 1)
 	)
 	go func() {
@@ -53,7 +53,7 @@ func (a *app) watchDesktop() {
 	}()
 	kick <- struct{}{}
 	a.bus.Subscribe(events.SettingsChanged, func(p any) {
-		next := desktopWant(p.(settings.Settings), exe)
+		next := desktopWant(p.(settings.Settings), exe, a.paths.FixedDir())
 		mu.Lock()
 		changed := next != latest
 		latest = next
