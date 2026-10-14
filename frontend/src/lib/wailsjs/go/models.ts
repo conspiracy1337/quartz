@@ -800,6 +800,7 @@ export namespace browse {
 	    sort: string;
 	    instance: string;
 	    version: boolean;
+	    game: string;
 	    loader: boolean;
 	    categories: string[];
 	    hideAi: boolean;
@@ -817,6 +818,7 @@ export namespace browse {
 	        this.sort = source["sort"];
 	        this.instance = source["instance"];
 	        this.version = source["version"];
+	        this.game = source["game"];
 	        this.loader = source["loader"];
 	        this.categories = source["categories"];
 	        this.hideAi = source["hideAi"];

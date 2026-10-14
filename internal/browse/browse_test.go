@@ -254,3 +254,27 @@ func TestMatchKey(t *testing.T) {
 		t.Fatal("empty title matched")
 	}
 }
+
+func TestModpackSearchIgnoresTarget(t *testing.T) {
+	mr := &fake{src: modplatform.Modrinth}
+	cf := &fake{src: modplatform.CurseForge}
+	s := newService(mr, cf, &Target{Minecraft: "1.20.1", Loader: "fabric"})
+	if _, err := s.Search(context.Background(), Query{Type: "modpack", Instance: "x", Version: true, Loader: true}); err != nil {
+		t.Fatal(err)
+	}
+	if q := mr.queries[0]; q.Game != "" || len(q.Loaders) != 0 {
+		t.Fatalf("a pack search took the instance's filters: %+v", q)
+	}
+	if _, err := s.Search(context.Background(), Query{Type: "modpack", Instance: "x", Version: true, Game: "1.21.1"}); err != nil {
+		t.Fatal(err)
+	}
+	if q := mr.queries[1]; q.Game != "1.21.1" {
+		t.Fatalf("picked version not used: %+v", q)
+	}
+	if _, err := s.Search(context.Background(), Query{Type: "modpack", Game: "1.21&x=1"}); err != nil {
+		t.Fatal(err)
+	}
+	if q := mr.queries[2]; q.Game != "" {
+		t.Fatalf("bad version passed through: %+v", q)
+	}
+}

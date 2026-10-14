@@ -3,6 +3,7 @@ package browse
 import (
 	"context"
 	"errors"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -22,12 +23,15 @@ const (
 
 // Query is what the Browse page asks for.
 type Query struct {
-	Type       string   `json:"type"` // mod | modpack | resourcepack | shader | datapack
-	Text       string   `json:"text"`
-	Sort       string   `json:"sort"` // relevance | downloads | updated
-	Instance   string   `json:"instance"`
-	Version    bool     `json:"version"` // only the instance's Minecraft version
-	Loader     bool     `json:"loader"`  // only the instance's loader
+	Type     string `json:"type"` // mod | modpack | resourcepack | shader | datapack
+	Text     string `json:"text"`
+	Sort     string `json:"sort"` // relevance | downloads | updated
+	Instance string `json:"instance"`
+	Version  bool   `json:"version"` // only the instance's Minecraft version
+	// Game is a Minecraft version picked by hand (modpacks, which go into
+	// no instance); it wins over Version.
+	Game       string   `json:"game"`
+	Loader     bool     `json:"loader"` // only the instance's loader
 	Categories []string `json:"categories"`
 	HideAI     bool     `json:"hideAi"`
 	HideAds    bool     `json:"hideAds"`
@@ -61,6 +65,9 @@ type Results struct {
 	Changed  []Row  `json:"changed"`
 	More     bool   `json:"more"`
 }
+
+// gameRe is what a Minecraft version id looks like ("1.20.1", "24w14a", "1.21-pre1").
+var gameRe = regexp.MustCompile(`^[0-9A-Za-z._-]{1,32}$`)
 
 // Content disclosures Modrinth can filter on (Prism's list).
 var (
@@ -114,8 +121,14 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 		base.Text = base.Text[:200]
 	}
 	ss := &session{id: newID(), sort: srt, byKey: map[string]*row{}, byID: map[string]*row{}, hidden: map[string]bool{}, used: s.d.Now()}
+	if t == modplatform.TypeModpack {
+		tgt = nil // a pack becomes a new instance: the target's version, loader and content don't apply
+	}
+	if gameRe.MatchString(q.Game) {
+		base.Game = q.Game
+	}
 	if tgt != nil {
-		if q.Version {
+		if q.Version && base.Game == "" {
 			base.Game = tgt.Minecraft
 		}
 		if q.Loader && t == modplatform.TypeMod {

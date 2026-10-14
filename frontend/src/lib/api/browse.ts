@@ -41,7 +41,8 @@ export const importsApi = {
   /** Opens a file picker; null when cancelled. */
   inspectFile: bridged(ImportsGo.InspectFile, (): ImportPreview | null => misc.importPreview),
   inspectDropped: bridged(ImportsGo.InspectDropped, (_dropId: string): ImportPreview | null => misc.importPreview),
-  inspectProject: bridged(ImportsGo.InspectProject, (_ref: string, _src: Src): ImportPreview | null => misc.importPreview),
+  /** A pack from Browse: the version picked on its project page, or "" for the newest release. */
+  inspectProject: bridged(ImportsGo.InspectProject, (_ref: string, _src: Src, _version: string): ImportPreview | null => misc.importPreview),
   /** A pack the launcher was asked to open from outside (a link or a file), by its open id. */
   inspectOpened: bridged(ImportsGo.InspectOpened, (_openId: string): ImportPreview | null => misc.importPreview),
   /** Creates the instance as a job; resolves with its id. */

@@ -132,8 +132,9 @@ func (im *Imports) InspectOpened(openID string) (*ImportPreview, error) {
 	return im.preview(im.d.Reader.Project(ctx, p.Source, p.Project, p.Version))
 }
 
-// InspectProject reads a pack from Browse.
-func (im *Imports) InspectProject(ref, source string) (*ImportPreview, error) {
+// InspectProject reads a pack from Browse: the version picked on the project
+// page, or "" for the newest release.
+func (im *Imports) InspectProject(ref, source, version string) (*ImportPreview, error) {
 	r, err := modplatform.ParseRef(ref)
 	if err != nil {
 		return nil, err
@@ -142,10 +143,10 @@ func (im *Imports) InspectProject(ref, source string) (*ImportPreview, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.ID(src) == "" {
+	if r.ID(src) == "" || len(version) > 64 {
 		return nil, ErrBadSource
 	}
-	return im.preview(im.d.Reader.Project(im.ctx.Get(), src, r.ID(src), ""))
+	return im.preview(im.d.Reader.Project(im.ctx.Get(), src, r.ID(src), version))
 }
 
 // Install creates the instance from an inspected pack and returns its job.

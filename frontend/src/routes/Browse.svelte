@@ -41,6 +41,10 @@
   let cats = $state<Record<string, boolean>>(hasBridge() ? {} : { Optimization: true });
   let useVersion = $state(true);
   let useLoader = $state(true);
+  /** Modpacks become new instances, so their version is picked by hand ("" for any). */
+  let game = $state('');
+  const releases = query(() => api.versions.minecraft());
+  const GAMES = $derived([{ value: '', label: 'Any version' }, ...(releases.data ?? []).flatMap((f) => f.releases.map((v) => ({ value: v.id, label: v.id })))]);
   const hide = session.browseHide;
 
   // svelte-ignore state_referenced_locally
@@ -66,7 +70,8 @@
 
   $effect(() => {
     const q = {
-      type, text, sort, instance: target?.id ?? '', version: useVersion && !!target, loader: useLoader && showTarget && !!target?.loader,
+      type, text, sort, instance: showTarget ? (target?.id ?? '') : '', version: useVersion && showTarget && !!target, game: showTarget ? '' : game,
+      loader: useLoader && showTarget && !!target?.loader,
       categories: Object.keys(cats).filter((c) => cats[c]), hideAi: hide.ai, hideAds: hide.ads, hideInstalled: hide.installed && showTarget,
     };
     untrack(() => void run(q));
@@ -179,7 +184,11 @@
     </div>
   </section>
   <aside id="browse-filters" class="filters scroll" class:open={filtersOpen} aria-label="Filters" bind:this={filtersEl} style="border-left: 1px solid var(--line); padding: 16px; flex-direction: column; gap: 18px">
-    <div class="fg"><span class="field-label">Version and loader</span><div style="display: flex; gap: 6px">{#if target}<button class="chip" class:on={useVersion} aria-pressed={useVersion} onclick={() => (useVersion = !useVersion)}>{target.minecraft}</button>{#if showTarget && target.loader}<button class="chip" class:on={useLoader} aria-pressed={useLoader} onclick={() => (useLoader = !useLoader)}>{LOADER_NAMES[target.loader.kind]}</button>{/if}{/if}</div></div>
+    {#if showTarget}
+      <div class="fg"><span class="field-label">Version and loader</span><div style="display: flex; gap: 6px">{#if target}<button class="chip" class:on={useVersion} aria-pressed={useVersion} onclick={() => (useVersion = !useVersion)}>{target.minecraft}</button>{#if target.loader}<button class="chip" class:on={useLoader} aria-pressed={useLoader} onclick={() => (useLoader = !useLoader)}>{LOADER_NAMES[target.loader.kind]}</button>{/if}{/if}</div></div>
+    {:else}
+      <div class="fg"><span class="field-label">Minecraft version</span><Select bind:value={game} options={GAMES} label="Minecraft version" style="width: 100%" /></div>
+    {/if}
     <div class="fg"><span class="field-label">Categories</span>
       {#each categories.data ?? [] as c (c)}
         <button class="fl" onclick={() => (cats[c] = !cats[c])} aria-pressed={!!cats[c]}><Check on={!!cats[c]} /><span>{c}</span><span></span></button>

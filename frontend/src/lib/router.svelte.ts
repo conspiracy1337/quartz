@@ -23,7 +23,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'library' }
   | { name: 'new-instance' }
-  | { name: 'import'; ref?: string; source?: (typeof SOURCES)[number]; open?: string }
+  | { name: 'import'; ref?: string; source?: (typeof SOURCES)[number]; version?: string; open?: string }
   | { name: 'browse'; type?: Kind; instance?: string }
   | { name: 'project'; id: string; tab?: 'versions' }
   | { name: 'skins' }
@@ -40,7 +40,7 @@ const simple = ['home', 'library', 'browse', 'skins', 'accounts', 'syncing', 'do
 export function path(r: Route): string {
   switch (r.name) {
     case 'new-instance': return '/library/new';
-    case 'import': return '/library/import' + (r.open ? `/open/${enc(r.open)}` : r.ref && r.source ? `/${enc(r.ref)}/${r.source}` : '');
+    case 'import': return '/library/import' + (r.open ? `/open/${enc(r.open)}` : r.ref && r.source ? `/${enc(r.ref)}/${r.source}${r.version ? '/' + enc(r.version) : ''}` : '');
     case 'browse': return '/browse' + (r.type ? `/t/${r.type}${r.instance ? '/' + enc(r.instance) : ''}` : '');
     case 'project': return `/browse/${enc(r.id)}${r.tab ? '/' + r.tab : ''}`;
     case 'settings': return `/settings/${r.tab}`;
@@ -67,14 +67,14 @@ const isOneOf = <T extends string>(list: readonly T[], v: string | undefined): v
 
 /** Parses a path; anything unknown falls back to Home. */
 export function parse(p: string): Route {
-  const [a, b, c, d] = p.replace(/^#?\/?/, '').split('/');
+  const [a, b, c, d, e] = p.replace(/^#?\/?/, '').split('/');
   if (isOneOf(simple, a) && b === undefined) return { name: a };
   switch (a) {
     case 'library':
       if (b === 'new') return { name: 'new-instance' };
       if (b === 'import') {
         if (c === 'open' && d) return { name: 'import', open: dec(d) };
-        return c && isOneOf(SOURCES, d) ? { name: 'import', ref: dec(c), source: d } : { name: 'import' };
+        return c && isOneOf(SOURCES, d) ? { name: 'import', ref: dec(c), source: d, ...(e ? { version: dec(e) } : {}) } : { name: 'import' };
       }
       break;
     case 'browse':

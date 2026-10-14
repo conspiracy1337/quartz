@@ -97,7 +97,7 @@
   {#if r.name === 'home'}<Home />
   {:else if r.name === 'library'}<Library />
   {:else if r.name === 'new-instance'}<NewInstance />
-  {:else if r.name === 'import'}{#key r.open ?? r.ref}<Import ref={r.ref} source={r.source} open={r.open} />{/key}
+  {:else if r.name === 'import'}{#key r.open ?? `${r.ref}/${r.version ?? ''}`}<Import ref={r.ref} source={r.source} version={r.version} open={r.open} />{/key}
   {:else if r.name === 'browse'}{#key `${r.type}/${r.instance}`}<Browse type={r.type} instance={r.instance} />{/key}
   {:else if r.name === 'project'}{#key r.id}<Project id={r.id} tab={r.tab} />{/key}
   {:else if r.name === 'skins'}<Skins />

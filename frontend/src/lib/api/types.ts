@@ -289,6 +289,8 @@ export type BrowseSort = 'relevance' | 'downloads' | 'updated';
 export interface BrowseQuery {
   type: ProjectKind; text: string; sort: BrowseSort; instance: string;
   version: boolean; loader: boolean; categories: string[];
+  /** A Minecraft version picked by hand (modpacks); "" for any. */
+  game: string;
   hideAi: boolean; hideAds: boolean; hideInstalled: boolean;
 }
 /** A page of results: rows to append and rows already shown that changed. */

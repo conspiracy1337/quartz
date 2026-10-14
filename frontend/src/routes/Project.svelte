@@ -36,6 +36,7 @@
   let chooser = $state<{ x: number; y: number } | null>(null);
 
   const p = $derived(project.data);
+  const kind = $derived(p ? projectType(p.type) : undefined);
   const src = $derived<Src>(chosen ?? p?.fresher ?? 'modrinth');
   const other = $derived<Src>(src === 'modrinth' ? 'curseforge' : 'modrinth');
   const side = $derived(p?.[src] ?? p?.[other]);
@@ -45,7 +46,9 @@
       ? `more recently (${ago(p[src]!.updated)}, ${SRC_NAMES[other]} ${ago(p[other]!.updated)})`
       : `${ago(p[src]!.updated)} (${SRC_NAMES[other]} was updated more recently)`) : '',
   );
-  const versions = query(() => (p?.[src] ? api.browse.versions(id, src, target?.id ?? '', onlyCompatible) : Promise.resolve([] as ProjectVersion[])));
+  /** A pack becomes a new instance: no instance's version or loader narrows its versions. */
+  const forInstance = $derived(!!kind?.content);
+  const versions = query(() => (p?.[src] ? api.browse.versions(id, src, forInstance ? (target?.id ?? '') : '', forInstance && onlyCompatible) : Promise.resolve([] as ProjectVersion[])));
   const shown = $derived((versions.data ?? []).filter((v) => channels[v.channel]));
   const changes = query(() => (tab === 3 && p?.[src] ? api.browse.changelog(id, src, []) : Promise.resolve([])));
   const openId = $derived(shown[openVersion]?.id);
@@ -58,12 +61,11 @@
   ]);
   /** The newest version for the target that the installed one would update to. */
   const latest = $derived(versions.data?.find((v) => v.action === 'Update'));
-  const kind = $derived(p ? projectType(p.type) : undefined);
   const forTarget = $derived(target ? `${target.name} (${target.minecraft}${target.loader ? `, ${LOADER_NAMES[target.loader.kind]}` : ''})` : '');
 
   function install(version?: string) {
     if (!p || !kind) return;
-    if (!kind.content) return go({ name: 'import', ref: p.ref, source: src });
+    if (!kind.content) return go({ name: 'import', ref: p.ref, source: src, ...(version ? { version } : {}) });
     if (target) session.open({ kind: 'install', ref: p.ref, source: src, instanceId: target.id, content: kind.content, ...(version ? { version } : {}) });
   }
   function choose(e: MouseEvent) {
@@ -124,7 +126,7 @@
         </div>
       {:else if tab === 1}
         <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
-          <label class="small muted" style="display: flex; gap: 8px; align-items: center"><Toggle bind:on={onlyCompatible} label="Only compatible versions" onchange={() => (openVersion = -1)} />Only versions for {forTarget}</label>
+          {#if forInstance}<label class="small muted" style="display: flex; gap: 8px; align-items: center"><Toggle bind:on={onlyCompatible} label="Only compatible versions" onchange={() => (openVersion = -1)} />Only versions for {forTarget}</label>{/if}
           <div style="flex: 1 1 0"></div>
           {#each CHANNELS as c (c)}<button class="chip" class:on={channels[c]} onclick={() => (channels[c] = !channels[c])}>{c}</button>{/each}
         </div>
