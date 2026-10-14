@@ -27,6 +27,10 @@ type SignInEvent struct {
 	Error     *auth.Problem `json:"error,omitempty"`
 }
 
+// maxCodeRenewals is how often an expired device code is replaced; codes
+// last 15 minutes, so the dialog keeps working for an hour.
+const maxCodeRenewals = 3
+
 type flow struct {
 	id     int64
 	mode   string
@@ -126,13 +130,22 @@ func (m *Manager) SignInCode() (int64, error) {
 	}
 	f, ctx := m.begin("code")
 	go func() {
-		dc, err := m.cfg.Auth.MSA.StartDevice(ctx)
-		if err != nil {
-			m.end(ctx, f, nil, msa.Token{}, err)
-			return
+		var (
+			tok msa.Token
+			err error
+		)
+		// A code that expires while the dialog is open is replaced by a new
+		// one (as Prism does), a few times, rather than ending the sign-in.
+		for renewed := 0; ; renewed++ {
+			var dc msa.DeviceCode
+			if dc, err = m.cfg.Auth.MSA.StartDevice(ctx); err != nil {
+				break
+			}
+			m.emit(f, SignInEvent{Code: dc.UserCode, URL: dc.VerificationURI, QR: qrMatrix(dc.QRURL), ExpiresAt: dc.ExpiresAt.UnixMilli()})
+			if tok, err = m.cfg.Auth.MSA.PollDevice(ctx, dc); !errors.Is(err, msa.ErrExpired) || renewed == maxCodeRenewals {
+				break
+			}
 		}
-		m.emit(f, SignInEvent{Code: dc.UserCode, URL: dc.VerificationURI, QR: qrMatrix(dc.QRURL), ExpiresAt: dc.ExpiresAt.UnixMilli()})
-		tok, err := m.cfg.Auth.MSA.PollDevice(ctx, dc)
 		m.end(ctx, f, m.stepper(f), tok, err)
 	}()
 	return f.id, nil

@@ -98,6 +98,42 @@ func (w *world) signIn(t *testing.T) Account {
 	}
 }
 
+func TestExpiredCodeIsRenewed(t *testing.T) {
+	w := newWorld(t)
+	w.srv.ExpiredCodes = 1
+	var codes []string
+	if _, err := w.m.SignInCode(); err != nil {
+		t.Fatal(err)
+	}
+	for e := range w.signin {
+		if e.Code != "" {
+			codes = append(codes, e.Code)
+		}
+		if e.Done {
+			if e.Error != nil {
+				t.Fatalf("sign-in failed: %+v", e.Error)
+			}
+			break
+		}
+	}
+	if len(codes) != 2 || codes[0] == codes[1] {
+		t.Fatalf("codes shown: %v", codes)
+	}
+	// Past the renewals, the expiry is reported.
+	w.srv.ExpiredCodes = maxCodeRenewals + 1
+	if _, err := w.m.SignInCode(); err != nil {
+		t.Fatal(err)
+	}
+	for e := range w.signin {
+		if e.Done {
+			if e.Error == nil || e.Error.Reason != "expired" {
+				t.Fatalf("want expired, got %+v", e.Error)
+			}
+			break
+		}
+	}
+}
+
 func TestSignInStoresTokensOnlyInTheKeychain(t *testing.T) {
 	w := newWorld(t)
 	a := w.signIn(t)
