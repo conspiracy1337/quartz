@@ -100,7 +100,10 @@
     kick();
   });
 
+  // The pointer is captured, so a drag keeps turning the model outside its box until the button is let go.
   function down(e: PointerEvent) {
+    if (e.button !== 0) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drag = { x: e.clientX, y: e.clientY, ry, rx };
   }
   function move(e: PointerEvent) {
@@ -115,7 +118,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="pm" class:fill class:drag={!!drag} style="font-family: var(--font); color: var(--text)"
-  onpointerdown={down} onpointermove={move} onpointerup={up} onpointerleave={up}>
+  onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onlostpointercapture={up}>
   <div class="pm-gl" role="img" aria-label="3D preview of the player skin. Drag to rotate.">
     <canvas bind:this={canvas} class:hide={flat}></canvas>
     {#if flat}<SkinFigure look={{ texture, slim }} zoom={s} />{/if}
