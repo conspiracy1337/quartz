@@ -302,7 +302,7 @@ func grantPath(path string, sid *windows.SID, mask uint32, inherit bool) error {
 }
 
 // denyPath adds an inheritable deny entry for sid unless an equal one is
-// there. Files hardlinked from the store inherit it like any other file, and
+// there. Hard links to store files inherit it like any other file, and
 // it names only this instance's container.
 func denyPath(path string, sid *windows.SID, mask uint32) error {
 	return setACE(path, sid, mask, windows.DENY_ACCESS, true)

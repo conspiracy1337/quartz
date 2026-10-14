@@ -213,6 +213,7 @@ type amdgpuDeviceInfo struct {
 	idsFlags uint64
 }
 
+//nolint:gosec // an ioctl on Go-owned memory
 func amdgpuFused(node string) (bool, error) {
 	fd, err := unix.Open(node, unix.O_RDWR|unix.O_CLOEXEC, 0)
 	if err != nil {

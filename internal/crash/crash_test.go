@@ -47,7 +47,7 @@ func TestRules(t *testing.T) {
 		{"java too new for modlauncher", "", "java.lang.ClassCastException: class jdk.internal.loader.ClassLoaders$AppClassLoader cannot be cast to class java.net.URLClassLoader", Finding{Rule: "java-new"}},
 		{"heap", "", "Error occurred during initialization of VM\nCould not reserve enough space for 8388608KB object heap", Finding{Rule: "jvm-memory"}},
 		{"vm option", "", "Unrecognized VM option 'UseZGCC'\nError: Could not create the Java Virtual Machine.", Finding{Rule: "jvm-arg", Arg: "UseZGCC"}},
-		{"java option", "", "Unrecognized option: --enable-preveiw", Finding{Rule: "jvm-arg", Arg: "--enable-preveiw"}},
+		{"java option", "", "Unrecognized option: --no-such-option", Finding{Rule: "jvm-arg", Arg: "--no-such-option"}},
 		{"native driver", fixture(t, "hs_err-nvidia.log"), "", Finding{Rule: "graphics", Arg: "nvoglv64.dll"}},
 		{"native other", "# Problematic frame:\n# C  [lwjgl.dll+0x1234]\n", "", Finding{Rule: "native", Arg: "lwjgl.dll"}},
 		{"native memory", "# There is insufficient memory for the Java Runtime Environment to continue.\n", "", Finding{Rule: "memory"}},

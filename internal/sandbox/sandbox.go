@@ -51,8 +51,8 @@ type Run struct {
 }
 
 // protectedFolders are the game folders a run reads but never changes. A
-// mod's file in mods/ is its store blob, hardlinked (where the disk can't
-// clone) into every instance that uses it, so a game able to write one would
+// mod's file in mods/ is its store blob, a hard link (where the disk can't
+// clone) in every instance that uses it, so a game able to write one would
 // change it for all of them, unsandboxed ones included.
 var protectedFolders = []string{"mods"}
 
