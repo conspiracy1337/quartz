@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"bufio"
 	"cmp"
 	"context"
 	"errors"
@@ -51,8 +52,13 @@ type run struct {
 	child      *procx.Child
 	started    time.Time
 	con        *gamelog.Console
-	logFile    *os.File
 	accountID  string
+
+	// The run's log: lines are buffered and written out with each console
+	// batch, not one write per line.
+	lmu     sync.Mutex
+	logFile *os.File
+	logBuf  *bufio.Writer
 
 	stopping atomic.Bool
 	killed   atomic.Bool
@@ -234,14 +240,14 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 		r.record.Sandbox = sp.jail.Name
 	}
 	r.con = gamelog.NewConsole(consoleLines, l.cfg.Redactor, logBatch, r.add, func(lines []gamelog.Line) {
+		r.flushLog()
 		l.cfg.Bus.Emit(events.GameLog, LogBatch{InstanceID: r.instanceID, RunID: r.id, Lines: lines})
 	})
 	runsDir := l.cfg.Instances.RunsDir(inst.ID)
 	if err := os.MkdirAll(runsDir, 0o700); err != nil {
 		return nil, err
 	}
-	var err error
-	if r.logFile, err = os.OpenFile(filepath.Join(runsDir, r.id+".log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil { //nolint:gosec // our own runs folder
+	if err := r.openLog(filepath.Join(runsDir, r.id+".log")); err != nil {
 		return nil, err
 	}
 	// The token stays a secret for the launcher's lifetime: another run may
@@ -303,7 +309,26 @@ func (r *run) add(line gamelog.Line) {
 	if line.Thread != "" {
 		thread = line.Thread + "/"
 	}
-	_, _ = fmt.Fprintf(r.logFile, "[%s] [%s%s]: %s\n", line.Time, thread, line.Level, line.Message)
+	r.lmu.Lock()
+	_, _ = fmt.Fprintf(r.logBuf, "[%s] [%s%s]: %s\n", line.Time, thread, line.Level, line.Message)
+	r.lmu.Unlock()
+}
+
+// openLog creates the run's log.
+func (r *run) openLog(p string) error {
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // our own runs folder
+	if err != nil {
+		return err
+	}
+	r.logFile, r.logBuf = f, bufio.NewWriterSize(f, 64<<10)
+	return nil
+}
+
+// flushLog writes the buffered lines to the run's log.
+func (r *run) flushLog() {
+	r.lmu.Lock()
+	_ = r.logBuf.Flush()
+	r.lmu.Unlock()
 }
 
 // tailLines is how much of the console finishers see.
@@ -374,6 +399,7 @@ func (l *Launcher) stop(r *run) error {
 func (l *Launcher) exited(r *run, waitErr error) {
 	close(r.done)
 	r.con.Done()
+	r.flushLog()
 	_ = r.logFile.Close()
 
 	code, reaped := r.child.Result()

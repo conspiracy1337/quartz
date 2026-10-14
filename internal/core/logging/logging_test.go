@@ -78,3 +78,13 @@ func TestAddSecret(t *testing.T) {
 		t.Fatal("secret not removed")
 	}
 }
+
+// BenchmarkRedact is one ordinary game log line, the common case.
+func BenchmarkRedact(b *testing.B) {
+	r := NewRedactor("alice")
+	r.AddSecret("eyJsecretsecret.payloadpayload.signaturesig")
+	line := "[12:01:22] [Render thread/INFO]: Loaded 1342 recipes from 214 mods in /home/alice/.minecraft"
+	for b.Loop() {
+		_ = r.Redact(line)
+	}
+}
