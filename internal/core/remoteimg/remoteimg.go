@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"quartz/internal/core/disklru"
 	"quartz/internal/core/flightx"
@@ -33,6 +34,14 @@ const (
 	// maxTotal is the cache size (see disklru).
 	maxTotal = 256 << 20
 	maxURL   = 2048
+	// maxTokens caps the URLs remembered for the UI. Past it they are all
+	// forgotten: cached pictures still load by token, and the UI asks
+	// for a fresh token whenever it shows a picture again.
+	maxTokens = 20000
+	// A picture that failed isn't asked for again for a while: longer when
+	// asking again can't help (gone, not a picture, too large).
+	retryPermanent = 10 * time.Minute
+	retryOther     = time.Minute
 )
 
 // Hosts are the CDNs pictures may come from.
@@ -52,6 +61,10 @@ var pathHosts = map[string]string{"github.com": "/user-attachments/"}
 // ErrUnknown is returned for a token the launcher never handed out.
 var ErrUnknown = errors.New("remoteimg: unknown picture")
 
+// errNotPicture is returned for a download that isn't a picture the UI may
+// show; asking again won't change that.
+var errNotPicture = &netx.PermanentError{Err: errors.New("remoteimg: not a picture")}
+
 var (
 	tokenRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
 	exts    = []string{".png", ".jpg", ".gif", ".webp"}
@@ -65,9 +78,11 @@ type Cache struct {
 	// allowed is Allowed; tests point it at a local server.
 	allowed func(string) bool
 
-	mu   sync.Mutex
-	urls map[string]string // token → URL
-	lru  *disklru.LRU
+	mu     sync.Mutex
+	urls   map[string]string  // token → URL
+	failed map[string]failure // token → its last failure, while it counts
+	lru    *disklru.LRU
+	now    func() time.Time
 
 	flight flightx.Group[string]
 }
@@ -77,7 +92,8 @@ func New(dir string, h *netx.Client, log *slog.Logger) *Cache {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Cache{dir: dir, http: h, log: log, allowed: Allowed, urls: map[string]string{}, lru: disklru.New(dir, maxTotal)}
+	return &Cache{dir: dir, http: h, log: log, allowed: Allowed, urls: map[string]string{}, failed: map[string]failure{},
+		lru: disklru.New(dir, maxTotal), now: time.Now}
 }
 
 // Allowed reports whether raw is an https URL on an allowed host.
@@ -105,6 +121,9 @@ func (c *Cache) Token(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	t := hex.EncodeToString(sum[:16])
 	c.mu.Lock()
+	if _, ok := c.urls[t]; !ok && len(c.urls) >= maxTokens {
+		c.urls, c.failed = map[string]string{}, map[string]failure{}
+	}
 	c.urls[t] = raw
 	c.mu.Unlock()
 	return t
@@ -128,15 +147,32 @@ func (c *Cache) Path(ctx context.Context, token string) (string, error) {
 	}
 	c.mu.Lock()
 	raw, ok := c.urls[token]
+	f, failed := c.failed[token]
 	c.mu.Unlock()
 	if !ok {
 		return "", ErrUnknown
 	}
+	if failed && c.now().Before(f.until) {
+		return "", f.err
+	}
 	p, err := c.flight.Do(ctx, token, func(ctx context.Context) (string, error) { return c.fetch(ctx, token, raw) })
-	if err != nil {
+	if err != nil && ctx.Err() == nil { // a page that stopped waiting isn't a failure
 		c.log.Debug("picture not fetched", "err", err)
+		wait := retryOther
+		if cls, _ := netx.Classify(err); cls == netx.Permanent {
+			wait = retryPermanent
+		}
+		c.mu.Lock()
+		c.failed[token] = failure{err: err, until: c.now().Add(wait)}
+		c.mu.Unlock()
 	}
 	return p, err
+}
+
+// failure is a fetch that failed and when it may be tried again.
+type failure struct {
+	err   error
+	until time.Time
 }
 
 // cached finds a token's file and marks it recently used.
@@ -164,7 +200,7 @@ func (c *Cache) fetch(ctx context.Context, token, raw string) (string, error) {
 	}
 	ext := Sniff(data)
 	if len(data) > MaxFile || ext == "" {
-		return "", errors.New("remoteimg: not a picture")
+		return "", errNotPicture
 	}
 	if err := os.MkdirAll(c.dir, 0o700); err != nil {
 		return "", err

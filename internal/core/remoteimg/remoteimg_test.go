@@ -136,3 +136,36 @@ func TestRedirectMustStayAllowed(t *testing.T) {
 		t.Fatalf("followed a redirect to a host that isn't allowed (err %v)", err)
 	}
 }
+
+// A picture that failed isn't fetched again on every render, only once it
+// may have changed.
+func TestFailuresWait(t *testing.T) {
+	var hits atomic.Int32
+	c, srv := newCache(t, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if r.URL.Path == "/gone" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte("<html>"))
+	})
+	now := time.Now()
+	c.now = func() time.Time { return now }
+	ctx := context.Background()
+	for _, path := range []string{"/gone", "/html"} {
+		tok := c.Token(srv.URL + path)
+		for range 3 {
+			if _, err := c.Path(ctx, tok); err == nil {
+				t.Fatalf("%s was served", path)
+			}
+		}
+	}
+	if hits.Load() != 2 {
+		t.Fatalf("hits = %d, want one per picture", hits.Load())
+	}
+	now = now.Add(retryPermanent + time.Second)
+	_, _ = c.Path(ctx, c.Token(srv.URL+"/gone"))
+	if hits.Load() != 3 {
+		t.Fatalf("hits = %d: a failure kept counting after its wait", hits.Load())
+	}
+}
