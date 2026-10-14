@@ -40,7 +40,7 @@
   <div style="display: flex; flex-direction: column; gap: 8px">
     <Icon name="brand" size={28} sw={1.5} />
     <h1 class="h1" style="font-size: 26px; line-height: 32px">Set up the launcher</h1>
-    <p class="muted" style="margin: 0">Four quick steps. You can change all of this later in Settings.</p>
+    <p class="muted" style="margin: 0">Three quick steps. You can change all of this later in Settings.</p>
   </div>
   <div class="field"><span class="field-label">Language</span><span class="tall"><SettingControl control={language} label="Language" /></span></div>
   <label class="field"><span class="field-label">Where to keep instances</span><span style="display: flex; gap: 6px"><span class="input" style="flex: 1 1 auto; height: 36px"><input class="mono" value={info.data?.dataDir ?? ''} readonly /></span><button class="btn" style="height: 36px" onclick={changeFolder} disabled={moving || !info.data || info.data.dataDirFixed}>Change</button></span><span class="field-help">About 200 MB per vanilla instance. Modpacks can need several GB.</span></label>
@@ -49,7 +49,7 @@
       {#each LOOKS as l (l.theme)}<button class="tp" class:on={theme === l.theme} onclick={() => prefs.update((s) => (s.appearance.theme = l.theme))} role="radio" aria-checked={theme === l.theme}><span style="background: {l.bg}; display: block"></span><span class="lb">{l.name}</span></button>{/each}
     </div>
   </div>
-  <div style="display: flex; justify-content: space-between; align-items: center"><span class="small faint">Step 1 of 4</span><a href={href({ name: 'setup', step: 2 })} class="btn btn-accent btn-lg">Continue</a></div>
+  <div style="display: flex; justify-content: space-between; align-items: center"><span class="small faint">Step 1 of 3</span><a href={href({ name: 'setup', step: 2 })} class="btn btn-accent btn-lg">Continue</a></div>
 </SetupLayout>
 
 <style>

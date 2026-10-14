@@ -50,7 +50,7 @@
   }
 </script>
 
-<SetupLayout step={4} width={500}>
+<SetupLayout step={3} width={500}>
   <div style="display: flex; flex-direction: column; gap: 8px">
     <h1 class="h1" style="font-size: 26px; line-height: 32px">Bring your instances</h1>
     <p class="muted" style="margin: 0">We found other launchers on this computer. Pick what to bring over. {mode === 'copy' ? 'The originals are not changed.' : 'They keep playing in the other launcher’s folders.'}</p>

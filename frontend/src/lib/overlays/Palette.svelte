@@ -65,7 +65,7 @@
       { key: 'shortcut', group: 'Actions', label: 'Create shortcut…', icon: 'link' as const, run: () => session.open({ kind: 'shortcut', instanceId: (router.route as { id: string }).id }) },
       { key: 'export', group: 'Actions', label: 'Export instance…', icon: 'upload' as const, run: () => session.open({ kind: 'export', instanceId: (router.route as { id: string }).id }) },
     ] : []),
-    { key: 'import-launchers', group: 'Actions', label: 'Import from other launchers', icon: 'download', run: nav({ name: 'setup', step: 4 }) },
+    { key: 'import-launchers', group: 'Actions', label: 'Import from other launchers', icon: 'download', run: nav({ name: 'setup', step: 3 }) },
     { key: 'data-folder', group: 'Actions', label: 'Open data folder', icon: 'folder', run: () => void api.app.openDataFolder() },
     { key: 'new', group: 'Actions', label: 'Create a new instance', icon: 'plus', run: nav({ name: 'new-instance' }) },
     { key: 'shortcuts', group: 'Actions', label: 'Show keyboard shortcuts', icon: 'settings-simple', run: () => session.open({ kind: 'shortcuts' }) },

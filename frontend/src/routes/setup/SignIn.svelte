@@ -15,7 +15,7 @@
     void untrack(() => api.accounts.list()).then((l) => (before = l.length));
     return onEvent('accounts:changed', () => {
       void api.accounts.list().then((l) => {
-        if (before >= 0 && l.length > before) go({ name: 'setup', step: 4 });
+        if (before >= 0 && l.length > before) go({ name: 'setup', step: 3 });
       });
     });
   });
@@ -42,7 +42,7 @@
     {/each}
   </div>
   <div class="small faint" style="display: flex; gap: 8px; align-items: center"><Icon name="lock" size={14} sw={1.8} />Your sign-in is stored in the system keychain.</div>
-  <div style="display: flex; justify-content: space-between; align-items: center"><a href={href({ name: 'setup', step: 1 })} class="btn btn-ghost">Back</a><a href={href({ name: 'setup', step: 4 })} class="btn btn-ghost">Skip for now</a></div>
+  <div style="display: flex; justify-content: space-between; align-items: center"><a href={href({ name: 'setup', step: 1 })} class="btn btn-ghost">Back</a><a href={href({ name: 'setup', step: 3 })} class="btn btn-ghost">Skip for now</a></div>
 </SetupLayout>
 
 <style>
