@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"quartz/internal/core/tasks"
+	"quartz/internal/instance"
 	"quartz/internal/manual"
 	"quartz/internal/modplatform"
 )
@@ -161,5 +162,76 @@ func TestBlockedFileWaitsForTheDownloadsFolder(t *testing.T) {
 	}
 	if e.svc.Busy(e.id) {
 		t.Fatal("still busy after the job ended")
+	}
+}
+
+func TestInstallDependencyEdges(t *testing.T) {
+	e := newEnv(t)
+	// A hand-added, unidentified Cloth Config jar (mod id cloth_config), turned off.
+	e.mod("cloth.jar.disabled", "cloth_config", "Cloth Config", "")
+	mainJar, betaJar, pinnedJar := jarBytes(t, "main"), jarBytes(t, "beta"), jarBytes(t, "pinned")
+	main := modplatform.Version{Source: modplatform.Modrinth, ProjectID: "PM", ID: "m1", Number: "1.0", Type: "release", Published: day,
+		File: fileOf("main.jar", "https://cdn.modrinth.com/data/PM/main.jar", mainJar), Loaders: []string{"fabric"},
+		Deps: []modplatform.Dep{
+			{ProjectID: "PC", Kind: modplatform.DepRequired},     // present by mod id, but off
+			{ProjectID: "PB", Kind: modplatform.DepRequired},     // only a beta exists
+			{ProjectID: "PN", Kind: modplatform.DepRequired},     // nothing fits at all
+			{VersionID: "pinned", Kind: modplatform.DepRequired}, // named by version only
+		}}
+	beta := modplatform.Version{Source: modplatform.Modrinth, ProjectID: "PB", ID: "b1", Number: "2.0-beta", Type: "beta", Published: day,
+		File: fileOf("beta.jar", "https://cdn.modrinth.com/data/PB/beta.jar", betaJar)}
+	pinned := modplatform.Version{Source: modplatform.Modrinth, ProjectID: "PV", ID: "pinned", Number: "0.9", Type: "release", Published: day,
+		File: fileOf("pinned.jar", "https://cdn.modrinth.com/data/PV/pinned.jar", pinnedJar)}
+	newer := pinned
+	newer.ID, newer.Number = "newer", "1.0"
+	fp := &fakePlatform{src: modplatform.Modrinth,
+		projects: map[string]modplatform.Project{"PM": {Title: "Main"}, "PC": {Slug: "cloth-config", Title: "Cloth Config API"},
+			"PB": {Title: "Beta Lib"}, "PN": {Title: "Nowhere"}, "PV": {Title: "Pinned Lib"}},
+		versions: map[string][]modplatform.Version{"PM": {main}, "PB": {beta}, "PV": {newer, pinned}}}
+	e.svc.d.Platforms = []modplatform.Provider{fakeCatalog{fp}}
+
+	ctx := context.Background()
+	pl, err := e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.Modrinth, Project: "PM"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]InstallDep{}
+	for _, d := range pl.Deps {
+		got[d.Name] = d
+	}
+	if d := got["Cloth Config API"]; !d.Installed || !d.Off {
+		t.Errorf("a turned-off jar with the dependency's mod id counts as installed, to be turned on: %+v", d)
+	}
+	if d := got["Beta Lib"]; d.Installed || d.Unavailable || d.Size == 0 {
+		t.Errorf("a beta-only required dependency must still be installed: %+v", d)
+	}
+	if d := got["Nowhere"]; !d.Unavailable {
+		t.Errorf("a dependency with no build must be shown, not dropped: %+v", d)
+	}
+	if d := got["Pinned Lib"]; d.Size == 0 {
+		t.Errorf("a version-only dependency must be resolved: %+v", d)
+	}
+	sp, _ := e.svc.plan(pl.PlanID)
+	if v := sp.items["dep-modrinth-PV"]; v == nil || v.v.ID != "pinned" {
+		t.Errorf("the pinned version must be used, not the newest")
+	}
+	eng := e.withTasks(cdn{main.File.URL: mainJar, beta.File.URL: betaJar, pinned.File.URL: pinnedJar})
+	job, err := e.svc.ApplyInstall(pl.PlanID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := eng.Wait(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.game, "mods", "cloth.jar")); err != nil {
+		t.Error("the turned-off dependency was not turned on")
+	}
+
+	vanilla, err := e.insts.Create(instance.CreateRequest{Name: "Plain", Minecraft: "1.21.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.PlanInstall(ctx, InstallRequest{Instance: vanilla.ID, Kind: Mods, Source: modplatform.Modrinth, Project: "PM"}); !errors.Is(err, ErrNeedsLoader) {
+		t.Fatalf("a mod into vanilla: %v", err)
 	}
 }

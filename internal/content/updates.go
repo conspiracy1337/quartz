@@ -81,6 +81,8 @@ type plan struct {
 	query modplatform.Query
 	items map[string]*planned
 	order []string
+	// enable lists turned-off items the plan needs on (installed dependencies).
+	enable []string
 }
 
 // planned is one file a check (or a version switch) will put in place.
@@ -263,25 +265,18 @@ func (s *Service) CheckUpdates(ctx context.Context, id string, k Kind, ch modpla
 	return rev, nil
 }
 
-// planDeps adds the newest allowed version of dependencies to install.
+// planDeps adds the version of each required dependency to install (see depVersion).
 func (s *Service) planDeps(ctx context.Context, pl *plan, p modplatform.Provider, ids []string, present map[string]bool, q modplatform.Query) {
 	sort.Strings(ids)
 	ids = compactSorted(ids)
 	projects, _ := p.Projects(ctx, ids)
 	for _, pid := range ids {
-		vs, err := p.Versions(ctx, pid, modplatform.Query{Game: q.Game, Loaders: q.Loaders})
-		if err != nil {
+		v, ok := s.depVersion(ctx, p, modplatform.Dep{ProjectID: pid, Kind: modplatform.DepRequired}, q)
+		if !ok {
 			continue
 		}
-		for _, v := range vs {
-			if !q.Channel.Allows(v.Type) {
-				continue
-			}
-			key := "dep-" + string(p.Source()) + "-" + pid
-			present[string(p.Source())+":"+pid] = true
-			pl.add(&planned{id: key, name: orElse(projects[pid].Title, pid), v: v, p: projects[pid], provider: p})
-			break
-		}
+		present[string(p.Source())+":"+pid] = true
+		pl.add(&planned{id: "dep-" + string(p.Source()) + "-" + pid, name: orElse(projects[pid].Title, pid), v: v, p: projects[pid], provider: p})
 	}
 }
 

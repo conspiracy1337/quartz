@@ -309,7 +309,13 @@ export interface ProjectVersion {
   action: '' | 'Install' | 'Update' | 'Switch';
 }
 export interface VersionNotes { id: string; number: string; published: number; items: string[] }
-export interface InstallDep { id: string; name: string; summary?: string; icon?: string; art?: Art; required: boolean; installed: boolean; size: number; blocked?: boolean }
+export interface InstallDep {
+  id: string; name: string; summary?: string; icon?: string; art?: Art; required: boolean; installed: boolean; size: number; blocked?: boolean;
+  /** Installed but turned off: the install turns it on. */
+  off?: boolean;
+  /** Required, but no build fits this instance: it is left out. */
+  unavailable?: boolean;
+}
 export interface InstallPlan {
   planId: string; name: string; kind: ContentKind; version: string; size: number;
   replaces?: string; blocked?: boolean; deps: InstallDep[]; mods: number;
