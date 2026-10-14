@@ -27,11 +27,26 @@ export function chords(custom: Record<string, string> | undefined): Record<Short
 
 const NAMES: Record<string, string> = { ' ': 'Space', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Escape: 'Esc' };
 
-/** The chord a key press makes ("" for a lone modifier). */
-export function chordOf(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): string {
+type KeyPress = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'> & Partial<Pick<KeyboardEvent, 'code'>>;
+
+/** The key a press names. A character outside ASCII (a Cyrillic or Greek layout, or
+    macOS's Option characters) falls back to the physical key, so Ctrl+K works on any
+    layout. */
+function keyName(e: KeyPress): string {
+  if (NAMES[e.key]) return NAMES[e.key]!;
+  if (e.key.length !== 1) return e.key;
+  if (e.key >= ' ' && e.key <= '~') return e.key.toUpperCase();
+  const phys = /^(?:Key([A-Z])|Digit(\d))$/.exec(e.code ?? '');
+  return phys ? (phys[1] ?? phys[2])! : e.key.toUpperCase();
+}
+
+/** The chord a key press makes ("" for a lone modifier). Shift counts for letters
+    and named keys; for symbols it is part of the character ("?" is Shift+/). */
+export function chordOf(e: KeyPress): string {
   if (['Control', 'Meta', 'Alt', 'Shift'].includes(e.key)) return '';
-  const key = NAMES[e.key] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key);
-  const mods = [e.ctrlKey || e.metaKey ? 'Ctrl' : '', e.altKey ? 'Alt' : '', e.shiftKey && e.key.length > 1 ? 'Shift' : ''].filter(Boolean);
+  const key = keyName(e);
+  const shift = e.shiftKey && (key.length > 1 || /^[A-Z]$/.test(key));
+  const mods = [e.ctrlKey || e.metaKey ? 'Ctrl' : '', e.altKey ? 'Alt' : '', shift ? 'Shift' : ''].filter(Boolean);
   return [...mods, key].join('+');
 }
 

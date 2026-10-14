@@ -6,7 +6,7 @@ import { INSTANCE_TABS, go, router, type Route } from './router.svelte';
 import { session } from './session.svelte';
 import { chordOf, chords, type ShortcutId } from './shortcuts';
 
-const GO_TO: Record<string, Route> = { h: { name: 'home' }, l: { name: 'library' }, b: { name: 'browse' }, d: { name: 'downloads' } };
+const GO_TO: Record<string, Route> = { H: { name: 'home' }, L: { name: 'library' }, B: { name: 'browse' }, D: { name: 'downloads' } };
 const SEQUENCE_MS = 800;
 
 export const typing = (t: EventTarget | null) =>
@@ -60,10 +60,11 @@ export function installShortcuts(): () => void {
     }
     if (typing(e.target) || mod) return;
     if (e.key === 'Escape' && session.overlay) session.close();
-    else if (e.key === 'g') pendingG = Date.now();
-    else if (Date.now() - pendingG < SEQUENCE_MS && GO_TO[e.key]) {
+    // Sequences go by chord too, so they work on any keyboard layout.
+    else if (chord === 'G') pendingG = Date.now();
+    else if (Date.now() - pendingG < SEQUENCE_MS && GO_TO[chord]) {
       pendingG = 0;
-      go(GO_TO[e.key]!);
+      go(GO_TO[chord]!);
     } else return;
     e.preventDefault();
   };
