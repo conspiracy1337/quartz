@@ -46,6 +46,8 @@ type Store[T any] struct {
 
 // Open loads the document. A missing file yields Default(); a corrupt one is
 // kept aside as <path>.corrupt and replaced by Default() instead of failing.
+// A value of the wrong type (a slip in a hand edit) only resets that field:
+// the rest is kept, and a copy of the file is kept aside.
 func Open[T any](o Options[T]) (*Store[T], error) {
 	s := newStore(o)
 	o = s.o
@@ -57,11 +59,15 @@ func Open[T any](o Options[T]) (*Store[T], error) {
 	case err != nil:
 		return nil, err
 	}
-	cur, err := s.decode(data)
-	if err != nil {
+	cur, typeErr, err := s.decode(data)
+	switch {
+	case err != nil:
 		o.Log.Warn("state file unreadable, starting fresh", "path", o.Path, "err", err)
 		_ = os.Rename(o.Path, o.Path+".corrupt")
 		cur = s.normalize(o.Default())
+	case typeErr != nil:
+		o.Log.Warn("state file has a field of the wrong type, keeping the rest", "path", o.Path, "err", typeErr)
+		_ = fsx.AtomicWrite(o.Path+".corrupt", data, fsx.FilePerm)
 	}
 	s.cur = cur
 	return s, nil
@@ -93,18 +99,24 @@ func Read[T any](o Options[T]) (T, error) {
 		var zero T
 		return zero, err
 	}
-	return s.decode(data)
+	v, _, err := s.decode(data)
+	return v, err
 }
 
 // decode starts from the defaults, so missing fields keep default values and
-// unknown fields are ignored.
-func (s *Store[T]) decode(data []byte) (T, error) {
-	v := s.o.Default()
+// unknown fields are ignored. A field of the wrong type keeps its default and
+// is reported as typeErr; encoding/json still fills every other field. Only
+// broken JSON is an error.
+func (s *Store[T]) decode(data []byte) (v T, typeErr, err error) {
+	v = s.o.Default()
 	if err := json.Unmarshal(data, &v); err != nil {
-		var zero T
-		return zero, err
+		if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+			var zero T
+			return zero, nil, err
+		}
+		typeErr = err
 	}
-	return s.normalize(v), nil
+	return s.normalize(v), typeErr, nil
 }
 
 func (s *Store[T]) normalize(v T) T {

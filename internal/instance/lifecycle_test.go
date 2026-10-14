@@ -249,3 +249,31 @@ func TestMove(t *testing.T) {
 		t.Fatal("the default folder needs no marker")
 	}
 }
+
+func TestHandEditOfTheWrongTypeKeepsTheInstance(t *testing.T) {
+	s, root := newStore(t)
+	in := create(t, s, "Survival")
+	if err := s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(s.Dir(in.ID), "instance.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := strings.Replace(string(data), `"playtimeMin": 0`, `"playtimeMin": "120"`, 1)
+	if edited == string(data) {
+		t.Fatal("test setup: playtimeMin not found")
+	}
+	data = []byte(edited)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Open(filepath.Join(root, "instances"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := again.Get(in.ID); err != nil || got.Name != "Survival" {
+		t.Fatalf("instance lost after a hand edit: %+v %v", got, err)
+	}
+}
