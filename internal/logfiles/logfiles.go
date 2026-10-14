@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"quartz/internal/brand"
 	"quartz/internal/content"
@@ -38,6 +39,8 @@ const (
 	maxText    = 8 << 20 // a file as shown, after decompressing
 	maxUpload  = 10 << 20
 	maxLines   = 25_000 // mclo.gs keeps at most this many lines
+	headLines  = 10_000 // of a longer log, the start kept (versions, mods)…
+	tailLines  = 14_900 // …and the end (the crash), as Prism cuts
 	OldAfter   = 30 * 24 * time.Hour
 	uploadURL  = "https://api.mclo.gs/1/log"
 	uploadHost = "mclo.gs"
@@ -298,6 +301,10 @@ func (s *Service) UploadRun(ctx context.Context, id, runID string) (string, erro
 	if err != nil {
 		return "", err
 	}
+	// The run's summary goes first, so the link alone says what ran.
+	if info, err := s.DebugInfo(ctx, id, runID); err == nil {
+		text = info + "\n" + text
+	}
 	return s.Upload(ctx, text)
 }
 
@@ -313,12 +320,40 @@ func (s *Service) forUpload(text string) string {
 		}
 	}
 	if lines := strings.Split(text, "\n"); len(lines) > maxLines {
-		text = strings.Join(lines[len(lines)-maxLines:], "\n")
+		text = strings.Join(lines[:headLines], "\n") + gap(len(lines)-headLines-tailLines) + strings.Join(lines[len(lines)-tailLines:], "\n")
 	}
 	if len(text) > maxUpload {
-		text = text[len(text)-maxUpload:]
+		budget := maxUpload - 64 // room for the gap line
+		head, tail := text[:cutBefore(text, budget*2/5)], text[cutAfter(text, len(text)-budget*3/5):]
+		text = head + gap(strings.Count(text[len(head):len(text)-len(tail)], "\n")) + tail
 	}
 	return text
+}
+
+// gap marks the lines cut out of the middle of a log.
+func gap(n int) string { return fmt.Sprintf("\n… %d lines left out …\n", n) }
+
+// cutBefore and cutAfter move a cut at byte i to a line boundary at or
+// before it, or after it, so no line is split (in a single huge line, no
+// character is).
+func cutBefore(text string, i int) int {
+	if j := strings.LastIndexByte(text[:i], '\n'); j >= 0 {
+		return j + 1
+	}
+	for i > 0 && !utf8.RuneStart(text[i]) {
+		i--
+	}
+	return i
+}
+
+func cutAfter(text string, i int) int {
+	if j := strings.IndexByte(text[i:], '\n'); j >= 0 {
+		return i + j + 1
+	}
+	for i < len(text) && !utf8.RuneStart(text[i]) {
+		i++
+	}
+	return i
 }
 
 // ---- debug info ----

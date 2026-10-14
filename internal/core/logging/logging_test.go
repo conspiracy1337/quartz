@@ -22,6 +22,7 @@ func TestRedact(t *testing.T) {
 		{"mail me at alice@example.com", "alice@example.com", Redacted},
 		{"/home/alice/.local/share/Quartz", "/home/alice", "/home/<user>"},
 		{`C:\Users\alice\AppData`, `\Users\alice`, `\Users\<user>`},
+		{`"path": "C:\\Users\\alice\\AppData"`, `\\Users\\alice`, `\\Users\\<user>`},
 	}
 	for _, tt := range tests {
 		got := r.Redact(tt.in)

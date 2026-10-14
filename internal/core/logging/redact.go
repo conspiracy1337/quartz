@@ -79,7 +79,7 @@ func (r *Redactor) Redact(s string) string {
 		}
 	}
 	if len(r.userName) > 1 {
-		for _, prefix := range []string{"/home/", "/Users/", `\Users\`, "/users/"} {
+		for _, prefix := range []string{"/home/", "/Users/", `\Users\`, `\\Users\\`, "/users/"} {
 			s = strings.ReplaceAll(s, prefix+r.userName, prefix+"<user>")
 		}
 	}
