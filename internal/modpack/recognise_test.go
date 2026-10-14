@@ -57,7 +57,8 @@ func TestRecogniseFindsTheInstalledVersion(t *testing.T) {
 	env.svc.d.Reader = NewReader(Deps{Modrinth: plat, Cache: filepath.Join(env.root, "cache"), Fetch: func(_ context.Context, raw string, _ int64, _ hashx.Sum, dest string) error {
 		return os.WriteFile(dest, served[raw], 0o600)
 	}})
-	in, err := env.insts.Create(instance.CreateRequest{Name: "Cool Pack 2.0", Minecraft: "1.21.1"})
+	// The player renamed it on import; the pack's own name still finds it.
+	in, err := env.insts.Create(instance.CreateRequest{Name: "My stuff", Minecraft: "1.21.1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +68,10 @@ func TestRecogniseFindsTheInstalledVersion(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(mods, name), jars[key], 0o600)
 	}
 	ctx := context.Background()
-	if err := env.svc.Recognise(ctx, in.ID); err != nil {
+	if err := env.svc.Recognise(ctx, in.ID); !errors.Is(err, ErrNotRecognised) {
+		t.Fatalf("matched a pack by a name it doesn't have: %v", err)
+	}
+	if err := env.svc.Recognise(ctx, in.ID, "Cool Pack 2.0"); err != nil {
 		t.Fatal(err)
 	}
 	in, _ = env.insts.Get(in.ID)

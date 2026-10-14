@@ -203,14 +203,14 @@
       {/each}
     </div>
     <div class="fg"><span class="field-label">Runs on</span>
-      {#each [['client', 'Client only'], ['server', 'Server only']] as const as [v, l] (v)}
+      {#each [['client', 'Client side'], ['server', 'Server side']] as const as [v, l] (v)}
         <button class="fl" aria-pressed={side === v} onclick={() => (side = side === v ? '' : v)}><Check on={side === v} /><span>{l}</span><span></span></button>
       {/each}
     </div>
     <div class="fg"><span class="field-label">Hide projects with</span>
       <button class="fl" aria-pressed={hide.ai} onclick={() => (hide.ai = !hide.ai)}><Check on={hide.ai} /><span>AI-generated content</span><span></span></button>
       <button class="fl" aria-pressed={hide.ads} onclick={() => (hide.ads = !hide.ads)}><Check on={hide.ads} /><span>Ads or telemetry</span><span></span></button>
-      <button class="fl" aria-pressed={hide.installed} onclick={() => (hide.installed = !hide.installed)}><Check on={hide.installed} /><span>Already installed</span><span></span></button>
+      {#if showTarget}<button class="fl" aria-pressed={hide.installed} onclick={() => (hide.installed = !hide.installed)}><Check on={hide.installed} /><span>Already installed</span><span></span></button>{/if}
     </div>
   </aside>
 </div>

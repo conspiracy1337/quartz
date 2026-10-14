@@ -18,8 +18,12 @@
   // svelte-ignore state_referenced_locally
   let picked = $state(session.packPick?.instanceId === i.id ? session.packPick.version : '');
   session.packPick = null;
-  const chosen = $derived(picked || (versions.data?.find((v) => v.offered) ?? versions.data?.find((v) => !v.current))?.id || '');
-  const diff = query(() => (versions.data || versions.error ? api.modpacks.diff(i.id, chosen) : new Promise<never>(() => {})));
+  const currentId = $derived(versions.data?.find((v) => v.current)?.id ?? '');
+  /** The version to move to: the player's pick, else the update on the instance's own line, else none (the installed one shows). */
+  const chosen = $derived(picked || versions.data?.find((v) => v.offered)?.id || currentId);
+  const moving = $derived(!!chosen && chosen !== currentId);
+  // Without the version list (its platform is down) the update the last check found is reviewed.
+  const diff = query(() => (versions.error ? api.modpacks.diff(i.id, '') : !versions.data ? new Promise<never>(() => {}) : moving ? api.modpacks.diff(i.id, chosen) : Promise.resolve(null)));
   const currentAt = $derived(versions.data?.findIndex((v) => v.current) ?? -1);
   /** Older than the installed version: the button goes back rather than updates. */
   const older = $derived(currentAt >= 0 && (versions.data?.findIndex((v) => v.id === chosen) ?? -1) > currentAt);
@@ -61,6 +65,8 @@
 <div class="scroll">
   {#if diff.error}
     <div class="page" style="padding-top: 16px"><p class="muted" style="margin: 0">{errorText(diff.error)}</p></div>
+  {:else if versions.data && !moving}
+    <div class="page" style="padding-top: 16px"><p class="muted" style="margin: 0">This is the newest version of {i.pack?.name ?? 'the pack'} for Minecraft {i.minecraft}. Pick another version above to switch to it.</p></div>
   {:else if diff.data}
     {@const d = diff.data}
     <div class="page rb" style="padding-top: 16px">
@@ -77,7 +83,7 @@
       <aside style="display: flex; flex-direction: column; gap: 14px">
         <section class="card card-pad" style="display: flex; flex-direction: column; gap: 8px" aria-label="Release notes">
           <h2 class="h3">What changed</h2>
-          <p class="small muted" style="margin: 0">{d.summary || 'The pack has no release notes for this version.'}{#if d.game} It moves to {d.game}.{/if}</p>
+          <p class="small muted" style="margin: 0">{d.summary || 'The pack has no release notes for this version.'}{#if d.game}{' '}It moves to {d.game}.{/if}</p>
         </section>
         <section class="card" aria-label="Your changes">
           <div class="card-head"><h2 class="h3">Your edits</h2><span class="badge badge-accent">Kept</span></div>

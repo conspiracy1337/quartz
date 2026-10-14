@@ -492,8 +492,8 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 - **Filters pane** (an overlay under 1100px):
   - Version and loader chips taken from the target instance. For modpacks, a Minecraft version picker instead ("Any version" by default).
   - Curated categories mapped to both platforms; a category CurseForge lacks drops CurseForge results. Two or more categories mean all of them on both platforms (CurseForge's "any of" answer is narrowed).
-  - **Runs on:** Client only or Server only (Modrinth's side facets; CurseForge publishes no sides, so it is left out).
-  - Hide AI-generated content (on by default), Hide ads/telemetry, Hide already installed (on by default).
+  - **Runs on:** Client side (needed on the client, optional on a server) or Server side (the other way round), Modrinth's side facets as Prism and XMCL use them. CurseForge publishes no sides, so it is left out.
+  - Hide AI-generated content (on by default), Hide ads/telemetry, Hide already installed (on by default; not for modpacks).
 - **Results:** infinite scroll, loading the next page 400px ahead.
   - **Install** opens the Install dialog. For modpacks it opens Import.
   - A project the target already has says **Installed** instead.
@@ -553,6 +553,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   3. Manual downloads.
   4. The instance itself.
 - Nothing is left behind on failure or cancel. `modpack.json` records which files the pack placed where.
+- The new instance's content is scanned at once, so its counts and lists are right before a tab is opened (also after an update).
 - **Safety caps:** 20,000 files, 512 MB per file, 4 GB of overrides, 16 MB manifest.
   - `CleanPath` refuses absolute paths, `..`, drive letters, launcher folders and Windows reserved names.
   - Extraction runs through `os.Root` and never creates links.
@@ -561,10 +562,10 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 **Modpack updates** ([modpack/update.go](internal/modpack/update.go), [modpack/swap.go](internal/modpack/swap.go), [ModpackUpdate.svelte](frontend/src/routes/instance/ModpackUpdate.svelte), [backup.go](internal/backup/backup.go))
 - **Checks:** Modrinth, CurseForge and FTB packs are checked on the update channel, and feed the Home alert.
   - Only versions for the instance's Minecraft version and loader are offered, so a pack published for several Minecraft versions stays on its line.
-- **Any version:** the update page lists every version of the pack (installed, channel, Minecraft). The player can pick another Minecraft line or go back to an older version. Overview's Details links to it as **Change version**.
+- **Any version:** the update page lists every version of the pack (installed, channel, Minecraft). It starts on the update for the instance's own line; when there is none it says so. The player can pick another Minecraft line or go back to an older version. Overview's Details links to it as **Change**.
 - **Diff review:**
   - Added, Updated and Removed lists of mods, resource packs and shader packs, paired by project or by file-name stem.
-  - Release notes, including whether the Minecraft version or loader changes.
+  - Release notes as sentences, including whether the Minecraft version, the loader or the loader's build changes ("Minecraft 1.21.1, Fabric 0.19.3").
 - **Three-way merge:**
   - A file you edited is kept ("Your edits — Kept").
   - A mod you removed stays removed.
@@ -600,9 +601,9 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Copying clones or copies; it never hardlinks, keeps mtimes, and skips links and devices.
   - In place, nothing in the original folder changes, and the instance is never linked to a pack or updated.
 - **Recognising the pack** ([modpack/recognise.go](internal/modpack/recognise.go)):
-  - A copied instance with no recorded pack is looked for in the background. Packs named like the instance are searched on Modrinth and CurseForge (top 3).
+  - A copied instance with no recorded pack is looked for in the background. Packs named like the instance, or like the name the import read (the player may have renamed it), are searched on Modrinth and CurseForge (top 3).
   - Their versions for the instance's Minecraft version and loader are compared by the sha1 of their mods, walking back while the match rises (at most 5 per pack).
-  - At 85% or more, the instance is linked to that pack and version and the activity feed says "Recognised as …".
+  - At 85% or more, the instance is linked to that pack and version, the activity feed says "Recognised as …", and its update is checked at once so Home can offer it. The outcome is logged.
   - The update baseline is built from that version (also for a recorded link, at the first review), so changes the player made since count as their edits.
 - Missing Java runtimes download first.
 

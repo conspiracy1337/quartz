@@ -157,7 +157,7 @@ func TestUpdateKeepsEdits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.From != "1.0" || d.To != "2.0" || !slices.Equal(d.KeptEdits, []string{"config/y.toml"}) || d.Summary != "Fixes quests Updates Create" {
+	if d.From != "1.0" || d.To != "2.0" || !slices.Equal(d.KeptEdits, []string{"config/y.toml"}) || d.Summary != "Fixes quests. Updates Create." {
 		t.Fatalf("diff %+v", d)
 	}
 	want := []DiffRow{{Name: "c", Kind: "added"}, {Name: "a", Kind: "updated"}, {Name: "b", Kind: "removed"}}
