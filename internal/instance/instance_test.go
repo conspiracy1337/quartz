@@ -238,3 +238,19 @@ func TestCreateKeepsNamesApart(t *testing.T) {
 		t.Fatalf("%q", in.Name)
 	}
 }
+
+func TestInstanceAccount(t *testing.T) {
+	s, err := Open(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, _ := s.Create(CreateRequest{Name: "Alt", Minecraft: "1.21.4"})
+	id := strings.Repeat("a", 32)
+	got, err := s.SetSettings(in.ID, Settings{Account: id})
+	if err != nil || got.Settings.Account != id || got.Resolve(settings.Defaults()).Account != id {
+		t.Fatalf("%+v %v", got.Settings, err)
+	}
+	if _, err := s.SetSettings(in.ID, Settings{Account: "../x"}); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("bad account id accepted: %v", err)
+	}
+}

@@ -2061,6 +2061,7 @@ export namespace instance {
 	    window: WindowSettings;
 	    commands: CommandSettings;
 	    performance: PerformanceSettings;
+	    account?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -2072,6 +2073,7 @@ export namespace instance {
 	        this.window = this.convertValues(source["window"], WindowSettings);
 	        this.commands = this.convertValues(source["commands"], CommandSettings);
 	        this.performance = this.convertValues(source["performance"], PerformanceSettings);
+	        this.account = source["account"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -41,6 +41,13 @@
   const javaOptions = $derived([{ value: '', label: `Automatic (${i.javaAuto})` }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
   const suggestGb = $derived(prefs.value?.java.suggestMemory ? suggestMemoryGb(i.counts.mods, info.data?.memoryMb ?? 0) : 0);
   const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${Math.round(info.data.memoryMb / 1024)} GB.${suggestGb ? ` ${suggestGb} GB suits ${plural(i.counts.mods, 'mod')}.` : ''}` : undefined);
+  // The account this instance always plays as (Prism, Pandora); one that was removed stays listed.
+  const accounts = query(() => api.accounts.list());
+  const accountOptions = $derived.by(() => {
+    const opts = [{ value: '', label: 'Default account' }, ...(accounts.data ?? []).map((a) => ({ value: a.id, label: a.name }))];
+    if (st.account && !opts.some((o) => o.value === st.account)) opts.push({ value: st.account, label: 'Removed account' });
+    return opts;
+  });
   const groupOptions = $derived([{ value: '', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
   let naming = $state(false);
   const onStart = $derived(st.window.onGameStart || prefs.value?.general.onGameStart || 'hide');
@@ -133,6 +140,8 @@
         <Setting title="When the game starts"><Seg options={ON_GAME_START} value={onStart} label="When the game starts" onchange={(v) => change(() => (st.window.onGameStart = v))} /></Setting>
         <div class="divider"></div>
         <Setting title="Open straight into" desc="Skips the title screen."><Select value={into} options={intoOptions} label="Open straight into" onchange={setInto} /></Setting>
+        <div class="divider"></div>
+        <Setting title="Play as" desc="Right-click Play as still picks another for one launch."><Select value={st.account ?? ''} options={accountOptions} label="Play as" onchange={(v) => change(() => (st.account = v))} /></Setting>
       </div>
     </section>
     <section class="sec" aria-label="Syncing">

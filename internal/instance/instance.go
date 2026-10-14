@@ -84,7 +84,13 @@ type Settings struct {
 	Window      WindowSettings      `json:"window"`
 	Commands    CommandSettings     `json:"commands"`
 	Performance PerformanceSettings `json:"performance"`
+	// Account is the account this instance always plays as ("" for the
+	// default one), as Prism and Pandora let you pick; Play as still wins.
+	Account string `json:"account,omitempty"`
 }
+
+// accountRe is an account id.
+var accountRe = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 // Instance is one instance's record.
 type Instance struct {
@@ -284,6 +290,9 @@ func normalize(in Instance) Instance {
 	w.Width, w.Height = min(max(w.Width, 0), 16384), min(max(w.Height, 0), 16384)
 	if !slices.Contains([]string{"", "keep-open", "hide", "close"}, w.OnGameStart) {
 		w.OnGameStart = ""
+	}
+	if in.Settings.Account != "" && !accountRe.MatchString(in.Settings.Account) {
+		in.Settings.Account = ""
 	}
 	in.PlaytimeMin = max(in.PlaytimeMin, 0)
 	in.PlaytimeSec = min(max(in.PlaytimeSec, 0), 59)
@@ -681,7 +690,8 @@ func checkLoader(kind, ver string) error {
 // SetSettings replaces an instance's settings after validation.
 func (s *Store) SetSettings(id string, st Settings) (Instance, error) {
 	if st.Java.MemoryMinMB < 0 || st.Java.MemoryMaxMB < 0 || len(st.Java.JVMArgs) > maxJVMArgs ||
-		(st.Java.JavaPath != "" && !filepath.IsAbs(st.Java.JavaPath)) || !st.Window.OpenInto.Valid() {
+		(st.Java.JavaPath != "" && !filepath.IsAbs(st.Java.JavaPath)) || !st.Window.OpenInto.Valid() ||
+		(st.Account != "" && !accountRe.MatchString(st.Account)) {
 		return Instance{}, ErrInvalidSettings
 	}
 	c := st.Commands

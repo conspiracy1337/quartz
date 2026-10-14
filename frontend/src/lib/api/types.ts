@@ -36,6 +36,8 @@ export interface InstanceSettings {
   window: { width: number; height: number; fullscreen: boolean; onGameStart: string; openInto?: { kind: '' | 'world' | 'server'; target: string } };
   commands: { preLaunch: string; wrapper: string; postExit: string; env: EnvVar[]; systemGlfw: boolean; systemOpenal: boolean };
   performance: { dedicatedGpu: boolean; gameMode: boolean; mangoHud: boolean };
+  /** The account this instance always plays as ("" or absent: the default one). */
+  account?: string;
 }
 /** What the New instance screen sends; an empty loaderVersion means the newest stable build. */
 export interface CreateInstance { name: string; art: Art; icon: string; minecraft: string; loader: string; loaderVersion: string; group: string; sandbox: boolean; shares: string[] }

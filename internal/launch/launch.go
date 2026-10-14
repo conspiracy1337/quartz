@@ -362,18 +362,28 @@ func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance, account
 func (p *pipeline) run(ctx context.Context) (int, error) {
 	l := p.l
 	p.progress(StageSignIn, 0)
-	acc, sess, err := l.cfg.Accounts.Session(ctx, p.account)
+	// Play as wins; else the instance's own account; else the default.
+	id, note := p.account, ""
+	instanceAccount := id == "" && p.eff.Account != ""
+	if instanceAccount {
+		id = p.eff.Account
+	}
+	acc, sess, err := l.cfg.Accounts.Session(ctx, id)
+	if instanceAccount && errors.Is(err, accounts.ErrUnknown) {
+		acc, sess, err = l.cfg.Accounts.Session(ctx, "")
+		note = ", the default account (this instance's was removed)"
+	}
 	p.signedIn = acc.ID
 	if err != nil {
 		return StageSignIn, err
 	}
 	switch {
 	case sess.Fallback:
-		p.set(StageSignIn, "offline, Microsoft unreachable")
+		p.set(StageSignIn, "offline, Microsoft unreachable"+note)
 	case sess.UserType == "msa":
-		p.set(StageSignIn, "online")
+		p.set(StageSignIn, "online"+note)
 	default:
-		p.set(StageSignIn, "offline")
+		p.set(StageSignIn, "offline"+note)
 	}
 
 	p.set(StageMods, p.checkMods(ctx))
