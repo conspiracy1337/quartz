@@ -207,6 +207,7 @@
   .md pre :global(code){padding:0;background:none}
   .badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
   .badges img{display:block;height:20px;width:auto;max-width:100%}
+  .badges .tlink{text-decoration:none;display:block}
   .md li{margin:4px 0}
   .md :global(code){font-family:var(--mono);font-size:12px;background:var(--raise);padding:1px 5px;border-radius:4px;color:var(--text)}
   .lk{display:flex;align-items:center;gap:10px;height:32px;color:var(--muted);text-decoration:none}
