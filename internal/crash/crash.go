@@ -27,6 +27,7 @@ import (
 // Limits.
 const (
 	maxReport  = 2 << 20
+	maxNative  = 256 << 10
 	maxLog     = 1 << 20
 	traceLines = 40
 )
@@ -34,7 +35,11 @@ const (
 // ErrNoCrash is returned when there is no crash to explain.
 var ErrNoCrash = errors.New("crash: nothing to explain")
 
-var reportNameRe = regexp.MustCompile(`^crash-[\w.\-]{1,96}\.txt$`)
+var (
+	reportNameRe = regexp.MustCompile(`^crash-[\w.\-]{1,96}\.txt$`)
+	// nativeNameRe is the JVM's own crash log, written in the game folder.
+	nativeNameRe = regexp.MustCompile(`^hs_err_pid\d{1,10}\.log$`)
+)
 
 // ValidReportName reports whether name is a file in crash-reports/.
 func ValidReportName(name string) bool { return reportNameRe.MatchString(name) }
@@ -94,18 +99,21 @@ type Service struct{ d Deps }
 // New returns a Service.
 func New(d Deps) *Service { return &Service{d: d} }
 
-// FinishRun keeps the crash report the run produced (redacted) and, when the
-// run crashed, notes its likely cause in the record.
+// FinishRun keeps the crash report the run produced (redacted), or else the
+// JVM's own crash log, and, when the run crashed, notes its likely cause in
+// the record. A report makes the run a crash even when the game then exited
+// cleanly: Forge's loading-error screen writes one and exits with 0 once it
+// is closed.
 func (s *Service) FinishRun(f *launch.Finished) {
-	report := ""
-	if p := newestReport(f.GameDir, f.Started); p != "" {
-		if data, err := fsx.ReadCapped(p, maxReport); err == nil {
-			report = s.redact(string(data))
-			if dest, err := launch.EvidencePath(f.RunsDir, f.Record.ID, launch.EvidenceCrash); err == nil {
-				if fsx.AtomicWrite(dest, []byte(report), fsx.FilePerm) == nil {
-					f.Record.Crash = &launch.Crash{Title: "Minecraft crashed", Report: true}
-				}
+	report, title := s.newReport(f)
+	if report != "" {
+		if dest, err := launch.EvidencePath(f.RunsDir, f.Record.ID, launch.EvidenceCrash); err == nil {
+			if fsx.AtomicWrite(dest, []byte(report), fsx.FilePerm) == nil {
+				f.Record.Crash = &launch.Crash{Title: title, Report: true}
 			}
+		}
+		if f.Record.Result == launch.ResultOK && !f.Stopped {
+			f.Record.Result = launch.ResultCrash
 		}
 	}
 	if r := f.Record.Result; r != launch.ResultCrash && r != launch.ResultFailed {
@@ -185,6 +193,16 @@ func (s *Service) explain(ctx context.Context, id string, f Finding) Cause {
 	case "dependency":
 		c.Title = name + " needs " + f.Dep
 		c.Text = f.Dep + " isn't installed, or its version doesn't fit. Add it from Browse, or turn " + name + " off."
+		if f.Need != "" {
+			c.Title = name + " needs " + f.Dep + " " + f.Need
+			c.Text = f.Dep + " " + f.Have + " is installed, but " + name + " needs " + f.Need + ". Change " + f.Dep + "'s version in the Mods tab, or turn " + name + " off."
+		}
+	case "version":
+		c.Title = name + " is for Minecraft " + f.Need
+		c.Text = "This instance plays Minecraft " + f.Have + ". Update " + name + " to a version for it, or turn it off."
+	case "conflict":
+		c.Title = name + " doesn't work with " + f.Dep
+		c.Text = "The two mods say they can't run together. Turn one of them off."
 	case "duplicate":
 		c.Title = name + " is installed twice"
 		c.Text = "Two files add the same mod"
@@ -195,11 +213,30 @@ func (s *Service) explain(ctx context.Context, id string, f Finding) Cause {
 	case "java":
 		c.Title = fmt.Sprintf("This needs Java %d", f.Java)
 		c.Text = fmt.Sprintf("Something here was built for Java %d, but the game ran on Java %d. Let the launcher pick Java in instance settings, or choose Java %d there.", f.Java, f.Ran, f.Java)
+	case "java-new":
+		c.Title = "This needs an older Java"
+		c.Text = "This Minecraft version's loader can't run on the Java the game used"
+		if f.Ran > 0 {
+			c.Text += fmt.Sprintf(" (Java %d)", f.Ran)
+		}
+		c.Text += ". Let the launcher pick Java in instance settings, or choose the version it needs there."
+	case "jvm-memory":
+		c.Title = "Java couldn't get the memory it was given"
+		c.Text = "Lower the most memory in instance settings. A 32-bit Java can use at most about 1.5 GB; let the launcher pick Java to get a 64-bit one."
+	case "jvm-arg":
+		c.Title = "Java doesn't accept " + f.Arg
+		c.Text = "Remove it from the JVM arguments in instance settings, or from Default JVM arguments in Settings → Java."
+	case "native":
+		c.Title = "The game crashed in " + f.Arg
+		c.Text = "Native code outside Java failed. If a mod ships " + f.Arg + ", update or turn it off; otherwise update your graphics driver and Java."
 	case "memory":
 		c.Title = "The game ran out of memory"
 		c.Text = "Give it more memory in instance settings, or remove some mods."
 	case "graphics":
 		c.Title = "The graphics driver couldn't start the game"
+		if f.Arg != "" {
+			c.Title = "The graphics driver crashed"
+		}
 		c.Text = "Update your graphics driver. On a laptop, make sure the game runs on the dedicated graphics card."
 	}
 	if mod != nil {
@@ -229,11 +266,15 @@ func className(c string) string {
 
 // Trace is the stack trace the dialog shows: the exception, its first frames,
 // each "Caused by" with its first frames, and the mod file lines, at most 40.
+// A native crash log shows its signal and the frame that crashed instead.
 func Trace(report, log string) string {
-	src := report
-	if src == "" {
-		src = log
+	if t := trace(report); t != "" || log == "" {
+		return t
 	}
+	return trace(log)
+}
+
+func trace(src string) string {
 	var out []string
 	frames := 0
 	started := false
@@ -255,6 +296,8 @@ func Trace(report, log string) string {
 			}
 		case strings.HasPrefix(trim, "Mod File:") || strings.HasPrefix(trim, "Mod file:"):
 			out = append(out, "  "+trim)
+		case nativeLineRe.MatchString(trim):
+			out = append(out, trim)
 		}
 		if len(out) >= traceLines {
 			break
@@ -263,7 +306,11 @@ func Trace(report, log string) string {
 	return strings.Join(out, "\n")
 }
 
-var exceptionRe = regexp.MustCompile(`^(?:Caused by: )?[\w$.]+(?:Exception|Error|Throwable)\b`)
+var (
+	exceptionRe = regexp.MustCompile(`^(?:Caused by: )?[\w$.]+(?:Exception|Error|Throwable)\b`)
+	// nativeLineRe keeps a JVM crash log's signal, its Java and the crashing frame.
+	nativeLineRe = regexp.MustCompile(`^#\s+(?:(?:SIGSEGV|SIGBUS|SIGILL|SIGFPE|SIGABRT|EXCEPTION_\w+) \(|JRE version:|Problematic frame:|[CjJV]\s+\[)`)
+)
 
 func isException(line string) bool { return exceptionRe.MatchString(line) }
 
@@ -291,23 +338,45 @@ func (s *Service) evidence(id, runID, kind string, limit int64, tail bool) strin
 	return string(data)
 }
 
-// newestReport is the crash report the game wrote since a run started.
-func newestReport(gameDir string, since time.Time) string {
-	entries, err := os.ReadDir(filepath.Join(gameDir, "crash-reports"))
+// newReport reads (redacted) the crash report the run wrote, else the JVM's
+// crash log cut before its process section (the environment, the command
+// line, memory maps), with a title for the history.
+func (s *Service) newReport(f *launch.Finished) (string, string) {
+	if p := newestFile(filepath.Join(f.GameDir, "crash-reports"), reportNameRe, f.Started); p != "" {
+		if data, err := fsx.ReadCapped(p, maxReport); err == nil {
+			return s.redact(string(data)), "Minecraft crashed"
+		}
+	}
+	if p := newestFile(f.GameDir, nativeNameRe, f.Started); p != "" {
+		if data, err := fsx.ReadCapped(p, maxNative); err == nil {
+			text := string(data)
+			if i := strings.Index(text, "P R O C E S S"); i > 0 {
+				text = text[:strings.LastIndexByte(text[:i], '\n')+1]
+			}
+			return s.redact(text), "Java crashed"
+		}
+	}
+	return "", ""
+}
+
+// newestFile is the newest file in dir named like re that changed since a
+// run started.
+func newestFile(dir string, re *regexp.Regexp, since time.Time) string {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return ""
 	}
 	var best string
 	var at time.Time
 	for _, e := range entries {
-		if !ValidReportName(e.Name()) || !e.Type().IsRegular() {
+		if !re.MatchString(e.Name()) || !e.Type().IsRegular() {
 			continue
 		}
 		fi, err := e.Info()
 		if err != nil || fi.ModTime().Before(since.Add(-time.Second)) || !fi.ModTime().After(at) {
 			continue
 		}
-		best, at = filepath.Join(gameDir, "crash-reports", e.Name()), fi.ModTime()
+		best, at = filepath.Join(dir, e.Name()), fi.ModTime()
 	}
 	return best
 }

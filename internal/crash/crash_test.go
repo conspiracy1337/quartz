@@ -38,6 +38,19 @@ func TestRules(t *testing.T) {
 		{"java", "", "java.lang.UnsupportedClassVersionError: net/minecraft/client/main/Main has been compiled by a more recent version of the Java Runtime (class file version 65.0), this version of the Java Runtime only recognizes class file versions up to 61.0", Finding{Rule: "java", Java: 21, Ran: 17}},
 		{"memory", "", "java.lang.OutOfMemoryError: Java heap space", Finding{Rule: "memory"}},
 		{"graphics", "", "GLFW error 65542: WGL: The driver does not appear to support OpenGL", Finding{Rule: "graphics"}},
+		{"fabric minecraft version", "", fixture(t, "fabric-version.txt"), Finding{Rule: "version", ModID: "sodium", Need: "1.20.4", Have: "1.20.1"}},
+		{"fabric dependency version", "", "\t - Mod 'Roughly Enough Items' (roughlyenoughitems) 16.0.729 requires version 13.0.6 or later of mod 'Architectury' (architectury), but only the wrong version is present: 12.1.4!",
+			Finding{Rule: "dependency", ModID: "roughlyenoughitems", Dep: "architectury", Need: "13.0.6 or later", Have: "12.1.4"}},
+		{"fabric old loader version", "", "Mod 'Iris' (iris) 1.6.4 requires any 1.20.x version of minecraft, but only the wrong version is present: 1.19.4!", Finding{Rule: "version", ModID: "iris", Need: "1.20.x", Have: "1.19.4"}},
+		{"fabric conflict", "", "\t - Mod 'OptiFabric' (optifabric) 1.13.0 is incompatible with any version of mod 'Sodium' (sodium), but a matching version is present: 0.5.3!", Finding{Rule: "conflict", ModID: "optifabric", Dep: "sodium"}},
+		{"java too new for old forge", "", "java.lang.IllegalArgumentException: Unsupported class file major version 65", Finding{Rule: "java-new", Ran: 21}},
+		{"java too new for modlauncher", "", "java.lang.ClassCastException: class jdk.internal.loader.ClassLoaders$AppClassLoader cannot be cast to class java.net.URLClassLoader", Finding{Rule: "java-new"}},
+		{"heap", "", "Error occurred during initialization of VM\nCould not reserve enough space for 8388608KB object heap", Finding{Rule: "jvm-memory"}},
+		{"vm option", "", "Unrecognized VM option 'UseZGCC'\nError: Could not create the Java Virtual Machine.", Finding{Rule: "jvm-arg", Arg: "UseZGCC"}},
+		{"java option", "", "Unrecognized option: --enable-preveiw", Finding{Rule: "jvm-arg", Arg: "--enable-preveiw"}},
+		{"native driver", fixture(t, "hs_err-nvidia.log"), "", Finding{Rule: "graphics", Arg: "nvoglv64.dll"}},
+		{"native other", "# Problematic frame:\n# C  [lwjgl.dll+0x1234]\n", "", Finding{Rule: "native", Arg: "lwjgl.dll"}},
+		{"native memory", "# There is insufficient memory for the Java Runtime Environment to continue.\n", "", Finding{Rule: "memory"}},
 	}
 	for _, c := range cases {
 		got, ok := Find(c.report, c.log)
@@ -46,6 +59,7 @@ func TestRules(t *testing.T) {
 			continue
 		}
 		if got.Rule != c.want.Rule || got.ModID != c.want.ModID || got.Dep != c.want.Dep || got.Java != c.want.Java || got.Ran != c.want.Ran ||
+			got.Need != c.want.Need || got.Have != c.want.Have || got.Arg != c.want.Arg ||
 			(c.want.File != "" && got.File != c.want.File) || (c.want.Text != "" && got.Text != c.want.Text) || (c.want.Target != "" && got.Target != c.want.Target) {
 			t.Errorf("%s: got %+v, want %+v", c.name, got, c.want)
 		}
@@ -141,5 +155,47 @@ func TestFinishAndExplain(t *testing.T) {
 	svc.FinishRun(&launch.Finished{InstanceID: inst.ID, GameDir: game, RunsDir: runs, Started: time.Now().Add(time.Hour), Record: &clean})
 	if clean.Crash != nil {
 		t.Fatalf("clean run got %+v", clean.Crash)
+	}
+}
+
+// A crash report makes a cleanly exited run a crash (Forge's loading-error
+// screen exits with 0), unless the player stopped it. Without a report, the
+// JVM's crash log is kept, cut before its environment.
+func TestFinishFindsCrashes(t *testing.T) {
+	dir := t.TempDir()
+	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
+	inst, _ := insts.Create(instance.CreateRequest{Name: "FO", Minecraft: "1.20.1"})
+	game, runs := insts.GameDir(inst.ID), insts.RunsDir(inst.ID)
+	_ = os.MkdirAll(filepath.Join(game, "crash-reports"), 0o700)
+	_ = os.MkdirAll(runs, 0o700)
+	svc := New(Deps{Instances: insts, Mods: fakeMods{}, Runs: fakeRuns{runs}, Redactor: logging.NewRedactor("steve")})
+	start := time.Now().Add(-time.Minute)
+	_ = os.WriteFile(filepath.Join(game, "crash-reports", "crash-2026-10-14_12.00.00-fml.txt"), []byte(fixture(t, "forge-deps.txt")), 0o600)
+
+	stopped := launch.Record{ID: "20261014-120000.000", Result: launch.ResultOK}
+	svc.FinishRun(&launch.Finished{InstanceID: inst.ID, GameDir: game, RunsDir: runs, Started: start, Record: &stopped, Stopped: true})
+	if stopped.Result != launch.ResultOK {
+		t.Fatalf("a stopped run became %s", stopped.Result)
+	}
+	clean := launch.Record{ID: "20261014-120001.000", Result: launch.ResultOK}
+	svc.FinishRun(&launch.Finished{InstanceID: inst.ID, GameDir: game, RunsDir: runs, Started: start, Record: &clean})
+	if clean.Result != launch.ResultCrash || clean.Crash == nil || clean.Crash.Title != "roughlyenoughitems needs architectury" {
+		t.Fatalf("exit 0 with a report: %s %+v", clean.Result, clean.Crash)
+	}
+
+	_ = os.RemoveAll(filepath.Join(game, "crash-reports"))
+	_ = os.WriteFile(filepath.Join(game, "hs_err_pid1.log"), []byte(fixture(t, "hs_err-nvidia.log")), 0o600)
+	native := launch.Record{ID: "20261014-120002.000", Result: launch.ResultCrash, ExitCode: 1}
+	svc.FinishRun(&launch.Finished{InstanceID: inst.ID, GameDir: game, RunsDir: runs, Started: start, Record: &native})
+	if native.Crash == nil || native.Crash.Title != "The graphics driver crashed" || !native.Crash.Report {
+		t.Fatalf("native crash %+v", native.Crash)
+	}
+	saved, _ := os.ReadFile(filepath.Join(runs, native.ID+".crash.txt"))
+	if strings.Contains(string(saved), "USERNAME") || !strings.Contains(string(saved), "nvoglv64.dll") {
+		t.Fatalf("saved native log: %s", saved)
+	}
+	info, err := svc.ForRun(context.Background(), inst.ID, native.ID)
+	if err != nil || !strings.Contains(info.Trace, "EXCEPTION_ACCESS_VIOLATION") || !strings.Contains(info.Trace, "[nvoglv64.dll") {
+		t.Fatalf("trace %q %v", info.Trace, err)
 	}
 }

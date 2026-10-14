@@ -68,6 +68,9 @@ type Finished struct {
 	Started    time.Time
 	Ended      time.Time
 	Record     *Record
+	// Stopped is set when the player stopped the run: whatever it left
+	// behind, it didn't crash.
+	Stopped bool
 	// Tail is the end of the console, newest last.
 	Tail []gamelog.Line
 }

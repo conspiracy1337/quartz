@@ -399,7 +399,8 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	kept := l.disassemble(&r.sp)
 	gameDir := l.cfg.Instances.GameDir(r.instanceID)
 	runsDir := l.cfg.Instances.RunsDir(r.instanceID)
-	f := &Finished{InstanceID: r.instanceID, GameDir: gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record, Tail: tail(r.con.Lines(), tailLines)}
+	f := &Finished{InstanceID: r.instanceID, GameDir: gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record,
+		Stopped: r.stopping.Load(), Tail: tail(r.con.Lines(), tailLines)}
 	for _, fin := range l.cfg.Finishers {
 		fin.FinishRun(f)
 	}
@@ -426,7 +427,8 @@ func (l *Launcher) exited(r *run, waitErr error) {
 	none := len(l.running) == 0
 	l.mu.Unlock()
 	l.cfg.Bus.Emit(events.InstancesChanged, nil)
-	l.cfg.Bus.Emit(events.GameState, State{InstanceID: r.instanceID, RunID: r.id, State: "exited", ExitCode: code, Result: result, Copies: len(rest), Kept: kept})
+	// The finishers may have found a crash the exit code didn't show.
+	l.cfg.Bus.Emit(events.GameState, State{InstanceID: r.instanceID, RunID: r.id, State: "exited", ExitCode: code, Result: r.record.Result, Copies: len(rest), Kept: kept})
 	if none && l.cfg.Hooks.AllExited != nil {
 		l.cfg.Hooks.AllExited()
 	}
