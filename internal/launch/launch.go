@@ -400,6 +400,14 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	if err != nil {
 		return StageJava, err
 	}
+	// A runtime the player chose is checked like Prism does: too old can't
+	// load the game's classes; too new breaks old Forge.
+	var javaWarn string
+	if req.Override != "" {
+		if javaWarn, err = javaFits(rt.Major, own.Major, p.inst); err != nil {
+			return StageJava, err
+		}
+	}
 	if res.Processing != nil && req.Override != "" && plan == nil && !res.Processing.Done() {
 		if _, ownPlan, err := l.cfg.Java.Resolve(ctx, own); err == nil {
 			plan = ownPlan
@@ -411,10 +419,12 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	} else {
 		p.set(StageJava, "Java "+rt.Version)
 	}
-	if warn := l.lowMemory(mem.Max); warn != "" {
-		p.mu.Lock()
-		p.details[StageJava] += ", " + warn
-		p.mu.Unlock()
+	for _, warn := range []string{javaWarn, l.lowMemory(mem.Max)} {
+		if warn != "" {
+			p.mu.Lock()
+			p.details[StageJava] += ", " + warn
+			p.mu.Unlock()
+		}
 	}
 	p.progress(StageFiles, 20)
 
@@ -591,6 +601,25 @@ func thousands(n int64) string {
 // memory is the heap the game gets.
 func (p *pipeline) memory() MemoryRange {
 	return MemoryRange{Min: p.eff.MemoryMinMB, Max: p.eff.MemoryMaxMB}
+}
+
+// ErrJavaTooOld fails a launch whose chosen Java can't run this Minecraft.
+var ErrJavaTooOld = errors.New("launch: this Java is too old for this Minecraft")
+
+// javaFits checks a chosen runtime's major version against the one the game
+// needs: older fails (the game would crash on its first class), newer only
+// warns for Forge on versions that ran on Java 8, whose old ModLauncher
+// breaks on modern Java.
+func javaFits(have, need int, in instance.Instance) (string, error) {
+	switch {
+	case have == 0 || need == 0:
+		return "", nil // not probed or not stated: nothing to compare
+	case have < need:
+		return "", fmt.Errorf("%w: Minecraft %s needs Java %d, and this instance uses Java %d. Pick another runtime in its settings, or Automatic", ErrJavaTooOld, in.Minecraft, need, have)
+	case have > need && need == 8 && in.Loader == "forge":
+		return fmt.Sprintf("Forge for %s usually needs Java 8", in.Minecraft), nil
+	}
+	return "", nil
 }
 
 // lowMemory warns when free RAM is below the maximum heap (if enabled).
