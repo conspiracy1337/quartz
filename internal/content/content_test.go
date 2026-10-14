@@ -308,6 +308,40 @@ func TestDataPacksByWorld(t *testing.T) {
 	}
 }
 
+func TestFolderDataPackTurnsOffForTheGame(t *testing.T) {
+	e := newEnv(t)
+	dir := filepath.Join(e.game, "saves", "Plots", "datapacks")
+	_ = os.MkdirAll(filepath.Join(dir, "graves", "data"), 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "graves", "pack.mcmeta"), []byte(`{"pack":{"pack_format":48,"description":"Graves"}}`), 0o600)
+	// Turned off by name only (by hand or an older launcher): still listed, and fixed.
+	_ = os.MkdirAll(filepath.Join(dir, "old.disabled"), 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "old.disabled", "pack.mcmeta"), []byte(`{"pack":{"pack_format":48,"description":"Old"}}`), 0o600)
+	rows := e.list(DataPacks)
+	if len(rows) != 2 {
+		t.Fatalf("both folders should be listed: %+v", rows)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "old.disabled", "pack.mcmeta")); err == nil {
+		t.Fatal("a pack off by name only must lose its manifest, or the game still loads it")
+	}
+	graves := byName(rows, "graves")
+	ctx := context.Background()
+	if err := e.svc.SetEnabled(ctx, e.id, DataPacks, graves.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "graves.disabled", "pack.mcmeta.disabled")); err != nil {
+		t.Fatal("turned off: the game must not find a pack.mcmeta")
+	}
+	if r := byName(e.list(DataPacks), "graves"); r.ID != graves.ID || r.Enabled {
+		t.Fatalf("off: %+v", r)
+	}
+	if err := e.svc.SetEnabled(ctx, e.id, DataPacks, graves.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "graves", "pack.mcmeta")); err != nil {
+		t.Fatal("turned on again: manifest not restored")
+	}
+}
+
 func TestRemoveAndUndo(t *testing.T) {
 	e := newEnv(t)
 	e.mod("a.jar", "a", "A", "")

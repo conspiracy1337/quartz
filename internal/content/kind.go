@@ -133,12 +133,38 @@ func (sp spec) accepts(name string, mode fs.FileMode) (ok, off bool) {
 	}
 	base, off := strings.CutSuffix(name, Disabled)
 	if mode.IsDir() {
-		return sp.dirs && !off, false
+		// A folder pack is turned off like a file (see packManifest).
+		return sp.dirs && (!off || sp.toggle == toggleSuffix), off && sp.toggle == toggleSuffix
 	}
 	if !mode.IsRegular() {
 		return false, false
 	}
 	return strings.EqualFold(path.Ext(base), sp.ext), off && sp.toggle == toggleSuffix
+}
+
+// packManifest is a folder pack's pack.mcmeta. Minecraft loads every folder
+// in datapacks/ that has one, whatever it is called, so turning a folder pack
+// off also renames its manifest (offManifest): the game then skips it.
+const (
+	packManifest = "pack.mcmeta"
+	offManifest  = packManifest + Disabled
+)
+
+// offPack reads a turned-off folder pack, whose manifest is offManifest.
+type offPack struct{ meta.Dir }
+
+func (o offPack) Read(name string, limit int64) ([]byte, error) {
+	if name == packManifest {
+		name = offManifest
+	}
+	return o.Dir.Read(name, limit)
+}
+
+func (o offPack) Has(name string) bool {
+	if name == packManifest {
+		name = offManifest
+	}
+	return o.Dir.Has(name)
 }
 
 // itemID names an item stably across toggles: its kind and path without the

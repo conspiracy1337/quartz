@@ -134,6 +134,15 @@ func (s *Service) renameIn(id, from, to string) error {
 		}
 		return err
 	}
+	if info, err := root.Lstat(to); err == nil && info.IsDir() {
+		// A folder pack: its manifest decides whether the game loads it.
+		on, off := path.Join(to, packManifest), path.Join(to, offManifest)
+		if strings.HasSuffix(to, Disabled) {
+			_ = root.Rename(on, off)
+		} else {
+			_ = root.Rename(off, on)
+		}
+	}
 	return nil
 }
 

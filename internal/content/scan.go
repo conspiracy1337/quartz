@@ -203,7 +203,16 @@ func (s *Service) readOne(game string, k Kind, sp spec, j job, adopt bool) (Entr
 			return Entry{}, err
 		}
 		defer func() { _ = sub.Close() }()
-		info, err := sp.parse(meta.Dir{Root: sub}, nil, s.d.Icons)
+		var src meta.Source = meta.Dir{Root: sub}
+		if strings.HasSuffix(j.rel, Disabled) {
+			// Turned off by name only (by hand, or an older launcher): the
+			// game would still load it until its manifest is renamed too.
+			if _, err := sub.Lstat(packManifest); err == nil {
+				_ = sub.Rename(packManifest, offManifest)
+			}
+			src = offPack{meta.Dir{Root: sub}}
+		}
+		info, err := sp.parse(src, nil, s.d.Icons)
 		if err != nil {
 			return Entry{}, err
 		}
