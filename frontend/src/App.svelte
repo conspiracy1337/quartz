@@ -134,7 +134,7 @@
   {#if session.launch}<LaunchPanel instanceId={session.launch.instanceId} accountId={session.launch.accountId} stage={session.launch.stage} details={session.launch.details} pct={session.launch.pct} />{/if}
   <!-- The server's panel shows on its instance's pages; the header's address chip hides it. -->
   {#if session.hosting && session.hostPanel && route.name === 'instance' && route.id === session.hosting.instanceId}<HostPanel host={session.hosting} />{/if}
-  {#if session.toast}<Toast {...session.toast} />{/if}
+  {#if session.toast}{#key session.toastSeq}<Toast {...session.toast} />{/key}{/if}
   {#if session.launchAs}{#key session.launchAs}<InstanceMenu {...session.launchAs} />{/key}{/if}
 
   {#if overlay?.kind === 'add-account'}<AddAccount mode={overlay.mode} accountId={overlay.accountId} />
