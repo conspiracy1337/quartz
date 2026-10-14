@@ -139,19 +139,3 @@ func (l *Launcher) disassemble(sp *spec) []runview.Copy {
 	}
 	return kept
 }
-
-// Recover merges back run views left by a launcher that quit or crashed
-// while games ran; it runs once at startup.
-func (l *Launcher) Recover() {
-	if l.cfg.Views == nil {
-		return
-	}
-	var dirs []string
-	for _, in := range l.cfg.Instances.List() {
-		m, _ := filepath.Glob(filepath.Join(l.cfg.Instances.RunsDir(in.ID), "*.view"))
-		dirs = append(dirs, m...)
-	}
-	if len(dirs) > 0 {
-		l.cfg.Views.Recover(dirs)
-	}
-}

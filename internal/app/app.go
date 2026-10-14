@@ -710,7 +710,8 @@ func (a *app) startup(ctx context.Context) {
 		wruntime.EventsEmit(ctx, string(t), payload)
 	})
 	a.accounts.Start()
-	// Games that ran when the launcher last quit get merged back.
+	// Games that ran when the launcher last quit are finished, or adopted
+	// while they still run.
 	safe.Go(a.log, "recover games", a.launcher.Recover)
 	safe.Go(a.log, "recover hosted servers", a.host.Recover)
 	go func() {
