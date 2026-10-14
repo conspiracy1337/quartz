@@ -22,8 +22,8 @@
 
   const FRONT = { ry: -28, rx: -10 };
   const DEG = Math.PI / 180;
-  // One walk step is 0.9 s each way, the arms and legs swinging 28° (as before in CSS).
-  const STEP = 0.9, SWING = 28 * DEG, CAPE = 10.8 * DEG;
+  // One walk step is 0.6 s each way, the arms and legs swinging 28°.
+  const STEP = 0.6, SWING = 28 * DEG, CAPE = 10.8 * DEG;
   let ry = $state(FRONT.ry);
   let rx = $state(FRONT.rx);
   let walkSet = $state<boolean | null>(null);
