@@ -68,12 +68,12 @@ func (s *Store) Move(ctx context.Context, p MovePlan, progress func(done, total 
 		return Instance{}, err
 	}
 	_ = os.Remove(p.To) // an empty target folder is fine
-	if err := os.Rename(p.From, p.To); err != nil {
+	renamed := os.Rename(p.From, p.To) == nil
+	if !renamed {
 		if err := copyTree(ctx, p.From, p.To, progress); err != nil {
 			_ = os.RemoveAll(p.To)
 			return Instance{}, err
 		}
-		defer func() { _ = os.RemoveAll(p.From) }()
 	}
 	loc := p.To
 	if p.Default {
@@ -82,11 +82,30 @@ func (s *Store) Move(ctx context.Context, p MovePlan, progress func(done, total 
 	} else {
 		writeMarker(p.To, p.ID)
 	}
-	return s.Update(p.ID, func(in *Instance) error { in.Location = loc; return nil })
+	in, err := s.Update(p.ID, func(in *Instance) error { in.Location = loc; return nil })
+	if err != nil {
+		// The instance still points at the old place: put it back as it was.
+		if renamed {
+			_ = os.Rename(p.To, p.From)
+			if p.Default {
+				writeMarker(p.From, p.ID)
+			} else {
+				_ = os.Remove(filepath.Join(p.From, markerName))
+			}
+		} else {
+			_ = os.RemoveAll(p.To)
+		}
+		return Instance{}, err
+	}
+	if !renamed {
+		_ = os.RemoveAll(p.From) // only once the instance points at the copy
+	}
+	return in, nil
 }
 
-// copyTree copies src into dst, keeping links as links, and checks that dst
-// ends up with every file at the same size. Both folders are opened as roots,
+// copyTree copies src into dst, keeping links as links (one pointing into src
+// now points to the same place in dst), and checks that dst ends up with
+// every file at the same size. Both folders are opened as roots,
 // so a link swapped in during the copy can't lead it outside either one.
 func copyTree(ctx context.Context, src, dst string, progress func(done, total int64)) error {
 	if err := os.MkdirAll(dst, 0o700); err != nil {
@@ -130,6 +149,10 @@ func copyTree(ctx context.Context, src, dst string, progress func(done, total in
 			link, err := from.Readlink(rel)
 			if err != nil {
 				return err
+			}
+			// A link into the old folder would dangle once it is deleted.
+			if r, err := filepath.Rel(src, link); err == nil && filepath.IsAbs(link) && filepath.IsLocal(r) {
+				link = filepath.Join(dst, r)
 			}
 			return to.Symlink(link, rel)
 		case d.Type().IsRegular():

@@ -277,3 +277,49 @@ func TestHandEditOfTheWrongTypeKeepsTheInstance(t *testing.T) {
 		t.Fatalf("instance lost after a hand edit: %+v %v", got, err)
 	}
 }
+
+func TestMoveKeepsTheSourceWhenSavingFails(t *testing.T) {
+	s, root := newStore(t)
+	in := create(t, s, "Kept")
+	world := filepath.Join(s.GameDir(in.ID), "saves", "World")
+	_ = os.MkdirAll(world, 0o700)
+	_ = os.WriteFile(filepath.Join(world, "level.dat"), []byte("level"), 0o600)
+	drive := filepath.Join(root, "drive2")
+	_ = os.MkdirAll(drive, 0o700)
+	p, err := s.PlanMove(in.ID, drive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	f := s.files[in.ID]
+	delete(s.files, in.ID) // saving the new location now fails
+	s.mu.Unlock()
+	if _, err := s.Move(context.Background(), p, nil); err == nil {
+		t.Fatal("move succeeded without saving")
+	}
+	if b, _ := os.ReadFile(filepath.Join(p.From, "saves", "World", "level.dat")); string(b) != "level" {
+		t.Fatal("the source was lost although the instance still points at it")
+	}
+	if _, err := os.Stat(p.To); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("the half-moved copy was left behind")
+	}
+	s.mu.Lock()
+	s.files[in.ID] = f
+	s.mu.Unlock()
+}
+
+func TestCopyTreeRepointsLinksIntoTheSource(t *testing.T) {
+	root := t.TempDir()
+	src, dst := filepath.Join(root, "src"), filepath.Join(root, "dst")
+	_ = os.MkdirAll(filepath.Join(src, "shared"), 0o700)
+	_ = os.WriteFile(filepath.Join(src, "shared", "a"), []byte("a"), 0o600)
+	if err := os.Symlink(filepath.Join(src, "shared"), filepath.Join(src, "link")); err != nil {
+		t.Skip("no symlinks here")
+	}
+	if err := copyTree(context.Background(), src, dst, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.Readlink(filepath.Join(dst, "link")); got != filepath.Join(dst, "shared") {
+		t.Fatalf("link = %q", got)
+	}
+}
