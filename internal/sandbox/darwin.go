@@ -90,7 +90,7 @@ func (b *darwinBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *J
 			read = append(read, f.Path)
 		}
 	}
-	sb.Read, sb.Write = canonAll(read), canonAll(write)
+	sb.Read, sb.Write, sb.Protect = canonAll(read), canonAll(write), canonAll(r.Protected())
 	if s.home != "" && r.Level(rules.Home) == rules.RO {
 		sb.HomeRead, sb.Hide = canon(s.home), canon(s.c.DataRoot)
 	}

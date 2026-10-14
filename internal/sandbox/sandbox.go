@@ -47,6 +47,25 @@ type Run struct {
 	GameMode bool
 }
 
+// protectedFolders are the game folders a run reads but never changes. A
+// mod's file in mods/ is its store blob, hardlinked (where the disk can't
+// clone) into every instance that uses it, so a game able to write one would
+// change it for all of them, unsandboxed ones included.
+var protectedFolders = []string{"mods"}
+
+// Protected lists the run's protected folders that exist as real folders (a
+// mods folder linked to another launcher's holds no store files).
+func (r Run) Protected() []string {
+	var out []string
+	for _, f := range protectedFolders {
+		p := filepath.Join(r.GameDir, f)
+		if fi, err := os.Lstat(p); err == nil && fi.IsDir() {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // Level is the run's level for a rule on this OS.
 func (r Run) Level(id rules.ID) rules.Level { return r.Rules.Level(id, runtime.GOOS) }
 

@@ -81,6 +81,7 @@ func (a *Sandbox) view(in instance.Instance) SandboxView {
 	v := SandboxView{On: s.On, Preset: string(s.Preset)}
 	paths := map[rules.ID]string{
 		rules.Instance:  a.short(a.d.Store.Dir(in.ID)) + "/",
+		rules.Mods:      a.short(filepath.Join(a.d.Store.GameDir(in.ID), "mods")) + "/",
 		rules.Libraries: a.short(filepath.Join(a.d.Root, "store", "libraries")) + "/, " + a.short(filepath.Join(a.d.Root, "store", "assets")) + "/",
 		rules.Java:      a.javaPath(in),
 		rules.Synced:    a.syncedPaths(in.ID),

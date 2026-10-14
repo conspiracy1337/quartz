@@ -56,6 +56,14 @@ func helper() {
 	say("write-rw", os.WriteFile(filepath.Join(os.Getenv("RW"), "x"), []byte("x"), 0o600))
 	say("read-store", func() error { _, err := os.ReadFile(os.Getenv("STORE")); return err }())
 	say("write-store", os.WriteFile(os.Getenv("STORE"), []byte("y"), 0o600))
+	mod := filepath.Join(os.Getenv("GAME"), "mods", "a.jar")
+	say("write-mod", func() error {
+		if err := os.Chmod(mod, 0o600); err != nil {
+			return err
+		}
+		return os.WriteFile(mod, []byte("infected"), 0o600)
+	}())
+	say("add-mod", os.WriteFile(filepath.Join(os.Getenv("GAME"), "mods", "new.jar"), []byte("x"), 0o600))
 	say("dial", func() error {
 		c, err := net.DialTimeout("tcp", os.Getenv("LISTEN"), 2*time.Second)
 		if err == nil {
@@ -94,6 +102,17 @@ func newJailFixture(t *testing.T) *jailFixture {
 		if err := os.WriteFile(p, []byte("data"), 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// The instance's mod is the store's file itself, as a hardlink is,
+	// sealed read-only.
+	if err := os.MkdirAll(filepath.Join(f.game, "mods"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(f.store, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(f.store, filepath.Join(f.game, "mods", "a.jar")); err != nil {
+		t.Fatal(err)
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -179,6 +198,14 @@ func TestJailStandard(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(f.game, "made.txt")); err != nil {
 		t.Error("the game's write didn't reach its folder")
+	}
+	// The mods folder is protected: whatever the game did there (refused,
+	// or kept in a throwaway layer) never reached the store's file.
+	if b, err := os.ReadFile(f.store); err != nil || string(b) != "data" {
+		t.Errorf("the game changed a store file through its mods folder: %q %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(f.game, "mods", "new.jar")); err == nil {
+		t.Error("the game added a file to its mods folder")
 	}
 	checkPlatform(t, got)
 }

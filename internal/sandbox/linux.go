@@ -124,6 +124,15 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 	}
 	a.Bind(r.GameDir, r.GameDir)
 	a.Add(r.Mounts...)
+	// Protected folders: writes land in a throwaway layer (a mod's own cache
+	// still works), or fail where overlays don't.
+	for _, p := range r.Protected() {
+		if sup.Overlay {
+			a.TmpOverlay(p, p)
+		} else {
+			a.RoBind(p, p)
+		}
+	}
 
 	env := spec.Env
 	if !r.Headless {

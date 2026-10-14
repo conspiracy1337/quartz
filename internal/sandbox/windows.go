@@ -28,6 +28,8 @@ var (
 	procDeriveCapabilitySids   = kernelbase.NewProc("DeriveCapabilitySidsFromName")
 	advapi32                   = windows.NewLazySystemDLL("advapi32.dll")
 	procSetFileSecurity        = advapi32.NewProc("SetFileSecurityW")
+	user32                     = windows.NewLazySystemDLL("user32.dll")
+	procGetWindowStation       = user32.NewProc("GetProcessWindowStation")
 	errAppContainerUnavailable = errors.New("app containers aren't available on this Windows")
 )
 
@@ -40,6 +42,15 @@ const (
 	inheritFlags   = 0x3 // OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
 
 	hrAlreadyExists = 0x800700B7 // HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)
+)
+
+const (
+	// denyChange is everything that changes a file or a folder's entries:
+	// write and append data (add files and folders), extended attributes,
+	// attributes (the read-only flag), delete, delete children, the ACL and
+	// the owner.
+	denyChange            = 0x000D0156
+	winstaWriteAttributes = 0x0010 // WINSTA_WRITEATTRIBUTES
 )
 
 type windowsBackend struct {
@@ -128,6 +139,45 @@ func capabilitySID(name string) (*windows.SID, error) {
 	return unsafe.Slice(caps, nc)[0].Copy()
 }
 
+// windowStation is the capability that lets a contained game confine and
+// move the mouse cursor (ClipCursor, SetCursorPos), which Minecraft needs to
+// look around: the interactive window station grants it WINSTA_WRITEATTRIBUTES,
+// once per launcher run. A capability of our own rather than each container's
+// SID, as Pandora found Chromium misbehaves with the latter.
+var windowStation = sync.OnceValues(func() (*windows.SID, error) {
+	c, err := capabilitySID("quartz.winsta")
+	if err != nil {
+		return nil, err
+	}
+	h, _, e := procGetWindowStation.Call()
+	if h == 0 {
+		return nil, fmt.Errorf("window station: %w", e)
+	}
+	ws := windows.Handle(h) // owned by the process: never closed
+	sd, err := windows.GetSecurityInfo(ws, windows.SE_WINDOW_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		return nil, err
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil {
+		return nil, err
+	}
+	if hasACE(dacl, windows.ACCESS_ALLOWED_ACE_TYPE, c, winstaWriteAttributes, false) {
+		return c, nil
+	}
+	acl, err := windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{{
+		AccessPermissions: winstaWriteAttributes, AccessMode: windows.GRANT_ACCESS, Inheritance: windows.NO_INHERITANCE,
+		Trustee: windows.TRUSTEE{TrusteeForm: windows.TRUSTEE_IS_SID, TrusteeType: windows.TRUSTEE_IS_WELL_KNOWN_GROUP, TrusteeValue: windows.TrusteeValueFromSID(c)},
+	}}, dacl)
+	if err != nil {
+		return nil, err
+	}
+	if err := windows.SetSecurityInfo(ws, windows.SE_WINDOW_OBJECT, windows.DACL_SECURITY_INFORMATION, nil, nil, acl, nil); err != nil {
+		return nil, err
+	}
+	return c, nil
+})
+
 // folderCapability names the capability for one folder at one level.
 func folderCapability(kind, path string, l rules.Level) string {
 	sum := sha256.Sum256([]byte(filepath.Clean(path)))
@@ -147,6 +197,11 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 		return procx.Spec{}, nil, err
 	}
 	caps := []*windows.SID{store}
+	if w, err := windowStation(); err == nil {
+		caps = append(caps, w)
+	} else {
+		s.c.Log.Warn("sandbox: the game may not capture the mouse", "err", err)
+	}
 	if r.Level(rules.Internet) == rules.Allowed {
 		for _, w := range []windows.WELL_KNOWN_SID_TYPE{windows.WinCapabilityInternetClientSid, windows.WinCapabilityInternetClientServerSid,
 			windows.WinCapabilityPrivateNetworkClientServerSid} {
@@ -221,6 +276,13 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 			}
 		}
 	}
+	// After the game folder's grant, so in every file below a protected
+	// folder the deny it inherits from that nearer folder comes first.
+	for _, p := range r.Protected() {
+		if err := denyPath(p, sid, denyChange); err != nil {
+			return procx.Spec{}, nil, fmt.Errorf("can't protect %s: %w", p, err)
+		}
+	}
 
 	c := &procx.Container{SID: sid.String()}
 	for _, cap := range caps {
@@ -232,12 +294,24 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 }
 
 // grantPath adds an allow entry for sid unless an equal one is there.
-// Inheritable grants go through SetNamedSecurityInfo, which carries them to
-// everything inside; a single folder's grant uses SetFileSecurity, which
+func grantPath(path string, sid *windows.SID, mask uint32, inherit bool) error {
+	return setACE(path, sid, mask, windows.GRANT_ACCESS, inherit)
+}
+
+// denyPath adds an inheritable deny entry for sid unless an equal one is
+// there. Files hardlinked from the store inherit it like any other file, and
+// it names only this instance's container.
+func denyPath(path string, sid *windows.SID, mask uint32) error {
+	return setACE(path, sid, mask, windows.DENY_ACCESS, true)
+}
+
+// setACE adds an allow or deny entry for sid unless an equal one is there.
+// Inheritable entries go through SetNamedSecurityInfo, which carries them to
+// everything inside; a single folder's entry uses SetFileSecurity, which
 // doesn't walk its contents (Pandora's speed fix).
 //
 //nolint:gosec // Win32 calls on Go-owned memory and 32-bit results
-func grantPath(path string, sid *windows.SID, mask uint32, inherit bool) error {
+func setACE(path string, sid *windows.SID, mask uint32, mode windows.ACCESS_MODE, inherit bool) error {
 	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		return err
@@ -251,7 +325,11 @@ func grantPath(path string, sid *windows.SID, mask uint32, inherit bool) error {
 		return err
 	}
 	inherit = inherit && fi.IsDir()
-	if hasACE(dacl, sid, mask, inherit) {
+	aceType := byte(windows.ACCESS_ALLOWED_ACE_TYPE)
+	if mode == windows.DENY_ACCESS {
+		aceType = windows.ACCESS_DENIED_ACE_TYPE
+	}
+	if hasACE(dacl, aceType, sid, mask, inherit) {
 		return nil
 	}
 	inh := uint32(windows.NO_INHERITANCE)
@@ -259,7 +337,7 @@ func grantPath(path string, sid *windows.SID, mask uint32, inherit bool) error {
 		inh = windows.SUB_CONTAINERS_AND_OBJECTS_INHERIT
 	}
 	acl, err := windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{{
-		AccessPermissions: windows.ACCESS_MASK(mask), AccessMode: windows.GRANT_ACCESS, Inheritance: inh,
+		AccessPermissions: windows.ACCESS_MASK(mask), AccessMode: mode, Inheritance: inh,
 		Trustee: windows.TRUSTEE{TrusteeForm: windows.TRUSTEE_IS_SID, TrusteeType: windows.TRUSTEE_IS_WELL_KNOWN_GROUP, TrusteeValue: windows.TrusteeValueFromSID(sid)},
 	}}, dacl)
 	if err != nil {
@@ -285,17 +363,17 @@ func grantPath(path string, sid *windows.SID, mask uint32, inherit bool) error {
 	return nil
 }
 
-// hasACE reports an explicit allow entry for sid covering mask (and
-// inheritable when asked).
+// hasACE reports an explicit entry of aceType (allow or deny) for sid
+// covering mask (and inheritable when asked).
 //
 //nolint:gosec // Win32 calls on Go-owned memory and 32-bit results
-func hasACE(dacl *windows.ACL, sid *windows.SID, mask uint32, inherit bool) bool {
+func hasACE(dacl *windows.ACL, aceType byte, sid *windows.SID, mask uint32, inherit bool) bool {
 	if dacl == nil {
 		return false
 	}
 	for i := range uint32(dacl.AceCount) {
 		var ace *windows.ACCESS_ALLOWED_ACE
-		if windows.GetAce(dacl, i, &ace) != nil || ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || ace.Header.AceFlags&windows.INHERITED_ACE != 0 {
+		if windows.GetAce(dacl, i, &ace) != nil || ace.Header.AceType != aceType || ace.Header.AceFlags&windows.INHERITED_ACE != 0 {
 			continue
 		}
 		if uint32(ace.Mask)&mask != mask || (inherit && ace.Header.AceFlags&inheritFlags != inheritFlags) {

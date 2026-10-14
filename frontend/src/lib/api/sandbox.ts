@@ -13,13 +13,13 @@ export interface SandboxStatus { available: boolean; name: string; version: stri
 export interface SandboxRow { id: string; folder: boolean; path: string; level: SandboxLevel; choices: SandboxLevel[] }
 export interface SandboxView { on: boolean; preset: SandboxPreset; rows: SandboxRow[] }
 
-const STANDARD: Record<string, SandboxLevel> = { instance: 'rw', libraries: 'ro', java: 'ro', synced: 'rw', internet: 'on', discord: 'on', graphics: 'on', home: 'no' };
+const STANDARD: Record<string, SandboxLevel> = { instance: 'rw', mods: 'ro', libraries: 'ro', java: 'ro', synced: 'rw', internet: 'on', discord: 'on', graphics: 'on', home: 'no' };
 const STRICT: Record<string, SandboxLevel> = { ...STANDARD, synced: 'ro', internet: 'no', discord: 'no' };
 const CHOICES: Record<string, SandboxLevel[]> = {
-  instance: ['rw'], libraries: ['ro'], java: ['ro'], synced: ['rw', 'ro', 'no'], internet: ['on', 'no'], discord: ['on', 'no'], graphics: ['on'], home: ['no', 'ro'],
+  instance: ['rw'], mods: ['ro'], libraries: ['ro'], java: ['ro'], synced: ['rw', 'ro', 'no'], internet: ['on', 'no'], discord: ['on', 'no'], graphics: ['on'], home: ['no', 'ro'],
 };
 const PATHS: Record<string, string> = {
-  instance: 'instances/fabulously-optimized/', libraries: 'libraries/, assets/', java: 'java/temurin-21.0.5/', synced: 'sync/options, sync/servers',
+  instance: 'instances/fabulously-optimized/', mods: 'instances/fabulously-optimized/game/mods/', libraries: 'libraries/, assets/', java: 'java/temurin-21.0.5/', synced: 'sync/options, sync/servers',
   internet: '', discord: '', graphics: '', home: '',
 };
 

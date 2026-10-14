@@ -11,6 +11,7 @@ import (
 // canonical (/private/var, not /var), as the kernel matches them.
 type seatbelt struct {
 	Read, Write []string // folders or files
+	Protect     []string // folders inside Write the game may not change
 	Network     bool
 	HomeRead    string // the home folder, readable when the rule says so
 	Hide        string // the launcher's data folder, hidden again after HomeRead
@@ -21,7 +22,9 @@ type seatbelt struct {
 // The profile is Pandora's (MIT), which runs Minecraft under Seatbelt: deny
 // by default, the system's graphics, fonts, input and audio services, and
 // only the listed paths. Later rules win, so the specific allowances follow
-// the broad ones.
+// the broad ones. Unlike Pandora's, it has no lsopen and sends no Apple
+// events: either would let a mod hand a script it wrote to an app outside
+// the sandbox (LaunchServices opens x.command in Terminal).
 const seatbeltBase = `(version 1)
 (deny default)
 (import "system.sb")
@@ -32,7 +35,7 @@ const seatbeltBase = `(version 1)
 (deny nvram*)
 (deny process-info*)
 (deny file-link)
-(allow hid-control process-fork lsopen)
+(allow hid-control process-fork)
 (allow signal (target same-sandbox))
 (allow process-info-pidinfo)
 (allow
@@ -152,7 +155,9 @@ const seatbeltNetwork = `(system-network)
          "com.apple.nsurlsessiond"))
 `
 
-const seatbeltProtect = `(deny network-outbound (literal "/private/var/run/cupsd"))
+const seatbeltProtect = `(deny lsopen)
+(deny appleevent-send)
+(deny network-outbound (literal "/private/var/run/cupsd"))
 (deny network-outbound (remote ip "localhost:631"))
 (deny file-write-xattr (xattr "com.apple.quarantine") (with no-log))
 (deny file-read-xattr file-write-xattr (xattr-prefix "com.apple.security.private."))
@@ -193,6 +198,7 @@ func (b seatbelt) profile() (string, error) {
 		{"(deny file-read* file-write* (subpath PATH))\n", nonEmpty(b.Hide)},
 		{"(allow file-read* file-map-executable process-exec file-issue-extension (subpath PATH))\n", b.Read},
 		{"(allow file-write* file-link file-read* file-map-executable process-exec file-issue-extension (subpath PATH))\n", b.Write},
+		{"(deny file-write* file-link (subpath PATH))\n", b.Protect},
 		{"(allow network-outbound (literal PATH))\n", b.Discord},
 	}
 	for _, s := range steps {
