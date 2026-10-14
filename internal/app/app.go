@@ -525,6 +525,11 @@ func (a *app) buildBrowse(dl *download.Downloader) {
 		},
 		Sandboxed: func() bool { return a.sandbox.Status().Available },
 		GetIcon:   modpack.GetIcon(a.http), Staging: staging, Bus: a.bus, Log: a.log, Recognise: true,
+		Index: func(ctx context.Context, id string) {
+			for _, k := range content.Kinds {
+				_ = a.content.Scan(ctx, id, k) // a failed scan runs again when a tab opens
+			}
+		},
 	}, modpack.UpdateDeps{Known: a.content.Known, Record: a.content.Record, Channel: channel})
 	a.follow = follow.New(follow.Deps{
 		Instances: a.instances.List, Latest: a.behind, Running: func(id string) bool { return a.launcher.Busy(id) }, Bus: a.bus,

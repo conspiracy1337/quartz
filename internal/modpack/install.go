@@ -63,6 +63,9 @@ type InstallDeps struct {
 	// Recognise looks for the pack of an imported instance in the
 	// background once it is installed (see Recognise).
 	Recognise bool
+	// Index scans an instance's content once a pack put or changed files in
+	// it, so its counts and lists are right before anyone opens a tab.
+	Index func(ctx context.Context, id string)
 }
 
 // Service installs and updates packs. It is safe for concurrent use.
@@ -361,6 +364,7 @@ func (s *Service) create(ctx context.Context, p *Pack, files []planned, set *man
 		if err := s.link(in.ID, *p.Managed); err != nil {
 			return err
 		}
+		s.checkLater(in.ID)
 	case p.Imported != nil:
 		// Another launcher's instance is no pack to update, unless Recognise finds it.
 	default:
@@ -378,11 +382,14 @@ func (s *Service) create(ctx context.Context, p *Pack, files []planned, set *man
 			}
 		}
 	}
+	if s.d.Index != nil {
+		s.d.Index(ctx, in.ID)
+	}
 	if s.d.Bus != nil {
 		s.d.Bus.Emit(events.InstancesChanged, nil)
 	}
 	if p.Copied && !inPlace && !p.Managed.Valid() && s.d.Recognise {
-		s.recogniseLater(in.ID)
+		s.recogniseLater(in.ID, p.Name)
 	}
 	return nil
 }

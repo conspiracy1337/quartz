@@ -37,25 +37,29 @@ var ErrNotRecognised = errors.New("modpack: no modpack matches this instance's m
 var trailingVersion = regexp.MustCompile(`(?i)(\s*[\[(][^\])]*[\])]|[\s_-]+v?\d+(\.\d+)*[a-z]?)+\s*$`)
 
 // recogniseLater runs Recognise in the background, for an import that
-// just finished.
-func (s *Service) recogniseLater(id string) {
+// just finished (names: what the import called it besides the instance's
+// own name, which the player may have changed).
+func (s *Service) recogniseLater(id string, names ...string) {
 	safe.Go(s.d.Log, "recognise modpack", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), recogniseTime)
 		defer cancel()
-		if err := s.Recognise(ctx, id); err != nil {
-			s.d.Log.Debug("modpack: not recognised", "instance", id, "err", err)
+		if err := s.Recognise(ctx, id, names...); err != nil {
+			s.d.Log.Info("modpack: imported instance not recognised", "instance", id, "err", err)
+		} else {
+			s.d.Log.Info("modpack: imported instance recognised", "instance", id)
 		}
 	})
 }
 
 // Recognise looks for the modpack an imported instance was installed from:
-// it searches both platforms for packs named like the instance, then reads
+// it searches both platforms for packs named like the instance (or like
+// any of names), then reads
 // versions of each for the instance's Minecraft version and loader and
 // keeps the one whose mods the instance has most of (at least 85%). The
 // instance is then linked to that pack and version, so it gets updates.
 // Instances played in another launcher's folder are never linked: an
 // update would change that launcher's files.
-func (s *Service) Recognise(ctx context.Context, id string) error {
+func (s *Service) Recognise(ctx context.Context, id string, names ...string) error {
 	in, err := s.d.Instances.Get(id)
 	if err != nil {
 		return err
@@ -69,7 +73,7 @@ func (s *Service) Recognise(ctx context.Context, id string) error {
 	}
 	var best *Pack
 	bestShare := 0.0
-	for _, c := range s.candidates(ctx, in.Name) {
+	for _, c := range s.candidates(ctx, append([]string{in.Name}, names...)) {
 		p, share := s.bestVersion(ctx, c, in, have)
 		if p == nil {
 			continue
@@ -92,6 +96,7 @@ func (s *Service) Recognise(ctx context.Context, id string) error {
 	if err := s.link(id, Managed{Origin: best.Origin, Name: best.Name, VersionName: best.Version}); err != nil {
 		return err
 	}
+	s.checkLater(id)
 	if s.u.Record != nil {
 		s.u.Record(id, content.Activity{Kind: "updated", Title: fmt.Sprintf("Recognised as %s %s (%s)", best.Name, best.Version, platformName(best.Origin.Source))})
 	}
@@ -107,30 +112,36 @@ type candidate struct {
 	project string
 }
 
-// candidates searches both platforms for packs whose title matches the
-// instance's name, taking them in turn from each platform's ranking.
-func (s *Service) candidates(ctx context.Context, name string) []candidate {
-	text := strings.TrimSpace(trailingVersion.ReplaceAllString(name, ""))
-	want := modplatform.Normalize(text)
-	if want == "" {
-		return nil
-	}
+// candidates searches both platforms for packs whose title matches one of
+// the names, taking them in turn from each search's ranking.
+func (s *Service) candidates(ctx context.Context, names []string) []candidate {
 	var lists [][]candidate
-	for _, plat := range []modplatform.Platform{s.d.Reader.d.Modrinth, s.d.Reader.d.CurseForge} {
-		if plat == nil || !plat.Ready() {
+	seen := map[string]bool{}
+	for _, name := range names {
+		text := strings.TrimSpace(trailingVersion.ReplaceAllString(name, ""))
+		want := modplatform.Normalize(text)
+		if want == "" || seen["name:"+want] {
 			continue
 		}
-		page, err := plat.Search(ctx, modplatform.SearchQuery{Type: modplatform.TypeModpack, Text: text, Sort: modplatform.SortRelevance, Limit: 10})
-		if err != nil {
-			continue
-		}
-		var list []candidate
-		for _, h := range page.Hits {
-			if t := modplatform.Normalize(h.Title); t != "" && (strings.Contains(t, want) || strings.Contains(want, t)) {
-				list = append(list, candidate{plat: plat, project: h.ID})
+		seen["name:"+want] = true
+		for _, plat := range []modplatform.Platform{s.d.Reader.d.Modrinth, s.d.Reader.d.CurseForge} {
+			if plat == nil || !plat.Ready() {
+				continue
 			}
+			page, err := plat.Search(ctx, modplatform.SearchQuery{Type: modplatform.TypeModpack, Text: text, Sort: modplatform.SortRelevance, Limit: 10})
+			if err != nil {
+				continue
+			}
+			var list []candidate
+			for _, h := range page.Hits {
+				key := modplatform.Key(plat.Source(), h.ID)
+				if t := modplatform.Normalize(h.Title); t != "" && !seen[key] && (strings.Contains(t, want) || strings.Contains(want, t)) {
+					seen[key] = true
+					list = append(list, candidate{plat: plat, project: h.ID})
+				}
+			}
+			lists = append(lists, list)
 		}
-		lists = append(lists, list)
 	}
 	var out []candidate
 	for i := 0; len(out) < maxCandidates; i++ {

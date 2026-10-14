@@ -22,6 +22,7 @@ import (
 	"quartz/internal/core/hashx"
 	"quartz/internal/core/linkx"
 	"quartz/internal/core/netx"
+	"quartz/internal/core/safe"
 	"quartz/internal/core/tasks"
 	"quartz/internal/install"
 	"quartz/internal/instance"
@@ -59,20 +60,8 @@ type Available struct {
 func (s *Service) CheckUpdates(ctx context.Context) []Available {
 	var out []Available
 	for _, in := range s.d.Instances.List() {
-		if in.Pack == nil || in.InPlace {
-			continue
-		}
-		o := Origin{Source: in.Pack.Source, Project: in.Pack.Project, Version: in.Pack.Version}
-		if !o.Updatable() {
-			continue
-		}
-		id, name, err := s.newest(ctx, o, in)
-		if err != nil {
-			s.d.Log.Debug("modpack: update check failed", "instance", in.ID, "err", err)
-			continue
-		}
-		if id != "" && id != o.Version {
-			out = append(out, Available{InstanceID: in.ID, Name: in.Pack.Name, Version: name, versionID: id})
+		if a, ok := s.check(ctx, in); ok {
+			out = append(out, a)
 		}
 	}
 	s.mu.Lock()
@@ -101,6 +90,50 @@ func (s *Service) Installed(o Origin) (instance.Instance, bool) {
 	return instance.Instance{}, false
 }
 
+// check asks an instance's pack platform for a newer version on its line.
+func (s *Service) check(ctx context.Context, in instance.Instance) (Available, bool) {
+	if in.Pack == nil || in.InPlace {
+		return Available{}, false
+	}
+	o := Origin{Source: in.Pack.Source, Project: in.Pack.Project, Version: in.Pack.Version}
+	if !o.Updatable() {
+		return Available{}, false
+	}
+	id, name, err := s.newest(ctx, o, in)
+	if err != nil {
+		s.d.Log.Debug("modpack: update check failed", "instance", in.ID, "err", err)
+		return Available{}, false
+	}
+	if id == "" || id == o.Version {
+		return Available{}, false
+	}
+	return Available{InstanceID: in.ID, Name: in.Pack.Name, Version: name, versionID: id}, true
+}
+
+// checkLater checks one instance in the background, for a pack it was just
+// linked to, so Home offers its update without waiting for the next check.
+func (s *Service) checkLater(id string) {
+	safe.Go(s.d.Log, "check modpack update", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		in, err := s.d.Instances.Get(id)
+		if err != nil {
+			return
+		}
+		a, ok := s.check(ctx, in)
+		s.mu.Lock()
+		if ok {
+			s.available[id] = a
+		} else {
+			delete(s.available, id)
+		}
+		s.mu.Unlock()
+		if s.d.Bus != nil {
+			s.d.Bus.Emit(events.ModpacksChanged, nil)
+		}
+	})
+}
+
 // Updates returns what the last check found.
 func (s *Service) Updates() []Available {
 	s.mu.Lock()
@@ -119,10 +152,6 @@ func (s *Service) Updates() []Available {
 // each) is offered updates on its own line only; another line is a choice
 // the player makes on the update page (Pandora pins updates the same way).
 func (s *Service) newest(ctx context.Context, o Origin, in instance.Instance) (string, string, error) {
-	ch := modplatform.Release
-	if s.u.Channel != nil {
-		ch = s.u.Channel()
-	}
 	if o.Source == "ftb" {
 		return s.newestFTB(ctx, o)
 	}
@@ -134,15 +163,27 @@ func (s *Service) newest(ctx context.Context, o Origin, in instance.Instance) (s
 	if err != nil {
 		return "", "", err
 	}
-	for _, v := range vs { // newest first
-		if v.ID == o.Version {
-			return "", "", nil
+	id, name := s.newestOf(vs, o.Version, in)
+	return id, name, nil
+}
+
+// newestOf picks from a pack's versions (newest first) the one an update
+// offers: the newest the channel allows on the instance's line, if it is
+// newer than the installed one.
+func (s *Service) newestOf(vs []modplatform.Version, installed string, in instance.Instance) (string, string) {
+	ch := modplatform.Release
+	if s.u.Channel != nil {
+		ch = s.u.Channel()
+	}
+	for _, v := range vs {
+		if v.ID == installed {
+			return "", ""
 		}
 		if ch.Allows(v.Type) && onLine(v, in) {
-			return v.ID, v.Number, nil
+			return v.ID, v.Number
 		}
 	}
-	return "", "", nil
+	return "", ""
 }
 
 // packLoaders are the loaders a pack version may name.
@@ -221,6 +262,10 @@ func (s *Service) Versions(ctx context.Context, id string) ([]PackVersion, error
 	vs, err := plat.Versions(ctx, in.Pack.Project, modplatform.Query{})
 	if err != nil {
 		return nil, err
+	}
+	if offered == "" {
+		// No check ran since the launcher started: offer what one would.
+		offered, _ = s.newestOf(vs, in.Pack.Version, in)
 	}
 	for _, v := range vs {
 		out = append(out, PackVersion{ID: v.ID, Number: v.Number, Channel: v.Type, Minecraft: strings.Join(v.Game, ", "),
@@ -314,10 +359,14 @@ func (s *Service) Diff(ctx context.Context, id, version string) (*Diff, error) {
 	if d.KeptEdits == nil {
 		d.KeptEdits = []string{}
 	}
-	if next.Minecraft != in.Minecraft || next.Loader != in.Loader {
+	// The game moves when Minecraft, the loader or the loader's build changes
+	// (packs pin their loader build: "enforced Fabric Loader 0.19.3").
+	k, kerr := loader.ParseKind(next.Loader)
+	newBuild := kerr == nil && next.Loader != "" && next.LoaderVersion != "" && next.LoaderVersion != loader.Display(k, in.Minecraft, in.LoaderVersion)
+	if next.Minecraft != in.Minecraft || next.Loader != in.Loader || newBuild {
 		d.Game = "Minecraft " + next.Minecraft
-		if k, err := loader.ParseKind(next.Loader); err == nil && next.Loader != "" {
-			d.Game += ", " + k.Name()
+		if kerr == nil && next.Loader != "" {
+			d.Game += ", " + strings.TrimSpace(k.Name()+" "+next.LoaderVersion)
 		}
 	}
 	d.Summary = s.changelog(ctx, next.Origin)
@@ -698,6 +747,12 @@ func (s *Service) changelog(ctx context.Context, o Origin) string {
 		return ""
 	}
 	items := modplatform.Items(vs[0].Changelog, plat.Source() == modplatform.CurseForge)
+	for i, it := range items {
+		// Bullets become sentences: "Readded Polytone. Updated Fabric API."
+		if it != "" && !strings.ContainsRune(".!?:", rune(it[len(it)-1])) {
+			items[i] = it + "."
+		}
+	}
 	return clip(strings.Join(items, " "), 600)
 }
 
@@ -933,6 +988,9 @@ func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, f
 		return err
 	}
 	sw.finish()
+	if s.d.Index != nil {
+		s.d.Index(ctx, in.ID)
+	}
 	s.mu.Lock()
 	delete(s.available, in.ID)
 	delete(s.pending, in.ID)

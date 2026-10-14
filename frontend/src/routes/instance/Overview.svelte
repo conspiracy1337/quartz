@@ -73,7 +73,7 @@
           <span>Content</span><span class="tnum">{contentLine}</span>
           <span>Created</span><span>{fullDate(i.created)}</span>
           <span>Folder</span><span class="trunc mono" style="color: var(--muted)">{i.folder}</span>
-          {#if i.pack}<span>Modpack</span><span style="display: flex; gap: 8px; min-width: 0"><span class="trunc">{i.pack.name} {i.pack.version}</span>{#if i.pack.updatable}<a class="tlink" href={href({ name: 'instance', id: i.id, tab: 'overview', sub: 'update' })}>Change version</a>{/if}</span>{/if}
+          {#if i.pack}<span>Modpack</span><span style="display: flex; gap: 6px; min-width: 0; white-space: nowrap"><span class="trunc">{i.pack.name}</span><span class="muted">{i.pack.version}</span>{#if i.pack.updatable}<a class="tlink" style="margin-left: auto" href={href({ name: 'instance', id: i.id, tab: 'overview', sub: 'update' })}>Change</a>{/if}</span>{/if}
         </div>
       </div>
     </section>
