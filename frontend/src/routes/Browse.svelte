@@ -5,7 +5,7 @@
   import { hasBridge } from '$lib/bridge';
   import type { BrowseSort, ProjectHit, ProjectKind, Src } from '$lib/api/types';
   import { ago, compact, errorText } from '$lib/format';
-  import { LOADER_NAMES, PROJECT_TYPES, projectType } from '$lib/labels';
+  import { LOADER_NAMES, PROJECT_TYPES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
@@ -41,6 +41,8 @@
   let cats = $state<Record<string, boolean>>(hasBridge() ? {} : { Optimization: true });
   let useVersion = $state(true);
   let useLoader = $state(true);
+  /** Runs on: only client or only server projects ("" for any). */
+  let side = $state<'' | 'client' | 'server'>('');
   /** Modpacks become new instances, so their version is picked by hand ("" for any). */
   let game = $state('');
   const releases = query(() => api.versions.minecraft());
@@ -66,13 +68,15 @@
   let more = $state(false);
   let loadingMore = $state(false);
   let failed = $state('');
+  /** Platforms that couldn't be searched; the rows shown come from the others. */
+  let lost = $state<Src[]>([]);
   let seq = 0;
 
   $effect(() => {
     const q = {
       type, text, sort, instance: showTarget ? (target?.id ?? '') : '', version: useVersion && showTarget && !!target, game: showTarget ? '' : game,
       loader: useLoader && showTarget && !!target?.loader,
-      categories: Object.keys(cats).filter((c) => cats[c]), hideAi: hide.ai, hideAds: hide.ads, hideInstalled: hide.installed && showTarget,
+      categories: Object.keys(cats).filter((c) => cats[c]), hideAi: hide.ai, hideAds: hide.ads, hideInstalled: hide.installed && showTarget, side,
     };
     untrack(() => void run(q));
   });
@@ -81,10 +85,12 @@
     const n = ++seq;
     rows = undefined;
     failed = '';
+    lost = [];
     try {
       const r = await api.browse.search(q);
       if (n !== seq) return;
       rows = r.rows;
+      lost = r.failed;
       searchId = r.searchId;
       more = r.more;
     } catch (e) {
@@ -105,6 +111,7 @@
       if (n !== seq || !rows) return;
       rows = mergePage(rows, r);
       more = r.more;
+      lost = [...new Set([...lost, ...r.failed])];
     } catch {
       more = false;
     } finally {
@@ -160,6 +167,7 @@
         <button class="btn fbtn" style="height: 36px" aria-expanded={filtersOpen} aria-controls="browse-filters" onclick={() => (filtersOpen = !filtersOpen)}>Filters</button>
         <Select bind:value={sort} options={SORTS} label="Sort results" style="width: 150px; height: 36px" />
       </div>
+      {#if lost.length && rows?.length}<p class="small faint" style="margin: 0">{lost.map((x) => SRC_NAMES[x]).join(' and ')} couldn't be reached; showing {SRC_NAMES[lost[0] === 'modrinth' ? 'curseforge' : 'modrinth']} only.</p>{/if}
       <div class="list">
         {#if rows}
           {#each rows as r (r.id)}
@@ -168,7 +176,7 @@
               <Tile art={r.art ?? artOf(r.name, r.icon)} size="lg" />
               <a href={href({ name: 'project', id: r.ref })} style="min-width: 0; text-decoration: none"><span style="display: flex; gap: 8px; align-items: baseline; min-width: 0"><span class="trunc" style="font-weight: 600">{r.name}</span><span class="small faint trunc" style="flex: 0 1 auto">by {r.author}</span></span><span class="muted clamp2" style="display: -webkit-box; margin-top: 2px; height: 40px">{r.summary}</span></a>
               <span class="opt" style="flex-direction: column; gap: 2px"><span class="tnum muted small">{compact(m.downloads)} downloads</span><span class="small faint">Updated {ago(m.updated)}</span></span>
-              <span style="display: flex; justify-content: flex-end"><button class="btn btn-sm" disabled={showTarget && !target} onclick={() => install(r)}>Install</button></span>
+              <span style="display: flex; justify-content: flex-end">{#if r.installed}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={showTarget && !target} onclick={() => install(r)}>Install</button>{/if}</span>
             </div>
           {:else}
             <Empty text={failed || 'No projects match these filters.'} />
@@ -192,6 +200,11 @@
     <div class="fg"><span class="field-label">Categories</span>
       {#each categories.data ?? [] as c (c)}
         <button class="fl" onclick={() => (cats[c] = !cats[c])} aria-pressed={!!cats[c]}><Check on={!!cats[c]} /><span>{c}</span><span></span></button>
+      {/each}
+    </div>
+    <div class="fg"><span class="field-label">Runs on</span>
+      {#each [['client', 'Client only'], ['server', 'Server only']] as const as [v, l] (v)}
+        <button class="fl" aria-pressed={side === v} onclick={() => (side = side === v ? '' : v)}><Check on={side === v} /><span>{l}</span><span></span></button>
       {/each}
     </div>
     <div class="fg"><span class="field-label">Hide projects with</span>

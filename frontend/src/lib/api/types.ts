@@ -284,6 +284,8 @@ export interface ProjectHit {
   art?: Art;
   modrinth?: SourceStats;
   curseforge?: SourceStats;
+  /** The target instance already has it. */
+  installed?: boolean;
 }
 export type BrowseSort = 'relevance' | 'downloads' | 'updated';
 export interface BrowseQuery {
@@ -291,10 +293,16 @@ export interface BrowseQuery {
   version: boolean; loader: boolean; categories: string[];
   /** A Minecraft version picked by hand (modpacks); "" for any. */
   game: string;
+  /** Only projects for one side; "" for any. */
+  side: '' | 'client' | 'server';
   hideAi: boolean; hideAds: boolean; hideInstalled: boolean;
 }
 /** A page of results: rows to append and rows already shown that changed. */
-export interface BrowseResults { searchId: string; rows: ProjectHit[]; changed: ProjectHit[]; more: boolean }
+export interface BrowseResults {
+  searchId: string; rows: ProjectHit[]; changed: ProjectHit[]; more: boolean;
+  /** Platforms that couldn't be searched for this page. */
+  failed: Src[];
+}
 /** A run of description text: plain, code, or a link. */
 export interface Span { text: string; code?: boolean; href?: string }
 /** A block of project description text. Never raw HTML. */
@@ -315,6 +323,8 @@ export interface ProjectPage {
   modrinth?: ProjectSide; curseforge?: ProjectSide;
   fresher: Src;
   installed?: InstalledVersion;
+  /** The release types the update channel offers ("release", "beta"). */
+  channels: string[];
 }
 export interface ProjectVersion {
   id: string; number: string; channel: 'Release' | 'Beta' | 'Alpha'; minecraft: string; published: number; bytes: number;

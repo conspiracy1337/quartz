@@ -64,6 +64,14 @@ func facets(q modplatform.SearchQuery) [][]string {
 			f = append(f, g)
 		}
 	}
+	// A client mod is needed on the client and optional or unsupported on a
+	// server; a server mod the other way round (Prism's and XMCL's facets).
+	switch q.Side {
+	case modplatform.SideClient:
+		f = append(f, []string{"client_side:required", "client_side:optional"}, []string{"server_side:optional", "server_side:unsupported"})
+	case modplatform.SideServer:
+		f = append(f, []string{"server_side:required", "server_side:optional"}, []string{"client_side:optional", "client_side:unsupported"})
+	}
 	for _, d := range q.Exclude {
 		f = append(f, []string{"disclosure_types!=" + d})
 	}

@@ -35,6 +35,8 @@ type Query struct {
 	Categories []string `json:"categories"`
 	HideAI     bool     `json:"hideAi"`
 	HideAds    bool     `json:"hideAds"`
+	// Side keeps projects for one side only: "client", "server" or "".
+	Side string `json:"side"`
 	// HideInstalled leaves out what the instance already has.
 	HideInstalled bool `json:"hideInstalled"`
 }
@@ -55,6 +57,8 @@ type Row struct {
 	Icon       string `json:"icon,omitempty"` // same-origin picture
 	Modrinth   *Stats `json:"modrinth,omitempty"`
 	CurseForge *Stats `json:"curseforge,omitempty"`
+	// Installed is true when the target instance already has the project.
+	Installed bool `json:"installed,omitempty"`
 }
 
 // Results is one page: new rows to append, rows already shown that changed
@@ -64,6 +68,8 @@ type Results struct {
 	Rows     []Row  `json:"rows"`
 	Changed  []Row  `json:"changed"`
 	More     bool   `json:"more"`
+	// Failed names the platforms that couldn't be searched for this page.
+	Failed []string `json:"failed"`
 }
 
 // gameRe is what a Minecraft version id looks like ("1.20.1", "24w14a", "1.21-pre1").
@@ -83,15 +89,16 @@ type source struct {
 }
 
 type session struct {
-	mu      sync.Mutex
-	id      string
-	sort    modplatform.Sort
-	sources []*source
-	rows    []*row
-	byKey   map[string]*row // match key → row
-	byID    map[string]*row // platform key → row
-	hidden  map[string]bool // platform keys the instance already has
-	used    time.Time
+	mu        sync.Mutex
+	id        string
+	sort      modplatform.Sort
+	sources   []*source
+	rows      []*row
+	byKey     map[string]*row // match key → row
+	byID      map[string]*row // platform key → row
+	installed map[string]bool // platform keys the instance already has
+	hide      bool            // leave installed projects out
+	used      time.Time
 }
 
 type row struct {
@@ -117,10 +124,13 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 		return Results{}, err
 	}
 	base := modplatform.SearchQuery{Type: t, Text: strings.TrimSpace(q.Text), Sort: srt, Limit: pageSize}
+	if q.Side == modplatform.SideClient || q.Side == modplatform.SideServer {
+		base.Side = q.Side
+	}
 	if len(base.Text) > 200 {
 		base.Text = base.Text[:200]
 	}
-	ss := &session{id: newID(), sort: srt, byKey: map[string]*row{}, byID: map[string]*row{}, hidden: map[string]bool{}, used: s.d.Now()}
+	ss := &session{id: newID(), sort: srt, byKey: map[string]*row{}, byID: map[string]*row{}, installed: map[string]bool{}, hide: q.HideInstalled, used: s.d.Now()}
 	if t == modplatform.TypeModpack {
 		tgt = nil // a pack becomes a new instance: the target's version, loader and content don't apply
 	}
@@ -134,14 +144,12 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 		if q.Loader && t == modplatform.TypeMod {
 			base.Loaders = content.LoaderChain(content.Mods, tgt.Loader, tgt.Minecraft)
 		}
-		if q.HideInstalled {
-			for _, in := range tgt.Installed {
-				if in.Modrinth != nil {
-					ss.hidden[modplatform.Key(modplatform.Modrinth, in.Modrinth.ProjectID)] = true
-				}
-				if in.CurseForge != nil {
-					ss.hidden[modplatform.Key(modplatform.CurseForge, in.CurseForge.ProjectID)] = true
-				}
+		for _, in := range tgt.Installed {
+			if in.Modrinth != nil {
+				ss.installed[modplatform.Key(modplatform.Modrinth, in.Modrinth.ProjectID)] = true
+			}
+			if in.CurseForge != nil {
+				ss.installed[modplatform.Key(modplatform.CurseForge, in.CurseForge.ProjectID)] = true
 			}
 		}
 	}
@@ -161,8 +169,8 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 				sq.Exclude = append(sq.Exclude, adsDisclosures...)
 			}
 		case modplatform.CurseForge:
-			if !curse {
-				continue
+			if !curse || base.Side != "" {
+				continue // CurseForge can't filter by this
 			}
 			sq.Categories = cfCats
 		}
@@ -224,23 +232,23 @@ func (s *Service) next(ctx context.Context, ss *session) (Results, error) {
 				return
 			}
 			pages[i] = page.Hits
-			src.offset += len(page.Hits)
-			src.done = len(page.Hits) == 0 || src.offset >= page.Total
+			src.offset += page.Used()
+			src.done = page.Used() == 0 || src.offset >= page.Total
 		})
 	}
 	wg.Wait()
-	failed := 0
+	failed := []string{}
 	for i, err := range errs {
 		if err != nil {
-			failed++
+			failed = append(failed, string(ss.sources[i].plat.Source()))
 			ss.sources[i].done = true
 			s.d.Log.Warn("browse: search failed", "source", ss.sources[i].plat.Source(), "err", err)
 		}
 	}
-	if failed > 0 && failed == len(ss.sources) {
+	if len(failed) > 0 && len(failed) == len(ss.sources) {
 		return Results{}, errs[0]
 	}
-	res := Results{SearchID: ss.id, Rows: []Row{}, Changed: []Row{}}
+	res := Results{SearchID: ss.id, Rows: []Row{}, Changed: []Row{}, Failed: failed}
 	for _, h := range order(pages, ss.sort) {
 		s.merge(ss, h)
 	}
@@ -320,10 +328,13 @@ func (s *Service) merge(ss *session, h modplatform.Hit) {
 		if r.Icon == "" {
 			r.Icon = s.d.Pictures.Src(h.Icon)
 		}
-		if ss.hidden[id] {
-			r.dirty = false
-			ss.removeRow(r)
-			return
+		if ss.installed[id] {
+			if ss.hide {
+				r.dirty = false
+				ss.removeRow(r)
+				return
+			}
+			r.Installed = true
 		}
 		r.dirty = r.sent
 		return
@@ -335,8 +346,11 @@ func (s *Service) merge(ss *session, h modplatform.Hit) {
 	if _, taken := ss.byKey[key]; !taken && key != "" {
 		ss.byKey[key] = r
 	}
-	if ss.hidden[id] {
-		return
+	if ss.installed[id] {
+		if ss.hide {
+			return
+		}
+		r.Installed = true
 	}
 	ss.rows = append(ss.rows, r)
 }

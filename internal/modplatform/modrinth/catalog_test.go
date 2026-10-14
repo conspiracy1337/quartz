@@ -65,3 +65,11 @@ func TestProjectDetail(t *testing.T) {
 		t.Fatal("slug with a slash accepted")
 	}
 }
+
+func TestSideFacets(t *testing.T) {
+	f := facets(modplatform.SearchQuery{Type: modplatform.TypeMod, Side: modplatform.SideClient})
+	want := `[["project_type:mod"],["client_side:required","client_side:optional"],["server_side:optional","server_side:unsupported"]]`
+	if b, _ := json.Marshal(f); string(b) != want {
+		t.Fatalf("facets %s", b)
+	}
+}

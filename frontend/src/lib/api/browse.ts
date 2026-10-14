@@ -21,7 +21,7 @@ export const browseApi = {
   /** Starts a search over both platforms; the first page of merged rows. */
   search: bridged(BrowseGo.Search, (q: BrowseQuery): BrowseResults => mock.search(q)),
   /** The next page: rows to append and rows a twin merged into. */
-  more: bridged(BrowseGo.More, (_searchId: string): BrowseResults => ({ searchId: 'preview', rows: [], changed: [], more: false })),
+  more: bridged(BrowseGo.More, (_searchId: string): BrowseResults => ({ searchId: 'preview', rows: [], changed: [], more: false, failed: [] })),
   categories: bridged(BrowseGo.Categories, (kind: ProjectKind): string[] => mock.categories(kind)),
   /** A project page; instance (optional) is where Install goes. */
   project: (ref: string, instance: string) => revs.load('content', bridged(() => BrowseGo.Project(ref, instance), (): ProjectPage => mock.iris)),

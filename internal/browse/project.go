@@ -62,6 +62,8 @@ type Page struct {
 	CurseForge *Side             `json:"curseforge,omitempty"`
 	Fresher    string            `json:"fresher"` // the platform updated more recently
 	Installed  *InstalledVersion `json:"installed,omitempty"`
+	// Channels are the release types the update channel offers ("release", "beta").
+	Channels []string `json:"channels"`
 }
 
 // Project reads a project page from every platform that has it. A project
@@ -93,7 +95,7 @@ func (s *Service) Project(ctx context.Context, ref modplatform.Ref, instance str
 		}
 		return Page{}, firstErr
 	}
-	page := Page{Ref: ref.String()}
+	page := Page{Ref: ref.String(), Channels: s.d.Channel().Types()}
 	var newest time.Time
 	for _, src := range []modplatform.Source{modplatform.Modrinth, modplatform.CurseForge} {
 		d, ok := sides[src]

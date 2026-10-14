@@ -23,6 +23,7 @@ type fake struct {
 	versions map[string][]modplatform.Version
 	cats     []modplatform.Category
 	refuse   bool // answers 400 to disclosure filters
+	down     bool // every search fails
 
 	mu      sync.Mutex
 	queries []modplatform.SearchQuery
@@ -34,6 +35,9 @@ func (f *fake) Search(_ context.Context, q modplatform.SearchQuery) (modplatform
 	f.mu.Lock()
 	f.queries = append(f.queries, q)
 	f.mu.Unlock()
+	if f.down {
+		return modplatform.SearchPage{}, &netx.StatusError{Code: 503}
+	}
 	if f.refuse && len(q.Exclude) > 0 {
 		return modplatform.SearchPage{}, &netx.StatusError{Code: 400}
 	}
@@ -276,5 +280,36 @@ func TestModpackSearchIgnoresTarget(t *testing.T) {
 	}
 	if q := mr.queries[2]; q.Game != "" {
 		t.Fatalf("bad version passed through: %+v", q)
+	}
+}
+
+func TestSearchNamesFailedPlatformsAndMarksInstalled(t *testing.T) {
+	mr := &fake{src: modplatform.Modrinth, hits: []modplatform.Hit{
+		hit(modplatform.Modrinth, "AANobbMI", "Sodium", "jellysquid3", 58_700_000, 5),
+		hit(modplatform.Modrinth, "uXXizFIs", "FerriteCore", "malte0811", 41_000_000, 14),
+	}}
+	cf := &fake{src: modplatform.CurseForge, down: true}
+	tgt := &Target{Minecraft: "1.21.1", Loader: "fabric", Installed: []content.Installed{{Modrinth: &content.Ident{ProjectID: "AANobbMI"}}}}
+	s := newService(mr, cf, tgt)
+	res, err := s.Search(context.Background(), Query{Type: "mod", Instance: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(res.Failed, []string{"curseforge"}) || len(res.Rows) != 2 || !res.Rows[0].Installed || res.Rows[1].Installed {
+		t.Fatalf("failed %v rows %+v", res.Failed, res.Rows)
+	}
+	res, err = s.Search(context.Background(), Query{Type: "mod", Instance: "x", HideInstalled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0].Name != "FerriteCore" {
+		t.Fatalf("rows %+v", res.Rows)
+	}
+	cf.down, cf.queries = false, nil
+	if _, err := s.Search(context.Background(), Query{Type: "mod", Side: "client"}); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(cf.queries); n != 0 {
+		t.Fatalf("CurseForge asked %d times for a side it can't filter", n)
 	}
 }

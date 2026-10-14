@@ -60,7 +60,7 @@
     { key: 3, label: 'Changelog' },
   ]);
   /** The newest version for the target that the installed one would update to. */
-  const latest = $derived(versions.data?.find((v) => v.action === 'Update'));
+  const latest = $derived(versions.data?.find((v) => v.action === 'Update' && p?.channels.includes(v.channel.toLowerCase())));
   const forTarget = $derived(target ? `${target.name} (${target.minecraft}${target.loader ? `, ${LOADER_NAMES[target.loader.kind]}` : ''})` : '');
 
   function install(version?: string) {

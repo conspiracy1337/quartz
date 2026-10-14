@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -77,6 +78,7 @@ type mod struct {
 		Name string `json:"name"`
 	} `json:"authors"`
 	Categories []struct {
+		ID   int64  `json:"id"`
 		Slug string `json:"slug"`
 	} `json:"categories"`
 	LatestIndexes []struct {
@@ -92,6 +94,28 @@ func (m mod) typ() modplatform.ProjectType {
 		}
 	}
 	return modplatform.TypeMod
+}
+
+// inEvery reports whether m has a category of every group. CurseForge's
+// categoryIds is one "any of" list, so with two groups or more the answer is
+// narrowed here, as Modrinth does it.
+func (m mod) inEvery(groups [][]string) bool {
+	if len(groups) < 2 {
+		return true
+	}
+	for _, g := range groups {
+		found := false
+		for _, c := range m.Categories {
+			if slices.Contains(g, id(c.ID)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 func (m mod) author() string {
@@ -169,9 +193,9 @@ func (c *Client) Search(ctx context.Context, q modplatform.SearchQuery) (modplat
 	if err := c.http.JSON(ctx, http.MethodGet, c.Base+"/v1/mods/search?"+v.Encode(), nil, nil, &resp); err != nil {
 		return modplatform.SearchPage{}, err
 	}
-	page := modplatform.SearchPage{Total: resp.Pagination.TotalCount}
+	page := modplatform.SearchPage{Total: resp.Pagination.TotalCount, Read: len(resp.Data)}
 	for _, m := range resp.Data {
-		if m.ID <= 0 {
+		if m.ID <= 0 || !m.inEvery(q.Categories) {
 			continue
 		}
 		page.Hits = append(page.Hits, modplatform.Hit{Source: modplatform.CurseForge, ID: id(m.ID), Slug: m.Slug, Title: m.Name,

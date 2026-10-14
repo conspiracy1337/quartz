@@ -759,6 +759,7 @@ export namespace browse {
 	    curseforge?: Side;
 	    fresher: string;
 	    installed?: InstalledVersion;
+	    channels: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Page(source);
@@ -773,6 +774,7 @@ export namespace browse {
 	        this.curseforge = this.convertValues(source["curseforge"], Side);
 	        this.fresher = source["fresher"];
 	        this.installed = this.convertValues(source["installed"], InstalledVersion);
+	        this.channels = source["channels"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -805,6 +807,7 @@ export namespace browse {
 	    categories: string[];
 	    hideAi: boolean;
 	    hideAds: boolean;
+	    side: string;
 	    hideInstalled: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -823,6 +826,7 @@ export namespace browse {
 	        this.categories = source["categories"];
 	        this.hideAi = source["hideAi"];
 	        this.hideAds = source["hideAds"];
+	        this.side = source["side"];
 	        this.hideInstalled = source["hideInstalled"];
 	    }
 	}
@@ -849,6 +853,7 @@ export namespace browse {
 	    icon?: string;
 	    modrinth?: Stats;
 	    curseforge?: Stats;
+	    installed?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Row(source);
@@ -864,6 +869,7 @@ export namespace browse {
 	        this.icon = source["icon"];
 	        this.modrinth = this.convertValues(source["modrinth"], Stats);
 	        this.curseforge = this.convertValues(source["curseforge"], Stats);
+	        this.installed = source["installed"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -889,6 +895,7 @@ export namespace browse {
 	    rows: Row[];
 	    changed: Row[];
 	    more: boolean;
+	    failed: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Results(source);
@@ -900,6 +907,7 @@ export namespace browse {
 	        this.rows = this.convertValues(source["rows"], Row);
 	        this.changed = this.convertValues(source["changed"], Row);
 	        this.more = source["more"];
+	        this.failed = source["failed"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
