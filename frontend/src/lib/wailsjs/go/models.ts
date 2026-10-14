@@ -155,6 +155,24 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class ExistingPack {
+	    id: string;
+	    name: string;
+	    version: string;
+	    target: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExistingPack(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.target = source["target"];
+	    }
+	}
 	export class ExportResult {
 	    job?: string;
 	    file?: string;
@@ -179,6 +197,8 @@ export namespace api {
 	    icon?: string;
 	    stats: modpack.Stats;
 	    warnings: string[];
+	    optional: modpack.OptionalFile[];
+	    existing?: ExistingPack;
 	
 	    static createFrom(source: any = {}) {
 	        return new ImportPreview(source);
@@ -195,6 +215,8 @@ export namespace api {
 	        this.icon = source["icon"];
 	        this.stats = this.convertValues(source["stats"], modpack.Stats);
 	        this.warnings = source["warnings"];
+	        this.optional = this.convertValues(source["optional"], modpack.OptionalFile);
+	        this.existing = this.convertValues(source["existing"], ExistingPack);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -287,6 +309,22 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class PackView {
+	    name: string;
+	    version: string;
+	    updatable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PackView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.updatable = source["updatable"];
+	    }
+	}
 	export class MemoryRange {
 	    min: number;
 	    max: number;
@@ -332,6 +370,7 @@ export namespace api {
 	    discordStatus: boolean;
 	    settings: instance.Settings;
 	    gpu: string;
+	    pack?: PackView;
 	    switch?: content.SwitchResult;
 	
 	    static createFrom(source: any = {}) {
@@ -370,6 +409,7 @@ export namespace api {
 	        this.discordStatus = source["discordStatus"];
 	        this.settings = this.convertValues(source["settings"], instance.Settings);
 	        this.gpu = source["gpu"];
+	        this.pack = this.convertValues(source["pack"], PackView);
 	        this.switch = this.convertValues(source["switch"], content.SwitchResult);
 	    }
 	
@@ -550,6 +590,7 @@ export namespace api {
 		    return a;
 		}
 	}
+	
 	export class SandboxRow {
 	    id: string;
 	    folder: boolean;
@@ -759,6 +800,7 @@ export namespace browse {
 	    curseforge?: Side;
 	    fresher: string;
 	    installed?: InstalledVersion;
+	    channels: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Page(source);
@@ -773,6 +815,7 @@ export namespace browse {
 	        this.curseforge = this.convertValues(source["curseforge"], Side);
 	        this.fresher = source["fresher"];
 	        this.installed = this.convertValues(source["installed"], InstalledVersion);
+	        this.channels = source["channels"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -800,10 +843,12 @@ export namespace browse {
 	    sort: string;
 	    instance: string;
 	    version: boolean;
+	    game: string;
 	    loader: boolean;
 	    categories: string[];
 	    hideAi: boolean;
 	    hideAds: boolean;
+	    side: string;
 	    hideInstalled: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -817,10 +862,12 @@ export namespace browse {
 	        this.sort = source["sort"];
 	        this.instance = source["instance"];
 	        this.version = source["version"];
+	        this.game = source["game"];
 	        this.loader = source["loader"];
 	        this.categories = source["categories"];
 	        this.hideAi = source["hideAi"];
 	        this.hideAds = source["hideAds"];
+	        this.side = source["side"];
 	        this.hideInstalled = source["hideInstalled"];
 	    }
 	}
@@ -847,6 +894,7 @@ export namespace browse {
 	    icon?: string;
 	    modrinth?: Stats;
 	    curseforge?: Stats;
+	    installed?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Row(source);
@@ -862,6 +910,7 @@ export namespace browse {
 	        this.icon = source["icon"];
 	        this.modrinth = this.convertValues(source["modrinth"], Stats);
 	        this.curseforge = this.convertValues(source["curseforge"], Stats);
+	        this.installed = source["installed"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -887,6 +936,7 @@ export namespace browse {
 	    rows: Row[];
 	    changed: Row[];
 	    more: boolean;
+	    failed: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Results(source);
@@ -898,6 +948,7 @@ export namespace browse {
 	        this.rows = this.convertValues(source["rows"], Row);
 	        this.changed = this.convertValues(source["changed"], Row);
 	        this.more = source["more"];
+	        this.failed = source["failed"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1495,10 +1546,27 @@ export namespace crash {
 
 export namespace docs {
 	
+	export class Pic {
+	    src: string;
+	    alt?: string;
+	    href?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Pic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.src = source["src"];
+	        this.alt = source["alt"];
+	        this.href = source["href"];
+	    }
+	}
 	export class Span {
 	    text: string;
 	    code?: boolean;
 	    href?: string;
+	    project?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Span(source);
@@ -1509,6 +1577,7 @@ export namespace docs {
 	        this.text = source["text"];
 	        this.code = source["code"];
 	        this.href = source["href"];
+	        this.project = source["project"];
 	    }
 	}
 	export class Block {
@@ -1517,6 +1586,7 @@ export namespace docs {
 	    items?: Span[][];
 	    src?: string;
 	    alt?: string;
+	    pics?: Pic[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Block(source);
@@ -1529,6 +1599,7 @@ export namespace docs {
 	        this.items = this.convertValues(source["items"], Span);
 	        this.src = source["src"];
 	        this.alt = source["alt"];
+	        this.pics = this.convertValues(source["pics"], Pic);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1549,6 +1620,7 @@ export namespace docs {
 		    return a;
 		}
 	}
+	
 
 }
 
@@ -1578,6 +1650,7 @@ export namespace exporting {
 	    format: string;
 	    list: string;
 	    include: Include;
+	    meta: instance.ExportMeta;
 	
 	    static createFrom(source: any = {}) {
 	        return new Plan(source);
@@ -1588,6 +1661,7 @@ export namespace exporting {
 	        this.format = source["format"];
 	        this.list = source["list"];
 	        this.include = this.convertValues(source["include"], Include);
+	        this.meta = this.convertValues(source["meta"], instance.ExportMeta);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1932,6 +2006,24 @@ export namespace instance {
 		}
 	}
 	
+	export class ExportMeta {
+	    name: string;
+	    version: string;
+	    summary?: string;
+	    author?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.summary = source["summary"];
+	        this.author = source["author"];
+	    }
+	}
 	export class Group {
 	    name: string;
 	    collapsed?: boolean;
@@ -2431,6 +2523,44 @@ export namespace modpack {
 		}
 	}
 	
+	export class OptionalFile {
+	    path: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OptionalFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.name = source["name"];
+	    }
+	}
+	export class PackVersion {
+	    id: string;
+	    number: string;
+	    channel: string;
+	    minecraft: string;
+	    published: number;
+	    current: boolean;
+	    offered: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PackVersion(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.number = source["number"];
+	        this.channel = source["channel"];
+	        this.minecraft = source["minecraft"];
+	        this.published = source["published"];
+	        this.current = source["current"];
+	        this.offered = source["offered"];
+	    }
+	}
 	export class Stats {
 	    mods: number;
 	    modBytes: number;

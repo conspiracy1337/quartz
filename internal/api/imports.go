@@ -42,6 +42,19 @@ type ImportPreview struct {
 	Icon      string        `json:"icon,omitempty"`
 	Stats     modpack.Stats `json:"stats"`
 	Warnings  []string      `json:"warnings"`
+	// Optional are files the pack lets the player choose (off by default).
+	Optional []modpack.OptionalFile `json:"optional"`
+	// Existing is an instance already installed from this pack, which can
+	// move to this version instead of a second copy being made.
+	Existing *ExistingPack `json:"existing,omitempty"`
+}
+
+// ExistingPack is an instance installed from the pack being imported.
+type ExistingPack struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version string `json:"version"` // installed
+	Target  string `json:"target"`  // the version being imported, by platform id
 }
 
 // ErrBadLink is returned for links that are too long to be real.
@@ -56,9 +69,12 @@ func (im *Imports) preview(p *modpack.Pack, err error) (*ImportPreview, error) {
 		return nil, err
 	}
 	v := &ImportPreview{Token: im.d.Packs.Stage(p), Name: p.Name, Version: p.Version, Minecraft: p.Minecraft, Source: p.Format,
-		Stats: st, Warnings: append([]string{}, p.Warnings...)}
+		Stats: st, Warnings: append([]string{}, p.Warnings...), Optional: p.Optional()}
 	if k, err := loader.ParseKind(p.Loader); err == nil {
 		v.Loader = k.Name()
+	}
+	if in, ok := im.d.Packs.Installed(p.Origin); ok && in.Pack.Version != p.Origin.Version {
+		v.Existing = &ExistingPack{ID: in.ID, Name: in.Name, Version: in.Pack.VersionName, Target: p.Origin.Version}
 	}
 	if im.d.Picture != nil && p.IconURL != "" {
 		v.Icon = im.d.Picture(p.IconURL)
@@ -132,8 +148,9 @@ func (im *Imports) InspectOpened(openID string) (*ImportPreview, error) {
 	return im.preview(im.d.Reader.Project(ctx, p.Source, p.Project, p.Version))
 }
 
-// InspectProject reads a pack from Browse.
-func (im *Imports) InspectProject(ref, source string) (*ImportPreview, error) {
+// InspectProject reads a pack from Browse: the version picked on the project
+// page, or "" for the newest release.
+func (im *Imports) InspectProject(ref, source, version string) (*ImportPreview, error) {
 	r, err := modplatform.ParseRef(ref)
 	if err != nil {
 		return nil, err
@@ -142,17 +159,18 @@ func (im *Imports) InspectProject(ref, source string) (*ImportPreview, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.ID(src) == "" {
+	if r.ID(src) == "" || len(version) > 64 {
 		return nil, ErrBadSource
 	}
-	return im.preview(im.d.Reader.Project(im.ctx.Get(), src, r.ID(src), ""))
+	return im.preview(im.d.Reader.Project(im.ctx.Get(), src, r.ID(src), version))
 }
 
-// Install creates the instance from an inspected pack and returns its job.
-func (im *Imports) Install(token, name string, art instance.Art) (string, error) {
+// Install creates the instance from an inspected pack, with the optional
+// files in enable turned on, and returns its job.
+func (im *Imports) Install(token, name string, art instance.Art, enable []string) (string, error) {
 	name = strings.TrimSpace(name)
-	if len(name) > 64 {
+	if len(name) > 64 || len(enable) > 20_000 {
 		return "", instance.ErrBadName
 	}
-	return im.d.Packs.Install(im.ctx.Get(), token, name, art)
+	return im.d.Packs.Install(im.ctx.Get(), token, name, art, enable)
 }

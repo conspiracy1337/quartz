@@ -3,6 +3,7 @@ package modplatform
 import (
 	"errors"
 	"strings"
+	"unicode"
 )
 
 // Ref names a project on one or both platforms, as the UI passes it around:
@@ -89,3 +90,15 @@ func (r Ref) Sources() []Source {
 
 // Key is the project's identity on one platform, e.g. "modrinth:AANobbMI".
 func Key(src Source, id string) string { return string(src) + ":" + id }
+
+// Normalize is how a title is compared across platforms: lower case,
+// letters and digits only ("Xaero's Minimap" → "xaerosminimap").
+func Normalize(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}

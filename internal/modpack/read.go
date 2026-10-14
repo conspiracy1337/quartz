@@ -155,10 +155,11 @@ func readMrpack(zr *archive.Reader) (*Pack, error) {
 			foreign++
 			continue
 		}
-		if f.Env != nil && f.Env.Client == "optional" {
+		optional := f.Env != nil && f.Env.Client == "optional"
+		if optional {
 			rel += ".disabled"
 		}
-		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, SHA512: sha512, Size: f.FileSize, URLs: urls})
+		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, SHA512: sha512, Size: f.FileSize, URLs: urls, Optional: optional})
 	}
 	if foreign > 0 {
 		p.Warnings = append(p.Warnings, fmt.Sprintf("%d %s from addresses Modrinth packs may not use %s left out", foreign, plural(foreign, "file"), were(foreign)))
@@ -265,11 +266,12 @@ func (r *Reader) resolveCurse(ctx context.Context, p *Pack, refs []cfRef) error 
 	if err != nil {
 		return err
 	}
-	skipped := 0
+	skipped, gone := 0, 0
 	for _, ref := range refs {
 		v, ok := files[fmt.Sprint(ref.file)]
 		if !ok || v.ProjectID != fmt.Sprint(ref.project) {
-			return fmt.Errorf("modpack: CurseForge doesn't have file %d any more", ref.file)
+			gone++ // removed by its author: the rest of the pack still installs (XMCL drops it too)
+			continue
 		}
 		folder, known := curseFolders[v.Class]
 		if !known {
@@ -285,7 +287,7 @@ func (r *Reader) resolveCurse(ctx context.Context, p *Pack, refs []cfRef) error 
 			rel += ".disabled"
 		}
 		f := File{Path: rel, SHA1: v.File.SHA1, Size: v.File.Size, Name: v.Number, Page: v.File.Page,
-			Project: modplatform.Key(modplatform.CurseForge, v.ProjectID), Version: v.Number}
+			Project: modplatform.Key(modplatform.CurseForge, v.ProjectID), Version: v.Number, Optional: ref.optional}
 		if v.File.URL != "" {
 			if !modplatform.ValidURL(v.File.URL) {
 				return fmt.Errorf("modpack: CurseForge gave an unexpected address for %s", name)
@@ -297,7 +299,45 @@ func (r *Reader) resolveCurse(ctx context.Context, p *Pack, refs []cfRef) error 
 	if skipped > 0 {
 		p.Warnings = append(p.Warnings, fmt.Sprintf("%d %s for worlds %s left out", skipped, plural(skipped, "file"), were(skipped)))
 	}
+	if gone > 0 {
+		p.Warnings = append(p.Warnings, fmt.Sprintf("%d %s CurseForge no longer has %s left out", gone, plural(gone, "file"), were(gone)))
+	}
+	r.modrinthCopies(ctx, p)
 	return nil
+}
+
+// modrinthCopies gives blocked CurseForge files the download of the same
+// file on Modrinth, found by sha1, so only the rest need a manual download
+// (Prism does this by default). Modrinth being unreachable changes nothing.
+func (r *Reader) modrinthCopies(ctx context.Context, p *Pack) {
+	mr := r.d.Modrinth
+	if mr == nil || !mr.Ready() {
+		return
+	}
+	var ask []modplatform.Hashes
+	for _, f := range p.Files {
+		if f.Blocked() {
+			ask = append(ask, modplatform.Hashes{SHA1: f.SHA1})
+		}
+	}
+	if len(ask) == 0 {
+		return
+	}
+	found, err := mr.Identify(ctx, ask)
+	if err != nil {
+		r.d.Log.Debug("modpack: Modrinth copies of blocked files", "err", err)
+		return
+	}
+	for i, f := range p.Files {
+		v, ok := found[f.SHA1]
+		if !f.Blocked() || !ok || !strings.EqualFold(v.File.SHA1, f.SHA1) || !modplatform.ValidURL(v.File.URL) {
+			continue
+		}
+		p.Files[i].URLs = []string{v.File.URL}
+		if hexOf(strings.ToLower(v.File.SHA512), 128) {
+			p.Files[i].SHA512 = strings.ToLower(v.File.SHA512)
+		}
+	}
 }
 
 // --- Prism and MultiMC instance zips ---
@@ -361,16 +401,20 @@ func readMMC(zr *archive.Reader) (*Pack, error) {
 			return nil, ErrUnsafePath
 		}
 	}
-	p := &Pack{Origin: Origin{Source: "file"}, Format: "Prism or MultiMC"}
-	// Only the name is read: commands, JVM arguments and the environment an
-	// instance file may carry are never taken over.
+	p := &Pack{Origin: Origin{Source: "file"}, Format: "Prism or MultiMC", Copied: true}
+	// Only the name and the pack Prism installed it from are read: commands,
+	// JVM arguments and the environment an instance file may carry are never
+	// taken over.
 	if b, err := zr.Read(cfg, 1<<20); err == nil {
+		vals := map[string]string{}
 		sc := bufio.NewScanner(bytes.NewReader(b))
 		for sc.Scan() {
-			if v, ok := strings.CutPrefix(sc.Text(), "name="); ok {
-				p.Name = clip(strings.TrimSpace(v), 80)
+			if k, v, ok := strings.Cut(sc.Text(), "="); ok {
+				vals[strings.TrimSpace(k)] = strings.TrimSpace(v)
 			}
 		}
+		p.Name = clip(vals["name"], 80)
+		p.Managed = ManagedFromPrism(vals)
 	}
 	data, err := zr.Read(root+"mmc-pack.json", maxManifest)
 	if err != nil {
@@ -386,6 +430,21 @@ func readMMC(zr *archive.Reader) (*Pack, error) {
 		}
 	}
 	return p, nil
+}
+
+// ManagedFromPrism reads the pack a Prism instance.cfg says the instance
+// was installed from (nil for none).
+func ManagedFromPrism(cfg map[string]string) *Managed {
+	src := map[string]string{"modrinth": "modrinth", "flame": "curseforge"}[cfg["ManagedPackType"]]
+	if cfg["ManagedPack"] != "true" || src == "" {
+		return nil
+	}
+	m := &Managed{Origin: Origin{Source: src, Project: cfg["ManagedPackID"], Version: cfg["ManagedPackVersionID"]},
+		Name: clip(cfg["ManagedPackName"], 80), VersionName: clip(cfg["ManagedPackVersionName"], 40)}
+	if !m.Valid() {
+		return nil
+	}
+	return m
 }
 
 // --- Technic ---

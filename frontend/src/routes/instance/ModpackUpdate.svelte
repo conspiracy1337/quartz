@@ -7,12 +7,25 @@
   import { session } from '$lib/session.svelte';
   import { tasks } from '$lib/tasks.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import Select from '$lib/ui/Select.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
 
-  const diff = query(() => api.modpacks.diff(i.id));
+  const versions = query(() => api.modpacks.versions(i.id));
+  /** The version to move to: the one the last check offered, else the newest other one; the player may pick any. */
+  // svelte-ignore state_referenced_locally
+  let picked = $state(session.packPick?.instanceId === i.id ? session.packPick.version : '');
+  session.packPick = null;
+  const chosen = $derived(picked || (versions.data?.find((v) => v.offered) ?? versions.data?.find((v) => !v.current))?.id || '');
+  const diff = query(() => (versions.data || versions.error ? api.modpacks.diff(i.id, chosen) : new Promise<never>(() => {})));
+  const currentAt = $derived(versions.data?.findIndex((v) => v.current) ?? -1);
+  /** Older than the installed version: the button goes back rather than updates. */
+  const older = $derived(currentAt >= 0 && (versions.data?.findIndex((v) => v.id === chosen) ?? -1) > currentAt);
+  const OPTS = $derived((versions.data ?? []).map((v) => ({
+    value: v.id, label: `${v.number}${v.current ? ' (installed)' : ''}${v.channel !== 'release' ? ` · ${v.channel}` : ''}${v.minecraft ? ` · ${v.minecraft}` : ''}`,
+  })));
   let tab = $state<'All changes' | DiffKind>('All changes');
   let backup = $state(true);
   const MARK: Record<DiffKind, { sym: string; color: string }> = {
@@ -30,7 +43,7 @@
   async function update() {
     busy = true;
     try {
-      const job = await api.modpacks.update(i.id, backup);
+      const job = await api.modpacks.update(i.id, chosen, backup);
       if (job) await tasks.load();
       go({ name: 'downloads' });
     } catch (e) {
@@ -43,7 +56,7 @@
 <div class="topbar">
   <a href={href({ name: 'instance', id: i.id, tab: 'overview' })} class="btn btn-sm btn-ghost btn-icon" aria-label="Back"><Icon name="chevron-left" size={14} sw={2} /></a>
   <h1 class="h2 trunc">{i.name}</h1>
-  {#if diff.data}<span class="mono muted" style="display: flex; gap: 8px; align-items: center; white-space: nowrap">{diff.data.from}<Icon name="arrow-right" size={12} sw={2} /><span style="color: var(--text)">{diff.data.to}</span></span>{/if}
+  {#if OPTS.length > 1 || diff.data}<span class="mono muted" style="display: flex; gap: 8px; align-items: center; white-space: nowrap">{diff.data?.from ?? i.pack?.version}<Icon name="arrow-right" size={12} sw={2} />{#if OPTS.length > 1}<Select value={chosen} options={OPTS} label="Version to move to" style="width: 240px" onchange={(v) => (picked = v)} />{:else}<span style="color: var(--text)">{diff.data?.to}</span>{/if}</span>{/if}
 </div>
 <div class="scroll">
   {#if diff.error}
@@ -76,7 +89,7 @@
         <section class="card" aria-label="Before updating">
           <div class="setting" style="min-height: 48px"><span class="setting-title">Back up worlds first</span><Toggle bind:on={backup} label="Back up worlds first" /></div>
         </section>
-        <button class="btn btn-accent btn-block" disabled={busy || session.running[i.id]} onclick={update}>Update to {d.to}</button>
+        <button class="btn btn-accent btn-block" disabled={busy || session.running[i.id]} onclick={update}>{older ? 'Go back to' : 'Update to'} {d.to}</button>
       </aside>
     </div>
   {:else}

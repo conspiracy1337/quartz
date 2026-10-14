@@ -46,9 +46,11 @@ type SearchQuery struct {
 	Game    string   // one Minecraft version, or "" for any
 	Loaders []string // any of these; empty for any
 	// Categories are groups of the platform's own ids (Modrinth slugs,
-	// CurseForge numeric ids): a project must match one id of every group on
-	// Modrinth; CurseForge takes them all as one "any of" list.
+	// CurseForge numeric ids): a project must match one id of every group.
 	Categories [][]string
+	// Side keeps projects that run on one side only: SideClient or
+	// SideServer ("" for any). Modrinth only; CurseForge publishes no sides.
+	Side string
 	// Exclude lists Modrinth content disclosures to hide (ignored by
 	// CurseForge, which publishes none).
 	Exclude []string
@@ -73,7 +75,21 @@ type Hit struct {
 type SearchPage struct {
 	Hits  []Hit
 	Total int
+	// Read is how many results the page used up when the platform's answer
+	// was filtered further (0: as many as Hits); the next page starts after it.
+	Read int
 }
+
+// Used is how far the next page's offset moves.
+func (p SearchPage) Used() int {
+	return max(p.Read, len(p.Hits))
+}
+
+// Search sides.
+const (
+	SideClient = "client"
+	SideServer = "server"
+)
 
 // Image is a gallery picture.
 type Image struct {

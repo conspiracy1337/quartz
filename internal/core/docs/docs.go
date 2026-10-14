@@ -7,6 +7,8 @@ package docs
 
 import (
 	"bytes"
+	"net/url"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -28,16 +30,37 @@ type Span struct {
 	Text string `json:"text"`
 	Code bool   `json:"code,omitempty"`
 	Href string `json:"href,omitempty"`
+	// Project names the project a link points at, when the caller knows the
+	// address (set by callers, never by the parser).
+	Project string `json:"project,omitempty"`
 }
 
-// Block is a heading (h2), a paragraph (p), a list (ul) or a picture (img).
+// Pic is one picture of a badge row.
+type Pic struct {
+	Src  string `json:"src"`
+	Alt  string `json:"alt,omitempty"`
+	Href string `json:"href,omitempty"`
+}
+
+// Block is a heading (h2), a paragraph (p), a list (ul, or numbered ol),
+// preformatted text (pre, line breaks kept), a picture (img) or a row of
+// small pictures such as badges (badges).
 type Block struct {
 	Type  string   `json:"type"`
 	Spans []Span   `json:"spans,omitempty"`
 	Items [][]Span `json:"items,omitempty"`
 	Src   string   `json:"src,omitempty"`
 	Alt   string   `json:"alt,omitempty"`
+	Pics  []Pic    `json:"pics,omitempty"`
+
+	href  string // the link around a picture
+	small bool   // a picture sized 64px or less
+	group int    // pictures in one group sit in one paragraph
 }
+
+// smallPic is the largest width or height a picture may declare to count as
+// a badge.
+const smallPic = 64
 
 // Picture maps a picture's URL to the address the UI loads it from, or ""
 // to drop it.
@@ -75,7 +98,41 @@ func HTML(src string, pic Picture) []Block {
 		w.block(n)
 	}
 	w.flush()
-	return w.out
+	return badges(w.out)
+}
+
+// badges turns small pictures, and runs of two or more pictures in one
+// paragraph, into badge rows (XMCL's grouping): a line of shields reads as
+// one row instead of a column of large pictures.
+func badges(in []Block) []Block {
+	var out []Block
+	for i := 0; i < len(in); {
+		if in[i].Type != "img" {
+			out = append(out, in[i])
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(in) && in[j].Type == "img" && in[j].group == in[i].group {
+			j++
+		}
+		run := in[i:j]
+		allSmall := true
+		for _, b := range run {
+			allSmall = allSmall && b.small
+		}
+		if len(run) == 1 && !allSmall {
+			out = append(out, run[0])
+		} else {
+			row := Block{Type: "badges"}
+			for _, b := range run {
+				row.Pics = append(row.Pics, Pic{Src: b.Src, Alt: b.Alt, Href: b.href})
+			}
+			out = append(out, row)
+		}
+		i = j
+	}
+	return out
 }
 
 type walker struct {
@@ -83,6 +140,7 @@ type walker struct {
 	out   []Block
 	cur   []Span // the paragraph being collected
 	chars int
+	group int // bumped at every block boundary, so pictures know their paragraph
 }
 
 func (w *walker) full() bool { return len(w.out) >= maxBlocks || w.chars >= maxChars }
@@ -100,6 +158,12 @@ func (w *walker) add(b Block) {
 		}
 	}
 	w.out = append(w.out, b)
+}
+
+// boundary ends a block: pictures on either side belong to different paragraphs.
+func (w *walker) boundary() {
+	w.flush()
+	w.group++
 }
 
 // flush ends the paragraph being collected.
@@ -136,34 +200,44 @@ func (w *walker) block(n *xhtml.Node) {
 	}
 	switch n.DataAtom {
 	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
-		w.flush()
+		w.boundary()
 		if spans := tidy(w.inline(n, nil)); len(spans) > 0 {
 			w.add(Block{Type: "h2", Spans: spans})
 		}
+		w.boundary()
 	case atom.Ul, atom.Ol:
-		w.flush()
+		w.boundary()
 		var items [][]Span
 		w.items(n, &items)
 		if len(items) > 0 {
-			w.add(Block{Type: "ul", Items: items})
+			typ := "ul"
+			if n.DataAtom == atom.Ol {
+				typ = "ol"
+			}
+			w.add(Block{Type: typ, Items: items})
 		}
+		w.boundary()
 	case atom.Pre:
-		w.flush()
-		if t := strings.TrimSpace(textOf(n)); t != "" {
-			w.add(Block{Type: "p", Spans: []Span{{Text: t, Code: true}}})
+		w.boundary()
+		if t := strings.Trim(textOf(n), "\r\n"); strings.TrimSpace(t) != "" {
+			w.add(Block{Type: "pre", Spans: []Span{{Text: t, Code: true}}})
 		}
+		w.boundary()
 	case atom.Table:
-		w.flush()
+		w.boundary()
 		w.table(n)
+		w.boundary()
 	case atom.Img:
-		w.image(n)
-	case atom.Br, atom.Hr:
+		w.image(n, "")
+	case atom.Br:
 		w.flush()
+	case atom.Hr:
+		w.boundary()
 	case atom.P, atom.Div, atom.Blockquote, atom.Details, atom.Summary, atom.Section, atom.Article, atom.Center,
 		atom.Header, atom.Footer, atom.Main, atom.Aside, atom.Figure, atom.Figcaption, atom.Dl, atom.Dt, atom.Dd, atom.Body:
-		w.flush()
+		w.boundary()
 		w.children(n)
-		w.flush()
+		w.boundary()
 	default:
 		// Inline content (links, emphasis, code) joins the current paragraph;
 		// a picture inside it still becomes its own block.
@@ -204,7 +278,7 @@ func (w *walker) inline(n *xhtml.Node, link *string) []Span {
 			// Keep the paragraph's order: text before, the picture, text after.
 			w.cur = append(w.cur, out...)
 			out = nil
-			w.image(n)
+			w.image(n, href)
 			return
 		case atom.Br:
 			out = append(out, Span{Text: " "})
@@ -284,7 +358,7 @@ func (w *walker) table(n *xhtml.Node) {
 	rows(n)
 }
 
-func (w *walker) image(n *xhtml.Node) {
+func (w *walker) image(n *xhtml.Node, href string) {
 	if w.pic == nil {
 		return
 	}
@@ -293,7 +367,13 @@ func (w *walker) image(n *xhtml.Node) {
 		return
 	}
 	w.flush()
-	w.add(Block{Type: "img", Src: src, Alt: collapse(attr(n, "alt"))})
+	w.add(Block{Type: "img", Src: src, Alt: collapse(attr(n, "alt")), href: href, small: sized(attr(n, "width")) || sized(attr(n, "height")), group: w.group})
+}
+
+// sized reports whether an HTML width or height ("20", "20px") is small.
+func sized(v string) bool {
+	n, err := strconv.Atoi(strings.TrimSuffix(strings.TrimSpace(v), "px"))
+	return err == nil && n > 0 && n <= smallPic
 }
 
 func attr(n *xhtml.Node, key string) string {
@@ -323,8 +403,16 @@ func textOf(n *xhtml.Node) string {
 	return b.String()
 }
 
-// safeLink keeps https links only.
+// safeLink keeps https links only. CurseForge's /linkout?remoteUrl= wrapper
+// is unwrapped to the address it leads to (Prism and XMCL do the same).
 func safeLink(raw string) string {
+	if u, err := url.Parse(raw); err == nil && strings.EqualFold(u.Hostname(), "www.curseforge.com") && u.Path == "/linkout" {
+		inner := u.Query().Get("remoteUrl")
+		if dec, err := url.QueryUnescape(inner); err == nil && strings.Contains(inner, "%") {
+			inner = dec // CurseForge encodes the address twice
+		}
+		raw = inner
+	}
 	if len(raw) > 2048 || !strings.HasPrefix(strings.ToLower(raw), "https://") || strings.ContainsAny(raw, " \r\n\\") {
 		return ""
 	}

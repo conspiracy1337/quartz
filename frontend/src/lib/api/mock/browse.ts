@@ -52,7 +52,7 @@ export function search(q: BrowseQuery): BrowseResults {
   const rows = catalog[LABELS[q.type]].hits
     .filter((p) => p.name.toLowerCase().includes(text))
     .sort((a, b) => (q.sort === 'downloads' ? total(b) - total(a) : q.sort === 'updated' ? newest(b) - newest(a) : 0));
-  return { searchId: 'preview', rows, changed: [], more: false };
+  return { searchId: 'preview', rows, changed: [], more: false, failed: [] };
 }
 
 export const categories = (kind: ProjectKind) => catalog[LABELS[kind]].categories;
@@ -112,7 +112,7 @@ const side = (downloads: number, days: number, url: string) => ({
 
 /** The Iris project page from the design. */
 export const iris: ProjectPage = {
-  ref: 'iris-shaders', type: 'mod', name: 'Iris Shaders', fresher: 'modrinth',
+  ref: 'iris-shaders', type: 'mod', name: 'Iris Shaders', fresher: 'modrinth', channels: ['release', 'beta'],
   modrinth: side(31.6e6, 5, 'https://modrinth.com/mod/iris'),
   curseforge: side(12.9e6, 12, 'https://www.curseforge.com/minecraft/mc-mods/irisshaders'),
   installed: { item: 'iris', source: 'modrinth', versionId: INSTALLED, version: INSTALLED, published: date(2024, 12, 12) },

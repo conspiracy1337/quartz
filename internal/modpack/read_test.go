@@ -86,6 +86,15 @@ func TestReadMrpack(t *testing.T) {
 	if len(p.Files) != 2 || p.Files[1].Path != "mods/extra.jar.disabled" || len(p.Warnings) != 1 {
 		t.Fatalf("files %+v warnings %v", p.Files, p.Warnings)
 	}
+	if opt := p.Optional(); len(opt) != 1 || opt[0] != (OptionalFile{Path: "mods/extra.jar", Name: "extra.jar"}) {
+		t.Fatalf("optional %+v", opt)
+	}
+	q := *p
+	q.Files = slices.Clone(p.Files)
+	q.Enable([]string{"mods/extra.jar", "mods/cobblemon.jar"})
+	if q.Files[1].Path != "mods/extra.jar" || q.Files[0].Path != "mods/cobblemon.jar" || p.Files[1].Path != "mods/extra.jar.disabled" {
+		t.Fatalf("enabled %+v", q.Files)
+	}
 	st, err := p.Stats()
 	if err != nil || st.Mods != 3 || st.Files != 2 || !slices.Contains(st.Foreign, "mods/hotfix.jar") || !slices.Contains(st.Foreign, "extra.jar.disabled") {
 		t.Fatalf("stats %+v %v", st, err)
@@ -282,5 +291,59 @@ func TestFlexInt(t *testing.T) {
 	var v struct{ A, B flexInt }
 	if err := json.Unmarshal([]byte(`{"A":12,"B":"34"}`), &v); err != nil || v.A != 12 || v.B != 34 {
 		t.Fatalf("%+v %v", v, err)
+	}
+}
+
+// twins is a Modrinth that has some files by sha1.
+type twins struct {
+	modplatform.Platform
+	files map[string]modplatform.Version
+}
+
+func (m twins) Ready() bool { return true }
+func (m twins) Identify(_ context.Context, hs []modplatform.Hashes) (map[string]modplatform.Version, error) {
+	out := map[string]modplatform.Version{}
+	for _, h := range hs {
+		if v, ok := m.files[h.SHA1]; ok {
+			out[h.SHA1] = v
+		}
+	}
+	return out, nil
+}
+
+func TestCurseForgeGoneAndBlockedFiles(t *testing.T) {
+	manifest := js(map[string]any{"manifestType": "minecraftModpack", "manifestVersion": 1, "name": "P", "version": "1",
+		"minecraft": map[string]any{"version": "1.20.1"},
+		"files":     []any{map[string]any{"projectID": 1, "fileID": 10}, map[string]any{"projectID": 2, "fileID": 20}, map[string]any{"projectID": 9, "fileID": 90}},
+	})
+	sha1B := strings.Repeat("b", 40)
+	cf := curse{files: map[string]modplatform.Version{
+		"10": {ProjectID: "1", Class: modplatform.TypeMod, File: modplatform.File{Name: "a.jar", SHA1: sha1A, Size: 5, Page: "https://www.curseforge.com/x/download/10"}},
+		"20": {ProjectID: "2", Class: modplatform.TypeMod, File: modplatform.File{Name: "b.jar", SHA1: sha1B, Size: 5, Page: "https://www.curseforge.com/y/download/20"}},
+	}}
+	mr := twins{files: map[string]modplatform.Version{
+		sha1A: {File: modplatform.File{URL: "https://cdn.modrinth.com/data/a/a.jar", SHA1: sha1A, SHA512: sha512A}},
+		sha1B: {File: modplatform.File{URL: "https://evil.example/b.jar", SHA1: sha1B}},
+	}}
+	p, err := NewReader(Deps{CurseForge: cf, Modrinth: mr}).File(context.Background(), zipOf(t, entry{name: "manifest.json", body: manifest}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Files) != 2 || !slices.Contains(p.Warnings, "1 file CurseForge no longer has was left out") {
+		t.Fatalf("files %+v warnings %v", p.Files, p.Warnings)
+	}
+	if f := p.Files[0]; f.Blocked() || f.URLs[0] != "https://cdn.modrinth.com/data/a/a.jar" || f.SHA512 != sha512A {
+		t.Fatalf("Modrinth copy not used: %+v", f)
+	}
+	if !p.Files[1].Blocked() {
+		t.Fatalf("a copy from an address that isn't Modrinth's CDN was used: %+v", p.Files[1])
+	}
+}
+
+func TestCurseLoaderIDRoundTrip(t *testing.T) {
+	for _, c := range [][3]string{{"neoforge", "1.20.1", "47.1.106"}, {"neoforge", "1.21.1", "21.1.77"}, {"forge", "1.20.1", "47.3.0"}, {"fabric", "1.21.1", "0.16.9"}} {
+		if k, v, ok := cfLoader(CurseLoaderID(c[0], c[1], c[2]), c[1]); !ok || k != c[0] || v != c[2] {
+			t.Errorf("%v → %s %s", c, k, v)
+		}
 	}
 }

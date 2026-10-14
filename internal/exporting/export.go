@@ -20,10 +20,12 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"quartz/internal/content"
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/hashx"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
 	"quartz/internal/loader"
@@ -34,9 +36,10 @@ import (
 type Format string
 
 const (
-	Mrpack Format = "mrpack" // links what Modrinth serves, bundles the rest
-	Zip    Format = "zip"    // the same index, every file bundled
-	List   Format = "list"   // the enabled mods as a table
+	Mrpack     Format = "mrpack"     // links what Modrinth serves, bundles the rest
+	CurseForge Format = "curseforge" // a CurseForge zip: links what CurseForge serves
+	Zip        Format = "zip"        // the .mrpack index, every file bundled
+	List       Format = "list"       // the enabled mods as a table
 )
 
 // ListFormat is a mod list's file type.
@@ -45,6 +48,7 @@ type ListFormat string
 const (
 	Markdown ListFormat = "md"
 	CSV      ListFormat = "csv"
+	HTML     ListFormat = "html"
 )
 
 // Include chooses the optional parts of a pack. Mods, resource packs,
@@ -62,15 +66,17 @@ type Plan struct {
 	Format  Format     `json:"format"`
 	List    ListFormat `json:"list"`
 	Include Include    `json:"include"`
+	// Meta names the pack ("" name: the instance's).
+	Meta instance.ExportMeta `json:"meta"`
 }
 
 // Valid reports whether p names a known format.
 func (p Plan) Valid() bool {
 	switch p.Format {
-	case Mrpack, Zip:
+	case Mrpack, CurseForge, Zip:
 		return true
 	case List:
-		return p.List == Markdown || p.List == CSV
+		return p.List == Markdown || p.List == CSV || p.List == HTML
 	}
 	return false
 }
@@ -80,7 +86,7 @@ func (p Plan) Ext() string {
 	switch p.Format {
 	case Mrpack:
 		return ".mrpack"
-	case Zip:
+	case Zip, CurseForge:
 		return ".zip"
 	}
 	return "." + string(p.List)
@@ -103,6 +109,8 @@ var (
 // Manifester lists an instance's content files (content.Service).
 type Manifester interface {
 	Manifest(ctx context.Context, id string) ([]content.ManifestItem, error)
+	// Identify looks files of one kind up on the platforms by hash.
+	Identify(ctx context.Context, id string, k content.Kind) (int, error)
 }
 
 // Deps wires the service.
@@ -138,13 +146,14 @@ func (s *Service) Preview(ctx context.Context, id string, p Plan) (Preview, erro
 	if err != nil {
 		return Preview{}, err
 	}
-	links, err := s.links(ctx, id, p)
+	pc, err := s.content(ctx, id, p)
 	if err != nil {
 		return Preview{}, err
 	}
 	var pv Preview
 	for _, f := range files {
-		if _, ok := links[f.rel]; ok {
+		_, mr := pc.links[f.rel]
+		if _, cf := pc.curse[f.rel]; mr || cf {
 			pv.Linked++
 			continue
 		}
@@ -212,12 +221,18 @@ func (s *Service) shared(id string) []string {
 	return s.d.Shared(id)
 }
 
+// linkable are the content folders whose files a pack may name instead of
+// carrying; one that is a link (Prism's "copy with symlinks") is followed
+// to its target, as scans do.
+var linkable = map[string]bool{"mods": true, "resourcepacks": true, "shaderpacks": true}
+
 // files lists every file the pack holds, game folder first, then each shared
 // folder under its instance-relative path. Names a pack can't carry safely
 // are left out.
 func (s *Service) files(id string, inc Include) ([]file, error) {
 	shared := s.shared(id)
 	var out []file
+	var linked []string // content folders that are links
 	walk := func(dir, prefix string) error {
 		root, err := os.OpenRoot(dir)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -241,6 +256,10 @@ func (s *Service) files(id string, inc Include) ([]file, error) {
 				}
 				return nil
 			}
+			if prefix == "" && d.Type()&fs.ModeSymlink != 0 && linkable[rel] {
+				linked = append(linked, rel)
+				return nil
+			}
 			if !d.Type().IsRegular() || !keepFile(rel, inc) {
 				return nil // links, devices and what never travels
 			}
@@ -255,8 +274,16 @@ func (s *Service) files(id string, inc Include) ([]file, error) {
 			return nil
 		})
 	}
-	if err := walk(s.d.Instances.GameDir(id), ""); err != nil {
+	game := s.d.Instances.GameDir(id)
+	if err := walk(game, ""); err != nil {
 		return nil, err
+	}
+	for _, rel := range linked {
+		if real, err := filepath.EvalSymlinks(filepath.Join(game, rel)); err == nil {
+			if err := walk(real, rel); err != nil {
+				return nil, err
+			}
+		}
 	}
 	for _, rel := range shared {
 		if keepDir(rel, inc) {
@@ -316,24 +343,77 @@ func keepFile(rel string, inc Include) bool {
 	return true
 }
 
-// links maps the files an .mrpack may link to their index entries. A full
-// zip links nothing.
-func (s *Service) links(ctx context.Context, id string, p Plan) (map[string]modpack.IndexFile, error) {
-	out := map[string]modpack.IndexFile{}
-	if p.Format != Mrpack {
-		return out, nil
+// packContent is what a pack export knows about the content, by path: the
+// files an .mrpack may link, the files a CurseForge zip may name (a full zip
+// links nothing), and the client-only mods.
+type packContent struct {
+	links  map[string]modpack.IndexFile
+	curse  map[string]modpack.CurseFile
+	client map[string]bool
+}
+
+func (s *Service) content(ctx context.Context, id string, p Plan) (packContent, error) {
+	pc := packContent{links: map[string]modpack.IndexFile{}, curse: map[string]modpack.CurseFile{}, client: map[string]bool{}}
+	var items []content.ManifestItem
+	var err error
+	if p.Format == Mrpack || p.Format == CurseForge {
+		items, err = s.items(ctx, id)
+	} else {
+		items, err = s.d.Content.Manifest(ctx, id)
 	}
-	items, err := s.d.Content.Manifest(ctx, id)
 	if err != nil {
-		return nil, err
+		return pc, err
 	}
 	for _, it := range items {
-		f := modpack.IndexFile{Path: strings.TrimSuffix(it.Rel, content.Disabled), SHA1: it.SHA1, SHA512: it.SHA512, Size: it.Size, URL: it.URL, Optional: !it.Enabled}
+		if it.ClientOnly {
+			pc.client[it.Rel] = true
+		}
+		if p.Format == CurseForge {
+			if cf, ok := curseFile(it); ok {
+				pc.curse[it.Rel] = cf
+			}
+			continue
+		}
+		if p.Format != Mrpack {
+			continue
+		}
+		f := modpack.IndexFile{Path: strings.TrimSuffix(it.Rel, content.Disabled), SHA1: it.SHA1, SHA512: it.SHA512, Size: it.Size, URL: it.URL,
+			Optional: !it.Enabled, ClientOnly: it.ClientOnly}
+		if f.SHA512 == "" && strings.HasPrefix(f.URL, "https://cdn.modrinth.com/") {
+			// The store didn't record it (a file in a linked folder): hashed now.
+			if sum, err := hashx.File(s.d.Instances.Path(id, it.Rel), hashx.SHA512); err == nil {
+				f.SHA512 = sum
+			}
+		}
 		if modpack.Linkable(f) {
-			out[it.Rel] = f
+			pc.links[it.Rel] = f
 		}
 	}
-	return out, nil
+	return pc, nil
+}
+
+// curseFile is a file CurseForge identified, by its project and file ids.
+func curseFile(it content.ManifestItem) (modpack.CurseFile, bool) {
+	id := it.CurseForge
+	if id == nil {
+		return modpack.CurseFile{}, false
+	}
+	project, err1 := strconv.ParseInt(id.ProjectID, 10, 64)
+	file, err2 := strconv.ParseInt(id.VersionID, 10, 64)
+	if err1 != nil || err2 != nil || project <= 0 || file <= 0 {
+		return modpack.CurseFile{}, false
+	}
+	return modpack.CurseFile{Project: project, File: file, Required: it.Enabled}, true
+}
+
+// items lists the instance's content after asking the platforms about
+// files nobody identified yet, so a file Modrinth or CurseForge serves is
+// named rather than carried (Prism looks files up when it exports too).
+func (s *Service) items(ctx context.Context, id string) ([]content.ManifestItem, error) {
+	for _, k := range []content.Kind{content.Mods, content.ResourcePacks, content.Shaders} {
+		_, _ = s.d.Content.Identify(ctx, id, k) // offline: what's known so far
+	}
+	return s.d.Content.Manifest(ctx, id)
 }
 
 func (s *Service) writePack(ctx context.Context, w io.Writer, in instance.Instance, p Plan) error {
@@ -341,23 +421,59 @@ func (s *Service) writePack(ctx context.Context, w io.Writer, in instance.Instan
 	if err != nil {
 		return err
 	}
-	links, err := s.links(ctx, in.ID, p)
+	pc, err := s.content(ctx, in.ID, p)
 	if err != nil {
 		return err
 	}
-	ix := modpack.Index{Name: in.Name, Summary: in.Notes, Minecraft: in.Minecraft}
+	meta := p.Meta.Clean()
+	// The instance's notes are the player's own and never go in a pack.
+	ix := modpack.Index{Name: orElse(meta.Name, in.Name), Version: meta.Version, Summary: meta.Summary, Minecraft: in.Minecraft}
+	cm := modpack.CurseManifest{Name: ix.Name, Version: meta.Version, Author: meta.Author, Minecraft: in.Minecraft}
 	if k, err := loader.ParseKind(in.Loader); err == nil && in.Loader != "" {
 		ix.Loader, ix.LoaderVersion = in.Loader, loader.Display(k, in.Minecraft, in.LoaderVersion)
+		cm.Loader, cm.LoaderVersion = ix.Loader, ix.LoaderVersion
+	}
+	if j := in.Settings.Java; j.Override && j.MemoryMaxMB > 0 {
+		cm.MemoryMB = j.MemoryMaxMB
 	}
 	zw := zip.NewWriter(w)
 	var bundled []file
 	for _, f := range files {
-		if l, ok := links[f.rel]; ok {
+		if l, ok := pc.links[f.rel]; ok {
 			ix.Files = append(ix.Files, l)
+		} else if c, ok := pc.curse[f.rel]; ok {
+			cm.Files = append(cm.Files, c)
 		} else {
 			bundled = append(bundled, f)
 		}
 	}
+	if p.Format == CurseForge {
+		err = s.curseIndex(ctx, zw, in.ID, cm)
+	} else {
+		err = s.mrIndex(zw, in, ix)
+	}
+	if err != nil {
+		return err
+	}
+	for _, f := range bundled {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// A client-only mod stays out of a server built from an .mrpack;
+		// CurseForge zips have one overrides folder.
+		layer := "overrides/"
+		if pc.client[f.rel] && p.Format != CurseForge {
+			layer = "client-overrides/"
+		}
+		if err := copyInto(zw, layer+f.rel, f.dir, f.in); err != nil {
+			return err
+		}
+	}
+	return zw.Close()
+}
+
+// mrIndex writes an .mrpack's (or full zip's) index and the instance's icon.
+func (s *Service) mrIndex(zw *zip.Writer, in instance.Instance, ix modpack.Index) error {
 	var buf bytes.Buffer
 	if err := modpack.WriteIndex(&buf, ix); err != nil {
 		return err
@@ -367,20 +483,33 @@ func (s *Service) writePack(ctx context.Context, w io.Writer, in instance.Instan
 	}
 	if s.d.Icons != nil && in.Icon != "" {
 		if p, err := s.d.Icons.Path(in.Icon); err == nil {
-			if err := copyInto(zw, "icon.png", filepath.Dir(p), filepath.Base(p)); err != nil {
-				return err
-			}
+			return copyInto(zw, "icon.png", filepath.Dir(p), filepath.Base(p))
 		}
 	}
-	for _, f := range bundled {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := copyInto(zw, "overrides/"+f.rel, f.dir, f.in); err != nil {
-			return err
-		}
+	return nil
+}
+
+// curseIndex writes a CurseForge zip's manifest.json and modlist.html.
+func (s *Service) curseIndex(ctx context.Context, zw *zip.Writer, id string, cm modpack.CurseManifest) error {
+	var buf bytes.Buffer
+	if err := modpack.WriteCurseManifest(&buf, cm); err != nil {
+		return err
 	}
-	return zw.Close()
+	if err := put(zw, "manifest.json", bytes.NewReader(buf.Bytes())); err != nil {
+		return err
+	}
+	rows, err := s.listRows(ctx, id)
+	if errors.Is(err, ErrNoMods) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	buf.Reset()
+	if err := writeHTML(&buf, rows); err != nil {
+		return err
+	}
+	return put(zw, "modlist.html", bytes.NewReader(buf.Bytes()))
 }
 
 // copyInto adds one file read through a root at dir, so a link swapped in
@@ -413,4 +542,11 @@ func put(zw *zip.Writer, name string, r io.Reader) error {
 	}
 	_, err = io.Copy(dst, r)
 	return err
+}
+
+func orElse(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

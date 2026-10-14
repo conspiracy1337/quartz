@@ -10,6 +10,8 @@ export function More(arg1:string):Promise<browse.Results>;
 
 export function Project(arg1:string,arg2:string):Promise<browse.Page>;
 
+export function Resolve(arg1:string):Promise<string>;
+
 export function Search(arg1:browse.Query):Promise<browse.Results>;
 
 export function Versions(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<Array<browse.VersionRow>>;

@@ -2,6 +2,7 @@ package modpack
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -83,7 +84,10 @@ func (p packs) Changelogs(_ context.Context, vs []modplatform.Version) error {
 	return nil
 }
 
-func TestUpdateKeepsEdits(t *testing.T) {
+// packUpdate installs version 1.0 of a two-version pack, then turns mod a
+// off and edits config/y.toml as a player would.
+func packUpdate(t *testing.T) (context.Context, *installEnv, instance.Instance, string) {
+	t.Helper()
 	jars := map[string][]byte{"a1": []byte("A1"), "a2": []byte("A2"), "b1": []byte("B1"), "c1": []byte("C1")}
 	served := cdn{}
 	file := func(name, key string) map[string]any {
@@ -113,13 +117,13 @@ func TestUpdateKeepsEdits(t *testing.T) {
 	}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 	p, err := env.svc.d.Reader.File(ctx, v1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	p.Origin = Origin{Source: "modrinth", Project: "PACK", Version: "V1"}
-	job, err := env.svc.Install(ctx, env.svc.Stage(p), "Pack", instance.Art{Background: "#3ecf8e"})
+	job, err := env.svc.Install(ctx, env.svc.Stage(p), "Pack", instance.Art{Background: "#3ecf8e"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,13 +136,24 @@ func TestUpdateKeepsEdits(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(game, "config", "y.toml"), []byte("mine"), 0o600)
 	_ = os.Rename(filepath.Join(game, "mods", "a.jar"), filepath.Join(game, "mods", "a.jar.disabled"))
 
-	if _, err := env.svc.Diff(ctx, in.ID); err == nil {
+	return ctx, env, in, game
+}
+
+func TestUpdateKeepsEdits(t *testing.T) {
+	ctx, env, in, game := packUpdate(t)
+	if _, err := env.svc.Diff(ctx, in.ID, ""); err == nil {
 		t.Fatal("diff before a check")
+	}
+	if _, err := env.svc.Diff(ctx, in.ID, "V1"); !errors.Is(err, ErrUpToDate) {
+		t.Fatalf("diff to the installed version: %v", err)
+	}
+	if d, err := env.svc.Diff(ctx, in.ID, "V2"); err != nil || d.To != "2.0" {
+		t.Fatalf("diff to a picked version: %+v %v", d, err)
 	}
 	if av := env.svc.CheckUpdates(ctx); len(av) != 1 || av[0].Version != "2.0" {
 		t.Fatalf("available %+v", av)
 	}
-	d, err := env.svc.Diff(ctx, in.ID)
+	d, err := env.svc.Diff(ctx, in.ID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +167,7 @@ func TestUpdateKeepsEdits(t *testing.T) {
 	saves := filepath.Join(game, "saves", "World")
 	_ = os.MkdirAll(saves, 0o700)
 	_ = os.WriteFile(filepath.Join(saves, "level.dat"), []byte("lvl"), 0o600)
-	job, err = env.svc.Update(ctx, in.ID, true)
+	job, err := env.svc.Update(ctx, in.ID, "", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,5 +209,65 @@ func TestStem(t *testing.T) {
 		if got := stem(in); got != want {
 			t.Errorf("%s → %s", in, got)
 		}
+	}
+}
+
+func TestUpdateRollsBackOnFailure(t *testing.T) {
+	ctx, env, in, game := packUpdate(t)
+	// b.jar can't be set aside: a folder sits where its old copy would go.
+	_ = os.MkdirAll(filepath.Join(game, "mods", "b.jar"+oldSuffix, "x"), 0o700)
+	if av := env.svc.CheckUpdates(ctx); len(av) != 1 {
+		t.Fatalf("available %+v", av)
+	}
+	job, err := env.svc.Update(ctx, in.ID, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := env.eng.Wait(ctx, job); err == nil {
+		t.Fatal("the update succeeded")
+	}
+	read := func(rel string) string {
+		b, err := os.ReadFile(filepath.Join(game, rel)) //nolint:gosec // test
+		if err != nil {
+			return "<missing>"
+		}
+		return string(b)
+	}
+	for rel, want := range map[string]string{"mods/a.jar.disabled": "A1", "mods/b.jar": "B1", "mods/c.jar": "<missing>",
+		"config/x.toml": "x1", "config/y.toml": "mine", "config/z.toml": "<missing>", "config/x.toml" + newSuffix: "<missing>"} {
+		if got := read(rel); got != want {
+			t.Errorf("%s = %q, want %q", rel, got, want)
+		}
+	}
+	m, err := ReadManifest(env.insts.Dir(in.ID))
+	if err != nil || m.Version != "1.0" {
+		t.Fatalf("manifest %+v %v", m, err)
+	}
+	if in, _ := env.insts.Get(in.ID); in.Pack.Version != "V1" {
+		t.Fatalf("pack %+v", in.Pack)
+	}
+}
+
+func TestNewestStaysOnTheInstancesLine(t *testing.T) {
+	plat := packs{versions: []modplatform.Version{
+		{ID: "V4", Number: "7.0 (1.21)", Type: "release", Game: []string{"1.21.1"}, Loaders: []string{"fabric"}},
+		{ID: "V3", Number: "6.2 beta", Type: "beta", Game: []string{"1.20.1"}, Loaders: []string{"fabric"}},
+		{ID: "V2", Number: "6.1", Type: "release", Game: []string{"1.20.1"}, Loaders: []string{"fabric"}},
+		{ID: "V1", Number: "6.0", Type: "release", Game: []string{"1.20.1"}, Loaders: []string{"fabric"}},
+	}}
+	s := &Service{d: InstallDeps{Reader: NewReader(Deps{Modrinth: plat})}}
+	in := instance.Instance{Minecraft: "1.20.1", Loader: "fabric"}
+	id, name, err := s.newest(context.Background(), Origin{Source: "modrinth", Project: "PACK", Version: "V1"}, in)
+	if err != nil || id != "V2" || name != "6.1" {
+		t.Fatalf("offered %q %q %v", id, name, err)
+	}
+	if id, _, _ := s.newest(context.Background(), Origin{Source: "modrinth", Project: "PACK", Version: "V2"}, in); id != "" {
+		t.Fatalf("offered %q to an instance on the newest release of its line", id)
+	}
+	if onLine(modplatform.Version{Game: []string{"1.20.1"}, Loaders: []string{"forge"}}, in) {
+		t.Fatal("a Forge build is on a Fabric instance's line")
+	}
+	if !onLine(modplatform.Version{Game: []string{"1.20.1"}, Loaders: []string{"mrpack"}}, in) {
+		t.Fatal("a version naming no loader was ruled out")
 	}
 }

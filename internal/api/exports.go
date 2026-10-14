@@ -37,6 +37,22 @@ type ExportResult struct {
 	File string `json:"file,omitempty"`
 }
 
+// Meta is what the export dialog fills in: what the last export was
+// called, else the instance's name and version 1.0.0.
+func (x *Exports) Meta(id string) (instance.ExportMeta, error) {
+	if err := checkInstanceID(id); err != nil {
+		return instance.ExportMeta{}, err
+	}
+	in, err := x.d.Instances.Get(id)
+	if err != nil {
+		return instance.ExportMeta{}, err
+	}
+	if in.Export != nil {
+		return *in.Export, nil
+	}
+	return instance.ExportMeta{Name: in.Name, Version: "1.0.0"}, nil
+}
+
 // Preview counts what a pack export would link and bundle.
 func (x *Exports) Preview(id string, p exporting.Plan) (exporting.Preview, error) {
 	if err := checkInstanceID(id); err != nil {
@@ -81,6 +97,10 @@ func (x *Exports) Export(id string, p exporting.Plan) (ExportResult, error) {
 	}
 	if p.Format == exporting.List {
 		return ExportResult{File: filepath.Base(dest)}, x.d.Service.Write(x.ctx.Get(), id, p, dest)
+	}
+	p.Meta = p.Meta.Clean()
+	if _, err := x.d.Instances.Update(id, func(i *instance.Instance) error { i.Export = &p.Meta; return nil }); err != nil {
+		return ExportResult{}, err
 	}
 	spec := tasks.NewJob(tasks.Meta{Title: "Exporting " + in.Name, Subtitle: filepath.Base(dest), Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "export"}).
 		Step("Packing files", tasks.Count, tasks.Func("write the export", func(ctx context.Context) error {

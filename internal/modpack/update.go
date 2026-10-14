@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"quartz/internal/core/tasks"
 	"quartz/internal/install"
 	"quartz/internal/instance"
+	"quartz/internal/loader"
 	"quartz/internal/manual"
 	"quartz/internal/modplatform"
 )
@@ -57,14 +59,14 @@ type Available struct {
 func (s *Service) CheckUpdates(ctx context.Context) []Available {
 	var out []Available
 	for _, in := range s.d.Instances.List() {
-		if in.Pack == nil {
+		if in.Pack == nil || in.InPlace {
 			continue
 		}
 		o := Origin{Source: in.Pack.Source, Project: in.Pack.Project, Version: in.Pack.Version}
 		if !o.Updatable() {
 			continue
 		}
-		id, name, err := s.newest(ctx, o)
+		id, name, err := s.newest(ctx, o, in)
 		if err != nil {
 			s.d.Log.Debug("modpack: update check failed", "instance", in.ID, "err", err)
 			continue
@@ -85,6 +87,20 @@ func (s *Service) CheckUpdates(ctx context.Context) []Available {
 	return out
 }
 
+// Installed finds an instance already installed from the pack o comes from
+// (played in its own folder, so it can be updated instead).
+func (s *Service) Installed(o Origin) (instance.Instance, bool) {
+	if !o.Updatable() {
+		return instance.Instance{}, false
+	}
+	for _, in := range s.d.Instances.List() {
+		if in.Pack != nil && !in.InPlace && in.Pack.Source == o.Source && in.Pack.Project == o.Project {
+			return in, true
+		}
+	}
+	return instance.Instance{}, false
+}
+
 // Updates returns what the last check found.
 func (s *Service) Updates() []Available {
 	s.mu.Lock()
@@ -97,24 +113,22 @@ func (s *Service) Updates() []Available {
 	return out
 }
 
-// newest is the newest version of a pack the update channel allows, only
-// when it is newer than the installed one.
-func (s *Service) newest(ctx context.Context, o Origin) (string, string, error) {
+// newest is the newest version of a pack the update channel allows for the
+// instance's Minecraft version and loader, only when it is newer than the
+// installed one. A pack published for several Minecraft versions (one line
+// each) is offered updates on its own line only; another line is a choice
+// the player makes on the update page (Pandora pins updates the same way).
+func (s *Service) newest(ctx context.Context, o Origin, in instance.Instance) (string, string, error) {
 	ch := modplatform.Release
 	if s.u.Channel != nil {
 		ch = s.u.Channel()
 	}
-	var plat modplatform.Platform
-	switch o.Source {
-	case "modrinth":
-		plat = s.d.Reader.d.Modrinth
-	case "curseforge":
-		plat = s.d.Reader.d.CurseForge
-	case "ftb":
+	if o.Source == "ftb" {
 		return s.newestFTB(ctx, o)
 	}
-	if plat == nil || !plat.Ready() {
-		return "", "", errors.New("modpack: platform not available")
+	plat, err := s.platform(o.Source)
+	if err != nil {
+		return "", "", err
 	}
 	vs, err := plat.Versions(ctx, o.Project, modplatform.Query{})
 	if err != nil {
@@ -124,28 +138,120 @@ func (s *Service) newest(ctx context.Context, o Origin) (string, string, error) 
 		if v.ID == o.Version {
 			return "", "", nil
 		}
-		if ch.Allows(v.Type) {
+		if ch.Allows(v.Type) && onLine(v, in) {
 			return v.ID, v.Number, nil
 		}
 	}
 	return "", "", nil
 }
 
-func (s *Service) newestFTB(ctx context.Context, o Origin) (string, string, error) {
-	var pack struct {
-		Versions []struct {
-			ID   int64  `json:"id"`
-			Name string `json:"name"`
-			Type string `json:"type"`
-		} `json:"versions"`
+// packLoaders are the loaders a pack version may name.
+var packLoaders = []string{"fabric", "quilt", "forge", "neoforge"}
+
+// onLine reports whether a pack version is for the instance's Minecraft
+// version and loader, as far as the version says.
+func onLine(v modplatform.Version, in instance.Instance) bool {
+	if len(v.Game) > 0 && !slices.Contains(v.Game, in.Minecraft) {
+		return false
 	}
-	if err := s.d.Reader.d.HTTP.JSON(ctx, http.MethodGet, ftbAPI+o.Project, nil, nil, &pack); err != nil {
+	names := false
+	for _, l := range v.Loaders {
+		names = names || slices.Contains(packLoaders, l)
+	}
+	return !names || in.Loader == "" || slices.Contains(v.Loaders, in.Loader)
+}
+
+// platform is the pack platform of a source.
+func (s *Service) platform(src string) (modplatform.Platform, error) {
+	var plat modplatform.Platform
+	switch src {
+	case "modrinth":
+		plat = s.d.Reader.d.Modrinth
+	case "curseforge":
+		plat = s.d.Reader.d.CurseForge
+	}
+	if plat == nil || !plat.Ready() {
+		return nil, errors.New("modpack: platform not available")
+	}
+	return plat, nil
+}
+
+// PackVersion is one version of an instance's pack, for the update page.
+type PackVersion struct {
+	ID        string `json:"id"`
+	Number    string `json:"number"`
+	Channel   string `json:"channel"`   // release | beta | alpha
+	Minecraft string `json:"minecraft"` // "1.21.1", or "" when the platform doesn't say
+	Published int64  `json:"published"` // unix ms, 0 when unknown
+	Current   bool   `json:"current"`
+	// Offered is the version the last update check found.
+	Offered bool `json:"offered"`
+}
+
+// Versions lists the versions of an instance's pack, newest first, so the
+// player can update to any of them or go back to an older one.
+func (s *Service) Versions(ctx context.Context, id string) ([]PackVersion, error) {
+	in, err := s.d.Instances.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if in.Pack == nil || !(Origin{Source: in.Pack.Source, Project: in.Pack.Project}).Updatable() {
+		return nil, ErrNoPack
+	}
+	s.mu.Lock()
+	offered := s.available[id].versionID
+	s.mu.Unlock()
+	var out []PackVersion
+	if in.Pack.Source == "ftb" {
+		list, err := s.ftbVersions(ctx, in.Pack.Project)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range list {
+			vid := strconv.FormatInt(v.ID, 10)
+			out = append(out, PackVersion{ID: vid, Number: v.Name, Channel: strings.ToLower(v.Type), Current: vid == in.Pack.Version, Offered: vid == offered})
+		}
+		sort.SliceStable(out, func(a, b int) bool { return out[a].ID > out[b].ID })
+		return out, nil
+	}
+	plat, err := s.platform(in.Pack.Source)
+	if err != nil {
+		return nil, err
+	}
+	vs, err := plat.Versions(ctx, in.Pack.Project, modplatform.Query{})
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range vs {
+		out = append(out, PackVersion{ID: v.ID, Number: v.Number, Channel: v.Type, Minecraft: strings.Join(v.Game, ", "),
+			Published: v.Published.UnixMilli(), Current: v.ID == in.Pack.Version, Offered: v.ID == offered})
+	}
+	return out, nil
+}
+
+type ftbVersion struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+func (s *Service) ftbVersions(ctx context.Context, project string) ([]ftbVersion, error) {
+	var pack struct {
+		Versions []ftbVersion `json:"versions"`
+	}
+	err := s.d.Reader.d.HTTP.JSON(ctx, http.MethodGet, ftbAPI+project, nil, nil, &pack)
+	return pack.Versions, err
+}
+
+func (s *Service) newestFTB(ctx context.Context, o Origin) (string, string, error) {
+	versions, err := s.ftbVersions(ctx, o.Project)
+	if err != nil {
 		return "", "", err
 	}
 	cur, _ := strconv.ParseInt(o.Version, 10, 64)
 	var best int64
 	name := ""
-	for _, v := range pack.Versions {
+	for _, v := range versions {
 		if strings.EqualFold(v.Type, "release") && v.ID > cur && v.ID > best {
 			best, name = v.ID, v.Name
 		}
@@ -181,22 +287,23 @@ type pending struct {
 	at   time.Time
 }
 
-// Diff reads the newer pack version and compares it with the instance.
-func (s *Service) Diff(ctx context.Context, id string) (*Diff, error) {
+// Diff reads a pack version and compares it with the instance: version, or
+// the one the last check offered when "".
+func (s *Service) Diff(ctx context.Context, id, version string) (*Diff, error) {
 	in, err := s.d.Instances.Get(id)
 	if err != nil {
 		return nil, err
 	}
-	if in.Pack == nil {
-		return nil, ErrNoPack
+	if in.Pack == nil || in.InPlace {
+		return nil, ErrNoPack // an in-place instance's files are another launcher's
 	}
-	next, err := s.next(ctx, in)
+	next, err := s.next(ctx, in, version)
 	if err != nil {
 		return nil, err
 	}
-	old, err := ReadManifest(s.d.Instances.Dir(id))
+	old, err := s.manifest(ctx, in)
 	if err != nil {
-		return nil, ErrNoPack
+		return nil, err
 	}
 	want, err := s.wanted(next, nil)
 	if err != nil {
@@ -209,31 +316,37 @@ func (s *Service) Diff(ctx context.Context, id string) (*Diff, error) {
 	}
 	if next.Minecraft != in.Minecraft || next.Loader != in.Loader {
 		d.Game = "Minecraft " + next.Minecraft
+		if k, err := loader.ParseKind(next.Loader); err == nil && next.Loader != "" {
+			d.Game += ", " + k.Name()
+		}
 	}
 	d.Summary = s.changelog(ctx, next.Origin)
 	return d, nil
 }
 
-// next reads (or returns the cached) newer version of an instance's pack.
-func (s *Service) next(ctx context.Context, in instance.Instance) (*Pack, error) {
+// next reads (or returns the cached) pack version an update moves to: the
+// one asked for, else the one the last check offered.
+func (s *Service) next(ctx context.Context, in instance.Instance, version string) (*Pack, error) {
 	s.mu.Lock()
 	a, ok := s.available[in.ID]
 	p, cached := s.pending[in.ID]
 	s.mu.Unlock()
-	if !ok {
+	switch {
+	case version == in.Pack.Version:
+		return nil, ErrUpToDate
+	case version != "":
+		if len(version) > 64 || strings.ContainsAny(version, "/?#\\") {
+			return nil, ErrNoPack
+		}
+	case !ok:
 		return nil, ErrNotChecked
+	default:
+		version = a.versionID
 	}
-	if cached && time.Since(p.at) < stagedLife && p.pack.Origin.Version == a.versionID {
+	if cached && time.Since(p.at) < stagedLife && p.pack.Origin.Version == version {
 		return p.pack, nil
 	}
-	var pack *Pack
-	var err error
-	switch in.Pack.Source {
-	case "ftb":
-		pack, err = s.d.Reader.ftb(ctx, in.Pack.Project, a.versionID)
-	default:
-		pack, err = s.d.Reader.Project(ctx, modplatform.Source(in.Pack.Source), in.Pack.Project, a.versionID)
-	}
+	pack, err := s.readVersion(ctx, in.Pack.Source, in.Pack.Project, version)
 	if err != nil {
 		return nil, err
 	}
@@ -396,12 +509,12 @@ type modFile struct{ rel, sha1, sha512, project, version string }
 func (s *Service) rows(ctx context.Context, old Manifest, next *Pack) []DiffRow {
 	var oldFiles, newFiles []modFile
 	for rel, f := range old.Files {
-		if isMod(rel) {
+		if isContent(rel) {
 			oldFiles = append(oldFiles, modFile{rel: rel, sha1: f.SHA1})
 		}
 	}
 	for _, f := range next.Files {
-		if isMod(f.Path) {
+		if isContent(f.Path) {
 			newFiles = append(newFiles, modFile{rel: f.Path, sha1: f.SHA1, sha512: f.SHA512, project: f.Project, version: f.Version})
 		}
 	}
@@ -538,9 +651,21 @@ func fromTo(a, b string) string {
 	return orElse(b, a)
 }
 
-func isMod(rel string) bool {
+// isContent reports whether a pack file is a mod, resource pack or shader
+// pack, the files the review lists by name.
+func isContent(rel string) bool {
 	rel = strings.TrimSuffix(rel, ".disabled")
-	return strings.HasPrefix(rel, "mods/") && strings.HasSuffix(rel, ".jar") && strings.Count(rel, "/") == 1
+	dir, name, ok := strings.Cut(rel, "/")
+	if !ok || strings.Contains(name, "/") {
+		return false
+	}
+	switch dir {
+	case "mods":
+		return strings.HasSuffix(name, ".jar")
+	case "resourcepacks", "shaderpacks":
+		return strings.HasSuffix(name, ".zip")
+	}
+	return false
 }
 
 // stem is a mod file's name without its version ("create-1.20.1-0.5.1.f.jar"
@@ -576,18 +701,19 @@ func (s *Service) changelog(ctx context.Context, o Origin) string {
 	return clip(strings.Join(items, " "), 600)
 }
 
-// Update moves an instance to the reviewed version as one job: an optional
-// world backup, the new files, any manual downloads and the game, then the
-// three-way update of the game folder.
-func (s *Service) Update(ctx context.Context, id string, backupWorlds bool) (string, error) {
+// Update moves an instance to the reviewed version (version, or the one the
+// last check offered when "") as one job: an optional world backup, the new
+// files, any manual downloads and the game, then the three-way update of
+// the game folder.
+func (s *Service) Update(ctx context.Context, id, version string, backupWorlds bool) (string, error) {
 	in, err := s.d.Instances.Get(id)
 	if err != nil {
 		return "", err
 	}
-	if in.Pack == nil {
+	if in.Pack == nil || in.InPlace {
 		return "", ErrNoPack
 	}
-	next, err := s.next(ctx, in)
+	next, err := s.next(ctx, in, version)
 	if err != nil {
 		return "", err
 	}
@@ -650,9 +776,79 @@ func (s *Service) Update(ctx context.Context, id string, backupWorlds bool) (str
 	return job, nil
 }
 
+// commit records the new version: manifest, game and loader, pack. A step
+// that fails undoes the ones before it, so the instance and its manifest
+// always describe the same files.
+func (s *Service) commit(in instance.Instance, next *Pack, t install.Target, old, m Manifest) error {
+	dir := s.d.Instances.Dir(in.ID)
+	if err := writeManifest(dir, m); err != nil {
+		return err
+	}
+	moved := t.Minecraft != in.Minecraft || string(t.Loader) != in.Loader || t.LoaderVersion != in.LoaderVersion
+	if moved {
+		if _, err := s.d.Instances.SetVersion(in.ID, t.Minecraft, string(t.Loader), t.LoaderVersion); err != nil {
+			_ = writeManifest(dir, old)
+			return err
+		}
+	}
+	_, err := s.d.Instances.Update(in.ID, func(i *instance.Instance) error {
+		i.Pack = &instance.PackRef{Source: next.Origin.Source, Project: next.Origin.Project, Version: next.Origin.Version, Name: next.Name, VersionName: next.Version}
+		return nil
+	})
+	if err != nil {
+		if moved {
+			_, _ = s.d.Instances.SetVersion(in.ID, in.Minecraft, in.Loader, in.LoaderVersion)
+		}
+		_ = writeManifest(dir, old)
+	}
+	return err
+}
+
+// readVersion reads one version of a pack from its platform.
+func (s *Service) readVersion(ctx context.Context, src, project, version string) (*Pack, error) {
+	if src == "ftb" {
+		return s.d.Reader.ftb(ctx, project, version)
+	}
+	return s.d.Reader.Project(ctx, modplatform.Source(src), project, version)
+}
+
+// manifest reads what the pack put where. An instance linked to its pack
+// after the fact (imported from another launcher) has none yet: it is
+// built from the installed version the first time, so the player's changes
+// since count as their edits (XMCL rebuilds its baseline the same way).
+func (s *Service) manifest(ctx context.Context, in instance.Instance) (Manifest, error) {
+	dir := s.d.Instances.Dir(in.ID)
+	m, err := ReadManifest(dir)
+	if !errors.Is(err, fs.ErrNotExist) {
+		if err != nil {
+			return m, ErrNoPack
+		}
+		return m, nil
+	}
+	p, err := s.readVersion(ctx, in.Pack.Source, in.Pack.Project, in.Pack.Version)
+	if err != nil {
+		return m, err
+	}
+	defer s.d.Reader.Discard(p)
+	return s.baseline(dir, p)
+}
+
+// baseline writes the manifest of pack version p as installed at dir.
+func (s *Service) baseline(dir string, p *Pack) (Manifest, error) {
+	want, err := s.wanted(p, nil)
+	if err != nil {
+		return Manifest{}, err
+	}
+	m := Manifest{Origin: p.Origin, Name: p.Name, Version: p.Version, Files: map[string]ManifestFile{}}
+	for rel, w := range want {
+		m.Files[rel] = ManifestFile{SHA1: w.SHA1, Layer: w.Layer, Off: w.Off}
+	}
+	return m, writeManifest(dir, m)
+}
+
 // apply runs the three-way update in the game folder and records the new version.
-func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, files []planned, set *manual.Set, t install.Target, work string) error {
-	old, err := ReadManifest(s.d.Instances.Dir(in.ID))
+func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, files []planned, set *manual.Set, t install.Target, work string) error {
+	old, err := s.manifest(ctx, in)
 	if err != nil {
 		return err
 	}
@@ -679,63 +875,52 @@ func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, fil
 	for _, f := range files {
 		byPath[strings.TrimSuffix(f.Path, ".disabled")] = f
 	}
-	// A path may sit in a folder the instance shares; each base gets a root.
-	roots := map[string]*os.Root{}
-	defer func() {
-		for _, r := range roots {
-			_ = r.Close()
-		}
-	}()
-	rootOf := func(rel string) (*os.Root, error) {
-		b := s.d.Instances.Base(in.ID, rel)
-		if r, ok := roots[b]; ok {
-			return r, nil
-		}
-		r, err := os.OpenRoot(b)
-		if err == nil {
-			roots[b] = r
-		}
-		return r, err
-	}
+	sw := newSwap(s.d.Instances, in.ID)
+	defer sw.close()
+	// Every new file is placed beside its target first; only once all of
+	// them are there are the old ones swapped out, so a failure part way
+	// leaves the game folder as it was (XMCL stages its updates the same way).
 	for _, c := range changes {
-		groot, err := rootOf(c.rel)
-		if err != nil {
-			return err
+		if c.act == actDelete {
+			continue
 		}
 		name := c.rel
 		if c.off {
 			name += ".disabled"
 		}
-		// Whatever was there (either name) goes first.
-		for _, suffix := range []string{"", ".disabled"} {
-			if err := groot.Remove(c.rel + suffix); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		var err error
+		switch f, ok := byPath[c.rel]; {
+		case c.w.Layer:
+			err = sw.stage(name, func(dst string) error {
+				_, err := linkx.Place(filepath.Join(layers, filepath.FromSlash(c.rel)), dst, linkx.Options{NoHardlink: true, Perm: 0o600})
 				return err
-			}
-		}
-		if c.act == actDelete {
-			continue
-		}
-		dst := abs(name)
-		if dir := path.Dir(name); dir != "." {
-			if err := groot.MkdirAll(dir, 0o700); err != nil {
+			})
+		case !ok || (f.Blocked() && set != nil && set.Skipped(f.SHA1)):
+			continue // nothing to put there: whatever is there stays
+		default:
+			err = sw.stage(name, func(dst string) error {
+				sum, err := s.blob(f)
+				if err == nil {
+					_, err = s.d.Store.Place(sum, dst)
+				}
 				return err
-			}
+			})
 		}
-		if c.w.Layer {
-			if _, err := linkx.Place(filepath.Join(layers, filepath.FromSlash(c.rel)), dst, linkx.Options{NoHardlink: true, Perm: 0o600}); err != nil {
-				return err
-			}
-			continue
-		}
-		f, ok := byPath[c.rel]
-		if !ok || (f.Blocked() && set != nil && set.Skipped(f.SHA1)) {
-			continue
-		}
-		sum, err := s.blob(f)
 		if err != nil {
+			sw.rollback()
 			return err
 		}
-		if _, err := s.d.Store.Place(sum, dst); err != nil {
+	}
+	for _, c := range changes {
+		name := c.rel
+		if c.off {
+			name += ".disabled"
+		}
+		if c.act == actWrite && !sw.isStaged(name) {
+			continue // skipped above
+		}
+		if err := sw.replace(c.rel, name, c.act == actWrite); err != nil {
+			sw.rollback()
 			return err
 		}
 	}
@@ -743,20 +928,11 @@ func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, fil
 	for rel, w := range want {
 		m.Files[rel] = ManifestFile{SHA1: w.SHA1, Layer: w.Layer, Off: w.Off}
 	}
-	if t.Minecraft != in.Minecraft || string(t.Loader) != in.Loader || t.LoaderVersion != in.LoaderVersion {
-		if _, err := s.d.Instances.SetVersion(in.ID, t.Minecraft, string(t.Loader), t.LoaderVersion); err != nil {
-			return err
-		}
-	}
-	if _, err := s.d.Instances.Update(in.ID, func(i *instance.Instance) error {
-		i.Pack = &instance.PackRef{Source: next.Origin.Source, Project: next.Origin.Project, Version: next.Origin.Version, Name: next.Name, VersionName: next.Version}
-		return nil
-	}); err != nil {
+	if err := s.commit(in, next, t, old, m); err != nil {
+		sw.rollback()
 		return err
 	}
-	if err := writeManifest(s.d.Instances.Dir(in.ID), m); err != nil {
-		return err
-	}
+	sw.finish()
 	s.mu.Lock()
 	delete(s.available, in.ID)
 	delete(s.pending, in.ID)

@@ -196,9 +196,10 @@ func openLinked(game, rel string) (*os.File, error) {
 	return os.Open(real) //nolint:gosec // the player's own link, resolved
 }
 
-// partial names files still being written by a browser or the launcher.
+// partial names files still being written by a browser or the launcher
+// (a modpack update stages files as .quartz-new and .quartz-old).
 func partial(name string) bool {
-	for _, ext := range []string{".part", ".crdownload", ".tmp", ".download"} {
+	for _, ext := range []string{".part", ".crdownload", ".tmp", ".download", ".quartz-new", ".quartz-old"} {
 		if strings.HasSuffix(strings.ToLower(name), ext) {
 			return true
 		}

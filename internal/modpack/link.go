@@ -204,6 +204,17 @@ func pickVersion(vs []modplatform.Version, want string) (modplatform.Version, bo
 	return modplatform.Version{}, false
 }
 
+// Discard deletes the archive a pack was fetched into, once nothing needs
+// it any more (packs read from the player's own files are left alone).
+func (r *Reader) Discard(p *Pack) {
+	if p == nil || p.Archive == "" || r.d.Cache == "" {
+		return
+	}
+	if rel, err := filepath.Rel(r.d.Cache, p.Archive); err == nil && filepath.IsLocal(rel) {
+		_ = os.Remove(p.Archive)
+	}
+}
+
 func (r *Reader) fetch(ctx context.Context, raw string, size int64, sum hashx.Sum) (string, error) {
 	if r.d.Fetch == nil || r.d.Cache == "" {
 		return "", ErrLink
@@ -333,7 +344,7 @@ func (r *Reader) ftb(ctx context.Context, id, version string) (*Pack, error) {
 		if f.Optional {
 			rel += ".disabled"
 		}
-		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, Size: f.Size, URLs: []string{f.URL}})
+		p.Files = append(p.Files, File{Path: rel, SHA1: sha1, Size: f.Size, URLs: []string{f.URL}, Optional: f.Optional})
 	}
 	if err := r.resolveCurse(ctx, p, curse); err != nil {
 		return nil, err

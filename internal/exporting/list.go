@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"html"
 	"io"
 	"net/url"
 	"slices"
@@ -39,10 +40,37 @@ func (s *Service) writeList(ctx context.Context, w io.Writer, id string, f ListF
 	if err != nil {
 		return err
 	}
-	if f == CSV {
+	switch f {
+	case CSV:
 		return writeCSV(w, rows)
+	case HTML:
+		return writeHTML(w, rows)
 	}
 	return writeMarkdown(w, rows)
+}
+
+// writeHTML writes the list as an HTML list, every text escaped (a
+// CurseForge zip carries the same list as modlist.html).
+func writeHTML(w io.Writer, rows []listRow) error {
+	var b strings.Builder
+	b.WriteString("<ul>\n")
+	for _, r := range rows {
+		name := html.EscapeString(r.name)
+		if r.link != "" {
+			name = `<a href="` + html.EscapeString(r.link) + `">` + name + `</a>`
+		}
+		b.WriteString("<li>" + name)
+		if r.version != "" {
+			b.WriteString(" " + html.EscapeString(r.version))
+		}
+		if r.authors != "" {
+			b.WriteString(" (by " + html.EscapeString(r.authors) + ")")
+		}
+		b.WriteString("</li>\n")
+	}
+	b.WriteString("</ul>\n")
+	_, err := io.WriteString(w, b.String())
+	return err
 }
 
 func writeCSV(w io.Writer, rows []listRow) error {

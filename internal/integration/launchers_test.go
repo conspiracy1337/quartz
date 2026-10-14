@@ -40,7 +40,7 @@ func TestImportFromPrism(t *testing.T) {
 	src := found[0].Instances[0]
 	for _, inPlace := range []bool{false, true} {
 		p := src.Pack(found[0], inPlace)
-		job, err := svc.Install(h.ctx(), svc.Stage(p), p.Name, instance.ArtFor(p.Name))
+		job, err := svc.Install(h.ctx(), svc.Stage(p), p.Name, instance.ArtFor(p.Name), nil)
 		if err != nil {
 			t.Fatal(err)
 		}

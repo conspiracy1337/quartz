@@ -9,16 +9,19 @@
   import { tasks } from '$lib/tasks.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Tile from '$lib/ui/Tile.svelte';
+  import ToggleRow from '$lib/ui/ToggleRow.svelte';
 
   /** Opened with a pack from Browse, or empty to drop a file or paste a link. */
-  interface Props { ref?: string | undefined; source?: Src | undefined; open?: string | undefined }
-  let { ref, source, open }: Props = $props();
+  interface Props { ref?: string | undefined; source?: Src | undefined; version?: string | undefined; open?: string | undefined }
+  let { ref, source, version, open }: Props = $props();
 
   // The preview shows the design's filled-in state.
   const START = hasBridge() ? '' : 'https://modrinth.com/modpack/cobblemon-fabric';
   let link = $state(START);
   let name = $state('');
   let pack = $state<ImportPreview | null>(null);
+  /** The optional files picked (Prism asks the same; all off by default). */
+  let enable = $state<Record<string, boolean>>({});
   let inspecting = $state(false);
   let busy = $state(false);
   let seq = 0;
@@ -32,6 +35,7 @@
       if (p) {
         pack = p;
         name = p.name;
+        enable = {};
       }
     } catch (e) {
       if (n === seq) session.notify({ tone: 'error', subject: "Couldn't read that pack", text: errorText(e) });
@@ -42,7 +46,7 @@
 
   // svelte-ignore state_referenced_locally
   if (open) void inspect(() => api.imports.inspectOpened(open!));
-  else if (ref && source) void inspect(() => api.imports.inspectProject(ref!, source!));
+  else if (ref && source) void inspect(() => api.imports.inspectProject(ref!, source!, version ?? ''));
   else if (!hasBridge()) void inspect(() => api.imports.inspectLink(link));
 
   // A pasted link is read once typing pauses.
@@ -83,7 +87,7 @@
     busy = true;
     try {
       // The tile is a tint and a letter; Go sets the pack's own icon when it has one.
-      const job = await api.imports.install(pack.token, name.trim(), artOf(name.trim()));
+      const job = await api.imports.install(pack.token, name.trim(), artOf(name.trim()), Object.keys(enable).filter((k) => enable[k]));
       if (job) await tasks.load();
       go({ name: 'downloads' });
     } catch (e) {
@@ -117,12 +121,27 @@
         <div class="divider"></div>
         <div class="card-pad" style="display: flex; flex-direction: column; gap: 12px">
           <div class="kv small" style="grid-template-columns: 96px minmax(0,1fr); row-gap: 8px"><span>Source</span><span>{pack.source}</span><span>Mods</span><span class="tnum">{pack.stats.mods}{pack.stats.modBytes ? `, ${bytes(pack.stats.modBytes)}` : ''}</span><span>Overrides</span><span class="tnum trunc">{overrides}</span></div>
+          {#if pack.existing}
+            {@const ex = pack.existing}
+            <div class="card" style="padding: 10px 12px; display: grid; grid-template-columns: 16px minmax(0,1fr) auto; gap: 10px; align-items: center">
+              <Icon name="info" size={16} sw={1.8} color="var(--info)" />
+              <span class="small"><span style="display: block; font-weight: 500">You have {ex.name}</span><span class="faint" style="display: block">Version {ex.version} is installed.</span></span>
+              <button class="btn btn-sm" onclick={() => { session.packPick = { instanceId: ex.id, version: ex.target }; go({ name: 'instance', id: ex.id, tab: 'overview', sub: 'update' }); }}>Update it instead</button>
+            </div>
+          {/if}
           {#each warnings as w (w.title)}
             <div class="card" style="padding: 10px 12px; border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); display: grid; grid-template-columns: 16px minmax(0,1fr); gap: 10px">
               <Icon name="warn" size={16} sw={1.8} color="var(--warn)" />
               <span class="small"><span style="display: block; font-weight: 500">{w.title}</span>{#if w.detail}<span class="faint" style="display: block">{w.detail}</span>{/if}</span>
             </div>
           {/each}
+          {#if pack.optional?.length}
+            <div class="field"><span class="field-label">Optional files</span>
+              <div class="card tgl-grid one">
+                {#each pack.optional as f (f.path)}<ToggleRow name={f.name} on={!!enable[f.path]} onchange={(v) => (enable[f.path] = v)} />{/each}
+              </div>
+            </div>
+          {/if}
           <label class="field"><span class="field-label">Instance name</span><span class="input"><input bind:value={name} maxlength="64" /></span></label>
           <button class="btn btn-accent btn-block" disabled={!name.trim() || busy} onclick={install}>Install</button>
         </div>

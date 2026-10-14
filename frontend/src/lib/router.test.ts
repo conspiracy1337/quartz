@@ -14,6 +14,7 @@ describe('router', () => {
     { name: 'browse', type: 'shader' },
     { name: 'browse', type: 'mod', instance: 'fo-1a2b' },
     { name: 'import', ref: 'mr:1KVo5zza', source: 'modrinth' },
+    { name: 'import', ref: 'mr:1KVo5zza', source: 'modrinth', version: 'tVXXFk2Z' },
     { name: 'settings', tab: 'appearance' },
     { name: 'settings-search', query: 'memory use' },
     { name: 'instance', id: 'fo', tab: 'mods' },

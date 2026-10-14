@@ -6,6 +6,10 @@ export function Export(arg1, arg2) {
   return window['go']['api']['Exports']['Export'](arg1, arg2);
 }
 
+export function Meta(arg1) {
+  return window['go']['api']['Exports']['Meta'](arg1);
+}
+
 export function Preview(arg1, arg2) {
   return window['go']['api']['Exports']['Preview'](arg1, arg2);
 }

@@ -100,3 +100,20 @@ func TestSlugAndPage(t *testing.T) {
 		t.Fatal("page")
 	}
 }
+
+func TestSearchNarrowsToEveryCategoryGroup(t *testing.T) {
+	c := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("categoryIds"); got != "[423,424]" {
+			t.Errorf("categoryIds = %q", got)
+		}
+		_, _ = io.WriteString(w, `{"data":[{"id":1,"name":"Both","categories":[{"id":423},{"id":424}]},
+			{"id":2,"name":"One","categories":[{"id":423}]}],"pagination":{"totalCount":2}}`)
+	})
+	page, err := c.Search(context.Background(), modplatform.SearchQuery{Type: modplatform.TypeMod, Categories: [][]string{{"423"}, {"424"}}, Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Hits) != 1 || page.Hits[0].ID != "1" || page.Used() != 2 {
+		t.Fatalf("%+v used %d", page.Hits, page.Used())
+	}
+}

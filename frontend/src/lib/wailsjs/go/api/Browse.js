@@ -18,6 +18,10 @@ export function Project(arg1, arg2) {
   return window['go']['api']['Browse']['Project'](arg1, arg2);
 }
 
+export function Resolve(arg1) {
+  return window['go']['api']['Browse']['Resolve'](arg1);
+}
+
 export function Search(arg1) {
   return window['go']['api']['Browse']['Search'](arg1);
 }

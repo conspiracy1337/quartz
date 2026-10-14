@@ -86,11 +86,11 @@ func TestInstallCreatesTheInstanceLast(t *testing.T) {
 	}
 	p.Origin = Origin{Source: "modrinth", Project: "P1", Version: "V2"}
 	tok := env.svc.Stage(p)
-	job, err := env.svc.Install(context.Background(), tok, "My Pack", instance.Art{Background: "#3ecf8e", Initial: "M"})
+	job, err := env.svc.Install(context.Background(), tok, "My Pack", instance.Art{Background: "#3ecf8e", Initial: "M"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.svc.Install(context.Background(), tok, "again", instance.Art{}); err == nil {
+	if _, err := env.svc.Install(context.Background(), tok, "again", instance.Art{}, nil); err == nil {
 		t.Fatal("a token was used twice")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -121,7 +121,7 @@ func TestInstallCreatesTheInstanceLast(t *testing.T) {
 func TestCancelledInstallLeavesNothing(t *testing.T) {
 	env := newInstallEnv(t, cdn{})
 	p := &Pack{Name: "Blocked", Minecraft: "1.21.1", Files: []File{{Path: "mods/b.jar", SHA1: strings.Repeat("b", 40), Size: 4, Page: "https://www.curseforge.com/x"}}}
-	job, err := env.svc.Install(context.Background(), env.svc.Stage(p), "", instance.Art{Background: "#3ecf8e"})
+	job, err := env.svc.Install(context.Background(), env.svc.Stage(p), "", instance.Art{Background: "#3ecf8e"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

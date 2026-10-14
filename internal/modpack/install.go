@@ -60,6 +60,9 @@ type InstallDeps struct {
 	Staging string // instances/.staging
 	Bus     *events.Bus
 	Log     *slog.Logger
+	// Recognise looks for the pack of an imported instance in the
+	// background once it is installed (see Recognise).
+	Recognise bool
 }
 
 // Service installs and updates packs. It is safe for concurrent use.
@@ -130,14 +133,16 @@ func (s *Service) take(token string) (*Pack, error) {
 }
 
 // Install creates an instance from a staged pack as one job: the game and
-// loader, the pack's files, any manual downloads, then the instance itself.
+// loader, the pack's files (the optional ones in enable turned on), any
+// manual downloads, then the instance itself.
 // The instance appears only when everything is in place; a failed or
 // cancelled job leaves nothing behind.
-func (s *Service) Install(ctx context.Context, token, name string, art instance.Art) (string, error) {
+func (s *Service) Install(ctx context.Context, token, name string, art instance.Art, enable []string) (string, error) {
 	p, err := s.take(token)
 	if err != nil {
 		return "", err
 	}
+	p.Enable(enable)
 	target, err := s.target(ctx, p)
 	if err != nil {
 		return "", err
@@ -347,24 +352,48 @@ func (s *Service) create(ctx context.Context, p *Pack, files []planned, set *man
 		if err := s.imported(in.ID, p.Imported, defaults); err != nil {
 			return err
 		}
-		if s.d.Bus != nil {
-			s.d.Bus.Emit(events.InstancesChanged, nil)
+	}
+	inPlace := p.Folder != nil && p.Folder.InPlace
+	switch {
+	case p.Managed.Valid() && !inPlace:
+		// The other launcher recorded the pack: linked now, its manifest
+		// built from that version at the first update review.
+		if err := s.link(in.ID, *p.Managed); err != nil {
+			return err
 		}
-		return nil // another launcher's instance is not a modpack to update
-	}
-	if _, err := s.d.Instances.Update(in.ID, func(i *instance.Instance) error {
-		i.Pack = &instance.PackRef{Source: p.Origin.Source, Project: p.Origin.Project, Version: p.Origin.Version, Name: p.Name, VersionName: p.Version}
-		return nil
-	}); err != nil {
-		return err
-	}
-	if err := writeManifest(s.d.Instances.Dir(in.ID), m); err != nil {
-		return err
+	case p.Imported != nil:
+		// Another launcher's instance is no pack to update, unless Recognise finds it.
+	default:
+		if _, err := s.d.Instances.Update(in.ID, func(i *instance.Instance) error {
+			i.Pack = &instance.PackRef{Source: p.Origin.Source, Project: p.Origin.Project, Version: p.Origin.Version, Name: p.Name, VersionName: p.Version}
+			return nil
+		}); err != nil {
+			return err
+		}
+		// An instance zip's files are whatever its player made of them, not
+		// a pack version's own: no manifest is claimed for them.
+		if !p.Copied {
+			if err := writeManifest(s.d.Instances.Dir(in.ID), m); err != nil {
+				return err
+			}
+		}
 	}
 	if s.d.Bus != nil {
 		s.d.Bus.Emit(events.InstancesChanged, nil)
 	}
+	if p.Copied && !inPlace && !p.Managed.Valid() && s.d.Recognise {
+		s.recogniseLater(in.ID)
+	}
 	return nil
+}
+
+// link records the pack an instance came from.
+func (s *Service) link(id string, m Managed) error {
+	_, err := s.d.Instances.Update(id, func(i *instance.Instance) error {
+		i.Pack = &instance.PackRef{Source: m.Origin.Source, Project: m.Origin.Project, Version: m.Origin.Version, Name: m.Name, VersionName: m.VersionName}
+		return nil
+	})
+	return err
 }
 
 // imported records what an instance brought from another launcher: its

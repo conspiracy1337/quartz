@@ -51,6 +51,8 @@ export interface Instance extends InstanceSummary {
   folder: string;
   /** The game folder was moved outside the data folder. */
   moved: boolean;
+  /** The modpack it was installed from; `updatable` when its platform can change its version. */
+  pack?: { name: string; version: string; updatable: boolean };
   /** What "Automatic" Java picks for this version, e.g. "Java 21". */
   javaAuto: string;
   notes: string;
@@ -284,19 +286,35 @@ export interface ProjectHit {
   art?: Art;
   modrinth?: SourceStats;
   curseforge?: SourceStats;
+  /** The target instance already has it. */
+  installed?: boolean;
 }
 export type BrowseSort = 'relevance' | 'downloads' | 'updated';
 export interface BrowseQuery {
   type: ProjectKind; text: string; sort: BrowseSort; instance: string;
   version: boolean; loader: boolean; categories: string[];
+  /** A Minecraft version picked by hand (modpacks); "" for any. */
+  game: string;
+  /** Only projects for one side; "" for any. */
+  side: '' | 'client' | 'server';
   hideAi: boolean; hideAds: boolean; hideInstalled: boolean;
 }
 /** A page of results: rows to append and rows already shown that changed. */
-export interface BrowseResults { searchId: string; rows: ProjectHit[]; changed: ProjectHit[]; more: boolean }
-/** A run of description text: plain, code, or a link. */
-export interface Span { text: string; code?: boolean; href?: string }
+export interface BrowseResults {
+  searchId: string; rows: ProjectHit[]; changed: ProjectHit[]; more: boolean;
+  /** Platforms that couldn't be searched for this page. */
+  failed: Src[];
+}
+/** A run of description text: plain, code, or a link; `project` names the project a link points at ("modrinth/mod/sodium"). */
+export interface Span { text: string; code?: boolean; href?: string; project?: string }
+/** A picture in a badge row; `href` is the link around it. */
+export interface DocPic { src: string; alt?: string; href?: string }
 /** A block of project description text. Never raw HTML. */
-export type DocBlock = { type: 'p' | 'h2'; spans: Span[] } | { type: 'ul'; items: Span[][] } | { type: 'img'; src: string; alt?: string };
+export type DocBlock =
+  | { type: 'p' | 'h2' | 'pre'; spans: Span[] }
+  | { type: 'ul' | 'ol'; items: Span[][] }
+  | { type: 'img'; src: string; alt?: string }
+  | { type: 'badges'; pics: DocPic[] };
 /** A gallery picture: a same-origin picture, or (in the preview) a painted stand-in. */
 export interface GalleryItem { src?: string; art?: string; title: string }
 export interface ProjectLink { icon: string; label: string; url: string }
@@ -313,6 +331,8 @@ export interface ProjectPage {
   modrinth?: ProjectSide; curseforge?: ProjectSide;
   fresher: Src;
   installed?: InstalledVersion;
+  /** The release types the update channel offers ("release", "beta"). */
+  channels: string[];
 }
 export interface ProjectVersion {
   id: string; number: string; channel: 'Release' | 'Beta' | 'Alpha'; minecraft: string; published: number; bytes: number;
@@ -336,6 +356,10 @@ export interface PackStats { mods: number; modBytes: number; files: number; fold
 export interface ImportPreview {
   token: string; name: string; version: string; minecraft: string; loader: string; source: string;
   icon?: string; art?: Art; stats: PackStats; warnings: string[];
+  /** Files the pack lets the player choose; they install turned off unless picked. */
+  optional: { path: string; name: string }[];
+  /** An instance already installed from this pack: it can move to this version (`target`) instead. */
+  existing?: { id: string; name: string; version: string; target: string };
 }
 export interface PackUpdate { instanceId: string; name: string; version: string }
 export interface ManualItem { id: string; name: string; fileName: string; size: number; state: 'waiting' | 'fetching' | 'found' | 'skipped'; twin: boolean; page?: string; art?: Art }
@@ -384,10 +408,12 @@ export interface FollowOffer { instanceId: string; name: string; minecraft: stri
 export interface BulkCheck { instanceId: string; name: string; updates: number }
 
 // ---- export ----
-export type ExportFormat = 'mrpack' | 'zip' | 'list';
-export type ExportListFormat = 'md' | 'csv';
+export type ExportFormat = 'mrpack' | 'curseforge' | 'zip' | 'list';
+export type ExportListFormat = 'md' | 'csv' | 'html';
 export interface ExportInclude { worlds: boolean; screenshots: boolean; options: boolean; servers: boolean; config: boolean }
-export interface ExportPlan { format: ExportFormat; list: ExportListFormat; include: ExportInclude }
+/** What an exported pack is called (remembered per instance). */
+export interface ExportMeta { name: string; version: string; summary?: string; author?: string }
+export interface ExportPlan { format: ExportFormat; list: ExportListFormat; include: ExportInclude; meta?: ExportMeta }
 export interface ExportPreview { linked: number; bundled: number; bytes: number }
 /** A pack export's job, or a mod list's saved file name; empty when the save dialog was cancelled. */
 export interface ExportResult { job?: string; file?: string }
@@ -417,6 +443,8 @@ export interface UpdateReview { checkId: string; updates: ModUpdate[]; locked: {
 export type DiffKind = 'Added' | 'Updated' | 'Removed';
 export interface ModpackDiffRow { name: string; version: string; kind: DiffKind }
 export interface ModpackDiff { from: string; to: string; summary: string; keptEdits: string[]; rows: ModpackDiffRow[]; game?: string }
+/** One version of an instance's pack; `offered` is the one the last update check found. */
+export interface PackVersion { id: string; number: string; channel: string; minecraft: string; published: number; current: boolean; offered: boolean }
 
 // ---- importing ----
 /** Another launcher on this computer; instances counts those not brought over yet. */

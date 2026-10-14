@@ -64,6 +64,8 @@ type Source struct {
 	Skip          []string // top-level names in GameDir that belong to the launcher
 	Disabled      string   // a folder of disabled mods (ATLauncher)
 	Warnings      []string
+	// Pack is the modpack the launcher says the instance came from.
+	Managed *modpack.Managed
 }
 
 // Found is a launcher with instances.
@@ -121,7 +123,10 @@ func (s Source) Pack(f Found, inPlace bool) *modpack.Pack {
 		Name: s.Name, Minecraft: s.Minecraft, Loader: s.Loader, LoaderVersion: s.LoaderVersion,
 		Folder:   &modpack.Folder{Path: s.GameDir, Skip: s.Skip, Disabled: s.Disabled, InPlace: inPlace},
 		Imported: &modpack.Imported{Launcher: launcherID, Path: s.GameDir, PlaytimeMin: s.PlaytimeMin, LastPlayed: s.LastPlayed, MemoryMB: s.MemoryMB},
-		Warnings: s.Warnings,
+		Warnings: s.Warnings, Copied: true,
+	}
+	if s.Managed.Valid() {
+		p.Managed = s.Managed
 	}
 	if s.Icon != "" {
 		if b, err := fsx.ReadCapped(s.Icon, maxIcon); err == nil {

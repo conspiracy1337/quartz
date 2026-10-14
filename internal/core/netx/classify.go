@@ -56,6 +56,7 @@ func Classify(err error) (Class, time.Duration) {
 		errors.Is(err, context.Canceled),
 		errors.Is(err, ErrInsecureRedirect),
 		errors.Is(err, ErrTooManyRedirects),
+		errors.Is(err, ErrRedirectRefused),
 		errors.As(err, &cert), errors.As(err, &unk), errors.As(err, &host):
 		return Permanent, 0
 	case errors.As(err, &se):

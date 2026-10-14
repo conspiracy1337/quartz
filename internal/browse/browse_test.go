@@ -23,6 +23,7 @@ type fake struct {
 	versions map[string][]modplatform.Version
 	cats     []modplatform.Category
 	refuse   bool // answers 400 to disclosure filters
+	down     bool // every search fails
 
 	mu      sync.Mutex
 	queries []modplatform.SearchQuery
@@ -34,6 +35,9 @@ func (f *fake) Search(_ context.Context, q modplatform.SearchQuery) (modplatform
 	f.mu.Lock()
 	f.queries = append(f.queries, q)
 	f.mu.Unlock()
+	if f.down {
+		return modplatform.SearchPage{}, &netx.StatusError{Code: 503}
+	}
 	if f.refuse && len(q.Exclude) > 0 {
 		return modplatform.SearchPage{}, &netx.StatusError{Code: 400}
 	}
@@ -252,5 +256,80 @@ func TestMatchKey(t *testing.T) {
 	}
 	if matchKey("!!!", "x") != "" {
 		t.Fatal("empty title matched")
+	}
+}
+
+func TestModpackSearchIgnoresTarget(t *testing.T) {
+	mr := &fake{src: modplatform.Modrinth}
+	cf := &fake{src: modplatform.CurseForge}
+	s := newService(mr, cf, &Target{Minecraft: "1.20.1", Loader: "fabric"})
+	if _, err := s.Search(context.Background(), Query{Type: "modpack", Instance: "x", Version: true, Loader: true}); err != nil {
+		t.Fatal(err)
+	}
+	if q := mr.queries[0]; q.Game != "" || len(q.Loaders) != 0 {
+		t.Fatalf("a pack search took the instance's filters: %+v", q)
+	}
+	if _, err := s.Search(context.Background(), Query{Type: "modpack", Instance: "x", Version: true, Game: "1.21.1"}); err != nil {
+		t.Fatal(err)
+	}
+	if q := mr.queries[1]; q.Game != "1.21.1" {
+		t.Fatalf("picked version not used: %+v", q)
+	}
+	if _, err := s.Search(context.Background(), Query{Type: "modpack", Game: "1.21&x=1"}); err != nil {
+		t.Fatal(err)
+	}
+	if q := mr.queries[2]; q.Game != "" {
+		t.Fatalf("bad version passed through: %+v", q)
+	}
+}
+
+func TestSearchNamesFailedPlatformsAndMarksInstalled(t *testing.T) {
+	mr := &fake{src: modplatform.Modrinth, hits: []modplatform.Hit{
+		hit(modplatform.Modrinth, "AANobbMI", "Sodium", "jellysquid3", 58_700_000, 5),
+		hit(modplatform.Modrinth, "uXXizFIs", "FerriteCore", "malte0811", 41_000_000, 14),
+	}}
+	cf := &fake{src: modplatform.CurseForge, down: true}
+	tgt := &Target{Minecraft: "1.21.1", Loader: "fabric", Installed: []content.Installed{{Modrinth: &content.Ident{ProjectID: "AANobbMI"}}}}
+	s := newService(mr, cf, tgt)
+	res, err := s.Search(context.Background(), Query{Type: "mod", Instance: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(res.Failed, []string{"curseforge"}) || len(res.Rows) != 2 || !res.Rows[0].Installed || res.Rows[1].Installed {
+		t.Fatalf("failed %v rows %+v", res.Failed, res.Rows)
+	}
+	res, err = s.Search(context.Background(), Query{Type: "mod", Instance: "x", HideInstalled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0].Name != "FerriteCore" {
+		t.Fatalf("rows %+v", res.Rows)
+	}
+	cf.down, cf.queries = false, nil
+	if _, err := s.Search(context.Background(), Query{Type: "mod", Side: "client"}); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(cf.queries); n != 0 {
+		t.Fatalf("CurseForge asked %d times for a side it can't filter", n)
+	}
+}
+
+func TestProjectLinks(t *testing.T) {
+	for href, want := range map[string]string{
+		"https://modrinth.com/mod/sodium":                             "modrinth/mod/sodium",
+		"https://modrinth.com/plugin/sodium/versions":                 "modrinth/mod/sodium",
+		"https://www.curseforge.com/minecraft/mc-mods/jei":            "curseforge/mod/jei",
+		"https://www.curseforge.com/minecraft/texture-packs/faithful": "curseforge/resourcepack/faithful",
+		"https://modrinth.com/user/jellysquid3":                       "",
+		"http://modrinth.com/mod/sodium":                              "",
+		"https://modrinth.com.evil.example/mod/sodium":                "",
+	} {
+		if got := projectLink(href); got != want {
+			t.Errorf("projectLink(%q) = %q, want %q", href, got, want)
+		}
+	}
+	s := newService(&fake{src: modplatform.Modrinth}, &fake{src: modplatform.CurseForge}, nil)
+	if _, err := s.Resolve(context.Background(), "modrinth/mod/../x"); err == nil {
+		t.Fatal("bad link resolved")
 	}
 }

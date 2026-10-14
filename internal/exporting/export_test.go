@@ -70,6 +70,7 @@ func sums(b []byte) (string, string) {
 }
 
 func (m *manifest) Manifest(context.Context, string) ([]content.ManifestItem, error) { return *m, nil }
+func (m *manifest) Identify(context.Context, string, content.Kind) (int, error)      { return 0, nil }
 
 func names(t *testing.T, file string) []string {
 	t.Helper()
@@ -206,5 +207,96 @@ func TestModListEscapes(t *testing.T) {
 	e.items = nil
 	if err := e.svc.Write(context.Background(), e.in.ID, Plan{Format: List, List: CSV}, filepath.Join(dir, "none.csv")); !errors.Is(err, ErrNoMods) {
 		t.Fatal(err)
+	}
+}
+
+func TestMrpackMetaSidesAndLinkedFolder(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.svc.d.Instances.SetNotes(e.in.ID, "my private notes"); err != nil {
+		t.Fatal(err)
+	}
+	// mods/ is a link to another launcher's folder (Prism's copy with links).
+	other := filepath.Join(t.TempDir(), "elsewhere")
+	sodium, menu := []byte("sodium jar"), []byte("a client mod from nowhere")
+	s1, _ := sums(sodium)
+	_, m5 := sums(menu)
+	m1, _ := sums(menu)
+	e.write(other, "sodium.jar", sodium)
+	e.write(other, "menu.jar", menu)
+	if err := os.Symlink(other, filepath.Join(e.game, "mods")); err != nil {
+		t.Fatal(err)
+	}
+	e.items = manifest{
+		// The store never recorded sodium's sha512: it is hashed for the index.
+		{Kind: content.Mods, Rel: "mods/sodium.jar", Enabled: true, SHA1: s1, Size: int64(len(sodium)), URL: "https://cdn.modrinth.com/data/AANobbMI/versions/x/sodium.jar", ClientOnly: true},
+		{Kind: content.Mods, Rel: "mods/menu.jar", Enabled: true, SHA1: m1, SHA512: m5, Size: int64(len(menu)), ClientOnly: true},
+	}
+	dest := filepath.Join(t.TempDir(), "x.mrpack")
+	p := Plan{Format: Mrpack, Meta: instance.ExportMeta{Name: " My Pack ", Version: "2.1", Summary: "For friends"}}
+	if err := e.svc.Write(context.Background(), e.in.ID, p, dest); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(t, dest); !slices.Contains(got, "client-overrides/mods/menu.jar") {
+		t.Fatalf("zip %v", got)
+	}
+	zr, _ := zip.OpenReader(dest)
+	defer func() { _ = zr.Close() }()
+	f, _ := zr.Open("modrinth.index.json")
+	var b bytes.Buffer
+	_, _ = b.ReadFrom(f)
+	index := b.String()
+	for _, want := range []string{`"name": "My Pack"`, `"versionId": "2.1"`, `"summary": "For friends"`, `"server": "unsupported"`, `mods/sodium.jar`} {
+		if !strings.Contains(index, want) {
+			t.Errorf("index lacks %s:\n%s", want, index)
+		}
+	}
+	if strings.Contains(index, "private") {
+		t.Fatal("the instance's notes were exported")
+	}
+}
+
+func TestCurseForgeZip(t *testing.T) {
+	e := newEnv(t)
+	jei, own := []byte("jei jar"), []byte("own jar")
+	j1, _ := sums(jei)
+	o1, _ := sums(own)
+	e.write(e.game, "mods/jei.jar", jei)
+	e.write(e.game, "mods/own.jar", own)
+	e.items = manifest{
+		{Kind: content.Mods, Rel: "mods/jei.jar", Enabled: true, SHA1: j1, Name: "JEI <3", Version: "15.2", Page: "https://www.curseforge.com/minecraft/mc-mods/jei",
+			CurseForge: &content.Ident{ProjectID: "238222", VersionID: "5101366"}},
+		{Kind: content.Mods, Rel: "mods/own.jar", Enabled: true, SHA1: o1, Name: "Own"},
+	}
+	if _, err := e.svc.d.Instances.SetVersion(e.in.ID, "1.20.1", "neoforge", "1.20.1-47.1.106"); err != nil {
+		t.Fatal(err)
+	}
+	p := Plan{Format: CurseForge, Meta: instance.ExportMeta{Name: "Pack", Version: "1.0", Author: "me"}}
+	if pv, err := e.svc.Preview(context.Background(), e.in.ID, p); err != nil || pv.Linked != 1 || pv.Bundled != 1 {
+		t.Fatalf("preview %+v %v", pv, err)
+	}
+	dest := filepath.Join(t.TempDir(), "Pack.zip")
+	if err := e.svc.Write(context.Background(), e.in.ID, p, dest); err != nil {
+		t.Fatal(err)
+	}
+	got := names(t, dest)
+	if !slices.Equal(got, []string{"manifest.json", "modlist.html", "overrides/mods/own.jar"}) {
+		t.Fatalf("zip %v", got)
+	}
+	zr, _ := zip.OpenReader(dest)
+	defer func() { _ = zr.Close() }()
+	read := func(name string) string {
+		f, _ := zr.Open(name)
+		var b bytes.Buffer
+		_, _ = b.ReadFrom(f)
+		return b.String()
+	}
+	m := read("manifest.json")
+	for _, want := range []string{`"manifestType": "minecraftModpack"`, `"id": "neoforge-1.20.1-47.1.106"`, `"projectID": 238222`, `"fileID": 5101366`, `"author": "me"`, `"overrides": "overrides"`} {
+		if !strings.Contains(m, want) {
+			t.Errorf("manifest lacks %s:\n%s", want, m)
+		}
+	}
+	if h := read("modlist.html"); !strings.Contains(h, `<a href="https://www.curseforge.com/minecraft/mc-mods/jei">JEI &lt;3</a>`) {
+		t.Fatalf("modlist.html:\n%s", h)
 	}
 }
