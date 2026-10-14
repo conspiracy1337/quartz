@@ -54,16 +54,24 @@ const CORNERS: Vec3[][] = [
   [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]],
 ];
 const NORMALS: Vec3[] = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]];
-const STRIDE = 8; // position, uv, normal
+/** Floats per vertex: position, uv, normal, and the face's texture rectangle (see `box`). */
+export const STRIDE = 12;
 
-/** A w×h×d box at texture offset uv, grown by `grow` texels on every side, centred on `at`. */
+/**
+ * A w×h×d box at texture offset uv, grown by `grow` texels on every side, centred on `at`.
+ * Each vertex also carries its face's texture rectangle, a quarter texel inside the edge: the
+ * fragment shader clamps to it, so a sample taken just past a face's edge (multisampling does
+ * that at silhouettes) never picks up the neighbouring texel as a thin line.
+ */
 function box(out: number[], [w, h, d]: Vec3, uv: UV, at: Vec3, tex: [number, number], grow = 0) {
   const half: Vec3 = [w / 2 + grow, h / 2 + grow, d / 2 + grow];
+  const [tw, th] = tex;
   faceRects([w, h, d], uv).forEach(([x, y, fw, fh], f) => {
-    const uvs = [[x, y], [x + fw, y], [x + fw, y + fh], [x, y + fh]].map(([u, v]) => [u! / tex[0], v! / tex[1]]);
+    const uvs = [[x, y], [x + fw, y], [x + fw, y + fh], [x, y + fh]].map(([u, v]) => [u! / tw, v! / th]);
+    const rect = [(x + 0.25) / tw, (y + 0.25) / th, (x + fw - 0.25) / tw, (y + fh - 0.25) / th];
     for (const k of [0, 1, 2, 0, 2, 3]) {
       const c = CORNERS[f]![k]!;
-      out.push(at[0] + c[0] * half[0], at[1] + c[1] * half[1], at[2] + c[2] * half[2], uvs[k]![0]!, uvs[k]![1]!, ...NORMALS[f]!);
+      out.push(at[0] + c[0] * half[0], at[1] + c[1] * half[1], at[2] + c[2] * half[2], uvs[k]![0]!, uvs[k]![1]!, ...NORMALS[f]!, ...rect);
     }
   });
 }
@@ -106,21 +114,27 @@ export function buildPlayer(slim: boolean): { data: Float32Array; parts: Record<
   });
   // The soft shadow under the feet: one quad, uv spans -1…1 for a radial falloff.
   add('floor', 'floor', [0, 0, 0], () => {
-    for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]] as const) v.push(x * 9, 0.01, z * 5, x, z, 0, 1, 0);
+    for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]] as const) v.push(x * 9, 0.01, z * 5, x, z, 0, 1, 0, 0, 0, 0, 0);
   });
   return { data: new Float32Array(v), parts };
 }
 
 // ---- shaders ----
-const VS = `attribute vec3 p;attribute vec2 t;attribute vec3 n;
-uniform mat4 mvp;uniform mat3 nm;varying vec2 vt;varying float lit;
+const VS = `attribute vec3 p;attribute vec2 t;attribute vec3 n;attribute vec4 r;
+uniform mat4 mvp;uniform mat3 nm;varying vec2 vt;varying vec4 vr;varying float lit;
 // Minecraft's entity lights, in view space, with its 0.4 ambient and 0.6 diffuse.
 const vec3 L0=vec3(0.16169,0.80845,0.56592);const vec3 L1=vec3(-0.16169,0.80845,0.56592);
-void main(){vec3 m=normalize(nm*n);lit=min(1.0,0.4+0.6*(max(dot(m,L0),0.0)+max(dot(m,L1),0.0)));vt=t;gl_Position=mvp*vec4(p,1.0);}`;
-const FS = `precision mediump float;uniform sampler2D tex;uniform int mode;varying vec2 vt;varying float lit;
+void main(){vec3 m=normalize(nm*n);lit=min(1.0,0.4+0.6*(max(dot(m,L0),0.0)+max(dot(m,L1),0.0)));vt=t;vr=r;gl_Position=mvp*vec4(p,1.0);}`;
+// highp where the GPU has it: at mediump a UV is only ~1/16 texel exact, enough to round across an edge.
+const FS = `#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform sampler2D tex;uniform int mode;varying vec2 vt;varying vec4 vr;varying float lit;
 void main(){
 if(mode==3){float d=length(vt);gl_FragColor=vec4(0.0,0.0,0.0,0.55*(1.0-smoothstep(0.0,1.0,d)));return;}
-vec4 c=texture2D(tex,vt);
+vec4 c=texture2D(tex,clamp(vt,vr.xy,vr.zw));
 if(mode==0)c.a=1.0;else if(c.a<0.5)discard;
 gl_FragColor=vec4(c.rgb*lit,1.0);}`;
 const MODE = { base: 0, over: 1, cape: 2, floor: 3 } as const;
@@ -139,6 +153,7 @@ function compile(gl: WebGLRenderingContext): WebGLProgram | null {
   gl.bindAttribLocation(prog, 0, 'p');
   gl.bindAttribLocation(prog, 1, 't');
   gl.bindAttribLocation(prog, 2, 'n');
+  gl.bindAttribLocation(prog, 3, 'r');
   gl.linkProgram(prog);
   return gl.getProgramParameter(prog, gl.LINK_STATUS) ? prog : null;
 }
@@ -236,7 +251,7 @@ export class SkinScene {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(this.prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
-    for (const [i, size, off] of [[0, 3, 0], [1, 2, 3], [2, 3, 5]] as const) {
+    for (const [i, size, off] of [[0, 3, 0], [1, 2, 3], [2, 3, 5], [3, 4, 8]] as const) {
       gl.enableVertexAttribArray(i);
       gl.vertexAttribPointer(i, size, gl.FLOAT, false, STRIDE * 4, off * 4);
     }

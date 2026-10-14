@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlayer } from './skin3d';
+import { STRIDE, buildPlayer } from './skin3d';
 import { crop, faceRects } from './skinUV';
 
 describe('skin UV layout', () => {
@@ -25,7 +25,7 @@ describe('skin UV layout', () => {
     const { data, parts } = buildPlayer(false);
     // Vertex k of a part: [x, y, z, u·64, v·64].
     const at = (part: string, k: number) => {
-      const i = (parts[part]!.first + k) * 8;
+      const i = (parts[part]!.first + k) * STRIDE;
       return [data[i], data[i + 1], data[i + 2], Math.round(data[i + 3]! * 64), Math.round(data[i + 4]! * (part === 'cape' ? 32 : 64))];
     };
     // Head front: the texture's top-left (8,8) is the viewer's top-left, facing the viewer (+z).
@@ -36,7 +36,10 @@ describe('skin UV layout', () => {
     expect(at('head+', 0)).toEqual([-4.5, 8.5, 4.5, 40, 8]);
     // Slim arms are 3 texels wide.
     const slim = buildPlayer(true);
-    expect(slim.data[(slim.parts['rarm']!.first) * 8]).toBe(-1.5);
+    expect(slim.data[slim.parts['rarm']!.first * STRIDE]).toBe(-1.5);
+    // Every face carries its texture rectangle a quarter texel inside the edge (head front: 8…16).
+    const i = parts['head']!.first * STRIDE;
+    expect([...data.slice(i + 8, i + 12)].map((x) => x * 64)).toEqual([8.25, 8.25, 15.75, 15.75]);
     // The cape's outer side (texture front, (1,1)) faces backwards, away from the body.
     expect(at('cape', 0)).toEqual([5, 0, -1, 1, 1]);
   });
