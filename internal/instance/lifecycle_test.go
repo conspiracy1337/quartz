@@ -22,7 +22,7 @@ func newStore(t *testing.T) (*Store, string) {
 
 func create(t *testing.T, s *Store, name string) Instance {
 	t.Helper()
-	in, err := s.Create(CreateRequest{Name: name, Minecraft: "1.21.1"}, JavaSettings{})
+	in, err := s.Create(CreateRequest{Name: name, Minecraft: "1.21.1"})
 	if err != nil {
 		t.Fatal(err)
 	}

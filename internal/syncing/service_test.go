@@ -38,8 +38,8 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, _ := insts.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"}, instance.JavaSettings{})
-	b, _ := insts.Create(instance.CreateRequest{Name: "B", Minecraft: "1.12.2"}, instance.JavaSettings{})
+	a, _ := insts.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"})
+	b, _ := insts.Create(instance.CreateRequest{Name: "B", Minecraft: "1.12.2"})
 	e := &env{t: t, dir: dir, insts: insts, a: a.ID, b: b.ID, running: map[string]bool{}}
 	e.svc = New(Config{
 		Root: filepath.Join(dir, "shared"), Trash: filepath.Join(dir, "trash"), Settings: st, Instances: insts,

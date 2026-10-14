@@ -265,8 +265,7 @@ func (s *Instances) Create(req instance.CreateRequest) (InstanceView, error) {
 	if len(req.Shares) > 32 {
 		return InstanceView{}, fmt.Errorf("%w: shares", instance.ErrInvalidSettings)
 	}
-	g := s.d.Settings.Get().Java
-	in, err := s.d.Store.Create(req, instance.JavaSettings{MemoryMinMB: g.MemoryMinMB, MemoryMaxMB: g.MemoryMaxMB, JVMArgs: g.JVMArgs})
+	in, err := s.d.Store.Create(req)
 	if err == nil && s.d.Syncing != nil && len(req.Shares) > 0 {
 		// A new instance has nothing to merge in; a target that can't be
 		// joined just stays off for it.

@@ -42,7 +42,7 @@ func setup(t *testing.T, upload http.HandlerFunc) (*Service, string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
-	in, _ := insts.Create(instance.CreateRequest{Name: "FO", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	in, _ := insts.Create(instance.CreateRequest{Name: "FO", Minecraft: "1.21.4"})
 	game := insts.GameDir(in.ID)
 	_ = os.MkdirAll(filepath.Join(game, "logs"), 0o700)
 	_ = os.MkdirAll(filepath.Join(game, "crash-reports"), 0o700)

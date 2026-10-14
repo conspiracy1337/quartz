@@ -236,7 +236,7 @@ func TestCheckAllSkipsInstancesWithoutMods(t *testing.T) {
 		projects: map[string]modplatform.Project{"PA": {Slug: "alpha", Title: "Alpha"}},
 		latest:   map[string]modplatform.Version{"PA": a2},
 		versions: map[string][]modplatform.Version{"PA": {a2, a1}}}}
-	if _, err := e.svc.d.Instances.Create(instance.CreateRequest{Name: "Empty", Minecraft: "1.21.1"}, instance.JavaSettings{}); err != nil {
+	if _, err := e.svc.d.Instances.Create(instance.CreateRequest{Name: "Empty", Minecraft: "1.21.1"}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := e.svc.CheckAll(context.Background(), modplatform.Release)

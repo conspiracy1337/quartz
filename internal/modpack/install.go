@@ -319,7 +319,7 @@ func (s *Service) create(ctx context.Context, p *Pack, files []planned, set *man
 	if s.d.Defaults != nil {
 		defaults = s.d.Defaults()
 	}
-	in, err := s.d.Instances.Create(req, defaults)
+	in, err := s.d.Instances.Create(req)
 	if err != nil {
 		return err
 	}

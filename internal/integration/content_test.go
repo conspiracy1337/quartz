@@ -118,7 +118,7 @@ func TestContentServiceWithRealMods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in, err := insts.Create(instance.CreateRequest{Name: "Content IT", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.9"}, instance.JavaSettings{})
+	in, err := insts.Create(instance.CreateRequest{Name: "Content IT", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.9"})
 	if err != nil {
 		t.Fatal(err)
 	}

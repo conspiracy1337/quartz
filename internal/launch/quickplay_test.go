@@ -34,7 +34,7 @@ func gameArgs(t *testing.T, ver string, into instance.Into) ([]string, string) {
 		t.Fatal(err)
 	}
 	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
-	inst, _ := insts.Create(instance.CreateRequest{Name: "T", Minecraft: ver}, instance.JavaSettings{})
+	inst, _ := insts.Create(instance.CreateRequest{Name: "T", Minecraft: ver})
 	st, _ := settings.Open(filepath.Join(dir, "settings.json"), events.NewBus(), nil)
 	l := New(Config{Instances: insts, Settings: st, BinDir: filepath.Join(dir, "bin")})
 	res := &install.Resolved{Version: v, Classpath: []string{"/a.jar"}, AssetsRoot: "/assets", GameAssets: "/assets"}

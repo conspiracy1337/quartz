@@ -19,18 +19,17 @@ func TestCreateListUpdateReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	def := JavaSettings{MemoryMinMB: 1024, MemoryMaxMB: 4096, JVMArgs: "-XX:+UseG1GC"}
-	a, err := s.Create(CreateRequest{Name: "  Survival 1.21.4 ", Minecraft: "1.21.4", Art: Art{Background: "#6b8afd"}}, def)
+	a, err := s.Create(CreateRequest{Name: "  Survival 1.21.4 ", Minecraft: "1.21.4", Art: Art{Background: "#6b8afd"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(a.ID, "survival-1-21-4-") || a.Name != "Survival 1.21.4" || a.Art.Initial != "S" || a.Settings.Java.MemoryMaxMB != 4096 || a.Settings.Java.Override {
+	if !strings.HasPrefix(a.ID, "survival-1-21-4-") || a.Name != "Survival 1.21.4" || a.Art.Initial != "S" || a.Settings.Java != (JavaSettings{}) {
 		t.Fatalf("created %+v", a)
 	}
 	if _, err := os.Stat(s.GameDir(a.ID)); err != nil {
 		t.Fatal("game folder missing")
 	}
-	b, _ := s.Create(CreateRequest{Name: "Second", Minecraft: "26.3"}, def)
+	b, _ := s.Create(CreateRequest{Name: "Second", Minecraft: "26.3"})
 	now := time.Now()
 	if _, err := s.Update(a.ID, func(in *Instance) error { in.LastPlayed = &now; in.PlaytimeMin += 30; in.ID = "hijack"; return nil }); err != nil {
 		t.Fatal(err)
@@ -65,18 +64,18 @@ func TestCreateRejects(t *testing.T) {
 		"bad version": {Name: "X", Minecraft: "../../x"},
 	}
 	for name, req := range cases {
-		if _, err := s.Create(req, JavaSettings{}); err == nil {
+		if _, err := s.Create(req); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	if _, err := s.Create(cases["loader"], JavaSettings{}); !errors.Is(err, ErrBadLoader) {
+	if _, err := s.Create(cases["loader"]); !errors.Is(err, ErrBadLoader) {
 		t.Fatal("loader error not specific")
 	}
-	in, err := s.Create(CreateRequest{Name: "Modded", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.10", Group: " Mods "}, JavaSettings{})
+	in, err := s.Create(CreateRequest{Name: "Modded", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.10", Group: " Mods "})
 	if err != nil || in.Loader != "fabric" || in.LoaderVersion != "0.16.10" || in.Group != "Mods" || !in.KeepLoaderUpdated || in.Version != schema {
 		t.Fatalf("modded instance = %+v, %v", in, err)
 	}
-	if in, _ := s.Create(CreateRequest{Name: "Plain", Minecraft: "1.21.1", Loader: "none"}, JavaSettings{}); in.Loader != "" {
+	if in, _ := s.Create(CreateRequest{Name: "Plain", Minecraft: "1.21.1", Loader: "none"}); in.Loader != "" {
 		t.Fatal(`"none" must mean vanilla`)
 	}
 }
@@ -143,7 +142,7 @@ func TestResolveWithAutomaticJavaOff(t *testing.T) {
 
 func TestCommandValidation(t *testing.T) {
 	s, _ := Open(t.TempDir(), nil)
-	in, _ := s.Create(CreateRequest{Name: "C", Minecraft: "1.21.1"}, JavaSettings{})
+	in, _ := s.Create(CreateRequest{Name: "C", Minecraft: "1.21.1"})
 	bad := []CommandSettings{
 		{PreLaunch: "backup\nrm -rf /"},
 		{Env: []EnvVar{{Name: "1BAD", Value: "x"}}},
@@ -182,7 +181,7 @@ func TestHostileFolders(t *testing.T) {
 
 func TestSettingsValidation(t *testing.T) {
 	s, _ := Open(t.TempDir(), nil)
-	a, _ := s.Create(CreateRequest{Name: "A", Minecraft: "1.21.4"}, JavaSettings{})
+	a, _ := s.Create(CreateRequest{Name: "A", Minecraft: "1.21.4"})
 	if _, err := s.SetSettings(a.ID, Settings{Java: JavaSettings{JavaPath: "relative/java"}}); !errors.Is(err, ErrInvalidSettings) {
 		t.Fatal("relative java path accepted")
 	}

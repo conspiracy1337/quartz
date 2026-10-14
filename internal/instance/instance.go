@@ -537,8 +537,9 @@ type CreateRequest struct {
 }
 
 // Create makes a new instance folder. The Minecraft version and loader build
-// must already be checked upstream by the caller; defaults seed the Java card.
-func (s *Store) Create(req CreateRequest, defaults JavaSettings) (Instance, error) {
+// must already be checked upstream by the caller. Its Java card starts empty
+// and inherits the global settings live until the player overrides them.
+func (s *Store) Create(req CreateRequest) (Instance, error) {
 	name, err := cleanName(req.Name)
 	if err != nil {
 		return Instance{}, err
@@ -559,12 +560,10 @@ func (s *Store) Create(req CreateRequest, defaults JavaSettings) (Instance, erro
 	if req.Icon != "" && !iconRe.MatchString(req.Icon) {
 		return Instance{}, fmt.Errorf("%w: icon", ErrInvalidSettings)
 	}
-	defaults.Override = false
 	in := Instance{
 		Version: schema, ID: s.newID(name), Name: name, Art: req.Art, Icon: req.Icon, Minecraft: req.Minecraft,
 		Loader: req.Loader, LoaderVersion: req.LoaderVersion, KeepLoaderUpdated: true,
 		Group: group, Sandbox: rules.Settings{On: req.Sandbox, Preset: rules.Standard}, Created: time.Now().UTC(),
-		Settings: Settings{Java: defaults},
 	}
 	if in.Art.Initial == "" {
 		in.Art.Initial = strings.ToUpper(string([]rune(name)[:1]))

@@ -99,7 +99,7 @@ func (f fakeRuns) Evidence(_, runID, kind string) (string, error) {
 func TestFinishAndExplain(t *testing.T) {
 	dir := t.TempDir()
 	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
-	inst, _ := insts.Create(instance.CreateRequest{Name: "FO", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	inst, _ := insts.Create(instance.CreateRequest{Name: "FO", Minecraft: "1.21.4"})
 	game := insts.GameDir(inst.ID)
 	runs := insts.RunsDir(inst.ID)
 	_ = os.MkdirAll(filepath.Join(game, "crash-reports"), 0o700)

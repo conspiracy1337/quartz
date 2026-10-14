@@ -30,8 +30,8 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, _ := insts.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"}, instance.JavaSettings{})
-	b, _ := insts.Create(instance.CreateRequest{Name: "B", Minecraft: "1.21.4"}, instance.JavaSettings{})
+	a, _ := insts.Create(instance.CreateRequest{Name: "A", Minecraft: "1.21.4"})
+	b, _ := insts.Create(instance.CreateRequest{Name: "B", Minecraft: "1.21.4"})
 	e := &env{insts: insts, id: a.ID, other: b.ID}
 	e.svc = New(Deps{Instances: insts, Images: localimg.New(filepath.Join(dir, "thumbs")), Busy: func(string) bool { return e.busy }})
 	return e
