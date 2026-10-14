@@ -7,6 +7,8 @@ export function Activity(arg1:string):Promise<Array<content.Activity>>;
 
 export function AddDropped(arg1:string,arg2:string,arg3:string,arg4:string):Promise<content.AddResult>;
 
+export function AddFiles(arg1:string,arg2:string,arg3:string):Promise<content.AddResult>;
+
 export function ApplyInstall(arg1:string,arg2:Array<string>):Promise<string>;
 
 export function ApplyUpdates(arg1:string,arg2:Array<string>):Promise<string>;
@@ -20,6 +22,10 @@ export function CheckUpdates(arg1:string,arg2:string):Promise<content.Review>;
 export function CleanUp():Promise<store.Usage>;
 
 export function Compatibility(arg1:string,arg2:string,arg3:string):Promise<content.Compat>;
+
+export function Dependents(arg1:string,arg2:Array<string>):Promise<Array<string>>;
+
+export function FindMod(arg1:string):Promise<string>;
 
 export function Info(arg1:string):Promise<content.TabInfo>;
 
@@ -36,6 +42,8 @@ export function Remove(arg1:string,arg2:string,arg3:Array<string>):Promise<strin
 export function SetActiveShader(arg1:string,arg2:string):Promise<void>;
 
 export function SetEnabled(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
+
+export function SetEnabledMany(arg1:string,arg2:string,arg3:Array<string>,arg4:boolean):Promise<void>;
 
 export function SetLocked(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 

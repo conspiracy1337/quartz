@@ -1270,6 +1270,8 @@ export namespace content {
 	    label?: string;
 	    tone?: string;
 	    world?: string;
+	    problem?: string;
+	    depId?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Status(source);
@@ -1282,6 +1284,8 @@ export namespace content {
 	        this.label = source["label"];
 	        this.tone = source["tone"];
 	        this.world = source["world"];
+	        this.problem = source["problem"];
+	        this.depId = source["depId"];
 	    }
 	}
 	export class Row {
@@ -1299,6 +1303,9 @@ export namespace content {
 	    project?: string;
 	    ref?: string;
 	    clientOnly?: boolean;
+	    file: string;
+	    size: number;
+	    added: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Row(source);
@@ -1320,6 +1327,9 @@ export namespace content {
 	        this.project = source["project"];
 	        this.ref = source["ref"];
 	        this.clientOnly = source["clientOnly"];
+	        this.file = source["file"];
+	        this.size = source["size"];
+	        this.added = source["added"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -34,6 +34,11 @@ type Row struct {
 	Ref string `json:"ref,omitempty"`
 	// ClientOnly marks a mod a local server leaves out.
 	ClientOnly bool `json:"clientOnly,omitempty"`
+	// File is the item's file name, Size its bytes (0 for a folder) and Added
+	// when it appeared (unix seconds), for search and sorting.
+	File  string `json:"file"`
+	Size  int64  `json:"size"`
+	Added int64  `json:"added"`
 }
 
 // Status is the one badge a row shows, most important first.
@@ -43,6 +48,9 @@ type Status struct {
 	Label   string `json:"label,omitempty"`
 	Tone    string `json:"tone,omitempty"`
 	World   string `json:"world,omitempty"`
+	// Problem is the problem's kind (see Problem), DepID a missing mod's id.
+	Problem string `json:"problem,omitempty"`
+	DepID   string `json:"depId,omitempty"`
 }
 
 // view gathers everything rows of one instance are built from.
@@ -181,6 +189,7 @@ func (s *Service) row(v *view, id string, e Entry, problems map[string]Problem) 
 	pw, hasPW := s.pwFor(v, e)
 	ident := k.Ident()
 	r := Row{ID: id, Kind: e.Kind, Name: displayName(e, k), Version: info.Version, Icon: info.Icon, Source: "file",
+		File: strings.TrimSuffix(path.Base(e.Rel), Disabled), Size: e.Size, Added: e.Added,
 		Group: e.Group, Locked: hasPW && pw.Pin}
 	switch e.Kind {
 	case ResourcePacks:
@@ -211,11 +220,11 @@ func (s *Service) row(v *view, id string, e Entry, problems map[string]Problem) 
 
 func (s *Service) status(v *view, id string, e Entry, info *meta.Info, problems map[string]Problem, r Row, unknown bool) *Status {
 	if p, ok := problems[id]; ok {
-		return &Status{Kind: "problem", Label: p.Label, Tone: p.Tone}
+		return &Status{Kind: "problem", Label: p.Label, Tone: p.Tone, Problem: p.Kind, DepID: p.DepID}
 	}
 	if !e.Dir && v.known[e.SHA1].Bad {
 		// A broken or truncated file: say so instead of listing it as unknown.
-		return &Status{Kind: "problem", Label: "Can't read this file", Tone: "danger"}
+		return &Status{Kind: "problem", Label: "Can't read this file", Tone: "danger", Problem: "unreadable"}
 	}
 	if u, ok := v.idx.Updates[id]; ok && !r.Locked {
 		return &Status{Kind: "update", Version: u.Version}

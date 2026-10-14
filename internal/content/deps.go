@@ -14,8 +14,9 @@ type Problem struct {
 	Kind  string `json:"kind"`  // loader | missing | conflict | version | game | duplicate | library
 	Label string `json:"label"` // "Needs Fabric API"
 	Tone  string `json:"tone"`  // warn | danger | info
-	// Dep is the missing mod's display name (missing only).
-	Dep string `json:"dep,omitempty"`
+	// Dep is the missing mod's display name (missing only), DepID its mod id.
+	Dep   string `json:"dep,omitempty"`
+	DepID string `json:"depId,omitempty"`
 }
 
 // modFacts is what the analysis needs about one mod.
@@ -137,13 +138,13 @@ func check(m modFacts, have map[string]present, t target) (Problem, bool) {
 		return Problem{Kind: "loader", Label: "Made for " + loaderNames[m.info.Loaders[0]], Tone: "danger"}, true
 	}
 	st := m.info.RangeStyle()
-	var missing []string
+	var missing []string // mod ids
 	var conflict, wrong *Problem
 	for _, d := range m.info.Deps {
 		p, ok := have[d.ID]
 		switch {
 		case d.Kind == meta.Required && !ok:
-			missing = append(missing, depName(d.ID))
+			missing = append(missing, d.ID)
 		case d.Kind == meta.Breaks && ok && !slices.Contains(m.provided, d.ID) && conflict == nil:
 			if in, sure := version.Satisfies(st, d.Range, p.version); sure && in {
 				conflict = &Problem{Kind: "conflict", Label: "Conflicts with " + p.name, Tone: "danger"}
@@ -156,8 +157,8 @@ func check(m modFacts, have map[string]present, t target) (Problem, bool) {
 	}
 	switch {
 	case len(missing) > 0:
-		sort.Strings(missing)
-		return Problem{Kind: "missing", Label: "Needs " + missing[0], Tone: "warn", Dep: missing[0]}, true
+		slices.SortFunc(missing, func(a, b string) int { return strings.Compare(depName(a), depName(b)) })
+		return Problem{Kind: "missing", Label: "Needs " + depName(missing[0]), Tone: "warn", Dep: depName(missing[0]), DepID: missing[0]}, true
 	case conflict != nil:
 		return *conflict, true
 	case wrong != nil:
@@ -241,4 +242,45 @@ func (s *Service) missing(id string, i Index) *Missing {
 		first.More = n - 1
 	}
 	return first
+}
+
+// Dependents names the enabled mods, other than items, that need something
+// items provide: turning items off or removing them leaves those unmet
+// (Prism asks about them; the toast says so).
+func (s *Service) Dependents(id string, items []string) []string {
+	ix, err := s.idx.get(id)
+	if err != nil {
+		return nil
+	}
+	facts := s.facts(id, ix.Get())
+	gone := map[string]bool{}
+	for _, f := range facts {
+		if slices.Contains(items, f.item) {
+			for _, p := range f.provided {
+				gone[p] = true
+			}
+		}
+	}
+	// What still provides an id once items are gone.
+	left := map[string]bool{}
+	for _, f := range facts {
+		if f.enabled && !slices.Contains(items, f.item) {
+			for _, p := range f.provided {
+				left[p] = true
+			}
+		}
+	}
+	var out []string
+	for _, f := range facts {
+		if !f.enabled || slices.Contains(items, f.item) {
+			continue
+		}
+		for _, d := range f.info.Deps {
+			if d.Kind == meta.Required && gone[d.ID] && !left[d.ID] {
+				out = append(out, f.name)
+				break
+			}
+		}
+	}
+	return out
 }

@@ -20,6 +20,7 @@ var (
 	ErrNameTaken    = errors.New("content: a file with that name is already there")
 	ErrNotLockable  = errors.New("content: only items found on Modrinth or CurseForge can be locked")
 	ErrGameHasFiles = errors.New("content: close the game first; it is using this file")
+	ErrOneShader    = errors.New("content: only one shader pack can be on at a time")
 )
 
 // entry looks an item up in the current index.
@@ -62,6 +63,51 @@ func (s *Service) SetEnabled(ctx context.Context, id string, k Kind, item string
 	return s.rename(ctx, id, e, on)
 }
 
+// SetEnabledMany switches several items of one kind on or off at once, then
+// rescans once. Shader packs are exclusive: several can only be turned off.
+func (s *Service) SetEnabledMany(ctx context.Context, id string, k Kind, items []string, on bool) error {
+	switch specs[k].toggle {
+	case toggleShader:
+		if on {
+			return ErrOneShader
+		}
+		return s.setShader(ctx, id, "")
+	case togglePackList:
+		v, err := s.view(id)
+		if err != nil {
+			return err
+		}
+		packs := v.packs
+		for _, item := range items {
+			e, ok := v.idx.Entries[item]
+			if !ok || e.Kind != k {
+				continue
+			}
+			packs = without(packs, base(e))
+			if on {
+				packs = append([]string{base(e)}, packs...)
+			}
+		}
+		return s.setPacks(ctx, id, packs)
+	}
+	var first error
+	for _, item := range items {
+		e, err := s.entry(id, item)
+		if err != nil || e.Kind != k {
+			continue
+		}
+		unlock := s.lock(id)
+		if err := s.renameIn(id, e.Rel, toggled(e.Rel, on)); err != nil && first == nil {
+			first = err
+		}
+		unlock()
+	}
+	if err := s.Scan(ctx, id, k); err != nil {
+		return err
+	}
+	return first
+}
+
 // SetActiveShader makes one shader pack the active one ("" turns shaders off).
 func (s *Service) SetActiveShader(ctx context.Context, id, item string) error {
 	if item == "" {
@@ -101,17 +147,21 @@ func without(list []string, s string) []string {
 // rename adds or removes the .disabled suffix.
 func (s *Service) rename(ctx context.Context, id string, e Entry, on bool) error {
 	unlock := s.lock(id)
-	from := e.Rel
-	to := strings.TrimSuffix(from, Disabled)
-	if !on {
-		to += Disabled
-	}
-	err := s.renameIn(id, from, to)
+	err := s.renameIn(id, e.Rel, toggled(e.Rel, on))
 	unlock()
 	if err != nil {
 		return err
 	}
 	return s.Scan(ctx, id, e.Kind)
+}
+
+// toggled is an item's path when turned on or off by suffix.
+func toggled(rel string, on bool) string {
+	rel = strings.TrimSuffix(rel, Disabled)
+	if !on {
+		rel += Disabled
+	}
+	return rel
 }
 
 // renameIn renames inside the item's folder only (that folder may itself be

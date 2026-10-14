@@ -42,7 +42,10 @@
     try {
       review = await api.content.review(i.id, kind, fresh);
       // Everything that can be downloaded starts picked; the preview keeps the design's sample choice.
-      picked = Object.fromEntries(review.updates.map((u, k) => [u.id, !u.blocked && (hasBridge() || k < 4)]));
+      // Updates picked on the content tab come ticked; otherwise every update that needs no manual download.
+      const want = session.updatePick;
+      session.updatePick = null;
+      picked = Object.fromEntries(review.updates.map((u, k) => [u.id, want ? want.has(u.id) : !u.blocked && (hasBridge() || k < 4)]));
       open = -1;
     } catch (e) {
       session.fail('Check updates', e);

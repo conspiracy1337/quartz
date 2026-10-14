@@ -14,16 +14,26 @@ import (
 // An end-to-end build (-tags e2e) answers the native dialogs from the folder
 // QUARTZ_E2E_DIALOGS names, so a browser driving the dev server can pick
 // files: a save lands in that folder under its suggested name, an open
-// returns the path written in its "open" file, and a folder pick the path in
+// returns the path written in its "open" file (one per line for a pick of
+// several), and a folder pick the path in
 // its "folder" file. Without the variable the real dialogs open. Release
 // builds never carry this file.
 func init() {
-	realOpen, realDir, realSave := openFileDialog, openDirDialog, saveFileDialog
+	realOpen, realOpenMany, realDir, realSave := openFileDialog, openFilesDialog, openDirDialog, saveFileDialog
 	openFileDialog = func(ctx context.Context, o wruntime.OpenDialogOptions) (string, error) {
 		if dir := e2eDialogs(); dir != "" {
 			return e2eAnswer(dir, "open"), nil
 		}
 		return realOpen(ctx, o)
+	}
+	openFilesDialog = func(ctx context.Context, o wruntime.OpenDialogOptions) ([]string, error) {
+		if dir := e2eDialogs(); dir != "" {
+			if p := e2eAnswer(dir, "open"); p != "" {
+				return strings.Split(p, "\n"), nil
+			}
+			return nil, nil
+		}
+		return realOpenMany(ctx, o)
 	}
 	openDirDialog = func(ctx context.Context, o wruntime.OpenDialogOptions) (string, error) {
 		if dir := e2eDialogs(); dir != "" {

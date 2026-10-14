@@ -662,3 +662,29 @@ func TestOptiFineShaders(t *testing.T) {
 		t.Fatalf("off: %q", got)
 	}
 }
+
+func TestBulkToggleAndDependents(t *testing.T) {
+	e := newEnv(t)
+	e.mod("api.jar", "fabric-api", "Fabric API", "")
+	e.mod("sodium.jar", "sodium", "Sodium", `,"depends":{"fabric-api":"*"}`)
+	e.mod("extra.jar", "sodium-extra", "Sodium Extra", `,"depends":{"sodium":"*"}`)
+	rows := e.list(Mods)
+	sodium, extra := byName(rows, "Sodium").ID, byName(rows, "Sodium Extra").ID
+	if got := e.svc.Dependents(e.id, []string{sodium}); strings.Join(got, ",") != "Sodium Extra" {
+		t.Fatalf("dependents of Sodium: %v", got)
+	}
+	if got := e.svc.Dependents(e.id, []string{sodium, extra}); len(got) != 0 {
+		t.Fatalf("both going: nothing is left unmet: %v", got)
+	}
+	ctx := context.Background()
+	if err := e.svc.SetEnabledMany(ctx, e.id, Mods, []string{sodium, extra}, false); err != nil {
+		t.Fatal(err)
+	}
+	rows = e.list(Mods)
+	if byName(rows, "Sodium").Enabled || byName(rows, "Sodium Extra").Enabled || !byName(rows, "Fabric API").Enabled {
+		t.Fatalf("%+v", rows)
+	}
+	if err := e.svc.SetEnabledMany(ctx, e.id, Shaders, []string{sodium}, true); !errors.Is(err, ErrOneShader) {
+		t.Fatalf("several shaders on: %v", err)
+	}
+}

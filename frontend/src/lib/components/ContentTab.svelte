@@ -1,18 +1,26 @@
+<script lang="ts" module>
+  // The sort each tab was left on, kept while the launcher runs.
+  const sorts: Partial<Record<string, string>> = {};
+</script>
+
 <script lang="ts">
   import { listKeys } from '../listkeys';
   import { api } from '../api';
   import { managed } from '../api/content';
   import type { AddResult, ContentItem, ContentKind, ContentStatus, Source } from '../api/types';
   import { hasBridge, onEvent } from '../bridge';
-  import { searchIn } from '../format';
+  import { plural, searchIn, sentenceList } from '../format';
   import { query } from '../query.svelte';
   import { revs } from '../revs.svelte';
   import { projectKindOf } from '../labels';
   import { go, href } from '../router.svelte';
+  import { pickRows } from '../selection';
   import { session } from '../session.svelte';
+  import Check from '../ui/Check.svelte';
   import Icon from '../ui/Icon.svelte';
   import Menu from '../ui/Menu.svelte';
   import SearchField from '../ui/SearchField.svelte';
+  import SplitButton from '../ui/SplitButton.svelte';
   import Toggle from '../ui/Toggle.svelte';
   import Empty from '../ui/Empty.svelte';
 
@@ -82,7 +90,36 @@
       started = true;
     }
   });
-  const shown = $derived(rows.filter((c) => (chips[chip] ?? all).test(c) && c.name.toLowerCase().includes(search.trim().toLowerCase())));
+  // Search finds names and file names; the sort (Pandora's, Prism's) is kept per tab.
+  let sortBy = $state({ ...sorts });
+  const sort = $derived(sortBy[kind] ?? '');
+  function setSort(v: string) {
+    sortBy[kind] = sorts[kind] = v;
+    sortMenu = null;
+  }
+  let sortMenu = $state<{ x: number; y: number } | null>(null);
+  /** A menu's place under the button that opens it, right-aligned. */
+  function below(e: MouseEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return { x: r.right - 240, y: r.bottom + 4 };
+  }
+  const SORTS = $derived([
+    { value: '', label: kind === 'resourcepacks' ? 'Load order' : 'Name' },
+    { value: 'added', label: 'Recently added' }, { value: 'size', label: 'Size' }, { value: 'enabled', label: 'Enabled first' },
+  ]);
+  const sortLabel = $derived(SORTS.find((o) => o.value === sort)?.label ?? '');
+  const ORDER: Record<string, (a: ContentItem, b: ContentItem) => number> = {
+    added: (a, b) => (b.added ?? 0) - (a.added ?? 0),
+    size: (a, b) => (b.size ?? 0) - (a.size ?? 0),
+    enabled: (a, b) => Number(isOn(b)) - Number(isOn(a)),
+  };
+  const matches = (c: ContentItem, q: string) => c.name.toLowerCase().includes(q) || !!c.file?.toLowerCase().includes(q);
+  const shown = $derived.by(() => {
+    const q = search.trim().toLowerCase();
+    const out = rows.filter((c) => (chips[chip] ?? all).test(c) && matches(c, q));
+    const by = ORDER[sort];
+    return by ? out.sort(by) : out;
+  });
   const isOn = (c: ContentItem) => (cfg.exclusive ? active === c.id : c.enabled);
 
   async function flip(c: ContentItem) {
@@ -92,12 +129,74 @@
         await api.content.setActiveShader(instanceId, active ?? '');
         return;
       }
+      const need = c.enabled ? await needs([c.id]) : '';
       c.enabled = !c.enabled;
       await api.content.setEnabled(instanceId, kind, c.id, c.enabled);
+      if (need) session.notify({ subject: c.name, text: `is off. ${need}.` });
     } catch (e) {
       c.enabled = !c.enabled;
       session.fail(c.name, e);
     }
+  }
+
+  /** "Sodium Extra needs it": what turning these mods off or removing them leaves unmet (Prism asks). */
+  async function needs(ids: string[]): Promise<string> {
+    if (kind !== 'mods') return '';
+    const names = await api.content.dependents(instanceId, ids).catch(() => [] as string[]);
+    if (!names.length) return '';
+    return `${sentenceList(names.length > 3 ? [...names.slice(0, 2), `${names.length - 2} more`] : names)} ${names.length === 1 ? 'needs' : 'need'} ${ids.length === 1 ? 'it' : 'them'}`;
+  }
+
+  // Selecting rows (the update review's checkbox, over the row's icon) for bulk
+  // actions: Shift-click picks a range, Ctrl+A everything shown, Esc clears.
+  const selectable = $derived(isManaged);
+  let picked = $state<Record<string, boolean>>({});
+  let anchor: string | null = null;
+  let shiftHeld = false;
+  const selected = $derived(rows.filter((c) => picked[c.id]));
+  $effect(() => {
+    void kind;
+    void instanceId;
+    picked = {};
+  });
+  function pick(c: ContentItem, on: boolean) {
+    anchor = pickRows(picked, shown.map((x) => x.id), c.id, on, anchor, shiftHeld);
+  }
+  $effect(() => {
+    if (!selected.length) return;
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !session.overlay) picked = {};
+    };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  });
+  const updatable = $derived(selected.filter((c) => c.status?.kind === 'update'));
+  async function bulkSet(on: boolean, list = selected) {
+    const ids = list.map((c) => c.id);
+    try {
+      const need = on ? '' : await needs(ids);
+      await api.content.setEnabledMany(instanceId, kind, ids, on);
+      picked = {};
+      if (need) session.notify({ subject: plural(ids.length, cfg.noun.replace(/s$/, '')), text: `turned off. ${need}.` });
+    } catch (e) {
+      session.fail(on ? 'Turn on' : 'Turn off', e);
+    }
+  }
+  async function bulkRemove() {
+    const ids = selected.map((c) => c.id);
+    try {
+      const need = await needs(ids);
+      const token = await api.content.remove(instanceId, kind, ids);
+      picked = {};
+      session.notify({ subject: plural(ids.length, cfg.noun.replace(/s$/, '')), text: need ? `removed. ${need}.` : 'removed', undo: () => void api.content.undo(instanceId, token).catch((e: unknown) => session.fail('Undo', e)) });
+    } catch (e) {
+      session.fail('Remove', e);
+    }
+  }
+  function bulkUpdate() {
+    session.updatePick = new Set(updatable.map((c) => c.id));
+    picked = {};
+    review();
   }
 
   // "Check updates" checks, then opens the review; with updates already found it
@@ -174,19 +273,23 @@
 
   // The row's "…" menu (composed from the Accounts "…" menu).
   let menu = $state<{ item: ContentItem; x: number; y: number } | null>(null);
-  function openMenu(e: MouseEvent, item: ContentItem) {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    menu = { item, x: r.right - 240, y: r.bottom + 4 };
-  }
+  const openMenu = (e: MouseEvent, item: ContentItem) => (menu = { item, ...below(e) });
   // Act first: closing the menu ends the block its item comes from.
   function act(fn: () => Promise<unknown>, what: string) {
     fn().catch((e: unknown) => session.fail(what, e));
     menu = null;
   }
   async function remove(c: ContentItem) {
+    const need = await needs([c.id]);
     const token = await api.content.remove(instanceId, kind, [c.id]);
-    session.notify({ subject: c.name, text: 'was removed', undo: () => void api.content.undo(instanceId, token).catch((e: unknown) => session.fail('Undo', e)) });
+    session.notify({ subject: c.name, text: need ? `was removed. ${need}.` : 'was removed', undo: () => void api.content.undo(instanceId, token).catch((e: unknown) => session.fail('Undo', e)) });
   }
+  /** A missing dependency's row menu installs it (XMCL, Prism): find its project, then the usual Install dialog. */
+  async function installDep(depId: string) {
+    const ref = await api.content.findMod(depId);
+    session.open({ kind: 'install', ref, source: ref.startsWith('cf:') ? 'curseforge' : 'modrinth', instanceId, content: 'mods' });
+  }
+  const unusedLibs = $derived(kind === 'mods' ? rows.filter((c) => c.enabled && c.status?.kind === 'problem' && c.status.problem === 'library') : []);
   const enabledIds = () => rows.filter((c) => c.enabled).map((c) => c.id);
   function move(c: ContentItem, by: number) {
     const ids = enabledIds();
@@ -199,7 +302,7 @@
 
   // Resource packs: drag an enabled row to reorder (the hint says so). The row
   // follows the pointer and the rows it passes make room; no new elements.
-  const reorderable = $derived(kind === 'resourcepacks' && chip === 0 && search.trim() === '');
+  const reorderable = $derived(kind === 'resourcepacks' && chip === 0 && search.trim() === '' && sort === '');
   let drag = $state<{ id: string; y0: number; dy: number; h: number; from: number; to: number } | null>(null);
   function dragStart(e: PointerEvent, c: ContentItem) {
     if (!reorderable || !c.enabled || e.button !== 0 || (e.target as HTMLElement).closest('button')) return;
@@ -261,14 +364,32 @@
       }
       return;
     }
-    let world = '';
-    if (kind === 'datapacks') {
-      const worlds = info.data?.worlds ?? [];
-      world = chip > 0 ? (chips[chip]?.label ?? '') : worlds.length === 1 ? worlds[0]! : '';
-      if (!world) return session.notify({ tone: 'error', subject: 'Pick a world first', text: 'Choose its chip, then drop the files again.' });
-    }
+    const world = worldFor('drop the files again');
+    if (world === null) return;
     try {
       announce(await api.content.addDropped(dropId, instanceId, kind, world));
+    } catch (e) {
+      session.fail('Add files', e);
+    }
+  }
+  /** The world added data packs go to: the chosen chip's, or the only one; null (and a toast) when unclear. */
+  function worldFor(retry: string): string | null {
+    if (kind !== 'datapacks') return '';
+    const worlds = info.data?.worlds ?? [];
+    const world = chip > 0 ? (chips[chip]?.label ?? '') : worlds.length === 1 ? worlds[0]! : '';
+    if (!world) session.notify({ tone: 'error', subject: 'Pick a world first', text: `Choose its chip, then ${retry}.` });
+    return world || null;
+  }
+  // Add's ▾: files from disk (for when dragging in doesn't work), and on Mods
+  // turning off library mods nothing uses.
+  let addMenu = $state<{ x: number; y: number } | null>(null);
+  const openAddMenu = (e: MouseEvent) => (addMenu = below(e));
+  async function addFiles() {
+    addMenu = null;
+    const world = worldFor('add the files again');
+    if (world === null) return;
+    try {
+      announce(await api.content.addFiles(instanceId, kind, world));
     } catch (e) {
       session.fail('Add files', e);
     }
@@ -298,22 +419,23 @@
 
 <div class="page" style="gap: 12px; padding-top: 16px; font-family: var(--font); color: var(--text)">
   <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
-    <SearchField bind:value={search} label="Search" placeholder={searchIn(cfg.noun, items.data?.length)} style="flex: 0 1 280px" />
+    <SearchField bind:value={search} label="Search" placeholder={searchIn(cfg.noun, items.data?.length)} style="flex: 0 1 {isManaged ? 260 : 280}px" />
     <div style="display: flex; gap: 6px; flex-wrap: wrap">
       {#each chips as ch, i (ch.label)}
         <button class="chip" class:on={chip === i} onclick={() => (chip = i)} aria-pressed={chip === i}>{ch.label}<span class="count">{rows.filter(ch.test).length}</span></button>
       {/each}
     </div>
     <div style="flex: 1 1 0"></div>
+    {#if isManaged}<button class="btn btn-icon" aria-label="Sort {cfg.noun}: {sortLabel}" title="Sort: {sortLabel}" aria-haspopup="menu" aria-expanded={!!sortMenu} onclick={(e) => (sortMenu = below(e))}><Icon name="up-down" size={14} /></button>{/if}
     <button class="btn" onclick={secondary}>{cfg.secondary}</button>
     {#if cfg.projects}
-      <a href={href({ name: 'browse', type: projectKindOf(kind), instance: instanceId })} class="btn btn-accent"><Icon name="plus" size={14} sw={2} />{cfg.primary}</a>
+      <SplitButton accent href={href({ name: 'browse', type: projectKindOf(kind), instance: instanceId })} menuLabel="More ways to add {cfg.noun}" expanded={!!addMenu} onmenu={openAddMenu}><Icon name="plus" size={14} sw={2} />{cfg.primary}</SplitButton>
     {:else}
       <button class="btn btn-accent" onclick={primary}><Icon name="plus" size={14} sw={2} />{cfg.primary}</button>
     {/if}
   </div>
   {#if hint}<p class="small faint" style="margin: 0">{hint}</p>{/if}
-  <div class="list" use:listKeys>
+  <div class="list" class:selecting={selected.length > 0} use:listKeys>
     {#if items.data && !checking}
       {#each shown as c (c.id)}
         {@const on = isOn(c)}
@@ -321,7 +443,10 @@
         <div class="row crow" class:off={cfg.toggles && !on} class:drag={drag?.id === c.id} style={drag ? `transform: translateY(${shift(c)}px)` : undefined}
           role={reorderable && c.enabled ? 'listitem' : undefined} onpointerdown={(e) => dragStart(e, c)} onpointermove={dragMove} onpointerup={dragEnd} onpointercancel={dragEnd} onclickcapture={swallow} ondragstart={(e) => reorderable && e.preventDefault()}>
           <span>{#if cfg.toggles}<Toggle {on} label="Enable {c.name}" onchange={() => flip(c)} />{/if}</span>
-          <span class="media dim" style="background: {c.art.background}">{c.art.initial ?? ''}</span>
+          <span class="pickcell">
+            <span class="media dim" style="background: {c.art.background}">{c.art.initial ?? ''}</span>
+            {#if selectable}<span class="pick" onclickcapture={(e) => (shiftHeld = e.shiftKey)}><Check on={!!picked[c.id]} label="Select {c.name}" onchange={(v) => pick(c, v)} /></span>{/if}
+          </span>
           <a href={cfg.projects && c.ref ? href({ name: 'project', id: c.ref }) : undefined} class="dim" style="min-width: 0; text-decoration: none"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></a>
           <span class="c-stat">
             {#if b}<span class="badge {b.cls}">{b.text}</span>{/if}
@@ -348,7 +473,37 @@
       {/each}
     {/if}
   </div>
+  {#if selected.length}
+    <!-- Composed from the update review's footer: what is selected, and what to do with it. -->
+    <div class="bulk">
+      <span class="small faint tnum" style="margin-right: auto">{selected.length} selected</span>
+      <button class="btn" onclick={() => (picked = {})}>Cancel</button>
+      <button class="btn" onclick={bulkRemove}>Remove</button>
+      {#if cfg.toggles}
+        <button class="btn" onclick={() => bulkSet(false)}>Turn off</button>
+        {#if !cfg.exclusive}<button class="btn" onclick={() => bulkSet(true)}>Turn on</button>{/if}
+      {/if}
+      {#if updatable.length}<button class="btn btn-accent" onclick={bulkUpdate}>Update {updatable.length}</button>{/if}
+    </div>
+  {/if}
 </div>
+
+{#if sortMenu}
+  <Menu x={sortMenu.x} y={sortMenu.y} label="Sort {cfg.noun}" title="Sort by" onclose={() => (sortMenu = null)}>
+    {#each SORTS as o (o.value)}
+      <button class="mi" role="menuitem" aria-current={o.value === sort} onclick={() => setSort(o.value)}>{#if o.value === sort}<Icon name="check" size={14} />{:else}<span></span>{/if}<span>{o.label}</span><span></span></button>
+    {/each}
+  </Menu>
+{/if}
+
+{#if addMenu}
+  <Menu x={addMenu.x} y={addMenu.y} label="More ways to add {cfg.noun}" onclose={() => (addMenu = null)}>
+    <button class="mi" role="menuitem" onclick={addFiles}><Icon name="file" size={14} /><span>From file…</span><span></span></button>
+    {#if unusedLibs.length}
+      <button class="mi" role="menuitem" onclick={() => { addMenu = null; void bulkSet(false, unusedLibs); }}><Icon name="stop" size={14} /><span>Turn off unused libraries</span><span class="small faint">{unusedLibs.length}</span></button>
+    {/if}
+  </Menu>
+{/if}
 
 {#if menu}
   {@const c = menu.item}
@@ -377,6 +532,10 @@
       <button class="mi" role="menuitem" onclick={() => act(() => move(c, -1), 'Move up')}><Icon name="chevron-up" size={14} /><span>Move up</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => move(c, 1), 'Move down')}><Icon name="chevron-down" size={14} /><span>Move down</span><span></span></button>
     {/if}
+    {#if c.status?.kind === 'problem' && c.status.problem === 'missing' && c.status.depId}
+      {@const dep = c.status.depId}
+      <button class="mi" role="menuitem" onclick={() => act(() => installDep(dep), 'Install')}><Icon name="download" size={14} /><span>Install {c.status.label.replace(/^Needs /, '')}</span><span></span></button>
+    {/if}
     {#if cfg.projects && c.ref}
       {@const ref = c.ref}
       <button class="mi" role="menuitem" onclick={() => act(async () => { session.browseTarget = instanceId; go({ name: 'project', id: ref, tab: 'versions' }); }, 'Change version')}><Icon name="refresh" size={14} /><span>Change version…</span><span></span></button>
@@ -400,6 +559,11 @@
   .c-stat{display:flex;justify-content:flex-end;gap:6px;min-width:0}
   .src{width:20px;height:20px;border-radius:4px;display:grid;place-items:center;font-family:var(--mono);font-size:10px;font-weight:500;background:var(--raise);color:var(--muted)}
   .media{width:32px;height:32px;border-radius:6px;display:grid;place-items:center;font-weight:600;font-size:13px;color:#0a0a0b}
+  /* The selection checkbox sits over the icon: shown on hover or focus, and on every row once something is selected. */
+  .pickcell{position:relative;width:32px;height:32px}
+  .pick{position:absolute;inset:0;display:grid;place-items:center;border-radius:6px;background:var(--raise);opacity:0}
+  .crow:hover .pick,.pick:focus-within,.selecting .pick{opacity:1}
+  .bulk{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:8px;align-items:center;padding:12px 0;background:var(--bg)}
   /* Dragging a resource pack: the held row rides above the others, which slide to make room. */
   .crow[role="listitem"]{cursor:grab}
   .crow.drag{position:relative;z-index:1;cursor:grabbing;background:var(--raise);user-select:none}

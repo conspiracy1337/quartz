@@ -411,3 +411,26 @@ func (p presence) find(src modplatform.Source, id string) (string, Entry, *Ident
 	it, ok := p.byID[modplatform.Key(src, id)]
 	return it.item, it.e, it.ident, ok
 }
+
+// ErrNoProject means no platform knows a mod id as a project.
+var ErrNoProject = errors.New("content: couldn't find that mod on Modrinth or CurseForge. Search for it in Browse")
+
+// FindMod finds the project for a mod id a dependency names ("fabric-api",
+// "cloth_config"), so a missing dependency can be installed from its row.
+// Mod ids usually match the project's slug.
+func (s *Service) FindMod(ctx context.Context, modID string) (string, error) {
+	slug := slugKey(modID)
+	if depName(modID) == "Fabric API" {
+		slug = "fabric-api" // its modules (fabric-rendering-v1, …)
+	}
+	for _, p := range s.d.Platforms {
+		cat, ok := p.(modplatform.Catalog)
+		if !ok || !cat.Ready() {
+			continue
+		}
+		if id, err := cat.Slug(ctx, modplatform.TypeMod, slug); err == nil && id != "" {
+			return modplatform.RefOf(p.Source(), id).String(), nil
+		}
+	}
+	return "", ErrNoProject
+}

@@ -90,8 +90,13 @@ export type ContentStatus =
   | { kind: 'outdated'; label: string }
   | { kind: 'world'; world: string }
   | { kind: 'offline' }
-  /** A missing dependency, a conflict, a duplicate, or a library nothing needs. */
-  | { kind: 'problem'; label: string; tone: 'warn' | 'danger' | 'info' };
+  /**
+   * A mod for another loader or Minecraft, a missing or wrong-version dependency, a conflict,
+   * a duplicate, a library nothing needs, or a file that can't be read. `problem` names which
+   * (loader | missing | conflict | version | game | duplicate | library | unreadable); a missing
+   * dependency's mod id is `depId`.
+   */
+  | { kind: 'problem'; label: string; tone: 'warn' | 'danger' | 'info'; problem?: string; depId?: string };
 
 export interface ContentItem {
   id: string;
@@ -112,6 +117,10 @@ export interface ContentItem {
   project?: string;
   /** Its reference for the launcher's own project page (identified items). */
   ref?: string;
+  /** The file's name, its size in bytes and when it appeared (unix seconds), for search and sorting. */
+  file?: string;
+  size?: number;
+  added?: number;
   /** A mod a local server leaves out. */
   clientOnly?: boolean;
 }

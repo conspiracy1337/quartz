@@ -32,7 +32,7 @@ function toStatus(s: GoRow['status']): ContentStatus | undefined {
     case 'unknown': return { kind: 'unknown' };
     case 'outdated': return { kind: 'outdated', label: s.label ?? '' };
     case 'world': return { kind: 'world', world: s.world ?? '' };
-    case 'problem': return { kind: 'problem', label: s.label ?? '', tone: (s.tone ?? 'warn') as 'warn' | 'danger' | 'info' };
+    case 'problem': return { kind: 'problem', label: s.label ?? '', tone: (s.tone ?? 'warn') as 'warn' | 'danger' | 'info', ...(s.problem ? { problem: s.problem } : {}), ...(s.depId ? { depId: s.depId } : {}) };
   }
   return undefined;
 }
@@ -41,6 +41,7 @@ export function toItem(r: GoRow): ContentItem {
   const status = toStatus(r.status);
   return {
     id: r.id, name: r.name, sub: r.sub, meta: r.version, art: contentArt(r.name, r.icon), source: r.source as Source, enabled: r.enabled,
+    file: r.file, size: r.size, added: r.added,
     ...(r.locked ? { locked: true } : {}), ...(status ? { status } : {}), ...(r.group ? { group: r.group } : {}), ...(r.project ? { project: r.project } : {}), ...(r.ref ? { ref: r.ref } : {}), ...(r.clientOnly ? { clientOnly: true } : {}),
   };
 }
@@ -68,6 +69,9 @@ class MockContent {
   setEnabled = (_id: string, kind: ContentKind, item: string, on: boolean) => {
     const c = this.find(kind, item);
     if (c) c.enabled = on;
+  };
+  setEnabledMany = (_id: string, kind: ContentKind, items: string[], on: boolean) => {
+    for (const id of items) this.setEnabled(_id, kind, id, on);
   };
   setActiveShader = (_id: string, item: string) => {
     for (const c of this.items.shaders) c.enabled = c.id === item;
@@ -125,6 +129,11 @@ export const contentApi = {
     kind === 'worlds' ? worldsApi.list(id) : kind === 'servers' ? serversApi.list(id) : revs.load('content', () => list(id, kind)),
   info: (id: string) => revs.load('content', bridged(() => Go.Info(id), () => mock.info(id))),
   setEnabled: edit(bridged(Go.SetEnabled, mock.setEnabled)),
+  setEnabledMany: edit(bridged(Go.SetEnabledMany, mock.setEnabledMany)),
+  /** The enabled mods that need something these items provide (to say so when they go). */
+  dependents: bridged(Go.Dependents, (_id: string, _items: string[]): string[] => []),
+  /** The project ref ("mr:…") for a mod id a dependency names. */
+  findMod: bridged(Go.FindMod, (modId: string) => `mr:${modId}`),
   setActiveShader: edit(bridged(Go.SetActiveShader, mock.setActiveShader)),
   setPackOrder: edit(bridged(Go.SetPackOrder, mock.setPackOrder)),
   setLocked: edit(bridged(Go.SetLocked, mock.setLocked)),
@@ -134,6 +143,8 @@ export const contentApi = {
   showInFolder: bridged(Go.ShowInFolder, (_id: string, _item: string) => undefined),
   /** Adds the files of a drop (Go keeps the paths; the UI only ever has the drop id). */
   addDropped: edit(bridged(Go.AddDropped, (_drop: string, _id: string, _kind: ContentKind, _world: string): AddResult => ({ added: [], rejected: [] }))),
+  /** Lets the player pick files to add (Go opens the dialog; no path reaches the UI). */
+  addFiles: edit(bridged(Go.AddFiles, (_id: string, _kind: ContentKind, _world: string): AddResult => ({ added: [], rejected: [] }))),
   /** Checks for updates; `fresh` skips the last check of the past few minutes. */
   review: async (id: string, kind: ContentKind, fresh = false): Promise<UpdateReview> => {
     const key = `${id}/${kind}`;

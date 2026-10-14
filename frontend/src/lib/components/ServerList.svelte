@@ -5,6 +5,7 @@
   import { query } from '../query.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
+  import SplitButton from '../ui/SplitButton.svelte';
   import Tile from '../ui/Tile.svelte';
   import Empty from '../ui/Empty.svelte';
 
@@ -66,10 +67,8 @@
           <span class="c-ver"><span class="badge" class:badge-danger={!s.online}>{s.version}</span></span>
           <span class="c-play small tnum trunc" style="color: {s.online ? 'var(--text)' : 'var(--faint)'}">{players(s)}</span>
           <span class="s-ping"><span class="s-ms">{s.pingMs !== undefined ? `${s.pingMs} ms` : ''}</span><span class="ping {pingClass(s.pingMs)}" aria-hidden="true"><i style="height: 4px"></i><i style="height: 6px"></i><i style="height: 8px"></i><i style="height: 11px"></i></span></span>
-          <span class="split">
-            <button class="btn btn-sm" class:btn-accent={s.online} onclick={() => join(s, s.instances[0])}>Join</button>
-            <button class="btn btn-sm" onclick={() => (open = open === s.id ? null : s.id)} aria-expanded={open === s.id} aria-label="Join {s.name} with another instance"><Icon name="chevron-down" size={10} sw={2.4} /></button>
-          </span>
+          <SplitButton size="sm" accent={s.online} menuAccent={false} style="justify-self: end" onclick={() => join(s, s.instances[0])}
+            onmenu={() => (open = open === s.id ? null : s.id)} expanded={open === s.id} menuLabel="Join {s.name} with another instance">Join</SplitButton>
         </div>
       {:else}
         <Empty text={servers.data.length ? 'No servers are online right now.' : 'Servers from all your instances show up here.'} />
@@ -118,8 +117,5 @@
   .ping{display:inline-flex;align-items:flex-end;gap:2px;height:11px}
   .ping i{width:3px;background:var(--line-2);border-radius:1px}
   .ping.p4 i,.ping.p3 i:nth-child(-n+3),.ping.p2 i:nth-child(-n+2),.ping.p1 i:nth-child(1){background:var(--accent)}
-  .split{display:inline-flex;justify-self:end}
-  .split .btn:first-child{border-radius:6px 0 0 6px}
-  .split .btn:last-child{border-radius:0 6px 6px 0;border-left:0;width:24px;padding:0}
   .jm{position:absolute;right:var(--inset);z-index:5;min-width:240px}
 </style>
