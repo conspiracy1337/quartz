@@ -4,7 +4,8 @@
   import { SETTINGS_TAB_LABELS, instanceMeta } from '../labels';
   import { query } from '../query.svelte';
   import { go, router, type Route } from '../router.svelte';
-  import { registry } from '../settings/registry';
+  import { descText, registry } from '../settings/registry';
+  import { marks, rank } from '../fuzzy';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
   import type { IconName } from '../ui/icons';
@@ -16,7 +17,8 @@
   let { mode }: Props = $props();
 
   const SHOWN = 5; // instance rows, as the design's switcher shows
-  interface Item { key: string; group: string; label: string; icon: IconName; hint?: string; run: () => void }
+  /** extra: more text the query may match (a setting's description and group). */
+  interface Item { key: string; group: string; label: string; icon: IconName; hint?: string; extra?: string; run: () => void }
   const nav = (r: Route) => () => go(r);
   // Mod update actions: the design's sample instance in the preview, the most recent instance in the app.
   const recent = query(() => (hasBridge() ? api.instances.first() : Promise.resolve(undefined)));
@@ -67,7 +69,7 @@
     { key: 'data-folder', group: 'Actions', label: 'Open data folder', icon: 'folder', run: () => void api.app.openDataFolder() },
     { key: 'new', group: 'Actions', label: 'Create a new instance', icon: 'plus', run: nav({ name: 'new-instance' }) },
     { key: 'shortcuts', group: 'Actions', label: 'Show keyboard shortcuts', icon: 'settings-simple', run: () => session.open({ kind: 'shortcuts' }) },
-    ...registry.map((d) => ({ key: d.id, group: 'Settings', label: d.title, icon: 'settings-simple' as const, hint: `Settings, ${SETTINGS_TAB_LABELS[d.tab]}`, run: nav({ name: 'settings', tab: d.tab }) })),
+    ...registry.map((d) => ({ key: d.id, group: 'Settings', label: d.title, icon: 'settings-simple' as const, hint: `Settings, ${SETTINGS_TAB_LABELS[d.tab]}`, extra: `${descText(d)} ${d.group}`, run: nav({ name: 'settings', tab: d.tab }) })),
   ]);
 
   const instances = query(() => api.instances.list());
@@ -77,15 +79,18 @@
   $effect(() => input.focus());
 
   const needle = $derived(q.trim().toLowerCase());
-  const commands = $derived(COMMANDS.filter((c) => !needle || c.label.toLowerCase().includes(needle)).slice(0, 8));
-  const insts = $derived((instances.data ?? []).filter((i) => !needle || `${i.name} ${instanceMeta(i)}`.toLowerCase().includes(needle)));
+  // Best matches first (see fuzzy.ts), then kept together by group so the arrow keys
+  // walk the rows in the order they show.
+  const ranked = $derived(rank(COMMANDS, needle, (c) => c.label, (c) => c.extra ?? '').slice(0, 8));
+  const groups = $derived([...new Set(ranked.map((r) => r.item.group))]);
+  const commands = $derived(groups.flatMap((g) => ranked.filter((r) => r.item.group === g)));
+  const insts = $derived(rank(instances.data ?? [], needle, (i) => i.name, instanceMeta));
   const count = $derived(mode === 'commands' ? commands.length : Math.min(insts.length, SHOWN));
-  const groups = $derived([...new Set(commands.map((c) => c.group))]);
 
   // Read the row before closing: closing unmounts the palette and drops its props.
   function runAt(i: number, open = false) {
-    const cmd = mode === 'commands' ? commands[i] : undefined;
-    const inst = mode === 'commands' ? undefined : insts[i];
+    const cmd = mode === 'commands' ? commands[i]?.item : undefined;
+    const inst = mode === 'commands' ? undefined : insts[i]?.item;
     session.close();
     if (cmd) cmd.run();
     else if (inst) open ? go({ name: 'instance', id: inst.id, tab: 'overview' }) : session.play(inst.id);
@@ -104,11 +109,6 @@
     void needle;
     sel = 0;
   });
-  /** Splits a label around the query for highlighting. */
-  function hl(label: string): [string, string, string] {
-    const at = needle ? label.toLowerCase().indexOf(needle) : -1;
-    return at < 0 ? [label, '', ''] : [label.slice(0, at), label.slice(at, at + needle.length), label.slice(at + needle.length)];
-  }
 </script>
 
 <div class="pal-scrim" role="presentation" onpointerdown={(e) => e.target === e.currentTarget && session.close()}>
@@ -123,10 +123,9 @@
       <div role="listbox" aria-label="Results">
         {#each groups as g (g)}
           <div class="grp-c"><div class="gl">{g}</div>
-            {#each commands as c, i (c.key)}
+            {#each commands as { item: c, at }, i (c.key)}
               {#if c.group === g}
-                {@const [a, m, b] = hl(c.label)}
-                <button class="pi" class:on={sel === i} role="option" aria-selected={sel === i} onpointermove={() => (sel = i)} onclick={() => runAt(i)}><Icon name={c.icon} /><span class="trunc">{a}{#if m}<mark>{m}</mark>{/if}{b}</span>{#if sel === i && !c.hint}<span class="k"><span class="kbd">Enter</span></span>{:else}<span class="small faint">{c.hint ?? ''}</span>{/if}</button>
+                <button class="pi" class:on={sel === i} role="option" aria-selected={sel === i} onpointermove={() => (sel = i)} onclick={() => runAt(i)}><Icon name={c.icon} /><span class="trunc">{#each marks(c.label, at) as m, k (k)}{#if m.hit}<mark>{m.text}</mark>{:else}{m.text}{/if}{/each}</span>{#if sel === i && !c.hint}<span class="k"><span class="kbd">Enter</span></span>{:else}<span class="small faint">{c.hint ?? ''}</span>{/if}</button>
               {/if}
             {/each}
           </div>
@@ -135,7 +134,7 @@
       <div class="pfoot-p"><span><span class="kbd">↑</span> <span class="kbd">↓</span> move</span><span><span class="kbd">Enter</span> run</span><span><span class="kbd">Tab</span> switch to instances</span><button class="link" style="margin-left: auto" onclick={() => session.open({ kind: 'shortcuts' })}><span class="kbd">?</span> shortcuts</button></div>
     {:else}
       <div role="listbox" aria-label="Instances" style="padding: 8px">
-        {#each insts.slice(0, SHOWN) as r, i (r.id)}
+        {#each insts.slice(0, SHOWN) as { item: r }, i (r.id)}
           <button class="pi pi-inst" class:on={sel === i} role="option" aria-selected={sel === i} onpointermove={() => (sel = i)} onclick={() => runAt(i)}>
             <Tile art={r.art} icon={r.icon} />
             <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small faint" style="display: block">{instanceMeta(r)}, {r.lastPlayed ? `played ${ago(r.lastPlayed)}` : 'never played'}</span></span>
