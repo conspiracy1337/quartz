@@ -201,3 +201,40 @@ func TestSyncMigratesShareLabels(t *testing.T) {
 		t.Fatalf("%+v %v", in.Sync, in.Shares)
 	}
 }
+
+func TestPlaytimeCarriesSeconds(t *testing.T) {
+	var in Instance
+	for range 4 {
+		in.AddPlaytime(20 * time.Second) // a quick test start, four times
+	}
+	if in.PlaytimeMin != 1 || in.PlaytimeSec != 20 {
+		t.Fatalf("%d min %d s", in.PlaytimeMin, in.PlaytimeSec)
+	}
+	in.AddPlaytime(90 * time.Minute)
+	if in.PlaytimeMin != 91 || in.PlaytimeSec != 20 {
+		t.Fatalf("%d min %d s", in.PlaytimeMin, in.PlaytimeSec)
+	}
+}
+
+func TestCreateKeepsNamesApart(t *testing.T) {
+	s, err := Open(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, n := range []string{"1.21.4", "1.21.4", "1.21.4", "Survival"} {
+		in, err := s.Create(CreateRequest{Name: n, Minecraft: "1.21.4"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, in.Name)
+	}
+	if strings.Join(names, "|") != "1.21.4|1.21.4 (2)|1.21.4 (3)|Survival" {
+		t.Fatalf("%q", names)
+	}
+	long := strings.Repeat("x", maxName)
+	_, _ = s.Create(CreateRequest{Name: long, Minecraft: "1.21.4"})
+	if in, _ := s.Create(CreateRequest{Name: long, Minecraft: "1.21.4"}); len([]rune(in.Name)) > maxName || !strings.HasSuffix(in.Name, " (2)") {
+		t.Fatalf("%q", in.Name)
+	}
+}

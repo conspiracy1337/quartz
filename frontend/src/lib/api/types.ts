@@ -23,6 +23,7 @@ export interface InstanceSummary {
   tags: string[];
   hasServers: boolean;
   lastPlayed?: number;
+  created: number;
   playtimeMin: number;
   running: boolean;
 }
@@ -45,7 +46,6 @@ export interface Instance extends InstanceSummary {
   counts: Record<'mods' | 'resourcepacks' | 'shaders' | 'datapacks' | 'worlds' | 'servers', number>;
   java: string;
   memoryMB: { min: number; max: number };
-  created: number;
   folder: string;
   /** The game folder was moved outside the data folder. */
   moved: boolean;

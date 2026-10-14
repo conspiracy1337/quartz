@@ -60,6 +60,9 @@ var (
 type Hooks struct {
 	GameStarted func(onGameStart string)
 	AllExited   func()
+	// AfterExitFailed reports the player's after-exit command failing, which
+	// happens with no launch panel open to show it.
+	AfterExitFailed func(instance string, err error)
 }
 
 // Sessions hands out the account and session to launch with (id "" means
@@ -420,7 +423,11 @@ func (p *pipeline) run(ctx context.Context) (int, error) {
 	} else {
 		p.set(StageJava, "Java "+rt.Version)
 	}
-	for _, warn := range []string{javaWarn, l.lowMemory(mem.Max)} {
+	var libWarn string
+	if missing := missingLibraries(p.eff); len(missing) > 0 {
+		libWarn = "system " + strings.Join(missing, " and ") + " not found"
+	}
+	for _, warn := range []string{javaWarn, libWarn, l.lowMemory(mem.Max)} {
 		if warn != "" {
 			p.mu.Lock()
 			p.details[StageJava] += ", " + warn

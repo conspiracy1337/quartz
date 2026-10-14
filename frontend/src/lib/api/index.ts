@@ -34,8 +34,8 @@ export type { AppInfo, CustomCSSState, Settings } from './system';
 
 const serve = preview;
 
-const summary = ({ id, name, art, icon, minecraft, loader, kind, group, tags, hasServers, lastPlayed, playtimeMin, running }: Instance): InstanceSummary =>
-  ({ id, name, art, minecraft, kind, tags, hasServers, playtimeMin, running, ...(icon ? { icon } : {}), ...(group ? { group } : {}), ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
+const summary = ({ id, name, art, icon, minecraft, loader, kind, group, tags, hasServers, lastPlayed, created, playtimeMin, running }: Instance): InstanceSummary =>
+  ({ id, name, art, minecraft, kind, tags, hasServers, created, playtimeMin, running, ...(icon ? { icon } : {}), ...(group ? { group } : {}), ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
 
 const byId = (id: string) => inst.instances.find((i) => i.id === id) ?? inst.instances[0]!;
 

@@ -81,6 +81,7 @@ type InstanceSummary struct {
 	Tags        []string     `json:"tags"`
 	HasServers  bool         `json:"hasServers"`
 	LastPlayed  int64        `json:"lastPlayed,omitempty"` // unix ms
+	Created     int64        `json:"created"`              // unix ms
 	PlaytimeMin int          `json:"playtimeMin"`
 	Running     bool         `json:"running"`
 }
@@ -100,7 +101,6 @@ type InstanceView struct {
 	JavaAuto          string            `json:"javaAuto"`      // what "Automatic" picks, e.g. "Java 21"
 	SandboxPreset     string            `json:"sandboxPreset"` // standard | strict | custom
 	MemoryMB          MemoryRange       `json:"memoryMB"`
-	Created           int64             `json:"created"`
 	Folder            string            `json:"folder"`
 	Moved             bool              `json:"moved"` // the game folder is outside the data folder
 	Notes             string            `json:"notes"`
@@ -141,7 +141,7 @@ func (s *Instances) guard(id string) error {
 func (s *Instances) summary(in instance.Instance) InstanceSummary {
 	v := InstanceSummary{
 		ID: in.ID, Name: in.Name, Art: in.Art, Icon: in.Icon, Minecraft: in.Minecraft, Kind: "vanilla",
-		Group: in.Group, Tags: in.Tags, PlaytimeMin: in.PlaytimeMin, Running: s.d.Running(in.ID),
+		Group: in.Group, Tags: in.Tags, PlaytimeMin: in.PlaytimeMin, Running: s.d.Running(in.ID), Created: in.Created.UnixMilli(),
 		HasServers: s.d.Servers != nil && s.d.Servers.Count(in.ID) > 0,
 	}
 	if v.Tags == nil {
@@ -175,7 +175,7 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 	return InstanceView{
 		InstanceSummary: s.summary(in),
 		Sandboxed:       in.Sandbox.On, SandboxPreset: string(in.Sandbox.Preset), Java: java, JavaAuto: auto, MemoryMB: MemoryRange{Min: eff.MemoryMinMB, Max: eff.MemoryMaxMB},
-		Created: in.Created.UnixMilli(), Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
+		Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),
 		DiscordStatus: !in.HideDiscord, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),

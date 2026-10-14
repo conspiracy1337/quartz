@@ -114,7 +114,10 @@ type Instance struct {
 	Created     time.Time  `json:"created"`
 	LastPlayed  *time.Time `json:"lastPlayed,omitempty"`
 	PlaytimeMin int        `json:"playtimeMin"`
-	Settings    Settings   `json:"settings"`
+	// PlaytimeSec carries the seconds below a whole minute, so short
+	// sessions add up instead of rounding away (Prism counts seconds).
+	PlaytimeSec int      `json:"playtimeSec,omitempty"`
+	Settings    Settings `json:"settings"`
 	// Pack is the modpack the instance was installed from (nil for none).
 	Pack *PackRef `json:"pack,omitempty"`
 	// Host is how the instance was last hosted as a local server (nil: never).
@@ -234,6 +237,24 @@ func cleanName(n string) (string, error) {
 	return n, nil
 }
 
+// freeName is name, or "name (2)", "name (3)" … when another instance is
+// already called that (ignoring case), so menus that list instances by name
+// never show two alike (XMCL does the same).
+func (s *Store) freeName(name string) string {
+	taken := map[string]bool{}
+	for _, in := range s.List() {
+		taken[strings.ToLower(in.Name)] = true
+	}
+	try := name
+	for n := 2; taken[strings.ToLower(try)]; n++ {
+		suffix := fmt.Sprintf(" (%d)", n)
+		base := []rune(name)
+		base = base[:min(len(base), maxName-len(suffix))]
+		try = strings.TrimSpace(string(base)) + suffix
+	}
+	return try
+}
+
 // normalize repairs a hand-edited file field by field.
 func normalize(in Instance) Instance {
 	if !hexColor.MatchString(in.Art.Background) {
@@ -265,6 +286,7 @@ func normalize(in Instance) Instance {
 		w.OnGameStart = ""
 	}
 	in.PlaytimeMin = max(in.PlaytimeMin, 0)
+	in.PlaytimeSec = min(max(in.PlaytimeSec, 0), 59)
 	if in.Version < schema {
 		in.Version, in.KeepLoaderUpdated = schema, true
 	}
@@ -544,6 +566,7 @@ func (s *Store) Create(req CreateRequest) (Instance, error) {
 	if err != nil {
 		return Instance{}, err
 	}
+	name = s.freeName(name)
 	if req.Loader == "none" {
 		req.Loader, req.LoaderVersion = "", ""
 	}

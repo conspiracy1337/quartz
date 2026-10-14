@@ -415,7 +415,9 @@ func (a *app) buildTasks() error {
 	a.launcher = launch.New(launch.Config{
 		Instances: a.instances, Accounts: a.accounts, Installer: a.installer, Loaders: a.loaders, Java: a.java, Tasks: eng,
 		Settings: a.settings, Bus: a.bus, Redactor: a.redactor, BinDir: a.paths.Bin(), Log: a.log,
-		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited}, Mods: a.content,
+		Hooks: launch.Hooks{GameStarted: a.gameStarted, AllExited: a.gamesExited, AfterExitFailed: func(name string, err error) {
+			a.opens.Fail(name+"'s after-exit command failed", err)
+		}}, Mods: a.content,
 		// In order: the world played names the screenshots it took; the crash goes last.
 		Finishers: []launch.Finisher{a.worlds, a.screenshots, a.servers, a.crash},
 		Syncing:   a.syncing,
