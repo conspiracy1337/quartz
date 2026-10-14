@@ -327,7 +327,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - **Play as:** the account this instance always launches with (default account or any added one). Right-click Play as still wins for one launch; if the account was removed, the default plays and the launch panel says so.
 - **Syncing:** a shared-keybinds toggle and a join/leave toggle for each enabled sync target.
 - **Sandbox:** On/Off and the preset, linking to the Sandbox page.
-- **Performance (Linux):** dedicated GPU, Feral GameMode, MangoHud.
+- **Performance:** dedicated GPU (Linux and Windows), Feral GameMode and MangoHud (Linux).
 - **About:** group, tags, notes.
 - **Advanced:** repair, move the game folder (or move it back to the default), move to trash.
 
@@ -645,7 +645,7 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
 - Six ordered steps, each shown with live detail in the panel, with Cancel:
   1. **Sign in:** the Microsoft session is refreshed if needed, with an offline fallback when Microsoft is unreachable.
   2. **Checking mods:** a stat-only scan. It warns about missing dependencies but never blocks, and updates the loader if that's enabled.
-  3. **Java:** the instance override, or the right major version picked automatically; a missing runtime is downloaded in the same job. Warns when free RAM is below the max heap.
+  3. **Java:** the instance override, or the right major version picked automatically; a missing runtime is downloaded in the same job. Warns when free RAM is under 70% of the max heap (the game rarely fills it at once), or on macOS when the system reports memory pressure.
   4. **Files:** an install plan with counters such as "2,318 / 3,604". A fully installed version touches no network.
   5. **Sandbox**
   6. **Start**
@@ -702,14 +702,20 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
   - The saved `cmd.txt` is redacted.
 - **JVM arguments:**
   - `-Xms`/`-Xmx` and the user's JVM args, split shell-style without a shell.
-  - `-Dlog4j2.formatMsgNoLookups=true` is always set (Log4Shell).
+  - `-Dlog4j2.formatMsgNoLookups=true` is always set (Log4Shell), and so is a UTF-8 console (`stdout.encoding`, `stderr.encoding` and their pre-18 `sun.*` names), so text isn't garbled on Windows code pages. Games and hosted servers share this list. [java/env.go](internal/java/env.go)
+  - LWJGL 2 versions on Linux get `-DLWJGL_DISABLE_XRANDR=true` when there's no `xrandr` program, which they'd crash without.
   - The log4j config file.
   - Forge's module exports.
   - System GLFW and OpenAL paths, if chosen.
 - **Quick Play** (1.20+) opens straight into a world or server. Older versions fall back to `--server`/`--port`. Fullscreen and custom size are supported.
-- **Linux performance:** `DRI_PRIME` and NVIDIA PRIME offload variables, `gamemoderun` and `mangohud`. The GPU name comes from `/sys/class/drm`. [sysinfo/gpu_linux.go](internal/core/sysinfo/gpu_linux.go)
+- **Dedicated GPU** ([sysinfo/gpu_linux.go](internal/core/sysinfo/gpu_linux.go), [gpu_windows.go](internal/core/sysinfo/gpu_windows.go)):
+  - **Linux:** the card is picked as Pandora does: switcheroo-control's udev tag, else the driver (NVIDIA's and nouveau are dedicated, Intel's integrated GPU sits at `00:02.0`, amdgpu's own flag says whether it's fused into the processor), then which one drives the display.
+  - NVIDIA's driver gets its PRIME offload variables; others get `DRI_PRIME=pci-…` naming the exact card. Both get the matching `VK_LOADER_DRIVERS_SELECT`.
+  - Nothing switches when there's one GPU or the dedicated one already drives the display. Without sysfs it falls back to `DRI_PRIME=1`.
+  - **Windows:** the game's Java is set to High performance in Windows' graphics preferences, unless the player chose already.
+- **Linux performance:** `gamemoderun` and `mangohud`.
 - **Player commands:** run as argv, never through a shell, with a 10-minute timeout. A failure shows the last lines of output.
-- **Stop:** a gentle quit first (SIGTERM or WM_CLOSE), then a kill after 3 s or on a second Stop. The game survives the launcher closing. [procx/](internal/core/procx/)
+- **Stop:** a gentle quit first (SIGTERM or WM_CLOSE), then a kill after 15 s, so the singleplayer world can save, or at once on a second Stop. The game survives the launcher closing. [procx/](internal/core/procx/)
 
 **Multiple copies and run views** ([runview.go](internal/runview/runview.go), [merge.go](internal/runview/merge.go), [recover.go](internal/runview/recover.go))
 - **Several at once:** several instances, or the same instance more than once (from Play as), can run together.
@@ -734,6 +740,7 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
 
 **Live console** ([LogsLive.svelte](frontend/src/routes/instance/LogsLive.svelte), [gamelog/](internal/gamelog/))
 - **Buffer:** keeps the last 20,000 lines, sent in 100 ms batches. Follows the newest run, or the hosted server.
+- **Reading:** a line over 64 KB is cut, and the output is always read to its end, so a mod printing a huge line can't stall the game on a full pipe. The run's log is written per batch, not per line.
 - **Parsing:** log4j XML events, plain lines and legacy formats. Malformed input never crashes it.
 - **View:**
   - Level chips: Info, Warn (count), Error (count), Debug (off by default).
@@ -757,21 +764,28 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
 **Uploads and debug info** ([logfiles.go](internal/logfiles/logfiles.go), [redact.go](internal/core/logging/redact.go))
 - **mclo.gs upload:**
   - Removes tokens, emails, the home user name and every account's player name first.
-  - Capped at 10 MB and 25,000 lines.
+  - Over 25,000 lines (or 10 MB), the first 10,000 and the last 14,900 lines are kept with the cut marked, so both the versions and mod list and the crash survive.
+  - A run's upload starts with its debug summary.
 - **Copy debug info:** a redacted summary of the launcher, system, instance, run and mods.
 
 **Crash dialog** ([Crash.svelte](frontend/src/lib/overlays/Crash.svelte), [crash.go](internal/crash/crash.go), [rules.go](internal/crash/rules.go))
-- **When:** opens automatically when a game crashes or fails to start.
+- **When:** opens automatically when a game crashes or fails to start. A crash report written during the run makes it a crash even when the game then exited with 0 (Forge's loading-error screen does), unless the player stopped it.
+- **Evidence:** the crash report, or else the JVM's own crash log (`hs_err_pid*.log`) cut before its environment section, both redacted.
 - **Likely cause:** found by an ordered rule table over the crash report (≤2 MB) and the end of the log (≤1 MB):
   - mixin failure (3 variants)
-  - missing dependency (Forge, NeoForge, Fabric)
+  - missing dependency (Forge, NeoForge, Fabric), or one of the wrong version (Fabric: "needs Architectury 13.0.6 or later")
+  - a mod for another Minecraft version (Fabric)
+  - two mods that say they can't run together (Fabric)
   - duplicate mods
   - a mod named in the crash (Forge MOD section, Fabric "Suspected Mods")
+  - Java refusing to start: the heap doesn't fit (a 32-bit Java), or an argument it doesn't know
+  - Java too new for an old loader (ASM's "Unsupported class file major version", old ModLauncher's class loader cast)
   - wrong Java (class version)
-  - out of memory
+  - out of memory (heap or native)
+  - a native crash: a graphics driver's library (nvoglv64, atio6axx, ig*icd, Mesa's drivers…) is the graphics cause; any other library is named
   - graphics driver
 - **One-click fixes:** **Update and relaunch** or **Disable it and relaunch**. The culprit mod is shown with its name, version and icon.
-- **Trace:** limited to 40 lines (exception, Caused-by chain, mod lines). Obfuscated class names show as "a game class".
+- **Trace:** limited to 40 lines (exception, Caused-by chain, mod lines; for a native crash, its signal and crashing frame). Obfuscated class names show as "a game class".
 - **Also:** open the crash report, copy debug info, upload, and launch again.
 
 ---
@@ -787,6 +801,7 @@ Files: [sandbox.go](internal/sandbox/sandbox.go), [rules/rules.go](internal/sand
 | Rule | Standard | Strict | Choices |
 |---|---|---|---|
 | This instance | Read and write | Read and write | fixed |
+| Mods | Read only | Read only | fixed |
 | Shared libraries and assets | Read only | Read only | fixed |
 | Java runtime | Read only | Read only | fixed |
 | Synced folders | Read and write | Read only | rw / ro / blocked |
@@ -799,13 +814,15 @@ Files: [sandbox.go](internal/sandbox/sandbox.go), [rules/rules.go](internal/sand
 - **Read only or blocked on folders the game writes to:**
   - "Read only": the game still writes, but into a throwaway layer that is dropped on exit.
   - "Blocked": the game sees an empty throwaway folder.
+- **Mods read only:** a mod's file is its store blob, hardlinked into every instance that uses it where the disk can't clone, so a game that could write `mods/` would change it for all of them, unsandboxed ones too. Writes there go to a throwaway layer (Linux with overlays; a mod's own cache still works) or fail. Resource and shader packs hold no code and stay writable, since in-game drag-drop adds packs there.
+- **Skins:** before 1.21.4 the game saves a skin under the assets and reads it back; each instance gets its own skin cache there (mounted on Linux; elsewhere `assets/skins` itself is writable).
 - **Extra folders** are added through a native dialog only. System roots, the launcher's data, and the home folder (or anything containing it) are refused.
 
 **Linux: bubblewrap + seccomp** ([linux.go](internal/sandbox/linux.go), [seccomp.go](internal/sandbox/seccomp/seccomp.go), [bwrap.go](internal/core/bwrap/bwrap.go))
 - **Namespaces:** user, pid, uts, cgroup and net (when internet is off). With `--as-pid-1`, leftover processes die with the game. Uses `--disable-userns` when bubblewrap supports it.
 - **Filesystem:**
   - A private `/tmp` and `/dev/shm`.
-  - Read-only system folders, and selected `/etc` files.
+  - Read-only system folders, including NixOS's and Guix's stores and `/run` links, and selected `/etc` files.
   - A made-up passwd and group that name only the player.
   - The home folder is an empty tmpfs or read-only.
   - The launcher's data folder is hidden, then only the allowed parts are bound back in.
@@ -823,17 +840,20 @@ Files: [sandbox.go](internal/sandbox/sandbox.go), [rules/rules.go](internal/sand
 - A deny-by-default `sandbox-exec` profile adapted from Pandora.
 - **Allowed:** graphics, fonts, input, audio and the window server. Only the listed paths are reachable.
 - **Network:** included only when the rule allows it.
-- **Blocked:** CUPS.
+- **Blocked:** CUPS, and LaunchServices opens and Apple events (both in Pandora's profile), so a mod can't have another app run a script it wrote.
 
 **Windows: AppContainer** ([windows.go](internal/sandbox/windows.go), [contain_windows.go](internal/core/procx/contain_windows.go))
 - **Container:** one per instance.
 - **Folder access:** granted through custom capability SIDs that the token carries only while the rule allows them, so stale ACL entries reach nobody.
 - **Internet:** the capability is added only when allowed.
 - **Per-run folders:** temp and app-data folders for each run.
+- **Mods:** an inherited deny entry for the container on `mods/`, ahead of the game folder's grant.
+- **Mouse:** a capability of Quartz's own may set window-station attributes, so the game can confine and move the cursor.
 - **Cleanup:** the container is deleted when the instance is purged.
 
 **Env allowlist** ([env.go](internal/sandbox/env.go))
-- Only display, audio, locale, system and GPU/overlay variables pass.
+- Only display, audio, locale, system and GPU/overlay variables pass (including the cursor theme and size, `GBM_BACKEND` and the `__EGL_`, `__VK_` and `LIBVA_` families).
+- `LD_LIBRARY_PATH` passes, and its folders outside the home and data folders are bound read-only.
 - Agent sockets, the session bus and tokens stay out.
 
 **Hosted servers** run headless inside the instance's sandbox on Linux and macOS.
