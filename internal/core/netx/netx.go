@@ -132,7 +132,6 @@ func (c *Client) Configure(p Proxy) error {
 func (c *Client) transport(p Proxy) (*http.Transport, error) {
 	dialer := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
 	tr := &http.Transport{
-		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          64,
 		MaxIdleConnsPerHost:   16,
@@ -142,8 +141,11 @@ func (c *Client) transport(p Proxy) (*http.Transport, error) {
 		ExpectContinueTimeout: time.Second,
 		TLSClientConfig:       c.o.TLS,
 	}
+	// A SOCKS proxy resolves and dials the target itself, so only the
+	// host check before each request (Do) applies to it.
 	switch p.Mode {
 	case ProxyNone:
+		tr.DialContext = guardDial(dialer, nil)
 	case ProxyCustom:
 		addr := net.JoinHostPort(p.Host, strconv.Itoa(p.Port))
 		switch p.Type {
@@ -153,6 +155,7 @@ func (c *Client) transport(p Proxy) (*http.Transport, error) {
 				u.User = url.UserPassword(p.User, p.Password)
 			}
 			tr.Proxy = http.ProxyURL(u)
+			tr.DialContext = guardDial(dialer, map[string]bool{addr: true})
 		case "socks5":
 			var auth *proxy.Auth
 			if p.User != "" {
@@ -172,6 +175,7 @@ func (c *Client) transport(p Proxy) (*http.Transport, error) {
 		}
 	default:
 		tr.Proxy = http.ProxyFromEnvironment
+		tr.DialContext = guardDial(dialer, envProxies())
 	}
 	return tr, nil
 }
@@ -186,6 +190,9 @@ func checkRedirect(req *http.Request, via []*http.Request) error {
 	}
 	if allow, ok := req.Context().Value(redirectKey{}).(func(*url.URL) bool); ok && !allow(req.URL) {
 		return ErrRedirectRefused
+	}
+	if publicOnly(req.Context()) {
+		return checkHost(req.Context(), req.URL.Hostname())
 	}
 	return nil
 }
@@ -237,6 +244,11 @@ func (e *StatusError) Error() string {
 // fails with ErrIdleTimeout when it stalls for longer than the idle timeout.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	host := req.URL.Host
+	if publicOnly(req.Context()) {
+		if err := checkHost(req.Context(), req.URL.Hostname()); err != nil {
+			return nil, err
+		}
+	}
 	if err := c.gates.wait(req.Context(), host); err != nil {
 		return nil, err
 	}

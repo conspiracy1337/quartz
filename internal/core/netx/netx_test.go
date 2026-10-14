@@ -216,13 +216,7 @@ func splitHostPort(t *testing.T, raw string) (string, int) {
 }
 
 // getErr performs a GET that is expected to fail and returns its error.
-func getErr(c *Client, url string) error {
-	resp, err := c.Get(context.Background(), url, nil)
-	if err == nil {
-		_ = resp.Body.Close()
-	}
-	return err
-}
+func getErr(c *Client, url string) error { return getErrCtx(context.Background(), c, url) }
 
 func TestJSONHelpersKeepErrorBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

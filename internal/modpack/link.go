@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"quartz/internal/core/hashx"
+	"quartz/internal/core/netx"
 	"quartz/internal/modplatform"
 )
 
@@ -71,8 +72,9 @@ func (r *Reader) Link(ctx context.Context, raw string) (*Pack, error) {
 		}
 		return nil, ErrLink
 	}
-	// A direct link to a pack file.
-	dest, err := r.fetch(ctx, u.String(), 0, hashx.Sum{})
+	// A direct link to a pack file, from any web page: never a host on this
+	// computer or its network.
+	dest, err := r.fetch(netx.PublicOnly(ctx), u.String(), 0, hashx.Sum{})
 	if err != nil {
 		return nil, err
 	}
