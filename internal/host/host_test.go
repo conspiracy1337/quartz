@@ -9,6 +9,7 @@ import (
 	"quartz/internal/sandbox"
 	"quartz/internal/sandbox/rules"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -342,5 +343,21 @@ func TestSandboxedServer(t *testing.T) {
 	<-srv.done
 	if st := rec.last(); st.State != "stopped" || st.Result != "ok" {
 		t.Fatalf("final state %+v", st)
+	}
+}
+
+func TestRecordedPid(t *testing.T) {
+	dir, _ := os.Getwd()
+	if _, ours := recorded(pidLine(os.Getpid()), "/elsewhere"); !ours {
+		t.Fatal("a pid with its start time is the recorded process")
+	}
+	if _, ours := recorded(strconv.Itoa(os.Getpid())+" 1", dir); ours && runtime.GOOS != "freebsd" {
+		t.Fatal("another start time counted as the recorded process")
+	}
+	if _, ours := recorded(strconv.Itoa(os.Getpid()), dir); ours != (runtime.GOOS == "linux") {
+		t.Fatal("an old pid file is checked by working folder (Linux only)")
+	}
+	if _, ours := recorded("junk", dir); ours {
+		t.Fatal("junk read as a pid")
 	}
 }

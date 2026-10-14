@@ -461,7 +461,7 @@ func (s *Service) spawn(ctx context.Context, srv *server, javaPath string, argv 
 	srv.cmd, srv.stdin, srv.con, srv.started = cmd, cmd.Stdin, con, time.Now()
 	srv.mu.Unlock()
 	srv.jail.Started(cmd.Process.Pid)
-	if err := fsx.AtomicWrite(pidFile(srv.dir), []byte(strconv.Itoa(cmd.Process.Pid)), fsx.FilePerm); err != nil {
+	if err := fsx.AtomicWrite(pidFile(srv.dir), []byte(pidLine(cmd.Process.Pid)), fsx.FilePerm); err != nil {
 		s.d.Log.Warn("host: recording the server process failed", "err", err)
 	}
 	pings, stopPings := context.WithCancel(context.Background())
