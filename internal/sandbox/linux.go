@@ -145,6 +145,9 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 			a.RoBind(p, p)
 		}
 	}
+	for _, f := range r.ProtectedFiles() {
+		a.RoBind(f.Real, f.Seen)
+	}
 
 	env := spec.Env
 	if !r.Headless {

@@ -94,6 +94,7 @@ func (l *Launcher) sandboxRun(sp *spec, argv []string) sandbox.Run {
 	}
 	if sp.view != nil {
 		r.Mounts = sp.view.Mounts()
+		r.Binds = sp.view.Binds()
 	}
 	// Before 1.21.4 the game saves a skin under the assets and reads it back
 	// from there; the shared assets are read-only, so each instance gets its

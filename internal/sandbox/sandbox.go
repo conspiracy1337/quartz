@@ -44,6 +44,9 @@ type Run struct {
 	Shared []string
 	// Mounts are the run view's bubblewrap mounts (Linux).
 	Mounts []string
+	// Binds are the folders the view mounts from elsewhere: where the game
+	// sees each one, and the real folder behind it (Linux).
+	Binds map[string]string
 	// Headless is a server: no display, audio or Discord.
 	Headless bool
 	// GameMode registers the game with GameMode from outside (Linux).
@@ -64,6 +67,64 @@ func (r Run) Protected() []string {
 		p := filepath.Join(r.GameDir, f)
 		if fi, err := os.Lstat(p); err == nil && fi.IsDir() {
 			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// contentFolders hold store files too (hard links where the disk can't
+// clone), but the game may add its own files beside them (Iris keeps a
+// shader pack's settings next to it), so only the store files are
+// protected, one by one. Every world's datapacks folder is one as well.
+var contentFolders = []string{"resourcepacks", "shaderpacks"}
+
+// ProtectedFile is a store file a run sees but must not change: Seen is
+// where the game sees it, Real the file itself.
+type ProtectedFile struct{ Seen, Real string }
+
+// ProtectedFiles lists the store files in the run's content folders. Store
+// files are read-only, and a hardlink shares that, so read-only files are
+// the ones placed from the store; the game's own files stay writable.
+func (r Run) ProtectedFiles() []ProtectedFile {
+	var dirs []string
+	for _, f := range contentFolders {
+		dirs = append(dirs, filepath.Join(r.GameDir, f))
+	}
+	saves := filepath.Join(r.GameDir, "saves")
+	if worlds, err := os.ReadDir(r.real(saves)); err == nil {
+		for _, w := range worlds {
+			if w.IsDir() {
+				dirs = append(dirs, filepath.Join(saves, w.Name(), "datapacks"))
+			}
+		}
+	}
+	var out []ProtectedFile
+	for _, seen := range dirs {
+		real := r.real(seen)
+		entries, err := os.ReadDir(real)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.Type().IsRegular() {
+				continue
+			}
+			if fi, err := e.Info(); err == nil && fi.Mode().Perm()&0o222 == 0 {
+				out = append(out, ProtectedFile{Seen: filepath.Join(seen, e.Name()), Real: filepath.Join(real, e.Name())})
+			}
+		}
+	}
+	return out
+}
+
+// real is the host path behind seen: inside a bind mount, the same place in
+// the mounted folder (the deepest mount wins); elsewhere seen itself.
+func (r Run) real(seen string) string {
+	best, out := "", seen
+	for at, target := range r.Binds {
+		if fsx.Within(seen, at) && len(at) > len(best) {
+			rel, _ := filepath.Rel(at, seen)
+			best, out = at, filepath.Join(target, rel)
 		}
 	}
 	return out

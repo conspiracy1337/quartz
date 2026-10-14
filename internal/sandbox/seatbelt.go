@@ -11,7 +11,7 @@ import (
 // canonical (/private/var, not /var), as the kernel matches them.
 type seatbelt struct {
 	Read, Write []string // folders or files
-	Protect     []string // folders inside Write the game may not change
+	Protect     []string // folders and files inside Write the game may not change
 	Network     bool
 	HomeRead    string // the home folder, readable when the rule says so
 	Hide        string // the launcher's data folder, hidden again after HomeRead

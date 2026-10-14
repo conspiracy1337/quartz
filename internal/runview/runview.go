@@ -167,6 +167,19 @@ func (v *View) Wrap(argv []string) []string {
 // root: nil when the view needs no namespace.
 func (v *View) Mounts() []string { return slices.Clone(v.st.Bwrap) }
 
+// Binds maps each folder the game sees through a bind mount to the real
+// folder behind it; elsewhere what the game sees is the real folder (or a
+// private copy of it).
+func (v *View) Binds() map[string]string {
+	out := map[string]string{}
+	for _, m := range v.st.Mounts {
+		if m.Kind == bind {
+			out[m.Path] = m.Target
+		}
+	}
+	return out
+}
+
 // Backend names how the view was built, for the log.
 func (v *View) Backend() string {
 	if v.st.Bin != "" {

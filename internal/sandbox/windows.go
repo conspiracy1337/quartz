@@ -286,6 +286,13 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 			return procx.Spec{}, nil, fmt.Errorf("can't protect %s: %w", p, err)
 		}
 	}
+	// Store files elsewhere get the entry on the file itself, which every
+	// hard link to it shares.
+	for _, f := range r.ProtectedFiles() {
+		if err := denyPath(f.Real, sid, denyChange); err != nil {
+			return procx.Spec{}, nil, fmt.Errorf("can't protect %s: %w", f.Seen, err)
+		}
+	}
 
 	c := &procx.Container{SID: sid.String()}
 	for _, cap := range caps {

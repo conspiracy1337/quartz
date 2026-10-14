@@ -63,6 +63,14 @@ func helper() {
 		}
 		return os.WriteFile(mod, []byte("infected"), 0o600)
 	}())
+	pack := filepath.Join(os.Getenv("GAME"), "resourcepacks", "pack.zip")
+	say("write-pack", func() error {
+		if err := os.Chmod(pack, 0o600); err != nil {
+			return err
+		}
+		return os.WriteFile(pack, []byte("infected"), 0o600)
+	}())
+	say("add-pack-file", os.WriteFile(pack+".txt", []byte("x"), 0o600))
 	say("write-skin", os.WriteFile(filepath.Join(os.Getenv("SKINS"), "ab.png"), []byte("x"), 0o600))
 	say("add-mod", os.WriteFile(filepath.Join(os.Getenv("GAME"), "mods", "new.jar"), []byte("x"), 0o600))
 	say("dial", func() error {
@@ -78,7 +86,7 @@ func helper() {
 type jailFixture struct {
 	s                         *Service
 	root, game, other, secret string
-	store, ro, rw             string
+	store, pack, ro, rw       string
 	scratch, data, listen     string
 }
 
@@ -91,15 +99,16 @@ func newJailFixture(t *testing.T) *jailFixture {
 	root := t.TempDir()
 	f := &jailFixture{root: root, game: filepath.Join(root, "instances", "a", "game"), other: filepath.Join(root, "instances", "b", "game"),
 		secret: filepath.Join(root, "accounts.json"), store: filepath.Join(root, "store", "libraries", "lib.jar"),
+		pack:    filepath.Join(root, "store", "content", "pack.zip"),
 		scratch: filepath.Join(root, "instances", "a", "runs", "1.view"), data: filepath.Join(root, "instances", "a", "sandbox")}
 	outside := t.TempDir()
 	f.ro, f.rw = filepath.Join(outside, "maps"), filepath.Join(outside, "notes")
-	for _, d := range []string{f.game, f.other, f.scratch, f.ro, f.rw, filepath.Dir(f.store)} {
+	for _, d := range []string{f.game, f.other, f.scratch, f.ro, f.rw, filepath.Dir(f.store), filepath.Dir(f.pack), filepath.Join(f.game, "resourcepacks")} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for _, p := range []string{f.secret, f.store} {
+	for _, p := range []string{f.secret, f.store, f.pack} {
 		if err := os.WriteFile(p, []byte("data"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -113,6 +122,13 @@ func newJailFixture(t *testing.T) *jailFixture {
 		t.Fatal(err)
 	}
 	if err := os.Link(f.store, filepath.Join(f.game, "mods", "a.jar")); err != nil {
+		t.Fatal(err)
+	}
+	// So is a resource pack, in a folder the game may otherwise write.
+	if err := os.Chmod(f.pack, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(f.pack, filepath.Join(f.game, "resourcepacks", "pack.zip")); err != nil {
 		t.Fatal(err)
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -211,6 +227,14 @@ func TestJailStandard(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(f.game, "mods", "new.jar")); err == nil {
 		t.Error("the game added a file to its mods folder")
+	}
+	// Store files in other content folders are protected one by one: the
+	// game's own files beside them still work.
+	if b, err := os.ReadFile(f.pack); err != nil || string(b) != "data" {
+		t.Errorf("the game changed a store file through its resourcepacks folder: %q %v", b, err)
+	}
+	if got["add-pack-file"] != "ok" {
+		t.Errorf("add-pack-file = %q: the game lost its own files beside a resource pack", got["add-pack-file"])
 	}
 	// The skin cache is the instance's own: the write lands in its data.
 	if got["write-skin"] != "ok" {
