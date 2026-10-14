@@ -25,7 +25,7 @@ func TestWriteProps(t *testing.T) {
 	if err := os.WriteFile(path, []byte(orig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeServerFiles(filepath.Dir(path), Options{Port: 25570, MaxPlayers: 8, LAN: false, Offline: true}, "Wörld\\1", "Ignored"); err != nil {
+	if err := writeServerFiles(filepath.Dir(path), Options{Port: 25570, MaxPlayers: 8, LAN: false, Offline: true}, "Wörld\\1", "Ignored", nil); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
@@ -46,7 +46,7 @@ func TestWriteProps(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeServerFiles(filepath.Dir(path), Options{Port: 25565, MaxPlayers: 10, LAN: true}, "w", "Survival §cplus\nmore"); err != nil {
+	if err := writeServerFiles(filepath.Dir(path), Options{Port: 25565, MaxPlayers: 10, LAN: true}, "w", "Survival §cplus\nmore", nil); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = os.ReadFile(path)

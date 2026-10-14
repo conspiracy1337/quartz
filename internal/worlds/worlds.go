@@ -158,7 +158,7 @@ func (s *Service) read(dir string) (World, bool) {
 		return World{}, false
 	}
 	w := World{Folder: filepath.Base(dir), Name: filepath.Base(dir), LastPlayed: fi.ModTime().UnixMilli()}
-	if data := levelData(dir); data != nil {
+	if data := LevelData(dir); data != nil {
 		if n := data.Get("LevelName").Text(); n != "" {
 			w.Name = n
 		}
@@ -175,8 +175,9 @@ func (s *Service) read(dir string) (World, bool) {
 	return w, true
 }
 
-// levelData reads level.dat's Data compound (level.dat_old as a fallback).
-func levelData(dir string) *nbt.Tag {
+// LevelData reads the Data compound of a world's level.dat (level.dat_old
+// as a fallback).
+func LevelData(dir string) *nbt.Tag {
 	for _, name := range []string{"level.dat", "level.dat_old"} {
 		if f, err := nbt.ReadFile(filepath.Join(dir, name)); err == nil {
 			if d := f.Root.Get("Data"); d != nil && d.Kind == nbt.Compound {
@@ -276,7 +277,7 @@ func (s *Service) Seed(id, folder string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data := levelData(d)
+	data := LevelData(d)
 	if data == nil {
 		return "", ErrNotWorld
 	}
@@ -545,7 +546,7 @@ func (s *Service) FinishRun(f *launch.Finished) {
 		}
 		latest = fi.ModTime()
 		f.Record.World = e.Name()
-		if data := levelData(filepath.Join(saves, e.Name())); data != nil {
+		if data := LevelData(filepath.Join(saves, e.Name())); data != nil {
 			if n := data.Get("LevelName").Text(); n != "" {
 				f.Record.World = n
 			}
