@@ -1,5 +1,5 @@
-import type { ImportPreview, InstallPlan, JavaRuntime, KeyChoice, Keybind, ManualView, ModUpdate, ModpackDiffRow, OtherLauncher, SyncEntry, SyncGroups } from '../types';
-import { date } from './time';
+import type { ImportPreview, InstallPlan, JavaRuntime, KeyChoice, Keybind, ManualView, ModUpdate, ModpackDiffRow, OtherLauncher, PackVersion, SyncEntry, SyncGroups } from '../types';
+import { date, daysAgo } from './time';
 
 const S = (id: string, name: string, path: string, users: number, enabled: boolean, available = true): SyncEntry => ({ id, name, path, users, enabled, available });
 
@@ -93,6 +93,11 @@ export const modUpdates: ModUpdate[] = [
   { id: 'u5', size: 1_300_000, name: 'YetAnotherConfigLib', note: 'Modrinth, release, needed by Zoomify', from: '3.6.1', to: '3.6.2', art: { background: '#c9b6f2', initial: 'Y' }, versions: [V('3.6.2', date(2025, 1, 5), ['Bug fixes'])] },
 ];
 
+export const packVersions: PackVersion[] = [
+  { id: 'v141', number: '1.4.1', channel: 'release', minecraft: '1.16.5', published: daysAgo(2), current: false, offered: true },
+  { id: 'v140', number: '1.4.0', channel: 'release', minecraft: '1.16.5', published: daysAgo(40), current: true, offered: false },
+  { id: 'v131', number: '1.3.1', channel: 'release', minecraft: '1.16.5', published: daysAgo(90), current: false, offered: false },
+];
 export const modpackDiff = {
   from: '1.4.0',
   to: '1.4.1',

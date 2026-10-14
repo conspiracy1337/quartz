@@ -51,6 +51,8 @@ export interface Instance extends InstanceSummary {
   folder: string;
   /** The game folder was moved outside the data folder. */
   moved: boolean;
+  /** The modpack it was installed from; `updatable` when its platform can change its version. */
+  pack?: { name: string; version: string; updatable: boolean };
   /** What "Automatic" Java picks for this version, e.g. "Java 21". */
   javaAuto: string;
   notes: string;
@@ -435,6 +437,8 @@ export interface UpdateReview { checkId: string; updates: ModUpdate[]; locked: {
 export type DiffKind = 'Added' | 'Updated' | 'Removed';
 export interface ModpackDiffRow { name: string; version: string; kind: DiffKind }
 export interface ModpackDiff { from: string; to: string; summary: string; keptEdits: string[]; rows: ModpackDiffRow[]; game?: string }
+/** One version of an instance's pack; `offered` is the one the last update check found. */
+export interface PackVersion { id: string; number: string; channel: string; minecraft: string; published: number; current: boolean; offered: boolean }
 
 // ---- importing ----
 /** Another launcher on this computer; instances counts those not brought over yet. */

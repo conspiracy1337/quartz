@@ -22,21 +22,31 @@ func NewModpacks(ctx *Ctx, d ModpacksDeps) *Modpacks { return &Modpacks{ctx: ctx
 // Updates lists packs with a newer version (from the last check).
 func (m *Modpacks) Updates() []modpack.Available { return asList(m.d.Packs.Updates()) }
 
-// Diff reviews an instance's pack update.
-func (m *Modpacks) Diff(instanceID string) (*modpack.Diff, error) {
+// Versions lists the versions of an instance's pack, newest first.
+func (m *Modpacks) Versions(instanceID string) ([]modpack.PackVersion, error) {
 	if err := checkInstanceID(instanceID); err != nil {
 		return nil, err
 	}
-	return m.d.Packs.Diff(m.ctx.Get(), instanceID)
+	return asListErr(m.d.Packs.Versions(m.ctx.Get(), instanceID))
 }
 
-// Update starts the pack update job, backing worlds up first when asked.
-func (m *Modpacks) Update(instanceID string, backupWorlds bool) (string, error) {
+// Diff reviews moving an instance's pack to version ("" for the update the
+// last check found).
+func (m *Modpacks) Diff(instanceID, version string) (*modpack.Diff, error) {
+	if err := checkInstanceID(instanceID); err != nil {
+		return nil, err
+	}
+	return m.d.Packs.Diff(m.ctx.Get(), instanceID, version)
+}
+
+// Update starts the job moving an instance's pack to version ("" for the
+// update the last check found), backing worlds up first when asked.
+func (m *Modpacks) Update(instanceID, version string, backupWorlds bool) (string, error) {
 	if err := checkInstanceID(instanceID); err != nil {
 		return "", err
 	}
 	if m.d.Busy(instanceID) {
 		return "", ErrBusy
 	}
-	return m.d.Packs.Update(m.ctx.Get(), instanceID, backupWorlds)
+	return m.d.Packs.Update(m.ctx.Get(), instanceID, version, backupWorlds)
 }

@@ -11,7 +11,7 @@ import * as ModpacksGo from '../wailsjs/go/api/Modpacks';
 import * as mock from './mock/browse';
 import * as misc from './mock/misc';
 import type {
-  Art, BrowseQuery, BrowseResults, ContentKind, DiffKind, ImportPreview, InstallPlan, ManualView, ModpackDiff, PackUpdate,
+  Art, BrowseQuery, BrowseResults, ContentKind, DiffKind, ImportPreview, InstallPlan, ManualView, ModpackDiff, PackUpdate, PackVersion,
   ProjectKind, ProjectPage, ProjectVersion, Src, VersionNotes,
 } from './types';
 
@@ -57,9 +57,12 @@ const toDiff = (d: GoDiff): ModpackDiff => ({ ...d, keptEdits: d.keptEdits ?? []
 export const packsApi = {
   /** Packs with a newer version, from the last check. */
   updates: () => revs.load('modpacks', bridged(ModpacksGo.Updates, (): PackUpdate[] => [{ instanceId: 'cab', name: 'Create: Above and Beyond', version: '1.4.1' }])),
-  diff: bridged((id: string) => ModpacksGo.Diff(id).then((d) => toDiff(d as unknown as GoDiff)), (_id: string): ModpackDiff => misc.modpackDiff),
-  /** Starts the update job, backing worlds up first when asked; resolves with its id. */
-  update: bridged(ModpacksGo.Update, (_id: string, _backup: boolean) => ''),
+  /** The versions of an instance's pack, newest first. */
+  versions: bridged(ModpacksGo.Versions, (_id: string): PackVersion[] => misc.packVersions),
+  /** The review of moving to a version ("" for the one the last check found). */
+  diff: bridged((id: string, version: string) => ModpacksGo.Diff(id, version).then((d) => toDiff(d as unknown as GoDiff)), (_id: string, _version: string): ModpackDiff => misc.modpackDiff),
+  /** Starts the job moving to a version ("" for the one the last check found), backing worlds up first when asked; resolves with its id. */
+  update: bridged(ModpacksGo.Update, (_id: string, _version: string, _backup: boolean) => ''),
 };
 
 export const manualApi = {

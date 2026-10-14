@@ -16,6 +16,7 @@ import (
 	"quartz/internal/follow"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
+	"quartz/internal/modpack"
 	"quartz/internal/loader"
 	"quartz/internal/meta"
 	"quartz/internal/modplatform"
@@ -113,8 +114,17 @@ type InstanceView struct {
 	DiscordStatus     bool              `json:"discordStatus"` // the instance's own switch
 	Settings          instance.Settings `json:"settings"`
 	GPU               string            `json:"gpu"` // the dedicated GPU's name, Linux only
+	// Pack is the modpack the instance was installed from.
+	Pack *PackView `json:"pack,omitempty"`
 	// Switch reports a version change's mod job (SetVersion only).
 	Switch *content.SwitchResult `json:"switch,omitempty"`
+}
+
+// PackView names an instance's modpack and whether it can change version.
+type PackView struct {
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Updatable bool   `json:"updatable"`
 }
 
 // Errors returned to the UI.
@@ -181,8 +191,16 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),
 		DiscordStatus: !in.HideDiscord, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),
-		SyncTargets: s.syncTargets(in.ID), Sync: in.Sync,
+		SyncTargets: s.syncTargets(in.ID), Sync: in.Sync, Pack: packView(in),
 	}
+}
+
+func packView(in instance.Instance) *PackView {
+	if in.Pack == nil {
+		return nil
+	}
+	o := modpack.Origin{Source: in.Pack.Source, Project: in.Pack.Project}
+	return &PackView{Name: in.Pack.Name, Version: in.Pack.VersionName, Updatable: o.Updatable() && !in.InPlace}
 }
 
 func (s *Instances) syncTargets(id string) int {

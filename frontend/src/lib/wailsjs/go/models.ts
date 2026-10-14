@@ -287,6 +287,22 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class PackView {
+	    name: string;
+	    version: string;
+	    updatable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PackView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.updatable = source["updatable"];
+	    }
+	}
 	export class MemoryRange {
 	    min: number;
 	    max: number;
@@ -332,6 +348,7 @@ export namespace api {
 	    discordStatus: boolean;
 	    settings: instance.Settings;
 	    gpu: string;
+	    pack?: PackView;
 	    switch?: content.SwitchResult;
 	
 	    static createFrom(source: any = {}) {
@@ -370,6 +387,7 @@ export namespace api {
 	        this.discordStatus = source["discordStatus"];
 	        this.settings = this.convertValues(source["settings"], instance.Settings);
 	        this.gpu = source["gpu"];
+	        this.pack = this.convertValues(source["pack"], PackView);
 	        this.switch = this.convertValues(source["switch"], content.SwitchResult);
 	    }
 	
@@ -550,6 +568,7 @@ export namespace api {
 		    return a;
 		}
 	}
+	
 	export class SandboxRow {
 	    id: string;
 	    folder: boolean;
@@ -2462,6 +2481,30 @@ export namespace modpack {
 		}
 	}
 	
+	export class PackVersion {
+	    id: string;
+	    number: string;
+	    channel: string;
+	    minecraft: string;
+	    published: number;
+	    current: boolean;
+	    offered: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PackVersion(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.number = source["number"];
+	        this.channel = source["channel"];
+	        this.minecraft = source["minecraft"];
+	        this.published = source["published"];
+	        this.current = source["current"];
+	        this.offered = source["offered"];
+	    }
+	}
 	export class Stats {
 	    mods: number;
 	    modBytes: number;

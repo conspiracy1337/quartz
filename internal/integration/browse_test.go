@@ -199,7 +199,7 @@ func TestModrinthPackInstallAndUpdate(t *testing.T) {
 	if av := svc.CheckUpdates(h.ctx()); len(av) == 0 {
 		t.Fatal("no update offered")
 	}
-	diff, err := svc.Diff(h.ctx(), in.ID)
+	diff, err := svc.Diff(h.ctx(), in.ID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
