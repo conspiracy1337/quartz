@@ -145,6 +145,9 @@ func TestBlockedFileWaitsForTheDownloadsFolder(t *testing.T) {
 	if v, err := e.svc.d.Manual.View(job); err != nil || len(v.Items) != 1 || v.Items[0].Name != "Balm" {
 		t.Fatalf("view %+v %v", v, err)
 	}
+	if !e.svc.Busy(e.id) {
+		t.Fatal("an instance with a waiting install must count as busy")
+	}
 	if err := os.WriteFile(filepath.Join(folder, "balm-1.0.jar"), balm, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -155,5 +158,8 @@ func TestBlockedFileWaitsForTheDownloadsFolder(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(e.game, "mods", "balm-1.0.jar")); err != nil {
 		t.Fatal("the manually downloaded mod was not installed")
+	}
+	if e.svc.Busy(e.id) {
+		t.Fatal("still busy after the job ended")
 	}
 }

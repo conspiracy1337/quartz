@@ -120,15 +120,20 @@ var (
 	ErrBadInstanceID = errors.New("api: invalid instance id")
 	ErrBusy          = errors.New("api: close the game first")
 	ErrHosting       = errors.New("api: stop the server first")
+	ErrContentBusy   = errors.New("api: a download for this instance is still running. Let it finish or cancel it in Downloads")
 )
 
-// guard refuses changes to files a game or a hosted server is using.
+// guard refuses changes to files a game, a hosted server or a content job
+// (install, update, version switch) is using.
 func (s *Instances) guard(id string) error {
 	if s.d.Hosting != nil && s.d.Hosting(id) {
 		return ErrHosting
 	}
 	if s.d.Busy(id) {
 		return ErrBusy
+	}
+	if s.d.Content != nil && s.d.Content.Busy(id) {
+		return ErrContentBusy
 	}
 	return nil
 }

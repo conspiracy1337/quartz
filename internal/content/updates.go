@@ -486,6 +486,9 @@ func (s *Service) submit(inst string, k Kind, title, subtitle string, picked []*
 		return nil
 	}))
 	id, err := s.d.Tasks.Submit(spec)
+	if err == nil {
+		s.tracked(inst, id)
+	}
 	if set != nil {
 		set.Bind(id)
 	}
