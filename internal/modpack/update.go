@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -650,6 +649,34 @@ func (s *Service) Update(ctx context.Context, id string, backupWorlds bool) (str
 	return job, nil
 }
 
+// commit records the new version: manifest, game and loader, pack. A step
+// that fails undoes the ones before it, so the instance and its manifest
+// always describe the same files.
+func (s *Service) commit(in instance.Instance, next *Pack, t install.Target, old, m Manifest) error {
+	dir := s.d.Instances.Dir(in.ID)
+	if err := writeManifest(dir, m); err != nil {
+		return err
+	}
+	moved := t.Minecraft != in.Minecraft || string(t.Loader) != in.Loader || t.LoaderVersion != in.LoaderVersion
+	if moved {
+		if _, err := s.d.Instances.SetVersion(in.ID, t.Minecraft, string(t.Loader), t.LoaderVersion); err != nil {
+			_ = writeManifest(dir, old)
+			return err
+		}
+	}
+	_, err := s.d.Instances.Update(in.ID, func(i *instance.Instance) error {
+		i.Pack = &instance.PackRef{Source: next.Origin.Source, Project: next.Origin.Project, Version: next.Origin.Version, Name: next.Name, VersionName: next.Version}
+		return nil
+	})
+	if err != nil {
+		if moved {
+			_, _ = s.d.Instances.SetVersion(in.ID, in.Minecraft, in.Loader, in.LoaderVersion)
+		}
+		_ = writeManifest(dir, old)
+	}
+	return err
+}
+
 // apply runs the three-way update in the game folder and records the new version.
 func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, files []planned, set *manual.Set, t install.Target, work string) error {
 	old, err := ReadManifest(s.d.Instances.Dir(in.ID))
@@ -679,63 +706,52 @@ func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, fil
 	for _, f := range files {
 		byPath[strings.TrimSuffix(f.Path, ".disabled")] = f
 	}
-	// A path may sit in a folder the instance shares; each base gets a root.
-	roots := map[string]*os.Root{}
-	defer func() {
-		for _, r := range roots {
-			_ = r.Close()
-		}
-	}()
-	rootOf := func(rel string) (*os.Root, error) {
-		b := s.d.Instances.Base(in.ID, rel)
-		if r, ok := roots[b]; ok {
-			return r, nil
-		}
-		r, err := os.OpenRoot(b)
-		if err == nil {
-			roots[b] = r
-		}
-		return r, err
-	}
+	sw := newSwap(s.d.Instances, in.ID)
+	defer sw.close()
+	// Every new file is placed beside its target first; only once all of
+	// them are there are the old ones swapped out, so a failure part way
+	// leaves the game folder as it was (XMCL stages its updates the same way).
 	for _, c := range changes {
-		groot, err := rootOf(c.rel)
-		if err != nil {
-			return err
+		if c.act == actDelete {
+			continue
 		}
 		name := c.rel
 		if c.off {
 			name += ".disabled"
 		}
-		// Whatever was there (either name) goes first.
-		for _, suffix := range []string{"", ".disabled"} {
-			if err := groot.Remove(c.rel + suffix); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		var err error
+		switch f, ok := byPath[c.rel]; {
+		case c.w.Layer:
+			err = sw.stage(name, func(dst string) error {
+				_, err := linkx.Place(filepath.Join(layers, filepath.FromSlash(c.rel)), dst, linkx.Options{NoHardlink: true, Perm: 0o600})
 				return err
-			}
-		}
-		if c.act == actDelete {
-			continue
-		}
-		dst := abs(name)
-		if dir := path.Dir(name); dir != "." {
-			if err := groot.MkdirAll(dir, 0o700); err != nil {
+			})
+		case !ok || (f.Blocked() && set != nil && set.Skipped(f.SHA1)):
+			continue // nothing to put there: whatever is there stays
+		default:
+			err = sw.stage(name, func(dst string) error {
+				sum, err := s.blob(f)
+				if err == nil {
+					_, err = s.d.Store.Place(sum, dst)
+				}
 				return err
-			}
+			})
 		}
-		if c.w.Layer {
-			if _, err := linkx.Place(filepath.Join(layers, filepath.FromSlash(c.rel)), dst, linkx.Options{NoHardlink: true, Perm: 0o600}); err != nil {
-				return err
-			}
-			continue
-		}
-		f, ok := byPath[c.rel]
-		if !ok || (f.Blocked() && set != nil && set.Skipped(f.SHA1)) {
-			continue
-		}
-		sum, err := s.blob(f)
 		if err != nil {
+			sw.rollback()
 			return err
 		}
-		if _, err := s.d.Store.Place(sum, dst); err != nil {
+	}
+	for _, c := range changes {
+		name := c.rel
+		if c.off {
+			name += ".disabled"
+		}
+		if c.act == actWrite && !sw.isStaged(name) {
+			continue // skipped above
+		}
+		if err := sw.replace(c.rel, name, c.act == actWrite); err != nil {
+			sw.rollback()
 			return err
 		}
 	}
@@ -743,20 +759,11 @@ func (s *Service) apply(_ context.Context, in instance.Instance, next *Pack, fil
 	for rel, w := range want {
 		m.Files[rel] = ManifestFile{SHA1: w.SHA1, Layer: w.Layer, Off: w.Off}
 	}
-	if t.Minecraft != in.Minecraft || string(t.Loader) != in.Loader || t.LoaderVersion != in.LoaderVersion {
-		if _, err := s.d.Instances.SetVersion(in.ID, t.Minecraft, string(t.Loader), t.LoaderVersion); err != nil {
-			return err
-		}
-	}
-	if _, err := s.d.Instances.Update(in.ID, func(i *instance.Instance) error {
-		i.Pack = &instance.PackRef{Source: next.Origin.Source, Project: next.Origin.Project, Version: next.Origin.Version, Name: next.Name, VersionName: next.Version}
-		return nil
-	}); err != nil {
+	if err := s.commit(in, next, t, old, m); err != nil {
+		sw.rollback()
 		return err
 	}
-	if err := writeManifest(s.d.Instances.Dir(in.ID), m); err != nil {
-		return err
-	}
+	sw.finish()
 	s.mu.Lock()
 	delete(s.available, in.ID)
 	delete(s.pending, in.ID)
