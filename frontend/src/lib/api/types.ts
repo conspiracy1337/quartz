@@ -411,7 +411,9 @@ export interface BulkCheck { instanceId: string; name: string; updates: number }
 export type ExportFormat = 'mrpack' | 'zip' | 'list';
 export type ExportListFormat = 'md' | 'csv';
 export interface ExportInclude { worlds: boolean; screenshots: boolean; options: boolean; servers: boolean; config: boolean }
-export interface ExportPlan { format: ExportFormat; list: ExportListFormat; include: ExportInclude }
+/** What an exported pack is called (remembered per instance). */
+export interface ExportMeta { name: string; version: string; summary?: string; author?: string }
+export interface ExportPlan { format: ExportFormat; list: ExportListFormat; include: ExportInclude; meta?: ExportMeta }
 export interface ExportPreview { linked: number; bundled: number; bytes: number }
 /** A pack export's job, or a mod list's saved file name; empty when the save dialog was cancelled. */
 export interface ExportResult { job?: string; file?: string }

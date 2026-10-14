@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '../api';
-  import type { ExportFormat, ExportInclude, ExportListFormat } from '../api/types';
+  import type { ExportFormat, ExportInclude, ExportListFormat, ExportMeta } from '../api/types';
   import { bytes, plural } from '../format';
   import { query } from '../query.svelte';
   import { session } from '../session.svelte';
@@ -35,6 +35,10 @@
   let list = $state<ExportListFormat>('md');
   let include = $state<ExportInclude>({ options: true, servers: true, config: true, worlds: false, screenshots: false });
   let busy = $state(false);
+  /** The pack's name, version and summary (Prism's export fields); never the instance's private notes. */
+  let meta = $state<ExportMeta>({ name: '', version: '' });
+  // svelte-ignore state_referenced_locally
+  void api.exports.meta(instanceId).then((m) => (meta = { summary: '', ...m }));
 
   const plan = $derived({ format, list, include: { ...include } });
   const preview = query(() => (plan.format === 'list' ? Promise.resolve(null) : api.exports.preview(instanceId, plan)));
@@ -50,7 +54,7 @@
     if (busy) return;
     busy = true;
     try {
-      const res = await api.exports.run(instanceId, plan);
+      const res = await api.exports.run(instanceId, { ...plan, meta: { ...meta } });
       if (!res.job && !res.file) return; // the save dialog was cancelled
       session.close();
       if (res.job) {
@@ -72,6 +76,11 @@
   {#if format === 'list'}
     <div class="field"><span class="field-label">File type</span><Seg options={LISTS} bind:value={list} label="File type" fill center /></div>
   {:else}
+    <div style="display: grid; grid-template-columns: minmax(0,1fr) 120px; gap: 12px">
+      <label class="field"><span class="field-label">Name</span><span class="input"><input bind:value={meta.name} maxlength="64" placeholder={inst.data?.name} /></span></label>
+      <label class="field"><span class="field-label">Version</span><span class="input"><input bind:value={meta.version} maxlength="32" placeholder="1.0.0" /></span></label>
+    </div>
+    <label class="field"><span class="field-label">Summary</span><span class="input"><input bind:value={meta.summary} maxlength="500" placeholder="Optional" /></span></label>
     <div class="field"><span class="field-label">Include</span>
       <div class="card tgl-grid">
         {#each PARTS as part (part.key)}<ToggleRow name={part.label} on={include[part.key]} onchange={(v) => (include[part.key] = v)} />{/each}

@@ -24,6 +24,7 @@ import (
 
 	"quartz/internal/content"
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/hashx"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
 	"quartz/internal/loader"
@@ -62,6 +63,8 @@ type Plan struct {
 	Format  Format     `json:"format"`
 	List    ListFormat `json:"list"`
 	Include Include    `json:"include"`
+	// Meta names the pack ("" name: the instance's).
+	Meta instance.ExportMeta `json:"meta"`
 }
 
 // Valid reports whether p names a known format.
@@ -103,6 +106,8 @@ var (
 // Manifester lists an instance's content files (content.Service).
 type Manifester interface {
 	Manifest(ctx context.Context, id string) ([]content.ManifestItem, error)
+	// Identify looks files of one kind up on the platforms by hash.
+	Identify(ctx context.Context, id string, k content.Kind) (int, error)
 }
 
 // Deps wires the service.
@@ -138,13 +143,13 @@ func (s *Service) Preview(ctx context.Context, id string, p Plan) (Preview, erro
 	if err != nil {
 		return Preview{}, err
 	}
-	links, err := s.links(ctx, id, p)
+	pc, err := s.content(ctx, id, p)
 	if err != nil {
 		return Preview{}, err
 	}
 	var pv Preview
 	for _, f := range files {
-		if _, ok := links[f.rel]; ok {
+		if _, ok := pc.links[f.rel]; ok {
 			pv.Linked++
 			continue
 		}
@@ -212,12 +217,18 @@ func (s *Service) shared(id string) []string {
 	return s.d.Shared(id)
 }
 
+// linkable are the content folders whose files a pack may name instead of
+// carrying; one that is a link (Prism's "copy with symlinks") is followed
+// to its target, as scans do.
+var linkable = map[string]bool{"mods": true, "resourcepacks": true, "shaderpacks": true}
+
 // files lists every file the pack holds, game folder first, then each shared
 // folder under its instance-relative path. Names a pack can't carry safely
 // are left out.
 func (s *Service) files(id string, inc Include) ([]file, error) {
 	shared := s.shared(id)
 	var out []file
+	var linked []string // content folders that are links
 	walk := func(dir, prefix string) error {
 		root, err := os.OpenRoot(dir)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -241,6 +252,10 @@ func (s *Service) files(id string, inc Include) ([]file, error) {
 				}
 				return nil
 			}
+			if prefix == "" && d.Type()&fs.ModeSymlink != 0 && linkable[rel] {
+				linked = append(linked, rel)
+				return nil
+			}
 			if !d.Type().IsRegular() || !keepFile(rel, inc) {
 				return nil // links, devices and what never travels
 			}
@@ -255,8 +270,16 @@ func (s *Service) files(id string, inc Include) ([]file, error) {
 			return nil
 		})
 	}
-	if err := walk(s.d.Instances.GameDir(id), ""); err != nil {
+	game := s.d.Instances.GameDir(id)
+	if err := walk(game, ""); err != nil {
 		return nil, err
+	}
+	for _, rel := range linked {
+		if real, err := filepath.EvalSymlinks(filepath.Join(game, rel)); err == nil {
+			if err := walk(real, rel); err != nil {
+				return nil, err
+			}
+		}
 	}
 	for _, rel := range shared {
 		if keepDir(rel, inc) {
@@ -316,43 +339,79 @@ func keepFile(rel string, inc Include) bool {
 	return true
 }
 
-// links maps the files an .mrpack may link to their index entries. A full
-// zip links nothing.
-func (s *Service) links(ctx context.Context, id string, p Plan) (map[string]modpack.IndexFile, error) {
-	out := map[string]modpack.IndexFile{}
-	if p.Format != Mrpack {
-		return out, nil
+// packContent is what a pack export knows about the content: the files an
+// .mrpack may link (a full zip links nothing), by path, and the client-only
+// mods.
+type packContent struct {
+	links  map[string]modpack.IndexFile
+	client map[string]bool
+}
+
+func (s *Service) content(ctx context.Context, id string, p Plan) (packContent, error) {
+	pc := packContent{links: map[string]modpack.IndexFile{}, client: map[string]bool{}}
+	var items []content.ManifestItem
+	var err error
+	if p.Format == Mrpack {
+		items, err = s.items(ctx, id)
+	} else {
+		items, err = s.d.Content.Manifest(ctx, id)
 	}
-	items, err := s.d.Content.Manifest(ctx, id)
 	if err != nil {
-		return nil, err
+		return pc, err
 	}
 	for _, it := range items {
-		f := modpack.IndexFile{Path: strings.TrimSuffix(it.Rel, content.Disabled), SHA1: it.SHA1, SHA512: it.SHA512, Size: it.Size, URL: it.URL, Optional: !it.Enabled}
+		if it.ClientOnly {
+			pc.client[it.Rel] = true
+		}
+		if p.Format != Mrpack {
+			continue
+		}
+		f := modpack.IndexFile{Path: strings.TrimSuffix(it.Rel, content.Disabled), SHA1: it.SHA1, SHA512: it.SHA512, Size: it.Size, URL: it.URL,
+			Optional: !it.Enabled, ClientOnly: it.ClientOnly}
+		if f.SHA512 == "" && strings.HasPrefix(f.URL, "https://cdn.modrinth.com/") {
+			// The store didn't record it (a file in a linked folder): hashed now.
+			if sum, err := hashx.File(s.d.Instances.Path(id, it.Rel), hashx.SHA512); err == nil {
+				f.SHA512 = sum
+			}
+		}
 		if modpack.Linkable(f) {
-			out[it.Rel] = f
+			pc.links[it.Rel] = f
 		}
 	}
-	return out, nil
+	return pc, nil
 }
+
+// items lists the instance's content after asking the platforms about
+// files nobody identified yet, so a file Modrinth or CurseForge serves is
+// named rather than carried (Prism looks files up when it exports too).
+func (s *Service) items(ctx context.Context, id string) ([]content.ManifestItem, error) {
+	for _, k := range []content.Kind{content.Mods, content.ResourcePacks, content.Shaders} {
+		_, _ = s.d.Content.Identify(ctx, id, k) // offline: what's known so far
+	}
+	return s.d.Content.Manifest(ctx, id)
+}
+
+
 
 func (s *Service) writePack(ctx context.Context, w io.Writer, in instance.Instance, p Plan) error {
 	files, err := s.files(in.ID, p.Include)
 	if err != nil {
 		return err
 	}
-	links, err := s.links(ctx, in.ID, p)
+	pc, err := s.content(ctx, in.ID, p)
 	if err != nil {
 		return err
 	}
-	ix := modpack.Index{Name: in.Name, Summary: in.Notes, Minecraft: in.Minecraft}
+	meta := p.Meta.Clean()
+	// The instance's notes are the player's own and never go in a pack.
+	ix := modpack.Index{Name: orElse(meta.Name, in.Name), Version: meta.Version, Summary: meta.Summary, Minecraft: in.Minecraft}
 	if k, err := loader.ParseKind(in.Loader); err == nil && in.Loader != "" {
 		ix.Loader, ix.LoaderVersion = in.Loader, loader.Display(k, in.Minecraft, in.LoaderVersion)
 	}
 	zw := zip.NewWriter(w)
 	var bundled []file
 	for _, f := range files {
-		if l, ok := links[f.rel]; ok {
+		if l, ok := pc.links[f.rel]; ok {
 			ix.Files = append(ix.Files, l)
 		} else {
 			bundled = append(bundled, f)
@@ -376,11 +435,23 @@ func (s *Service) writePack(ctx context.Context, w io.Writer, in instance.Instan
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := copyInto(zw, "overrides/"+f.rel, f.dir, f.in); err != nil {
+		// A client-only mod stays out of a server built from the pack.
+		layer := "overrides/"
+		if pc.client[f.rel] {
+			layer = "client-overrides/"
+		}
+		if err := copyInto(zw, layer+f.rel, f.dir, f.in); err != nil {
 			return err
 		}
 	}
 	return zw.Close()
+}
+
+func orElse(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // copyInto adds one file read through a root at dir, so a link swapped in

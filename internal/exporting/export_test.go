@@ -70,6 +70,7 @@ func sums(b []byte) (string, string) {
 }
 
 func (m *manifest) Manifest(context.Context, string) ([]content.ManifestItem, error) { return *m, nil }
+func (m *manifest) Identify(context.Context, string, content.Kind) (int, error)       { return 0, nil }
 
 func names(t *testing.T, file string) []string {
 	t.Helper()
@@ -206,5 +207,50 @@ func TestModListEscapes(t *testing.T) {
 	e.items = nil
 	if err := e.svc.Write(context.Background(), e.in.ID, Plan{Format: List, List: CSV}, filepath.Join(dir, "none.csv")); !errors.Is(err, ErrNoMods) {
 		t.Fatal(err)
+	}
+}
+
+func TestMrpackMetaSidesAndLinkedFolder(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.svc.d.Instances.SetNotes(e.in.ID, "my private notes"); err != nil {
+		t.Fatal(err)
+	}
+	// mods/ is a link to another launcher's folder (Prism's copy with links).
+	other := filepath.Join(t.TempDir(), "elsewhere")
+	sodium, menu := []byte("sodium jar"), []byte("a client mod from nowhere")
+	s1, _ := sums(sodium)
+	_, m5 := sums(menu)
+	m1, _ := sums(menu)
+	e.write(other, "sodium.jar", sodium)
+	e.write(other, "menu.jar", menu)
+	if err := os.Symlink(other, filepath.Join(e.game, "mods")); err != nil {
+		t.Fatal(err)
+	}
+	e.items = manifest{
+		// The store never recorded sodium's sha512: it is hashed for the index.
+		{Kind: content.Mods, Rel: "mods/sodium.jar", Enabled: true, SHA1: s1, Size: int64(len(sodium)), URL: "https://cdn.modrinth.com/data/AANobbMI/versions/x/sodium.jar", ClientOnly: true},
+		{Kind: content.Mods, Rel: "mods/menu.jar", Enabled: true, SHA1: m1, SHA512: m5, Size: int64(len(menu)), ClientOnly: true},
+	}
+	dest := filepath.Join(t.TempDir(), "x.mrpack")
+	p := Plan{Format: Mrpack, Meta: instance.ExportMeta{Name: " My Pack ", Version: "2.1", Summary: "For friends"}}
+	if err := e.svc.Write(context.Background(), e.in.ID, p, dest); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(t, dest); !slices.Contains(got, "client-overrides/mods/menu.jar") {
+		t.Fatalf("zip %v", got)
+	}
+	zr, _ := zip.OpenReader(dest)
+	defer func() { _ = zr.Close() }()
+	f, _ := zr.Open("modrinth.index.json")
+	var b bytes.Buffer
+	_, _ = b.ReadFrom(f)
+	index := b.String()
+	for _, want := range []string{`"name": "My Pack"`, `"versionId": "2.1"`, `"summary": "For friends"`, `"server": "unsupported"`, `mods/sodium.jar`} {
+		if !strings.Contains(index, want) {
+			t.Errorf("index lacks %s:\n%s", want, index)
+		}
+	}
+	if strings.Contains(index, "private") {
+		t.Fatal("the instance's notes were exported")
 	}
 }

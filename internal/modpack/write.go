@@ -25,6 +25,8 @@ type IndexFile struct {
 	Size     int64
 	URL      string
 	Optional bool // a turned-off mod: imported as ".disabled"
+	// ClientOnly is a mod a server built from the pack leaves out.
+	ClientOnly bool
 }
 
 // ErrBadIndexFile refuses a file the format can't link (no allowed address,
@@ -93,8 +95,11 @@ func WriteIndex(w io.Writer, ix Index) error {
 			return ErrBadIndexFile
 		}
 		mf := mrOutFile{Path: f.Path, Hashes: map[string]string{"sha1": f.SHA1, "sha512": f.SHA512}, Downloads: []string{f.URL}, FileSize: f.Size}
-		if f.Optional {
+		switch {
+		case f.Optional:
 			mf.Env = &mrEnv{Client: "optional", Server: "optional"}
+		case f.ClientOnly:
+			mf.Env = &mrEnv{Client: "required", Server: "unsupported"}
 		}
 		out.Files = append(out.Files, mf)
 	}

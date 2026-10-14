@@ -1650,6 +1650,7 @@ export namespace exporting {
 	    format: string;
 	    list: string;
 	    include: Include;
+	    meta: instance.ExportMeta;
 	
 	    static createFrom(source: any = {}) {
 	        return new Plan(source);
@@ -1660,6 +1661,7 @@ export namespace exporting {
 	        this.format = source["format"];
 	        this.list = source["list"];
 	        this.include = this.convertValues(source["include"], Include);
+	        this.meta = this.convertValues(source["meta"], instance.ExportMeta);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2004,6 +2006,24 @@ export namespace instance {
 		}
 	}
 	
+	export class ExportMeta {
+	    name: string;
+	    version: string;
+	    summary?: string;
+	    author?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.version = source["version"];
+	        this.summary = source["summary"];
+	        this.author = source["author"];
+	    }
+	}
 	export class Group {
 	    name: string;
 	    collapsed?: boolean;

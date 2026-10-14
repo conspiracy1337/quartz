@@ -140,6 +140,33 @@ type Instance struct {
 	HideDiscord bool `json:"hideDiscord,omitempty"`
 	// Shortcuts are its desktop and app-menu shortcuts.
 	Shortcuts []Shortcut `json:"shortcuts,omitempty"`
+	// Export is what the last pack export was called, offered again next time.
+	Export *ExportMeta `json:"export,omitempty"`
+}
+
+// ExportMeta names an exported pack (Prism's export fields).
+type ExportMeta struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Summary string `json:"summary,omitempty"`
+	Author  string `json:"author,omitempty"`
+}
+
+// Clean trims the fields, drops control characters and caps their lengths.
+func (m ExportMeta) Clean() ExportMeta {
+	clip := func(s string, n int) string {
+		s = strings.TrimSpace(strings.Map(func(r rune) rune {
+			if r < 0x20 || r == 0x7f {
+				return -1
+			}
+			return r
+		}, s))
+		if r := []rune(s); len(r) > n {
+			s = strings.TrimSpace(string(r[:n]))
+		}
+		return s
+	}
+	return ExportMeta{Name: clip(m.Name, 64), Version: clip(m.Version, 32), Summary: clip(m.Summary, 500), Author: clip(m.Author, 64)}
 }
 
 // Host is how to run an instance as a local server.
