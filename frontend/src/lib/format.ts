@@ -86,20 +86,14 @@ export function sentenceList(names: string[]): string {
 }
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** Playtime in whole hours: "41 h". */
-export const hours = (min: number) => `${Math.floor(min / 60)} h`;
+// Separators follow the OS language (the WebView's navigator.language).
+const TENTHS: Intl.NumberFormatOptions = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+const tenths = new Intl.NumberFormat(undefined, TENTHS);
 
-/** Duration: "2 h 08 m", "40 m". `full` keeps the hours in table columns: "0 h 03 m". */
-export function hm(min: number, full = false): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h > 0 || full ? `${h} h ${String(m).padStart(2, '0')} m` : `${m} m`;
-}
-
-/** Duration without zero padding, for sentences: "11 h 40 m". */
-export function hmLoose(min: number): string {
-  const h = Math.floor(min / 60);
-  return (h > 0 ? `${h} h ` : '') + `${min % 60} m`;
+/** Time played, every total and session alike: "3,600.1 hours" ("3.600,1 hours" in German). Never rounds up. */
+export function hours(min: number, locale?: string): string {
+  const h = Math.floor(min / 6) / 10;
+  return `${(locale ? new Intl.NumberFormat(locale, TENTHS) : tenths).format(h)} hours`;
 }
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
