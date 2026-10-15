@@ -2,7 +2,7 @@
   import { api } from '../api';
   import type { MergedServer } from '../api/types';
   import { count } from '../format';
-  import { query } from '../query.svelte';
+  import { query, skeletonRows } from '../query.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
   import SplitButton from '../ui/SplitButton.svelte';
@@ -21,7 +21,7 @@
     const f = force;
     force = false;
     return api.home.servers(f);
-  });
+  }, 'home.servers'); // opening Home again shows the last answers while it pings
   function refresh() {
     force = true;
     reload++;
@@ -74,10 +74,10 @@
         <Empty text={servers.data.length ? 'No servers are online right now.' : 'Servers from all your instances show up here.'} />
       {/each}
     {:else}
-      {#each { length: 6 } as _, k (k)}
+      {#each { length: skeletonRows('home.servers', 6) } as _, k (k)}
         <div class="srow" aria-hidden="true">
           <div class="sk" style="width: 32px; height: 32px; border-radius: 6px"></div>
-          <div class="sk" style="height: 12px; width: {[40, 30, 46, 36, 32, 50][k]}%"></div>
+          <div class="sk" style="height: 12px; width: {[40, 30, 46, 36, 32, 50][k % 6]}%"></div>
           <div class="sk c-ver" style="height: 20px; width: 56px"></div>
           <div class="sk c-play" style="height: 10px; width: 48px"></div>
           <div class="sk" style="height: 10px; width: 64px"></div>
