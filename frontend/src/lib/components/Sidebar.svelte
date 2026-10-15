@@ -13,6 +13,7 @@
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
   import type { IconName } from '../ui/icons';
+  import Logo from '../ui/Logo.svelte';
   import Tile from '../ui/Tile.svelte';
 
   interface Props { active: SideKey; instanceId?: string | undefined; downloads?: number }
@@ -34,7 +35,7 @@
 
 <aside class="side" style="font-family: var(--font); color: var(--text)">
   <div class="side-brand">
-    <Icon name="brand" size={18} />
+    <Logo size={18} />
     <span class="hide-c">Quartz Client</span>
   </div>
   <button class="side-link" style="border: 1px solid var(--line-2); background: var(--panel); color: var(--faint); text-align: left" onclick={() => session.open({ kind: 'palette', mode: 'commands' })}>

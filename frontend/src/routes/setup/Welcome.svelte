@@ -6,7 +6,7 @@
   import { session } from '$lib/session.svelte';
   import { registry } from '$lib/settings/registry';
   import SettingControl from '$lib/settings/SettingControl.svelte';
-  import Icon from '$lib/ui/Icon.svelte';
+  import Logo from '$lib/ui/Logo.svelte';
   import SetupLayout from './SetupLayout.svelte';
 
   const info = query(() => api.app.info());
@@ -38,7 +38,7 @@
 
 <SetupLayout step={1}>
   <div style="display: flex; flex-direction: column; gap: 8px">
-    <Icon name="brand" size={28} sw={1.5} />
+    <Logo size={28} />
     <h1 class="h1" style="font-size: 26px; line-height: 32px">Set up the launcher</h1>
     <p class="muted" style="margin: 0">Three quick steps. You can change all of this later in Settings.</p>
   </div>
