@@ -38,7 +38,7 @@
 
 <SetupLayout step={1}>
   <div style="display: flex; flex-direction: column; gap: 8px">
-    <Logo size={28} />
+    <Logo />
     <h1 class="h1" style="font-size: 26px; line-height: 32px">Set up the launcher</h1>
     <p class="muted" style="margin: 0">Three quick steps. You can change all of this later in Settings.</p>
   </div>
