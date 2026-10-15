@@ -34,7 +34,7 @@ a{color:inherit}
 
 /* sidebar */
 .side{width:232px;height:100vh;min-height:600px;position:sticky;top:0;display:flex;flex-direction:column;gap:18px;padding:14px 10px;background:var(--side);border-right:1px solid var(--line)}
-.side-brand{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;font-weight:600;letter-spacing:-.01em}
+.side-brand{display:flex;align-items:center;gap:10px;min-height:32px;padding:0 10px;font-weight:600;letter-spacing:-.01em}
 .side-nav{display:flex;flex-direction:column;gap:2px}
 .side-link{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:var(--radius);color:var(--muted);text-decoration:none;transition:background-color 120ms ease,color 120ms ease}
 .side-link:hover{background:var(--raise);color:var(--text)}
