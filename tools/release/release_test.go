@@ -193,6 +193,65 @@ func TestLdflags(t *testing.T) {
 	}
 }
 
+func TestServiceFlags(t *testing.T) {
+	t.Setenv("QUARTZ_MSA_CLIENT_ID", "11111111-2222-3333-4444-555555555555")
+	t.Setenv("QUARTZ_CF_API_KEY", "")
+	t.Setenv("QUARTZ_DISCORD_CLIENT_ID", "")
+	f := serviceFlags()
+	if !strings.Contains(f, "brand.MSAClientID=11111111-2222-3333-4444-555555555555") {
+		t.Errorf("missing the Microsoft ID in %s", f)
+	}
+	for _, never := range []string{"Version", "UpdatePublicKey", "CurseForgeAPIKey", "-s -w"} {
+		if strings.Contains(f, never) {
+			t.Errorf("development flags must not carry %s: %s", never, f)
+		}
+	}
+}
+
+func TestLoadDotEnv(t *testing.T) {
+	unset := func(keys ...string) {
+		for _, k := range keys {
+			t.Setenv(k, "") // restored after the test
+			_ = os.Unsetenv(k)
+		}
+	}
+	write := func(body string) string {
+		path := filepath.Join(t.TempDir(), ".env")
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	unset("QUARTZ_MSA_CLIENT_ID", "QUARTZ_CF_API_KEY", "QUARTZ_DISCORD_CLIENT_ID")
+	t.Setenv("QUARTZ_DISCORD_CLIENT_ID", "123456789012345678")
+	err := loadDotEnv(write("# service IDs\n\n" +
+		"QUARTZ_MSA_CLIENT_ID = \"11111111-2222-3333-4444-555555555555\"\n" +
+		"QUARTZ_CF_API_KEY=$2a$10$abc/.def$HOME\n" +
+		"QUARTZ_DISCORD_CLIENT_ID=999999999999999999\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]string{
+		"QUARTZ_MSA_CLIENT_ID":     "11111111-2222-3333-4444-555555555555", // quotes stripped
+		"QUARTZ_CF_API_KEY":        "$2a$10$abc/.def$HOME",                 // taken literally
+		"QUARTZ_DISCORD_CLIENT_ID": "123456789012345678",                   // the environment wins
+	} {
+		if got := os.Getenv(k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+
+	for _, bad := range []string{"QUARTZ_RELEASE_PASSPHRASE=hunter2hunter2\n", "QUARTZ_MSA_CLIENT_ID\n"} {
+		if err := loadDotEnv(write(bad)); err == nil {
+			t.Errorf("%q must be refused", bad)
+		}
+	}
+	if err := loadDotEnv(filepath.Join(t.TempDir(), "missing")); err != nil {
+		t.Fatal("a missing .env is fine:", err)
+	}
+}
+
 func TestReleaseBuildsCarryNoDevTags(t *testing.T) {
 	for w := range targets {
 		args := strings.Join(wailsArgs(w, "", "out", false), " ")

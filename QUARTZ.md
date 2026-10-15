@@ -1404,6 +1404,8 @@ Gathered here from the sections above for quick review.
   - `verify`: reads a program's build info. It must be a production build without the `fakeauth`, `e2e` or `pprof` tag, and Linux and Windows binaries must be under 20 MB. For the macOS zip, the program inside is checked.
   - `manifest`: a signed `update.json`. Before signing, every file must carry this version's stamp and pass `verify`, so a build left over from an older release is never signed.
   - `sign`.
+  - `ldflags`: the service-ID linker flags for development builds, with no version or update key. `build.sh` uses it; `wails dev -ldflags "$(go run ./tools/release ldflags)"` gives a dev session real sign-in and CurseForge.
+  - `build` and `ldflags` read the gitignored `.env` next to `go.mod` ([.env.example](.env.example)): taken literally (a CurseForge key holds `$`), service IDs only, and the environment wins.
 - **Wrapper jar:** a reproducible Java 8 build of the stdin launcher, pinned by SHA-256. [tools/wrapperjar/](tools/wrapperjar/)
 - **Builds:**
   - [build.sh](build.sh) makes a one-command stripped production build.

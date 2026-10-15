@@ -6,11 +6,13 @@
 //	go run ./tools/release manifest 1.0.0 notes.md      write and sign dist/update.json
 //	go run ./tools/release sign <file>                  sign any file (file.minisig)
 //	go run ./tools/release verify <file>…               check built programs (tags, size)
+//	go run ./tools/release ldflags                      service-ID linker flags for development builds
 //
 // Targets default to what this computer can build: linux-amd64,
 // windows-amd64 and windows-arm64 on Linux; darwin-universal on a Mac.
 // Secrets and IDs come from the environment, never from the repository:
-// QUARTZ_MSA_CLIENT_ID, QUARTZ_CF_API_KEY, QUARTZ_DISCORD_CLIENT_ID, and
+// QUARTZ_MSA_CLIENT_ID, QUARTZ_CF_API_KEY, QUARTZ_DISCORD_CLIENT_ID (or the
+// gitignored .env next to go.mod, see .env.example), and
 // QUARTZ_RELEASE_PASSPHRASE (else it is asked for). A release refuses to
 // build without the Microsoft and CurseForge IDs unless given
 // -allow-missing. The key pair lives in
@@ -33,6 +35,7 @@ const usage = `usage:
   release manifest <version> <notes.md>
   release sign <file>
   release verify <file>…
+  release ldflags
 `
 
 func main() {
@@ -74,6 +77,8 @@ func run(ctx context.Context, args []string) error {
 			return fmt.Errorf("sign needs a file\n%s", usage)
 		}
 		return signFile(args[1])
+	case "ldflags":
+		return devFlags()
 	case "verify":
 		if len(args) < 2 {
 			return fmt.Errorf("verify needs a file\n%s", usage)
