@@ -26,8 +26,16 @@
   const left = $derived(Math.max(8, Math.min(x, window.innerWidth - w - 8)));
   const top = $derived(Math.max(8, Math.min(y, window.innerHeight - h - 8)));
 
+  // The first item takes focus, again when rows arrive above it (the size changes),
+  // unless the player has already moved to another item.
+  let focused: HTMLElement | null = null;
   $effect(() => {
-    el?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    void h;
+    const first = el?.querySelector<HTMLElement>('[role="menuitem"]');
+    if (!el || !first || first === focused) return;
+    if (focused && document.activeElement !== focused && el.contains(document.activeElement)) return;
+    first.focus();
+    focused = first;
   });
 
   // Inner panes scroll without bubbling, so listen in the capture phase (but not to
