@@ -14,8 +14,6 @@ export function CreateGroup(arg1:string):Promise<instance.Group>;
 
 export function CreateShortcut(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
-export function DeleteGroup(arg1:string):Promise<void>;
-
 export function Duplicate(arg1:string):Promise<string>;
 
 export function FollowOffers():Promise<Array<follow.Offer>>;
@@ -32,15 +30,11 @@ export function MoveDefault(arg1:string):Promise<string>;
 
 export function OpenFolder(arg1:string):Promise<void>;
 
-export function PickIcon(arg1:string):Promise<api.InstanceView>;
-
 export function Purge(arg1:string):Promise<void>;
 
 export function RemoveClientJar(arg1:string):Promise<api.InstanceView>;
 
 export function Rename(arg1:string,arg2:string):Promise<api.InstanceView>;
-
-export function RenameGroup(arg1:string,arg2:string):Promise<void>;
 
 export function Restore(arg1:string):Promise<api.InstanceView>;
 
@@ -49,8 +43,6 @@ export function SetArt(arg1:string,arg2:instance.Art):Promise<api.InstanceView>;
 export function SetDiscord(arg1:string,arg2:boolean):Promise<api.InstanceView>;
 
 export function SetGroup(arg1:string,arg2:string):Promise<api.InstanceView>;
-
-export function SetGroupCollapsed(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetIcon(arg1:string,arg2:string):Promise<api.InstanceView>;
 

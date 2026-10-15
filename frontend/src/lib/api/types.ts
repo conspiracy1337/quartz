@@ -77,7 +77,7 @@ export interface Instance extends InstanceSummary {
   switch?: SwitchResult;
 }
 
-export interface Group { name: string; collapsed?: boolean }
+export interface Group { name: string }
 /** An instance in the launcher's trash. */
 export interface TrashEntry { key: string; id: string; name: string; art: Art; icon?: string; minecraft: string; loader?: string; group?: string; trashedAt: number }
 

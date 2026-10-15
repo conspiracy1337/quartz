@@ -2035,7 +2035,6 @@ export namespace instance {
 	}
 	export class Group {
 	    name: string;
-	    collapsed?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Group(source);
@@ -2044,7 +2043,6 @@ export namespace instance {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
-	        this.collapsed = source["collapsed"];
 	    }
 	}
 	export class Host {

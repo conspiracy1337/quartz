@@ -392,22 +392,6 @@ func (s *Instances) SetArt(id string, art instance.Art) (InstanceView, error) {
 	return s.changed(s.d.Store.SetArt(id, art))
 }
 
-// PickIcon lets the user choose a picture in a native dialog (the path never
-// comes from the page). A cancelled dialog changes nothing.
-func (s *Instances) PickIcon(id string) (InstanceView, error) {
-	if err := checkInstanceID(id); err != nil {
-		return InstanceView{}, err
-	}
-	hash, err := s.chooseIcon()
-	if err != nil || hash == "" {
-		if err == nil {
-			return s.Get(id)
-		}
-		return InstanceView{}, err
-	}
-	return s.changed(s.d.Store.SetIcon(id, hash))
-}
-
 // SetIcon uses a picture already in the icon library ("" goes back to the tile).
 func (s *Instances) SetIcon(id, hash string) (InstanceView, error) {
 	if err := checkInstanceID(id); err != nil {
@@ -423,9 +407,7 @@ func (s *Instances) SetIcon(id, hash string) (InstanceView, error) {
 
 // ChooseIcon picks a picture for an instance that doesn't exist yet (New
 // instance); it returns the icon's name, or "" when cancelled.
-func (s *Instances) ChooseIcon() (string, error) { return s.chooseIcon() }
-
-func (s *Instances) chooseIcon() (string, error) {
+func (s *Instances) ChooseIcon() (string, error) {
 	path, err := openFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a picture",
 		Filters: []wruntime.FileFilter{{DisplayName: "Pictures (*.png, *.jpg)", Pattern: "*.png;*.jpg;*.jpeg"}},
@@ -470,21 +452,6 @@ func (s *Instances) CreateGroup(name string) (instance.Group, error) {
 		s.d.Bus.Emit(events.InstancesChanged, nil)
 	}
 	return g, err
-}
-
-// RenameGroup renames a group and its members' group.
-func (s *Instances) RenameGroup(from, to string) error {
-	return s.groupsChanged(s.d.Store.RenameGroup(from, to))
-}
-
-// DeleteGroup removes a group; its instances become ungrouped.
-func (s *Instances) DeleteGroup(name string) error {
-	return s.groupsChanged(s.d.Store.DeleteGroup(name))
-}
-
-// SetGroupCollapsed remembers a group folded away.
-func (s *Instances) SetGroupCollapsed(name string, collapsed bool) error {
-	return s.groupsChanged(s.d.Store.SetGroupCollapsed(name, collapsed))
 }
 
 func (s *Instances) groupsChanged(err error) error {
