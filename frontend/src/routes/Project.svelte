@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { ProjectVersion, Src } from '$lib/api/types';
-  import { ago, bytes, compact, errorText, shortMonthDay, shortDate } from '$lib/format';
+  import { bytes, compact, errorText, shortMonthDay, shortDate } from '$lib/format';
   import { LOADER_NAMES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { query } from '$lib/query.svelte';
@@ -37,15 +37,17 @@
 
   const p = $derived(project.data);
   const kind = $derived(p ? projectType(p.type) : undefined);
-  const src = $derived<Src>(chosen ?? p?.fresher ?? 'modrinth');
+  const src = $derived<Src>(chosen ?? p?.preferred ?? 'modrinth');
   const other = $derived<Src>(src === 'modrinth' ? 'curseforge' : 'modrinth');
   const side = $derived(p?.[src] ?? p?.[other]);
   const both = $derived(!!p?.modrinth && !!p?.curseforge);
-  const why = $derived(
-    p?.modrinth && p.curseforge ? (src === p.fresher
-      ? `more recently (${ago(p[src]!.updated)}, ${SRC_NAMES[other]} ${ago(p[other]!.updated)})`
-      : `${ago(p[src]!.updated)} (${SRC_NAMES[other]} was updated more recently)`) : '',
-  );
+  /** Why the page shows its platform; Modrinth is preferred as it pays creators more. */
+  const why = $derived.by(() => {
+    if (!p || !both || (p.reason !== 'same' && p.reason !== 'newer')) return '';
+    const has = p.reason === 'same' ? 'the same latest release' : 'a newer release';
+    if (src !== p.preferred) return `Showing ${SRC_NAMES[src]}. ${SRC_NAMES[p.preferred]} is the default because it has ${has}.`;
+    return p.reason === 'same' ? `Showing ${SRC_NAMES[src]} because both platforms have the same latest release.` : `Showing ${SRC_NAMES[src]} because it has a newer release.`;
+  });
   /** A pack becomes a new instance: no instance's version or loader narrows its versions. */
   const forInstance = $derived(!!kind?.content);
   const versions = query(() => (p?.[src] ? api.browse.versions(id, src, forInstance ? (target?.id ?? '') : '', forInstance && onlyCompatible) : Promise.resolve([] as ProjectVersion[])));
@@ -125,7 +127,7 @@
                 <a class="lk" href={l.url} onclick={open(l.url)}><Icon name={l.icon as IconName} size={14} />{l.label}</a>
               {/each}
               <a class="lk" href={side.url} onclick={open(side.url)}><Icon name="external" size={14} />View on {SRC_NAMES[p[src] ? src : other]}</a>
-              {#if both}<span class="small faint" style="margin-top: 6px">Showing {SRC_NAMES[src]} because it was updated {why}.</span>{/if}
+              {#if why}<span class="small faint" style="margin-top: 6px">{why}</span>{/if}
             </nav>
           </aside>
         </div>

@@ -112,7 +112,7 @@ const side = (downloads: number, days: number, url: string) => ({
 
 /** The Iris project page from the design. */
 export const iris: ProjectPage = {
-  ref: 'iris-shaders', type: 'mod', name: 'Iris Shaders', fresher: 'modrinth', channels: ['release', 'beta'],
+  ref: 'iris-shaders', type: 'mod', name: 'Iris Shaders', preferred: 'modrinth', reason: 'same', channels: ['release', 'beta'],
   modrinth: side(31.6e6, 5, 'https://modrinth.com/mod/iris'),
   curseforge: side(12.9e6, 12, 'https://www.curseforge.com/minecraft/mc-mods/irisshaders'),
   installed: { item: 'iris', source: 'modrinth', versionId: INSTALLED, version: INSTALLED, published: date(2024, 12, 12) },

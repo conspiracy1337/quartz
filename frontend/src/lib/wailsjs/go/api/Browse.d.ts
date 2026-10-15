@@ -8,6 +8,8 @@ export function Changelog(arg1:string,arg2:string,arg3:Array<string>):Promise<Ar
 
 export function More(arg1:string):Promise<browse.Results>;
 
+export function Prefer(arg1:string,arg2:string):Promise<string>;
+
 export function Project(arg1:string,arg2:string):Promise<browse.Page>;
 
 export function Resolve(arg1:string):Promise<string>;
