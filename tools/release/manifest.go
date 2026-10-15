@@ -33,7 +33,7 @@ func manifest(version, notesFile string) error {
 		return err
 	}
 	m.Notes = string(notes)
-	if err := addFiles(&m, "dist"); err != nil {
+	if err := addFiles(&m, "dist", version); err != nil {
 		return err
 	}
 	if len(m.Files) == 0 {
@@ -68,18 +68,31 @@ func readManifest(dir, version string) (update.Manifest, error) {
 	return m, nil
 }
 
-// addFiles hashes every release file in dir into m.
-func addFiles(m *update.Manifest, dir string) error {
+// addFiles hashes every release file in dir into m. Each must have been
+// built for version (see stamp) and pass verifyArtifact: this is the last
+// look before the manifest is signed.
+func addFiles(m *update.Manifest, dir, version string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
+	stamps := readStamps(dir)
 	for _, e := range entries {
 		platform, ok := platformOf(e.Name())
 		if !ok || !e.Type().IsRegular() {
 			continue
 		}
-		f, err := os.Open(filepath.Join(dir, e.Name())) //nolint:gosec // our own output
+		path := filepath.Join(dir, e.Name())
+		if built := stamps[e.Name()]; built != version {
+			if built == "" {
+				built = "an unknown version"
+			}
+			return fmt.Errorf("%s was built for %s, not %s: rebuild it or remove it", path, built, version)
+		}
+		if _, err := verifyArtifact(path); err != nil {
+			return err
+		}
+		f, err := os.Open(path) //nolint:gosec // our own output
 		if err != nil {
 			return err
 		}
