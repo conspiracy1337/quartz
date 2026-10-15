@@ -19,7 +19,6 @@
   import Sandbox from './Sandbox.svelte';
   import ScreenshotViewer from './ScreenshotViewer.svelte';
   import Screenshots from './Screenshots.svelte';
-  import Version from './Version.svelte';
 
   interface Props { id: string; tab: InstanceTab; sub?: string | undefined }
   let { id, tab, sub }: Props = $props();
@@ -49,10 +48,8 @@
       {#if sub}<ScreenshotViewer instanceId={i.id} shotId={sub} />{:else}<Screenshots instanceId={i.id} />{/if}
     {:else if tab === 'logs'}
       {#if sub === 'files'}<LogFiles instanceId={i.id} />{:else if sub === 'history'}<LogHistory instanceId={i.id} />{:else}<LogsLive instanceId={i.id} />{/if}
-    {:else if tab === 'version'}
-      {#if sub === 'minecraft'}<ChangeMinecraft instance={i} />{:else if sub === 'loader'}<ChangeLoader instance={i} />{:else}<Version instance={i} />{/if}
     {:else if tab === 'settings'}
-      {#if sub === 'commands'}<Commands instance={i} />{:else if sub === 'sandbox'}<Sandbox instance={i} />{:else}<InstanceSettings instance={i} />{/if}
+      {#if sub === 'minecraft'}<ChangeMinecraft instance={i} />{:else if sub === 'loader'}<ChangeLoader instance={i} />{:else if sub === 'commands'}<Commands instance={i} />{:else if sub === 'sandbox'}<Sandbox instance={i} />{:else}<InstanceSettings instance={i} />{/if}
     {/if}
   {/if}
 {:else}

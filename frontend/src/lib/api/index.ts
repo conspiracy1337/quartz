@@ -208,7 +208,7 @@ async function missingAlerts(): Promise<Alert[]> {
 /** "Survival: every mod supports 1.21.5", for instances that follow the latest release. */
 async function followAlerts(): Promise<Alert[]> {
   const offers = await api.instances.followOffers();
-  return offers.map((o): Alert => ({ tone: 'info', subject: o.name, text: `every mod supports ${o.minecraft}`, action: 'Switch', target: { kind: 'instance', id: o.instanceId, tab: 'version' } }));
+  return offers.map((o): Alert => ({ tone: 'info', subject: o.name, text: `every mod supports ${o.minecraft}`, action: 'Switch', target: { kind: 'instance', id: o.instanceId, tab: 'settings' } }));
 }
 
 const FOLDER_PROBLEMS: Record<string, string> = {

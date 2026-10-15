@@ -18,7 +18,7 @@
   let l = $state<number | null>(null);
   let v = $state(0);
   let beta = $state(false);
-  const back = $derived(href({ name: 'instance', id: i.id, tab: 'version' }));
+  const back = $derived(href({ name: 'instance', id: i.id, tab: 'settings' }));
   const currentIndex = $derived(loaders.data?.findIndex((x) => x.kind === (i.loader?.kind ?? 'none')) ?? 0);
   const li = $derived(l ?? currentIndex);
   const opt = $derived(loaders.data?.[li]);

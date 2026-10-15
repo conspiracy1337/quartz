@@ -16,6 +16,7 @@
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
   import ToggleRow from '$lib/ui/ToggleRow.svelte';
+  import VersionSection from './VersionSection.svelte';
 
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
@@ -120,6 +121,7 @@
 
 <div class="scroll">
   <div class="page set-grid" style="gap: 24px; padding-top: 18px">
+    <VersionSection instance={i} />
     <section class="sec" aria-label="Java and memory">
       <div class="sec-h"><h2 class="h3">Java and memory</h2><button class="ov" onclick={() => setOverride(!st.java.override)} aria-pressed={st.java.override}><span>Override global settings</span><span class="tg" class:on={st.java.override} aria-hidden="true"><span></span></span></button></div>
       <div class="card" class:inherited={!st.java.override}>

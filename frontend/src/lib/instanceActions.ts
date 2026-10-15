@@ -78,7 +78,7 @@ export async function switchVersion(i: Instance, minecraft: string, kind: string
     const off = s?.disabled.length ?? 0;
     if (off > 0) session.notify({ subject: `${off} ${off === 1 ? 'mod was' : 'mods were'} turned off`, text: `no build for ${label}` });
     else if (s?.unknown.length) session.notify({ subject: label, text: `${s.unknown.length} unidentified ${s.unknown.length === 1 ? 'mod' : 'mods'} kept as they are` });
-    go({ name: 'instance', id: i.id, tab: 'version' });
+    go({ name: 'instance', id: i.id, tab: 'settings' });
     return true;
   } catch (e) {
     session.fail(label, e);

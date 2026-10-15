@@ -155,7 +155,7 @@ export interface ContentChange { at: number; kind: 'added' | 'updated' | 'remove
 export interface Alert { tone: 'warn' | 'info'; subject: string; text: string; action: string; target: AlertTarget }
 export type AlertTarget =
   | { kind: 'sign-in'; accountId: string }
-  | { kind: 'instance'; id: string; tab: 'mods' | 'version' }
+  | { kind: 'instance'; id: string; tab: 'mods' | 'settings' }
   | { kind: 'modpack-update'; id: string }
   | { kind: 'settings'; tab: 'storage' };
 /** The latest minecraft.net article; `image` is its picture on Go's image route. */
