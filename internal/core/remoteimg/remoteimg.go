@@ -1,5 +1,6 @@
 // Package remoteimg proxies project pictures (icons, galleries, pictures in
-// descriptions) from the Modrinth and CurseForge CDNs to the UI, so the page
+// descriptions) from the Modrinth and CurseForge CDNs, the image and object
+// storage hosts descriptions link to, and Mojang's news to the UI, so the page
 // never loads anything from another origin. It is not an open proxy: the UI
 // only ever holds tokens, and a token exists only for a URL the launcher read
 // from a platform's answer and found on an allowed host. Files are cached on
@@ -52,7 +53,28 @@ var Hosts = map[string]bool{
 	// Where project descriptions commonly keep their pictures.
 	"i.imgur.com": true, "raw.githubusercontent.com": true, "user-images.githubusercontent.com": true,
 	"private-user-images.githubusercontent.com": true, "media.githubusercontent.com": true,
+	"firebasestorage.googleapis.com": true,
 }
+
+// storageHosts are object storage services. They give every bucket its own
+// host name, so they are matched by pattern, at a label boundary. Only a
+// service's storage endpoints count: amazonaws.com and scw.cloud also name
+// servers anyone can run.
+var storageHosts = regexp.MustCompile(`^(?:[a-z0-9-]+\.)*(?:` + strings.Join([]string{
+	`s3(?:-[a-z0-9-]+)?(?:\.dualstack)?(?:\.[a-z]{2}(?:-[a-z]+)+-[0-9]+)?\.amazonaws\.com`, // Amazon S3
+	`r2\.dev`, `r2\.cloudflarestorage\.com`, // Cloudflare R2
+	`storage\.googleapis\.com`,                     // Google Cloud Storage
+	`blob\.core\.windows\.net`,                     // Azure Blob Storage
+	`backblazeb2\.com`,                             // Backblaze B2
+	`digitaloceanspaces\.com`,                      // DigitalOcean Spaces
+	`wasabisys\.com`,                               // Wasabi
+	`linodeobjects\.com`,                           // Akamai (Linode) Object Storage
+	`your-objectstorage\.com`,                      // Hetzner
+	`vultrobjects\.com`,                            // Vultr
+	`s3\.[a-z]{2}-[a-z]{3}\.scw\.cloud`,            // Scaleway
+	`s3\.[a-z0-9-]+\.(?:io|perf)\.cloud\.ovh\.net`, // OVHcloud
+	`objectstorage\.[a-z0-9-]+\.oraclecloud\.com`,  // Oracle Cloud
+}, "|") + `)$`)
 
 // pathHosts are hosts that serve pictures only under one path; GitHub's
 // uploads redirect from there to private-user-images.githubusercontent.com.
@@ -109,7 +131,7 @@ func Allowed(raw string) bool {
 	if prefix, ok := pathHosts[host]; ok {
 		return strings.HasPrefix(u.EscapedPath(), prefix) && !strings.Contains(u.Path, "..")
 	}
-	return Hosts[host]
+	return Hosts[host] || storageHosts.MatchString(host)
 }
 
 // Token registers raw and returns the name the UI asks for it by ("" when
