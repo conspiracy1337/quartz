@@ -57,7 +57,9 @@ export class MockTasks {
   };
   pauseAll = () => this.active.forEach((j) => this.pause(j.id));
   resumeAll = () => this.active.forEach((j) => this.resume(j.id));
-  cancelAll = () => (this.active = []);
+  cancelAll = () => {
+    this.active = [];
+  };
   retryAllFailed = () => this.history.filter((j) => j.state === 'failed').forEach((j) => this.retry(j.id));
   clearFinished = () => {
     this.history = this.history.filter((j) => j.state === 'failed');

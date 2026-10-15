@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"quartz/internal/brand"
 )
 
 // target is one release file.
@@ -42,21 +45,56 @@ func defaultTargets() []string {
 	return []string{"linux-amd64", "windows-amd64", "windows-arm64"}
 }
 
-// ldflags builds in the version, the update key and the service IDs.
+// serviceID is a build-time ID taken from the environment.
+type serviceID struct {
+	Env, Var string // environment variable, brand variable
+	Valid    func(string) bool
+	Feature  string // what is off without it
+	Required bool   // a release without it misses a main feature
+}
+
+var serviceIDs = []serviceID{
+	{brand.EnvMSAClientID, "MSAClientID", brand.ValidClientID, "Microsoft sign-in", true},
+	{brand.EnvCurseForgeKey, "CurseForgeAPIKey", brand.ValidCurseForgeKey, "CurseForge", true},
+	{brand.EnvDiscordClientID, "DiscordClientID", brand.ValidDiscordID, "Discord Rich Presence", false},
+}
+
+// checkIDs refuses malformed service IDs, and missing required ones unless
+// allowMissing. A missing optional one is only reported.
+func checkIDs(allowMissing bool) error {
+	for _, id := range serviceIDs {
+		v := os.Getenv(id.Env)
+		switch {
+		case v != "" && !id.Valid(v):
+			return fmt.Errorf("%s is malformed", id.Env)
+		case v == "" && id.Required && !allowMissing:
+			return fmt.Errorf("%s is not set, so %s would be off in this release (build -allow-missing to accept that)", id.Env, id.Feature)
+		case v == "":
+			fmt.Fprintf(os.Stderr, "warning: %s is not set: %s is off in this release\n", id.Env, id.Feature)
+		}
+	}
+	return nil
+}
+
+// ldflags builds in the version, the update key and the service IDs
+// (checked by checkIDs first).
 func ldflags(version, pub string) string {
 	set := func(name, v string) string { return fmt.Sprintf(" -X quartz/internal/brand.%s=%s", name, v) }
 	f := "-s -w" + set("Version", version) + set("UpdatePublicKey", pub)
-	for env, name := range map[string]string{"QUARTZ_MSA_CLIENT_ID": "MSAClientID", "QUARTZ_CF_API_KEY": "CurseForgeAPIKey", "QUARTZ_DISCORD_CLIENT_ID": "DiscordClientID"} {
-		if v := os.Getenv(env); v != "" {
-			f += set(name, v)
+	for _, id := range serviceIDs {
+		if v := os.Getenv(id.Env); v != "" {
+			f += set(id.Var, v)
 		}
 	}
 	return f
 }
 
-func build(version string, which []string) error {
+func build(ctx context.Context, version string, which []string, allowMissing bool) error {
 	if !versionOK(version) {
 		return fmt.Errorf("version %q isn't x.y.z", version)
+	}
+	if err := checkIDs(allowMissing); err != nil {
+		return err
 	}
 	pub, err := publicKey()
 	if err != nil {
@@ -81,13 +119,21 @@ func build(version string, which []string) error {
 		}
 		args := wailsArgs(w, ldflags(version, pub), t.File, frontendBuilt)
 		fmt.Println("wails", strings.Join(args[:4], " "), "…")
-		cmd := exec.Command("wails", args...) //nolint:gosec // fixed tool, our own arguments
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		if err := cmd.Run(); err != nil {
+		if err := runTool(ctx, "wails", args...); err != nil {
 			return fmt.Errorf("%s: %w", w, err)
 		}
 		frontendBuilt = true
-		if err := collect(w, t); err != nil {
+		if err := collect(ctx, w, t); err != nil {
+			return err
+		}
+		out := filepath.Join("dist", t.File)
+		summary, err := verifyArtifact(out)
+		if err != nil {
+			_ = os.Remove(out)
+			return err
+		}
+		fmt.Println(summary)
+		if err := stamp("dist", t.File, version); err != nil {
 			return err
 		}
 	}
@@ -109,8 +155,15 @@ func wailsArgs(w, flags, file string, skipFrontend bool) []string {
 	return args
 }
 
+// runTool runs a fixed build tool with our own arguments, stopped by ctx.
+func runTool(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // fixed tools, our own arguments
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	return cmd.Run()
+}
+
 // collect moves a build into dist/ (the macOS .app zipped, ad-hoc signed).
-func collect(w string, t target) error {
+func collect(ctx context.Context, w string, t target) error {
 	if w == "darwin-universal" {
 		apps, _ := filepath.Glob(filepath.Join("build", "bin", "*.app"))
 		if len(apps) != 1 {
@@ -120,15 +173,36 @@ func collect(w string, t target) error {
 			{"codesign", "--force", "--deep", "-s", "-", apps[0]},
 			{"ditto", "-c", "-k", "--keepParent", apps[0], filepath.Join("dist", t.File)},
 		} {
-			cmd := exec.Command(c[0], c[1:]...) //nolint:gosec // fixed tools
-			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-			if err := cmd.Run(); err != nil {
+			if err := runTool(ctx, c[0], c[1:]...); err != nil {
 				return fmt.Errorf("%s: %w", c[0], err)
 			}
 		}
 		return nil
 	}
 	return os.Rename(filepath.Join("build", "bin", t.File), filepath.Join("dist", t.File))
+}
+
+// stampFile records which version built each file in dist/, so a manifest
+// never signs a file left over from an older release. It is a dotfile, so
+// publishing dist/* leaves it out.
+const stampFile = ".builds.json"
+
+func readStamps(dir string) map[string]string {
+	stamps := map[string]string{}
+	if b, err := os.ReadFile(filepath.Join(dir, stampFile)); err == nil { //nolint:gosec // our own output
+		_ = json.Unmarshal(b, &stamps)
+	}
+	return stamps
+}
+
+func stamp(dir, file, version string) error {
+	stamps := readStamps(dir)
+	stamps[file] = version
+	b, err := json.MarshalIndent(stamps, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, stampFile), append(b, '\n'), 0o644) //nolint:gosec // build bookkeeping
 }
 
 // setProductVersion writes the version into wails.json for the build's

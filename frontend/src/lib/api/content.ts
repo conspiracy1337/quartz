@@ -64,7 +64,7 @@ class MockContent {
 
   find = (kind: ContentKind, id: string) => this.items[kind].find((c) => c.id === id);
   // Preview items open their project page by their own id.
-  list = (_id: string, kind: ContentKind) => this.items[kind].map((c) => ({ ...c, ref: c.ref ?? c.id }));
+  list = (_id: string, kind: ContentKind): ContentItem[] => this.items[kind].map((c) => ({ ...c, ref: c.ref ?? c.id }));
   info = (_id: string): ContentInfo => ({ shaderMod: 'Iris 1.8.1', worlds: ['Creative Plots', 'Northwatch'] });
   setEnabled = (_id: string, kind: ContentKind, item: string, on: boolean) => {
     const c = this.find(kind, item);

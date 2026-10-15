@@ -44,12 +44,15 @@ var MSAClientID = ""
 
 var guid = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+// ValidClientID reports whether id is a well-formed Microsoft client ID.
+func ValidClientID(id string) bool { return guid.MatchString(id) }
+
 // ClientID returns the Microsoft client ID ($QUARTZ_MSA_CLIENT_ID first, then
 // the build value), or "" when neither is a well-formed GUID. An empty result
 // means Microsoft sign-in is not set up in this build.
 func ClientID() string {
 	for _, id := range []string{os.Getenv(EnvMSAClientID), MSAClientID} {
-		if guid.MatchString(id) {
+		if ValidClientID(id) {
 			return strings.ToLower(id)
 		}
 	}
@@ -63,12 +66,15 @@ var CurseForgeAPIKey = ""
 
 var apiKey = regexp.MustCompile(`^[\x21-\x7e]{20,128}$`)
 
+// ValidCurseForgeKey reports whether k is a well-formed CurseForge API key.
+func ValidCurseForgeKey(k string) bool { return apiKey.MatchString(k) }
+
 // CurseForgeKey returns the CurseForge API key ($QUARTZ_CF_API_KEY first, then
 // the build value), or "" when neither is well-formed. Without a key,
 // CurseForge lookups are skipped.
 func CurseForgeKey() string {
 	for _, k := range []string{os.Getenv(EnvCurseForgeKey), CurseForgeAPIKey} {
-		if apiKey.MatchString(k) {
+		if ValidCurseForgeKey(k) {
 			return k
 		}
 	}
@@ -85,12 +91,15 @@ var DiscordClientID = ""
 
 var snowflake = regexp.MustCompile(`^[0-9]{17,20}$`)
 
+// ValidDiscordID reports whether id is a well-formed Discord application ID.
+func ValidDiscordID(id string) bool { return snowflake.MatchString(id) }
+
 // DiscordID returns the Discord application ID ($QUARTZ_DISCORD_CLIENT_ID
 // first, then the build value), or "" when neither is well-formed: Rich
 // Presence is then not set up in this build.
 func DiscordID() string {
 	for _, id := range []string{os.Getenv(EnvDiscordClientID), DiscordClientID} {
-		if snowflake.MatchString(id) {
+		if ValidDiscordID(id) {
 			return id
 		}
 	}
