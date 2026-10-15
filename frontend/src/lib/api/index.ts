@@ -192,8 +192,6 @@ export const api = {
   },
 };
 
-export type Api = typeof api;
-
 /** "Prominence II is missing Sodium": one alert per instance whose mods lack a dependency. */
 async function missingAlerts(): Promise<Alert[]> {
   const [missing, list] = await Promise.all([contentApi.missing(), InstancesGo.List()]);

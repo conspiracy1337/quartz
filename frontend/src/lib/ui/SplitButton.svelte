@@ -15,7 +15,6 @@
     menuAccent?: boolean;
     href?: string | undefined;
     disabled?: boolean;
-    menuDisabled?: boolean;
     menuLabel: string;
     expanded?: boolean | undefined;
     onclick?: () => void;
@@ -23,7 +22,7 @@
     style?: string | undefined;
     children: Snippet;
   }
-  let { size = 'md', accent = false, menuAccent = accent, href, disabled = false, menuDisabled = false, menuLabel, expanded, onclick, onmenu, style, children }: Props = $props();
+  let { size = 'md', accent = false, menuAccent = accent, href, disabled = false, menuLabel, expanded, onclick, onmenu, style, children }: Props = $props();
 </script>
 
 <span class="split split-{size}" {style}>
@@ -33,7 +32,7 @@
     <button class="btn" class:btn-accent={accent} class:btn-sm={size === 'sm'} class:btn-lg={size === 'lg'} {disabled} {onclick}>{@render children()}</button>
   {/if}
   <button class="btn" class:btn-accent={menuAccent} class:btn-sm={size === 'sm'} class:btn-lg={size === 'lg'} class:btn-icon={size === 'lg'}
-    aria-label={menuLabel} aria-haspopup="menu" aria-expanded={expanded} disabled={menuDisabled} onclick={onmenu}>
+    aria-label={menuLabel} aria-haspopup="menu" aria-expanded={expanded} onclick={onmenu}>
     <Icon name="chevron-down" size={size === 'lg' ? 12 : 10} sw={size === 'lg' ? 2.2 : 2.4} />
   </button>
 </span>

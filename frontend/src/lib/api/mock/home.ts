@@ -15,7 +15,7 @@ export const news: NewsItem = {
 };
 
 /** Minutes played per day, Monday to Sunday; the last entry is today. */
-export const week: DayPlay[] = [85, 15, 150, 40, 160, 190, 60].map((minutes, i) => ({ day: i, minutes }));
+export const week: DayPlay[] = [85, 15, 150, 40, 160, 190, 60].map((minutes, i) => ({ day: i, minutes, today: i === 6 }));
 
 const lg = (a: string, b: string) => ({ background: `linear-gradient(135deg,${a},${b})` });
 export const servers: MergedServer[] = [

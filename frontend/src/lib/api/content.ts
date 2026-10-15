@@ -10,7 +10,7 @@ import * as inst from './mock/instances';
 import * as misc from './mock/misc';
 import type {
   BulkCheck,
-  AddResult, Art, Compat, ContentChange, ContentInfo, ContentItem, ContentKind, ContentStatus, ModUpdate,
+  AddResult, Art, Compat, ContentChange, ContentInfo, ContentItem, ContentKind, ContentStatus,
   PendingUpdate, Source, StoreUsage, UpdateReview, ChangelogVersion,
 } from './types';
 
@@ -178,5 +178,3 @@ export const contentApi = {
   usage: () => revs.load('content', bridged(Go.Usage, (): StoreUsage => ({ blobs: 412, bytes: 3_100_000_000, unused: 18, unusedBytes: 240_000_000 }))),
   cleanUp: bridged(Go.CleanUp, (): StoreUsage => ({ blobs: 394, bytes: 2_860_000_000, unused: 0, unusedBytes: 0 })),
 };
-
-export type { ModUpdate };

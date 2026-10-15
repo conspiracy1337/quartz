@@ -47,7 +47,6 @@ export const icons = {
   issue: s('<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>'),
   refresh: s('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
   external: s('<path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5"/>'),
-  grid: s('<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>'),
   list: s('<path d="M4 6h16M4 12h16M4 18h16"/>'),
   file: s('<path d="M6 3h9l4 4v14H6z"/>'),
   link: s('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),

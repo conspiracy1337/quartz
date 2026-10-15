@@ -71,7 +71,7 @@ const serversList = (id: string, force: boolean) =>
     }));
 
 export const worldsApi = {
-  list: (id: string, _force = false): Promise<ContentItem[]> => (hasBridge() ? revs.load('worlds', () => worldsList(id)) : preview(fixtures.worlds)),
+  list: (id: string): Promise<ContentItem[]> => (hasBridge() ? revs.load('worlds', () => worldsList(id)) : preview(fixtures.worlds)),
   import: bridged(WorldsGo.Import, (_id: string) => ''),
   importDropped: bridged(WorldsGo.ImportDropped, (_drop: string, _id: string): string[] => []),
   export: bridged(WorldsGo.Export, (_id: string, _folder: string) => false),

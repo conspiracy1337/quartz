@@ -7,8 +7,6 @@
   import Empty from '../ui/Empty.svelte';
 
   /** Recent screenshots from every instance, shown one at a time. */
-  interface Props { bare?: boolean; inset?: number }
-  let { bare = false, inset = 12 }: Props = $props();
 
   const INTERVAL = 5000;
   const shots = query(() => api.home.recentShots());
@@ -31,12 +29,12 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="shr" class:bare role="region" aria-roledescription="carousel" aria-label="Recent screenshots" style="font-family: var(--font)"
+<div class="shr" role="region" aria-roledescription="carousel" aria-label="Recent screenshots" style="font-family: var(--font)"
   onmouseenter={() => (paused = true)} onmouseleave={() => (paused = false)}>
   {#each list as s, k (s.id)}<span class="shr-img" class:on={k === i} style="background: {s.art.background}" aria-hidden="true"></span>{/each}
   {#if cur}
     <a href={href({ name: 'instance', id: cur.instanceId, tab: 'screenshots', sub: cur.id })} class="shr-hit" aria-label="Open {cur.title}"></a>
-    <div class="shr-bar" style="padding: 40px {inset}px {inset}px {inset}px">
+    <div class="shr-bar" style="padding: 40px 12px 12px 12px">
       <span class="shr-cap" aria-live="polite"><span class="shr-t">{cur.title}</span><span class="shr-d">{where}</span></span>
       <span class="shr-dots">{#each list as s, k (s.id)}<button class:on={k === i} onclick={() => (i = k)} aria-label="Show screenshot {k + 1}"></button>{/each}</span>
       <button class="shr-nv" onclick={() => (i = (i + n - 1) % n)} aria-label="Previous screenshot"><Icon name="chevron-left" size={12} sw={2.2} /></button>
@@ -52,7 +50,6 @@
 <style>
   /* Classes are prefixed shr- so they never collide with monolith.css (.sr and .bar exist there). */
   .shr{position:absolute;inset:0;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--line);background:#0c0c0e;container-type:size}
-  .shr.bare{border:0;border-radius:0}
   .shr-img{position:absolute;inset:0;opacity:0}
   .shr-img.on{opacity:1}
   @media (prefers-reduced-motion:no-preference){.shr-img{transition:opacity 900ms ease}}
