@@ -111,11 +111,6 @@ func GenerateKey() (PublicKey, SecretKey, error) {
 	return PublicKey{ID: id, Key: pub}, SecretKey{ID: id, Key: priv}, nil
 }
 
-// Public is the key's public half.
-func (s SecretKey) Public() PublicKey {
-	return PublicKey{ID: s.ID, Key: s.Key.Public().(ed25519.PublicKey)}
-}
-
 // Sign returns the .minisig file for message with a trusted comment.
 func (s SecretKey) Sign(message []byte, trustedComment string) []byte {
 	trustedComment = strings.Map(func(r rune) rune {

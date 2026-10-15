@@ -78,7 +78,7 @@ func TestPurge(t *testing.T) {
 	now := time.Now()
 	old, _, _ := Hold(root, []Move{{Rel: "screenshots/a.png"}}, now.Add(-2*Keep))
 	fresh, _, _ := Hold(root, []Move{{Rel: "mods/x.jar"}}, now)
-	// A hold from before manifests existed: purged by the folder's age.
+	// A hold whose manifest is missing: purged by the folder's age.
 	legacy := filepath.Join(dir, ".quartz", "removed", "0123456789abcdef")
 	_ = os.MkdirAll(legacy, 0o700)
 	_ = os.Chtimes(legacy, now.Add(-2*Keep), now.Add(-2*Keep))

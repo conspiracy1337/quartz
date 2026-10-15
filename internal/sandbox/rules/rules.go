@@ -5,7 +5,6 @@
 package rules
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -125,18 +124,6 @@ type Settings struct {
 
 // Default is a new instance's sandbox: on, Standard.
 func Default() Settings { return Settings{On: true, Preset: Standard} }
-
-// UnmarshalJSON also reads the bool instance.json held before the sandbox
-// had rules (true: on, Standard).
-func (s *Settings) UnmarshalJSON(b []byte) error {
-	var on bool
-	if json.Unmarshal(b, &on) == nil {
-		*s = Settings{On: on, Preset: Standard}
-		return nil
-	}
-	type plain Settings
-	return json.Unmarshal(b, (*plain)(s))
-}
 
 // Level is the rule's level on goos: the custom choice if it is one goos can
 // enforce, else the preset's.

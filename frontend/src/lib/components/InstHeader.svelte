@@ -41,7 +41,7 @@
   <div class="crumbs"><a href={href({ name: 'library' })}>Library</a><Icon name="chevron-right" size={12} sw={2} /><span class="muted">{i.name}</span></div>
   <div style="display: grid; grid-template-columns: 56px minmax(0,1fr) auto; align-items: center; column-gap: 16px; height: 56px; margin-top: 14px">
     <div class="ico" style="width: 56px; height: 56px; border-radius: 10px; background: {i.art.background}; font-size: 22px" aria-hidden="true">
-      <InstanceMark art={i.art} icon={i.icon} glyphs />
+      <InstanceMark art={i.art} icon={i.icon} />
     </div>
     <div style="min-width: 0; display: flex; flex-direction: column; gap: 4px">
       <h1 class="h1 trunc">{i.name}</h1>

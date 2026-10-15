@@ -16,7 +16,7 @@ export interface InstanceSummary {
   id: string;
   name: string;
   art: Art;
-  /** A picture's sha256 (served at /tex/icon/<icon>.png), or in the design's fixtures a glyph name. */
+  /** A picture's sha256 (served at /tex/icon/<icon>.png). */
   icon?: string;
   minecraft: string;
   loader?: LoaderRef;
@@ -77,7 +77,7 @@ export interface Instance extends InstanceSummary {
   switch?: SwitchResult;
 }
 
-export interface Group { name: string; collapsed?: boolean }
+export interface Group { name: string }
 /** An instance in the launcher's trash. */
 export interface TrashEntry { key: string; id: string; name: string; art: Art; icon?: string; minecraft: string; loader?: string; group?: string; trashedAt: number }
 
@@ -161,7 +161,7 @@ export type AlertTarget =
 /** The latest minecraft.net article; `image` is its picture on Go's image route. */
 export interface NewsItem { id?: string; title: string; source: string; published: number; url: string; image?: string }
 /** Minutes played on one day of this week (0 is Monday). */
-export interface DayPlay { day: number; minutes: number; today?: boolean }
+export interface DayPlay { day: number; minutes: number; today: boolean }
 /** Free space on the data folder's drive; `low` under 5 GB. */
 export interface DiskSpace { free: number; low: boolean }
 
@@ -224,8 +224,8 @@ export interface CrashCause {
 export type RunResult = 'ok' | 'crash' | 'killed' | 'failed';
 export interface Run {
   id: string; startedAt: number; lengthMin: number; exitCode: number; result: RunResult;
-  /** What the run used (recorded by Go; absent in older fixtures). */
-  java?: string; memory?: { min: number; max: number }; account?: string; mods?: number;
+  /** What the run used. */
+  java: string; memory: { min: number; max: number }; account: string; mods: number;
   /** The sandbox it ran in ("bubblewrap"); absent when it ran unsandboxed. */
   sandbox?: string;
   /** Filled in after the game exits: the world played, the server joined, screenshots taken, the crash. */

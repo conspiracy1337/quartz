@@ -17,21 +17,19 @@ import (
 
 // fakeServer answers status requests with js, replies to pings unless noPong,
 // and can send a raw first packet instead.
-func fakeServer(t *testing.T, js string, noPong bool, raw []byte) (Address, *atomic.Int32) {
+func fakeServer(t *testing.T, js string, noPong bool, raw []byte) Address {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = ln.Close() })
-	var conns atomic.Int32
 	go func() {
 		for {
 			c, err := ln.Accept()
 			if err != nil {
 				return
 			}
-			conns.Add(1)
 			go func(c net.Conn) {
 				defer func() { _ = c.Close() }()
 				r := bufio.NewReader(c)
@@ -59,7 +57,7 @@ func fakeServer(t *testing.T, js string, noPong bool, raw []byte) (Address, *ato
 		}
 	}()
 	port := ln.Addr().(*net.TCPAddr).Port
-	return Address{Host: "127.0.0.1", Port: port}, &conns
+	return Address{Host: "127.0.0.1", Port: port}
 }
 
 func pngData(t *testing.T, side int) string {
@@ -70,7 +68,7 @@ func pngData(t *testing.T, side int) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(b.Bytes())
 }
 
-func status(t *testing.T, fav string) string {
+func status(fav string) string {
 	b, _ := json.Marshal(map[string]any{
 		"version":     map[string]any{"name": "§aPaper 1.21.4", "protocol": 769},
 		"players":     map[string]any{"max": 20, "online": 6},
@@ -81,7 +79,7 @@ func status(t *testing.T, fav string) string {
 }
 
 func TestPing(t *testing.T) {
-	addr, _ := fakeServer(t, status(t, pngData(t, 64)), false, nil)
+	addr := fakeServer(t, status(pngData(t, 64)), false, nil)
 	st, err := Ping(context.Background(), addr, -1)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +93,7 @@ func TestPing(t *testing.T) {
 }
 
 func TestNoPongStillAnswers(t *testing.T) {
-	addr, _ := fakeServer(t, status(t, ""), true, nil)
+	addr := fakeServer(t, status(""), true, nil)
 	st, err := Ping(context.Background(), addr, 769)
 	if err != nil || st.Latency <= 0 || st.Favicon != nil {
 		t.Fatalf("%+v %v", st, err)
@@ -104,22 +102,22 @@ func TestNoPongStillAnswers(t *testing.T) {
 
 func TestHostileServers(t *testing.T) {
 	big := pngData(t, 512) // over 64 px: dropped
-	addr, _ := fakeServer(t, status(t, big), false, nil)
+	addr := fakeServer(t, status(big), false, nil)
 	if st, err := Ping(context.Background(), addr, -1); err != nil || st.Favicon != nil {
 		t.Fatalf("oversized favicon kept: %v", err)
 	}
-	addr, _ = fakeServer(t, status(t, "data:image/svg+xml;base64,PHN2Zz4="), false, nil)
+	addr = fakeServer(t, status("data:image/svg+xml;base64,PHN2Zz4="), false, nil)
 	if st, _ := Ping(context.Background(), addr, -1); st == nil || st.Favicon != nil {
 		t.Fatal("non-PNG favicon kept")
 	}
 	// A packet length far over the cap.
 	var huge bytes.Buffer
 	putVarInt(&huge, 1<<28)
-	addr, _ = fakeServer(t, "", false, huge.Bytes())
+	addr = fakeServer(t, "", false, huge.Bytes())
 	if _, err := Ping(context.Background(), addr, -1); err == nil {
 		t.Fatal("oversized packet accepted")
 	}
-	addr, _ = fakeServer(t, "{not json", false, nil)
+	addr = fakeServer(t, "{not json", false, nil)
 	if _, err := Ping(context.Background(), addr, -1); err == nil {
 		t.Fatal("bad json accepted")
 	}
@@ -180,11 +178,11 @@ func TestPingerCachesAndMerges(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	good := map[string]Address{
-		"mc.hypixel.net":      {Host: "mc.hypixel.net"},
+		"mc.hypixel.net":       {Host: "mc.hypixel.net"},
 		"smp.kestrel.gg:25570": {Host: "smp.kestrel.gg", Port: 25570},
-		"[::1]:25565":         {Host: "::1", Port: 25565},
-		"::1":                 {Host: "::1"},
-		" 10.0.0.2 ":          {Host: "10.0.0.2"},
+		"[::1]:25565":          {Host: "::1", Port: 25565},
+		"::1":                  {Host: "::1"},
+		" 10.0.0.2 ":           {Host: "10.0.0.2"},
 	}
 	for in, want := range good {
 		got, err := Parse(in)

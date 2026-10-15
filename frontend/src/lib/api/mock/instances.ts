@@ -31,7 +31,6 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   ...(lastDays !== undefined ? { lastPlayed: daysAgo(lastDays, 21, 14) } : {}),
   playtimeMin: hours * 60,
   running: false,
-  ...(id === 'fo' ? { icon: 'bolt' as const } : {}),
   sandboxed: true,
   sandboxPreset: 'standard',
   counts: { mods: 48, resourcepacks: 6, shaders: 4, datapacks: 4, worlds: 6, servers: 4 },

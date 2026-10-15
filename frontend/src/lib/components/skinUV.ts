@@ -2,8 +2,6 @@
 
 /** A texel offset [u, v] in a skin or cape texture. */
 export type UV = [number, number];
-/** A texture's size in texels. */
-export type Size = [number, number];
 
 /** The rectangle [u, v, width, height] each face of a w×h×d box at uv takes up, in skin3d's face order. */
 export function faceRects([w, h, d]: [number, number, number], [u, v]: UV): [number, number, number, number][] {

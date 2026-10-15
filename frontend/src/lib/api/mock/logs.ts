@@ -51,15 +51,18 @@ export const latestLogText = `[21:14:02] [main/INFO]: Loading Minecraft 1.21.4 w
 [21:15:02] [Server thread/INFO]: Saving chunks for level ServerLevel[Northwatch]
 `;
 
+/** What every sample run used. */
+const used = { java: '21.0.5 (Temurin)', memory: { min: 2048, max: 6144 }, account: 'Kestrel_Vane', mods: 48, sandbox: 'bubblewrap' };
+
 export const runs: Run[] = [
-  { id: 'r1', startedAt: daysAgo(1, 21, 14), lengthMin: 128, exitCode: 0, result: 'ok' },
-  { id: 'r2', startedAt: daysAgo(2, 15, 2), lengthMin: 281, exitCode: 0, result: 'ok' },
-  { id: 'r3', startedAt: daysAgo(3, 19, 30), lengthMin: 3, exitCode: -1, result: 'crash' },
-  { id: 'r4', startedAt: daysAgo(3, 19, 22), lengthMin: 6, exitCode: 0, result: 'ok' },
-  { id: 'r5', startedAt: daysAgo(4, 22, 47), lengthMin: 72, exitCode: 137, result: 'killed' },
-  { id: 'r6', startedAt: daysAgo(24, 18, 5), lengthMin: 75, exitCode: 0, result: 'ok' },
-  { id: 'r7', startedAt: daysAgo(30, 23, 40), lengthMin: 0, exitCode: 1, result: 'failed' },
-  { id: 'r8', startedAt: daysAgo(40, 10, 12), lengthMin: 164, exitCode: 0, result: 'ok' },
+  { id: 'r1', startedAt: daysAgo(1, 21, 14), lengthMin: 128, exitCode: 0, result: 'ok', ...used },
+  { id: 'r2', startedAt: daysAgo(2, 15, 2), lengthMin: 281, exitCode: 0, result: 'ok', ...used },
+  { id: 'r3', startedAt: daysAgo(3, 19, 30), lengthMin: 3, exitCode: -1, result: 'crash', ...used },
+  { id: 'r4', startedAt: daysAgo(3, 19, 22), lengthMin: 6, exitCode: 0, result: 'ok', ...used },
+  { id: 'r5', startedAt: daysAgo(4, 22, 47), lengthMin: 72, exitCode: 137, result: 'killed', ...used },
+  { id: 'r6', startedAt: daysAgo(24, 18, 5), lengthMin: 75, exitCode: 0, result: 'ok', ...used },
+  { id: 'r7', startedAt: daysAgo(30, 23, 40), lengthMin: 0, exitCode: 1, result: 'failed', ...used },
+  { id: 'r8', startedAt: daysAgo(40, 10, 12), lengthMin: 164, exitCode: 0, result: 'ok', ...used },
 ];
 
 /** The design's crash dialog (DlgCrash). */

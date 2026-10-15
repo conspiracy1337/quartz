@@ -28,7 +28,7 @@ func (d darwin) apply(_, want Want) error {
 	if !want.Autostart {
 		return removeIfExists(d.agentPath())
 	}
-	return writeFile(d.agentPath(), launchAgent(want.Argv(intent.MinimizedFlag)), 0o644)
+	return writeFile(d.agentPath(), launchAgent(want.Argv(intent.MinimizedFlag)))
 }
 
 // launchAgent is a plist that runs argv at login.

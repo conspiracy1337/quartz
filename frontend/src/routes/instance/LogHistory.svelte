@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { hasBridge } from '$lib/bridge';
   import { api } from '$lib/api';
   import type { RunResult } from '$lib/api/types';
   import LogsNav from '$lib/components/LogsNav.svelte';
@@ -13,7 +12,6 @@
   let { instanceId }: Props = $props();
 
   const runs = query(() => api.logs.runs(instanceId));
-  const accounts = query(() => api.accounts.list());
   // Opens on the latest crash, the run people come here to look at, else on the newest run.
   let picked = $state<number | null>(null);
   const cur = $derived(picked ?? Math.max(0, runs.data?.findIndex((r) => r.result === 'crash') ?? 0));
@@ -27,10 +25,9 @@
     go({ name: 'instance', id: instanceId, tab: 'logs', sub: 'files' });
   }
   const debug = async (runId: string) => session.copy(await api.logs.debugInfo(instanceId, runId), 'Debug info');
-  // Runs recorded by Go carry what they used; the design's fixtures do not (the preview fills in samples).
-  const used = $derived(run?.java || hasBridge() ? {
-    java: run?.java ?? '', memory: run?.memory ? `${gb(run.memory.min)} to ${gb(run.memory.max)} GB` : '', account: run?.account ?? '', sandbox: run?.sandbox ? `On (${run.sandbox})` : 'Off', mods: run?.mods ? `${run.mods} loaded` : 'None',
-  } : { java: '21.0.5 (Temurin)', memory: '2 to 6 GB', account: accounts.data?.find((a) => a.isDefault)?.name ?? '', sandbox: 'On', mods: '48 loaded' });
+  const used = $derived({
+    java: run?.java ?? '', memory: run ? `${gb(run.memory.min)} to ${gb(run.memory.max)} GB` : '', account: run?.account ?? '', sandbox: run?.sandbox ? `On (${run.sandbox})` : 'Off', mods: run?.mods ? `${run.mods} loaded` : 'None',
+  });
 </script>
 
 <div class="scroll">

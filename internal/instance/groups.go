@@ -10,11 +10,10 @@ import (
 )
 
 // Group is a named set of instances, in the order the user arranged them.
-// An instance names its group; groups.json keeps the order, the collapsed
-// state and groups that are still empty.
+// An instance names its group; groups.json keeps the order and groups that
+// are still empty.
 type Group struct {
-	Name      string `json:"name"`
-	Collapsed bool   `json:"collapsed,omitempty"`
+	Name string `json:"name"`
 }
 
 type groupsDoc struct {
@@ -32,7 +31,7 @@ func openGroups(dir string, s *Store) (*jsonfile.Store[groupsDoc], error) {
 			var out []Group
 			for _, g := range d.Groups {
 				if n, err := cleanGroup(g.Name); err == nil && n != "" && !slices.ContainsFunc(out, sameGroup(n)) {
-					out = append(out, Group{Name: n, Collapsed: g.Collapsed})
+					out = append(out, Group{Name: n})
 				}
 			}
 			d.Groups = out
@@ -74,54 +73,6 @@ func (s *Store) CreateGroup(name string) (Group, error) {
 	return Group{Name: n}, err
 }
 
-// RenameGroup renames a group and moves its instances with it.
-func (s *Store) RenameGroup(from, to string) error {
-	n, err := cleanGroup(to)
-	if err != nil || n == "" {
-		return ErrBadGroup
-	}
-	if !strings.EqualFold(from, n) && slices.ContainsFunc(s.Groups(), sameGroup(n)) {
-		return ErrGroupExists
-	}
-	s.ensureGroup(from)
-	if _, err := s.groups.Update(func(d *groupsDoc) error {
-		for i := range d.Groups {
-			if strings.EqualFold(d.Groups[i].Name, from) {
-				d.Groups[i].Name = n
-			}
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	return s.regroup(from, n)
-}
-
-// DeleteGroup removes a group; its instances become ungrouped (never deleted).
-func (s *Store) DeleteGroup(name string) error {
-	if _, err := s.groups.Update(func(d *groupsDoc) error {
-		d.Groups = slices.DeleteFunc(d.Groups, sameGroup(name))
-		return nil
-	}); err != nil {
-		return err
-	}
-	return s.regroup(name, "")
-}
-
-// SetGroupCollapsed remembers whether a group is folded away.
-func (s *Store) SetGroupCollapsed(name string, collapsed bool) error {
-	s.ensureGroup(name)
-	_, err := s.groups.Update(func(d *groupsDoc) error {
-		for i := range d.Groups {
-			if strings.EqualFold(d.Groups[i].Name, name) {
-				d.Groups[i].Collapsed = collapsed
-			}
-		}
-		return nil
-	})
-	return err
-}
-
 // SetGroup moves an instance into a group ("" for none), creating it if new.
 func (s *Store) SetGroup(id, group string) (Instance, error) {
 	n, err := cleanGroup(group)
@@ -146,16 +97,4 @@ func (s *Store) ensureGroup(name string) {
 		d.Groups = append(d.Groups, Group{Name: name})
 		return nil
 	})
-}
-
-// regroup moves every instance of group from into group to.
-func (s *Store) regroup(from, to string) error {
-	var errs []error
-	for _, in := range s.List() {
-		if strings.EqualFold(in.Group, from) {
-			_, err := s.Update(in.ID, func(i *Instance) error { i.Group = to; return nil })
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
 }

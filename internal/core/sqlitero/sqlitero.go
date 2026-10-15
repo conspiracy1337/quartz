@@ -146,17 +146,6 @@ func str(v any) string {
 	return s
 }
 
-// Tables lists the database's tables.
-func (db *DB) Tables() []string {
-	var out []string
-	for _, s := range db.schema {
-		if s.typ == "table" {
-			out = append(out, s.name)
-		}
-	}
-	return out
-}
-
 // HasTable reports whether the database has table name (ignoring case).
 func (db *DB) HasTable(name string) bool {
 	_, err := db.table(name)

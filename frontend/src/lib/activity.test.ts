@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { activityFeed } from './activity';
 import { hours } from './format';
 
+const used = { java: '21', memory: { min: 1024, max: 4096 }, account: 'Steve', mods: 0 };
+
 describe('activity feed', () => {
   it('merges runs and content changes, newest first', () => {
     const feed = activityFeed(
       [
-        { id: 'a', startedAt: 3_000, lengthMin: 128, exitCode: 0, result: 'ok' },
-        { id: 'b', startedAt: 1_000, lengthMin: 3, exitCode: 1, result: 'crash' },
+        { id: 'a', startedAt: 3_000, lengthMin: 128, exitCode: 0, result: 'ok', ...used },
+        { id: 'b', startedAt: 1_000, lengthMin: 3, exitCode: 1, result: 'crash', ...used },
       ],
       [{ at: 2, kind: 'updated', title: 'Updated 4 mods', detail: 'Sodium, Lithium' }, { at: 4, kind: 'removed', title: 'Removed Zoomify', detail: '' }],
     );
@@ -22,8 +24,8 @@ describe('session details', () => {
   it('names the world, the crash cause and the screenshots taken', () => {
     const feed = activityFeed(
       [
-        { id: 'a', startedAt: 10 * 60_000, lengthMin: 128, exitCode: 0, result: 'ok', world: 'Northwatch', shots: 3 },
-        { id: 'b', startedAt: 1_000, lengthMin: 3, exitCode: 1, result: 'crash', crash: { title: 'Entity Culling 1.7.2 failed to load', detail: 'Mixin apply failed in entityculling', report: true } },
+        { id: 'a', startedAt: 10 * 60_000, lengthMin: 128, exitCode: 0, result: 'ok', world: 'Northwatch', shots: 3, ...used },
+        { id: 'b', startedAt: 1_000, lengthMin: 3, exitCode: 1, result: 'crash', crash: { title: 'Entity Culling 1.7.2 failed to load', detail: 'Mixin apply failed in entityculling', report: true }, ...used },
       ],
       [],
     );

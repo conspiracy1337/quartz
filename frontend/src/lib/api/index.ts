@@ -65,7 +65,6 @@ export const api = {
     rename: bridged(InstancesGo.Rename, inst.mockInstances.rename),
     setArt: bridged(InstancesGo.SetArt, inst.mockInstances.setArt),
     /** Opens a native picture picker; resolves unchanged when cancelled. */
-    pickIcon: bridged(InstancesGo.PickIcon, (id: string) => byId(id)),
     /** Uses a picture chooseIcon returned ("" goes back to the tile). */
     setIcon: bridged(InstancesGo.SetIcon, inst.mockInstances.setIcon),
     /** A picture for an instance not created yet; "" when cancelled. */
@@ -192,8 +191,6 @@ export const api = {
     import: bridged(LaunchersGo.Import, (_ids: string[], _inPlace: boolean) => undefined),
   },
 };
-
-export type Api = typeof api;
 
 /** "Prominence II is missing Sodium": one alert per instance whose mods lack a dependency. */
 async function missingAlerts(): Promise<Alert[]> {

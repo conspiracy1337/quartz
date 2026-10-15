@@ -201,7 +201,7 @@ func (w *walker) block(n *xhtml.Node) {
 	switch n.DataAtom {
 	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
 		w.boundary()
-		if spans := tidy(w.inline(n, nil)); len(spans) > 0 {
+		if spans := tidy(w.inline(n)); len(spans) > 0 {
 			w.add(Block{Type: "h2", Spans: spans})
 		}
 		w.boundary()
@@ -241,7 +241,7 @@ func (w *walker) block(n *xhtml.Node) {
 	default:
 		// Inline content (links, emphasis, code) joins the current paragraph;
 		// a picture inside it still becomes its own block.
-		w.cur = append(w.cur, w.inline(n, nil)...)
+		w.cur = append(w.cur, w.inline(n)...)
 	}
 }
 
@@ -252,7 +252,7 @@ func (w *walker) children(n *xhtml.Node) {
 }
 
 // inline collects n's text as spans; pictures inside become blocks.
-func (w *walker) inline(n *xhtml.Node, link *string) []Span {
+func (w *walker) inline(n *xhtml.Node) []Span {
 	var out []Span
 	var walk func(*xhtml.Node, string, bool)
 	walk = func(n *xhtml.Node, href string, code bool) {
@@ -288,11 +288,7 @@ func (w *walker) inline(n *xhtml.Node, link *string) []Span {
 			walk(c, href, code)
 		}
 	}
-	h := ""
-	if link != nil {
-		h = *link
-	}
-	walk(n, h, false)
+	walk(n, "", false)
 	return out
 }
 
@@ -315,7 +311,7 @@ func (w *walker) items(n *xhtml.Node, items *[][]Span) {
 			if g.Type == xhtml.ElementNode && g.DataAtom == atom.P {
 				spans = append(spans, Span{Text: " "})
 			}
-			spans = append(spans, w.inline(g, nil)...)
+			spans = append(spans, w.inline(g)...)
 		}
 		if s := tidy(spans); len(s) > 0 {
 			*items = append(*items, s)
@@ -340,7 +336,7 @@ func (w *walker) table(n *xhtml.Node) {
 				if cell.Type != xhtml.ElementNode || (cell.DataAtom != atom.Td && cell.DataAtom != atom.Th) {
 					continue
 				}
-				s := tidy(w.inline(cell, nil))
+				s := tidy(w.inline(cell))
 				if len(s) == 0 {
 					continue
 				}

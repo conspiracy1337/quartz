@@ -21,13 +21,6 @@ func murmurKept(b []byte) int {
 	return n
 }
 
-// Murmur2 fingerprints data the way CurseForge does.
-func Murmur2(data []byte) uint32 {
-	m := newMurmur(uint32(murmurKept(data))) //nolint:gosec // CurseForge defines the length as 32 bits
-	m.write(data)
-	return m.sum()
-}
-
 // murmur mixes filtered bytes incrementally; it must know their count first.
 type murmur struct {
 	h    uint32

@@ -21,17 +21,6 @@ const (
 	Permanent
 )
 
-func (c Class) String() string {
-	switch c {
-	case Retryable:
-		return "retryable"
-	case RateLimited:
-		return "rate-limited"
-	default:
-		return "permanent"
-	}
-}
-
 // PermanentError marks any error as not worth retrying (for example a file
 // that fails its hash check twice).
 type PermanentError struct{ Err error }

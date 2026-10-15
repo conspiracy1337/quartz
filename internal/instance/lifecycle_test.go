@@ -75,21 +75,6 @@ func TestGroups(t *testing.T) {
 	if names := groupNames(s); names != "Modded,Testing" {
 		t.Fatalf("groups = %s", names)
 	}
-	if err := s.RenameGroup("Modded", "Mods"); err != nil {
-		t.Fatal(err)
-	}
-	if g, _ := s.Get(a.ID); g.Group != "Mods" {
-		t.Fatal("rename must move the members")
-	}
-	if err := s.DeleteGroup("Mods"); err != nil {
-		t.Fatal(err)
-	}
-	if g, _ := s.Get(a.ID); g.Group != "" {
-		t.Fatal("deleting a group must ungroup its members, not delete them")
-	}
-	if names := groupNames(s); names != "Testing" {
-		t.Fatalf("groups after delete = %s", names)
-	}
 }
 
 func groupNames(s *Store) string {

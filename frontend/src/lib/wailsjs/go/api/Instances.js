@@ -22,10 +22,6 @@ export function CreateShortcut(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['api']['Instances']['CreateShortcut'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function DeleteGroup(arg1) {
-  return window['go']['api']['Instances']['DeleteGroup'](arg1);
-}
-
 export function Duplicate(arg1) {
   return window['go']['api']['Instances']['Duplicate'](arg1);
 }
@@ -58,10 +54,6 @@ export function OpenFolder(arg1) {
   return window['go']['api']['Instances']['OpenFolder'](arg1);
 }
 
-export function PickIcon(arg1) {
-  return window['go']['api']['Instances']['PickIcon'](arg1);
-}
-
 export function Purge(arg1) {
   return window['go']['api']['Instances']['Purge'](arg1);
 }
@@ -72,10 +64,6 @@ export function RemoveClientJar(arg1) {
 
 export function Rename(arg1, arg2) {
   return window['go']['api']['Instances']['Rename'](arg1, arg2);
-}
-
-export function RenameGroup(arg1, arg2) {
-  return window['go']['api']['Instances']['RenameGroup'](arg1, arg2);
 }
 
 export function Restore(arg1) {
@@ -92,10 +80,6 @@ export function SetDiscord(arg1, arg2) {
 
 export function SetGroup(arg1, arg2) {
   return window['go']['api']['Instances']['SetGroup'](arg1, arg2);
-}
-
-export function SetGroupCollapsed(arg1, arg2) {
-  return window['go']['api']['Instances']['SetGroupCollapsed'](arg1, arg2);
 }
 
 export function SetIcon(arg1, arg2) {

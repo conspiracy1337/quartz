@@ -13,12 +13,11 @@
     texture: string;
     capeTexture?: string | undefined;
     slim?: boolean;
-    walk?: boolean;
     scale?: number;
     controls?: boolean;
     fill?: boolean;
   }
-  let { texture, capeTexture, slim = false, walk = false, scale: s = 9, controls = true, fill = false }: Props = $props();
+  let { texture, capeTexture, slim = false, scale: s = 9, controls = true, fill = false }: Props = $props();
 
   const FRONT = { ry: -28, rx: -10 };
   const DEG = Math.PI / 180;
@@ -26,10 +25,9 @@
   const STEP = 0.6, SWING = 28 * DEG, CAPE = 10.8 * DEG;
   let ry = $state(FRONT.ry);
   let rx = $state(FRONT.rx);
-  let walkSet = $state<boolean | null>(null);
+  let walking = $state(false);
   let drag = $state<{ x: number; y: number; ry: number; rx: number } | null>(null);
   let flat = $state(false);
-  const walking = $derived(walkSet ?? walk);
 
   let canvas: HTMLCanvasElement;
   let scene: SkinScene | null = null;
@@ -126,7 +124,7 @@
   {#if controls}
     <div class="pm-ctrl" onpointerdown={(e) => e.stopPropagation()} role="toolbar" tabindex="-1" aria-label="Preview controls">
       <button class="btn btn-sm btn-icon btn-ghost" onclick={() => turn(-45)} aria-label="Rotate left"><Icon name="rotate-left" size={14} sw={2} /></button>
-      <button class="btn btn-sm btn-ghost" onclick={() => (walkSet = !walking)} aria-pressed={walking}>{walking ? 'Stop' : 'Walk'}</button>
+      <button class="btn btn-sm btn-ghost" onclick={() => (walking = !walking)} aria-pressed={walking}>{walking ? 'Stop' : 'Walk'}</button>
       <button class="btn btn-sm btn-ghost" onclick={() => face(FRONT.ry)}>Front</button>
       <button class="btn btn-sm btn-ghost" onclick={() => face(152)}>Back</button>
       <button class="btn btn-sm btn-icon btn-ghost" onclick={() => turn(45)} aria-label="Rotate right"><Icon name="rotate-right" size={14} sw={2} /></button>

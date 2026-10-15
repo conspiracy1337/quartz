@@ -30,7 +30,7 @@ func TestServerMods(t *testing.T) {
 	e.svc.cat.update(sha["zoomify.jar"], func(k *Known) { k.Modrinth = &Ident{Source: "modrinth", ProjectID: "w7ThoJFB", Title: "Zoomify"} })
 	e.svc.d.Platforms = []modplatform.Provider{&fakePlatform{src: modplatform.Modrinth,
 		projects: map[string]modplatform.Project{"w7ThoJFB": {ServerSide: "unsupported"}}}}
-	// An entry parsed by an older launcher has no side yet.
+	// An entry parsed before its side was known.
 	e.svc.cat.update(sha["old.jar"], func(k *Known) { k.Info.Side, k.Rev = "", 0 })
 	if zoom.ClientOnly {
 		t.Fatal("Zoomify isn't known to be client-only before Modrinth is asked")
