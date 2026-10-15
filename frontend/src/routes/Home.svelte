@@ -7,11 +7,11 @@
   import ShotRotator from '$lib/components/ShotRotator.svelte';
   import SkinCard from '$lib/components/SkinCard.svelte';
   import { prefs } from '$lib/prefs.svelte';
-  import { query } from '$lib/query.svelte';
+  import { lastCount, query, rememberCount } from '$lib/query.svelte';
 
   // Home 2.6 "Focus column": alerts, the profile row, the news strip, then servers.
-  const alerts = query(() => api.home.alerts());
-  const news = query(() => api.home.news());
+  const alerts = query(() => api.home.alerts(), 'home.alerts');
+  const news = query(() => api.home.news(), 'home.news');
   // Dismissing hides that article for good (the next one shows again).
   let dismissed = $state(false);
   const newsHidden = $derived(dismissed || (!!news.data?.id && prefs.value?.general.hiddenNews === news.data.id));
@@ -23,19 +23,29 @@
   const wide = new MediaQuery('min-width: 1640px');
 
   // Rows that have nothing to show leave the grid, so no empty gap is left behind.
-  const showAlerts = $derived((alerts.data?.length ?? 0) > 0);
-  const showNews = $derived(!newsHidden && !!news.data);
+  // Until alerts and news answer, the strips shown last time hold their rows as
+  // skeletons, so the cards below don't move when the data arrives.
+  const STRIP = 'home.news-strip';
+  const alertsKnown = $derived(alerts.data !== undefined || !alerts.loading);
+  const newsKnown = $derived(news.data !== undefined || !news.loading);
+  const showAlerts = $derived(alertsKnown ? (alerts.data?.length ?? 0) > 0 : (lastCount('home.alerts') ?? 0) > 0);
+  const showNews = $derived(newsKnown ? !newsHidden && !!news.data : (lastCount(STRIP) ?? 0) > 0);
+  $effect(() => {
+    if (newsKnown) rememberCount(STRIP, showNews ? 1 : 0);
+  });
   const rows = $derived([showAlerts && 'var(--alert-h)', 'var(--duo-h)', showNews && 'var(--strip-h)', 'minmax(0,1fr)'].filter(Boolean).join(' '));
   const areas = $derived([showAlerts && '"alerts"', '"duo"', showNews && '"news"', '"servers"'].filter(Boolean).join(' '));
 </script>
 
+{#snippet strip()}<div class="sk" style="position: absolute; inset: 0; border-radius: var(--radius-lg)" aria-hidden="true"></div>{/snippet}
+
 <div class="home" style="grid-template-rows: {rows}; grid-template-areas: {areas}">
-  {#if showAlerts}<div class="cell" style="grid-area: alerts"><HomeAlerts alerts={alerts.data ?? []} /></div>{/if}
+  {#if showAlerts}<div class="cell" style="grid-area: alerts">{#if alertsKnown}<HomeAlerts alerts={alerts.data ?? []} />{:else}{@render strip()}{/if}</div>{/if}
   <div class="duo">
     <div class="cell"><SkinCard scale={wide.current ? 5 : 4} /></div>
     <div class="cell"><ShotRotator /></div>
   </div>
-  {#if showNews && news.data}<div class="cell" style="grid-area: news"><NewsBanner item={news.data} ondismiss={hideNews} /></div>{/if}
+  {#if showNews}<div class="cell" style="grid-area: news">{#if news.data}<NewsBanner item={news.data} ondismiss={hideNews} />{:else}{@render strip()}{/if}</div>{/if}
   <div class="cell" style="grid-area: servers"><ServerList /></div>
 </div>
 
