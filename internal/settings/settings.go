@@ -104,8 +104,7 @@ type Updates struct {
 func Defaults() Settings {
 	return Settings{
 		Version: SchemaVersion,
-		// A settings file from before first-run setup existed reads as done.
-		General: General{Language: "system", StartPage: "home", SetupDone: true},
+		General: General{Language: "system", StartPage: "home"},
 		Downloads: Downloads{
 			Parallel: 8, WatchDownloads: true, Proxy: "system",
 			ProxyCustom: ProxyCustom{Type: "http", Port: 8080},

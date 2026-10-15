@@ -81,15 +81,15 @@ func TestCreateRejects(t *testing.T) {
 	}
 }
 
-func TestVersionOneFilesMigrate(t *testing.T) {
+func TestOpenRepairsFields(t *testing.T) {
 	dir := t.TempDir()
-	id := "old-1a2b"
+	id := "odd-1a2b"
 	if err := os.MkdirAll(filepath.Join(dir, id, "game"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	v1 := `{"version":1,"id":"old-1a2b","name":"Old","art":{"background":"#3ecf8e"},"minecraft":"1.21.1","loader":"quilt-ish","sandbox":true,
+	raw := `{"id":"odd-1a2b","name":"Odd","art":{"background":"#3ecf8e"},"minecraft":"1.21.1","loader":"quilt-ish",
 		"settings":{"java":{"override":true,"memoryMinMb":2048,"memoryMaxMb":6144,"jvmArgs":"-XX:+UseZGC"},"window":{}}}`
-	if err := os.WriteFile(filepath.Join(dir, id, "instance.json"), []byte(v1), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, id, "instance.json"), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s, err := Open(dir, nil)
@@ -100,9 +100,8 @@ func TestVersionOneFilesMigrate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if in.Version != schema || !in.KeepLoaderUpdated || in.Loader != "" || in.Settings.Java.MemoryMaxMB != 6144 ||
-		!in.Sandbox.On || in.Sandbox.Preset != rules.Standard {
-		t.Fatalf("migrated = %+v", in)
+	if in.Version != schema || in.Loader != "" || in.Settings.Java.MemoryMaxMB != 6144 || in.Sandbox.Preset != rules.Standard {
+		t.Fatalf("repaired = %+v", in)
 	}
 }
 
@@ -196,11 +195,10 @@ func TestSettingsValidation(t *testing.T) {
 	}
 }
 
-func TestSyncMigratesShareLabels(t *testing.T) {
-	in := normalize(Instance{ID: "a", Name: "A", Shares: []string{"Keybinds", "Worlds", "Shaders", "Nonsense"},
-		Sync: Sync{Join: []string{"saves", "Bad Id", "c-1a2b"}}})
-	if in.Shares != nil || !in.Sync.Keys || !slices.Equal(in.Sync.Join, []string{"saves", "c-1a2b", "shaderpacks"}) {
-		t.Fatalf("%+v %v", in.Sync, in.Shares)
+func TestSyncDropsBadIDs(t *testing.T) {
+	in := normalize(Instance{ID: "a", Name: "A", Sync: Sync{Join: []string{"saves", "Bad Id", "c-1a2b", "saves"}}})
+	if !slices.Equal(in.Sync.Join, []string{"saves", "c-1a2b"}) {
+		t.Fatalf("%+v", in.Sync)
 	}
 }
 

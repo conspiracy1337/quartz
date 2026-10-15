@@ -49,10 +49,9 @@ type Known struct {
 	Rev int `json:"rev,omitempty"`
 }
 
-// metaRev is bumped when parsing learns something new (1: a mod's side; 2:
-// version ranges and the Minecraft range, lenient JSON), so older catalog
+// metaRev is bumped when parsing learns something new, so older catalog
 // entries are read again once when that field is needed.
-const metaRev = 2
+const metaRev = 1
 
 // Ref names the blob's project on every platform that knows it.
 func (k Known) Ref() modplatform.Ref {

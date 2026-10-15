@@ -1,9 +1,6 @@
 package rules
 
-import (
-	"encoding/json"
-	"testing"
-)
+import "testing"
 
 func TestPresets(t *testing.T) {
 	std := Default()
@@ -54,22 +51,6 @@ func TestSetLevelGoesCustom(t *testing.T) {
 	}
 	if c.Apply(Standard, "linux").Level(Internet, "linux") != Allowed {
 		t.Fatal("standard did not reset")
-	}
-}
-
-func TestDecodeLegacyBool(t *testing.T) {
-	for _, c := range []struct {
-		in   string
-		want Settings
-	}{
-		{`true`, Settings{On: true, Preset: Standard}},
-		{`false`, Settings{Preset: Standard}},
-		{`{"on":true,"preset":"strict"}`, Settings{On: true, Preset: Strict}},
-	} {
-		var s Settings
-		if err := json.Unmarshal([]byte(c.in), &s); err != nil || s.On != c.want.On || s.Preset != c.want.Preset {
-			t.Errorf("%s: %+v %v", c.in, s, err)
-		}
 	}
 }
 

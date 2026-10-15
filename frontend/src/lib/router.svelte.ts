@@ -86,14 +86,12 @@ export function parse(p: string): Route {
       if (isOneOf(SETTINGS_TABS, b)) return { name: 'settings', tab: b };
       return { name: 'settings', tab: 'general' };
     case 'instance':
-      if (b && c === 'version') return { name: 'instance', id: dec(b), tab: 'settings', ...(d ? { sub: dec(d) } : {}) }; // the old Version tab
       if (b && isOneOf(INSTANCE_TABS, c)) return { name: 'instance', id: dec(b), tab: c, ...(d ? { sub: dec(d) } : {}) };
       if (b) return { name: 'instance', id: dec(b), tab: 'overview' };
       break;
     case 'setup': {
       const step = Number(b);
       if (step === 1 || step === 2 || step === 3) return { name: 'setup', step };
-      if (step === 4) return { name: 'setup', step: 3 }; // the old number of the last step
       return { name: 'setup', step: 1 };
     }
   }

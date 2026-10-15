@@ -20,7 +20,8 @@ type Store struct {
 
 // Open loads settings from path. A missing file yields defaults; a corrupt file is
 // kept aside as path.corrupt and replaced with defaults instead of failing startup.
-// A new data folder (no settings file yet) starts with first-run setup.
+// A new data folder (no settings file yet) gets a memory limit suited to
+// the computer.
 func Open(path string, bus *events.Bus, log *slog.Logger) (*Store, error) {
 	_, statErr := os.Stat(path)
 	f, err := jsonfile.Open(jsonfile.Options[Settings]{
@@ -31,7 +32,6 @@ func Open(path string, bus *events.Bus, log *slog.Logger) (*Store, error) {
 	}
 	if errors.Is(statErr, fs.ErrNotExist) {
 		s := f.Get()
-		s.General.SetupDone = false
 		if mem, err := sysinfo.ReadMemory(); err == nil {
 			s.Java.MemoryMaxMB = SuggestedMaxMemoryMB(mem.Total, s.Java.MemoryMaxMB)
 		}

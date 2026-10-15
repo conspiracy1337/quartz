@@ -316,7 +316,7 @@ func TestFolderDataPackTurnsOffForTheGame(t *testing.T) {
 	dir := filepath.Join(e.game, "saves", "Plots", "datapacks")
 	_ = os.MkdirAll(filepath.Join(dir, "graves", "data"), 0o700)
 	_ = os.WriteFile(filepath.Join(dir, "graves", "pack.mcmeta"), []byte(`{"pack":{"pack_format":48,"description":"Graves"}}`), 0o600)
-	// Turned off by name only (by hand or an older launcher): still listed, and fixed.
+	// Turned off by name only (by hand): still listed, and fixed.
 	_ = os.MkdirAll(filepath.Join(dir, "old.disabled"), 0o700)
 	_ = os.WriteFile(filepath.Join(dir, "old.disabled", "pack.mcmeta"), []byte(`{"pack":{"pack_format":48,"description":"Old"}}`), 0o600)
 	rows := e.list(DataPacks)

@@ -255,7 +255,7 @@ func (s *Service) readOne(game string, k Kind, sp spec, j job, adopt bool) (Entr
 		defer func() { _ = sub.Close() }()
 		var src meta.Source = meta.Dir{Root: sub}
 		if strings.HasSuffix(j.rel, Disabled) {
-			// Turned off by name only (by hand, or an older launcher): the
+			// Turned off by name only (by hand): the
 			// game would still load it until its manifest is renamed too.
 			if _, err := sub.Lstat(packManifest); err == nil {
 				_ = sub.Rename(packManifest, offManifest)

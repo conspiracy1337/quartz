@@ -105,21 +105,18 @@ type Instance struct {
 	// KeepLoaderUpdated installs the newest stable loader build at launch.
 	KeepLoaderUpdated bool `json:"keepLoaderUpdated"`
 	// FollowLatest moves to the newest Minecraft release once every mod
-	// supports it (checked from M5 on; stored now).
+	// supports it.
 	FollowLatest bool     `json:"followLatest"`
 	Group        string   `json:"group,omitempty"`
 	Notes        string   `json:"notes,omitempty"`
 	Tags         []string `json:"tags,omitempty"`
 	Location     string   `json:"location,omitempty"` // a moved game folder; "" is instances/<id>/game
-	// Sandbox is what the game may reach (instance.json held a bool before
-	// M10, which still reads: true is on with the Standard rules).
-	Sandbox rules.Settings `json:"sandbox"`
-	// Shares is the pre-M8 list of New instance labels, migrated into Sync.
-	Shares      []string   `json:"shares,omitempty"`
-	Sync        Sync       `json:"sync"`
-	Created     time.Time  `json:"created"`
-	LastPlayed  *time.Time `json:"lastPlayed,omitempty"`
-	PlaytimeMin int        `json:"playtimeMin"`
+	// Sandbox is what the game may reach.
+	Sandbox     rules.Settings `json:"sandbox"`
+	Sync        Sync           `json:"sync"`
+	Created     time.Time      `json:"created"`
+	LastPlayed  *time.Time     `json:"lastPlayed,omitempty"`
+	PlaytimeMin int            `json:"playtimeMin"`
 	// PlaytimeSec carries the seconds below a whole minute, so short
 	// sessions add up instead of rounding away (Prism counts seconds).
 	PlaytimeSec int      `json:"playtimeSec,omitempty"`
@@ -188,26 +185,13 @@ type Sync struct {
 	Keys bool     `json:"keys"` // write the shared keybinds on launch
 }
 
-// legacyShares maps the New instance labels stored before M8 to target ids.
-var legacyShares = map[string]string{
-	"Game options": "options", "Servers": "servers", "Worlds": "saves", "Resource packs": "resourcepacks",
-	"Shaders": "shaderpacks", "Screenshots": "screenshots", "Hotbars": "hotbar",
-}
-
 var syncIDRe = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
 
 // ValidSyncID reports whether s can name a sync target.
 func ValidSyncID(s string) bool { return syncIDRe.MatchString(s) }
 
-func (y Sync) normalize(legacy []string) Sync {
+func (y Sync) normalize() Sync {
 	join := y.Join
-	for _, label := range legacy {
-		if label == "Keybinds" {
-			y.Keys = true
-		} else if id, ok := legacyShares[label]; ok {
-			join = append(join, id)
-		}
-	}
 	y.Join = make([]string, 0, len(join)) // never nil: the UI reads sync.join as a list
 	for _, id := range join {
 		if ValidSyncID(id) && !slices.Contains(y.Join, id) && len(y.Join) < 128 {
@@ -226,9 +210,8 @@ type PackRef struct {
 	VersionName string `json:"versionName,omitempty"` // "1.4.0"
 }
 
-// schema is the instance.json version this build writes. Version 1 files
-// (M2 and M3) load unchanged: every field added since defaults sensibly.
-const schema = 2
+// schema is the instance.json version this build writes.
+const schema = 1
 
 // Errors returned to the UI.
 var (
@@ -323,9 +306,7 @@ func normalize(in Instance) Instance {
 	}
 	in.PlaytimeMin = max(in.PlaytimeMin, 0)
 	in.PlaytimeSec = min(max(in.PlaytimeSec, 0), 59)
-	if in.Version < schema {
-		in.Version, in.KeepLoaderUpdated = schema, true
-	}
+	in.Version = schema
 	if _, err := loader.ParseKind(in.Loader); err != nil || !loader.ValidVersionID(in.LoaderVersion) {
 		in.Loader, in.LoaderVersion = "", ""
 	}
@@ -335,7 +316,7 @@ func normalize(in Instance) Instance {
 	if in.ClientJar = in.ClientJar.normalize(); in.ClientJar != nil {
 		in.Loader, in.LoaderVersion, in.FollowLatest = "", "", false
 	}
-	in.Sync, in.Shares = in.Sync.normalize(in.Shares), nil
+	in.Sync = in.Sync.normalize()
 	in.Sandbox = in.Sandbox.Normalize()
 	in.Notes = clip(in.Notes, maxNotes)
 	in.Tags = cleanTags(in.Tags)
