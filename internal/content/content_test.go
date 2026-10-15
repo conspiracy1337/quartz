@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"os"
@@ -458,6 +459,22 @@ func TestConfigEditsKeepOtherBytes(t *testing.T) {
 	}
 	if l.Text[0] != "# comment" || l.Text[1] != "a=1" || l.Text[2] != "shaderPack=\\u00dcn\\u00ef code.zip" {
 		t.Fatalf("%q", l.Text)
+	}
+}
+
+func TestAddResultListsAreNeverNull(t *testing.T) {
+	e := newEnv(t)
+	src := t.TempDir()
+	mod := filepath.Join(src, "sodium.jar")
+	writeZip(t, mod, map[string]string{"fabric.mod.json": `{"id":"sodium","name":"Sodium"}`})
+	txt := filepath.Join(src, "notes.txt")
+	_ = os.WriteFile(txt, []byte("x"), 0o600)
+	for path, want := range map[string]string{mod: `"rejected":[]`, txt: `"added":[]`} {
+		res, err := e.svc.Add(context.Background(), e.id, Mods, "", []string{path})
+		b, _ := json.Marshal(res)
+		if err != nil || !strings.Contains(string(b), want) {
+			t.Fatalf("%s %v", b, err)
+		}
 	}
 }
 
