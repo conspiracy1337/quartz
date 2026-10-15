@@ -5,7 +5,7 @@
   import { groupsFor } from '$lib/settings/registry';
   import SettingsGroup from '$lib/settings/SettingsGroup.svelte';
   import Icon from '$lib/ui/Icon.svelte';
-  import Menu from '$lib/ui/Menu.svelte';
+  import Menu, { below } from '$lib/ui/Menu.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import SettingsTab from './SettingsTab.svelte';
 
@@ -29,10 +29,6 @@
     menu = null;
     if (j) void fn(j);
   }
-  const at = (e: MouseEvent) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    return { x: r.right - 240, y: r.bottom + 4 };
-  };
 
   async function act(fn: () => Promise<JavaRuntime[]>) {
     busy = true;
@@ -60,14 +56,14 @@
 
 <SettingsTab tab="java" gap={20}>
   <section style="display: flex; flex-direction: column; gap: 8px" aria-label="Runtimes">
-    <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="h3">Java runtimes</h2><div style="display: flex; gap: 6px"><button class="btn btn-sm" disabled={busy} onclick={() => act(api.java.scan)}>Scan again</button><button class="btn btn-sm" disabled={busy} onclick={() => act(api.java.addFromFolder)}>Add from folder</button><button class="btn btn-sm btn-accent" disabled={busy} aria-haspopup="menu" onclick={(e) => (pick = at(e))}>Download</button></div></div>
+    <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="h3">Java runtimes</h2><div style="display: flex; gap: 6px"><button class="btn btn-sm" disabled={busy} onclick={() => act(api.java.scan)}>Scan again</button><button class="btn btn-sm" disabled={busy} onclick={() => act(api.java.addFromFolder)}>Add from folder</button><button class="btn btn-sm btn-accent" disabled={busy} aria-haspopup="menu" onclick={(e) => (pick = below(e))}>Download</button></div></div>
     <div class="list">
       {#each list ?? [] as j (j.path)}
         <div class="row jr">
           <span class="maj">{j.major}</span>
           <span style="min-width: 0"><span style="display: flex; gap: 8px; align-items: center"><span class="trunc" style="font-weight: 500">{j.name}</span><span class="badge" class:badge-accent={j.source === 'Managed'}>{j.source}</span>{#if j.default && manual}<span class="badge badge-accent">Default</span>{/if}</span><span class="trunc small faint mono" style="display: block">{j.path}</span></span>
           <span class="small muted opt">{j.usedBy ? plural(j.usedBy, 'instance') : 'Not used'}</span>
-          <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {j.name}" aria-haspopup="menu" onclick={(e) => (menu = { ...at(e), j })}><Icon name="more" size={14} /></button>
+          <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {j.name}" aria-haspopup="menu" onclick={(e) => (menu = { ...below(e), j })}><Icon name="more" size={14} /></button>
         </div>
       {:else}
         {#if list}

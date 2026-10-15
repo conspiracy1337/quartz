@@ -12,7 +12,7 @@
   import SplitButton from '$lib/ui/SplitButton.svelte';
   import Inline, { follow } from '$lib/ui/Inline.svelte';
   import type { IconName } from '$lib/ui/icons';
-  import Menu from '$lib/ui/Menu.svelte';
+  import Menu, { below } from '$lib/ui/Menu.svelte';
   import Tabs from '$lib/ui/Tabs.svelte';
   import Tile from '$lib/ui/Tile.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
@@ -68,10 +68,7 @@
     if (!kind.content) return go({ name: 'import', ref: p.ref, source: src, ...(version ? { version } : {}) });
     if (target) session.open({ kind: 'install', ref: p.ref, source: src, instanceId: target.id, content: kind.content, ...(version ? { version } : {}) });
   }
-  function choose(e: MouseEvent) {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    chooser = { x: r.right - 240, y: r.bottom + 4 };
-  }
+  const choose = (e: MouseEvent) => (chooser = below(e));
   const open = (url: string) => (e: MouseEvent) => {
     e.preventDefault();
     void api.app.openUrl(url);
@@ -92,7 +89,12 @@
         <div class="seg" role="group" aria-label="Source" style="margin-right: 4px">
           {#each SOURCES as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]}>{SRC_NAMES[s]}</button>{/each}
         </div>
-        <SplitButton size="lg" accent disabled={!!kind?.content && !target} onclick={() => install()} menuLabel="Choose instance" menuDisabled={!kind?.content} onmenu={choose}>Install</SplitButton>
+        <!-- A modpack installs as its own instance, so only content gets the instance chooser. -->
+        {#if kind?.content}
+          <SplitButton size="lg" accent disabled={!target} onclick={() => install()} menuLabel="Choose instance" expanded={!!chooser} onmenu={choose}>Install</SplitButton>
+        {:else}
+          <button class="btn btn-accent btn-lg" disabled={!kind} onclick={() => install()}>Install</button>
+        {/if}
       </header>
       <Tabs items={tabs} active={tab} label="Project" onselect={(k) => (tab = k)} />
 

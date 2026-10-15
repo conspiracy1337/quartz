@@ -18,7 +18,7 @@
   import { session } from '../session.svelte';
   import Check from '../ui/Check.svelte';
   import Icon from '../ui/Icon.svelte';
-  import Menu from '../ui/Menu.svelte';
+  import Menu, { below } from '../ui/Menu.svelte';
   import SearchField from '../ui/SearchField.svelte';
   import SplitButton from '../ui/SplitButton.svelte';
   import Toggle from '../ui/Toggle.svelte';
@@ -98,11 +98,6 @@
     sortMenu = null;
   }
   let sortMenu = $state<{ x: number; y: number } | null>(null);
-  /** A menu's place under the button that opens it, right-aligned. */
-  function below(e: MouseEvent) {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    return { x: r.right - 240, y: r.bottom + 4 };
-  }
   const SORTS = $derived([
     { value: '', label: kind === 'resourcepacks' ? 'Load order' : 'Name' },
     { value: 'added', label: 'Recently added' }, { value: 'size', label: 'Size' }, { value: 'enabled', label: 'Enabled first' },

@@ -1,3 +1,11 @@
+<script lang="ts" module>
+  /** A menu's place under the button that opens it, right-aligned to it. */
+  export function below(e: MouseEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return { x: r.right - 240, y: r.bottom + 4 };
+  }
+</script>
+
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
