@@ -1380,18 +1380,31 @@ Gathered here from the sections above for quick review.
 
 - **Mock mode:** without the Go runtime (Vite on :5173, Playwright, tests), every API call returns cloned fixtures.
   - `?slow` adds 1.2 s of latency so the skeletons show.
-  - [bridge.ts](frontend/src/lib/bridge.ts), [api/mock/](frontend/src/lib/api/mock/)
-- **Build tags:**
+  - Every fallback is type-checked against the generated Go binding. A preview may only declare fields Go sends, with Go's types, and may not declare a field as always present when Go may leave it out. Arguments may only use fields Go reads. Errors name the path (`result.rows[].art`). Painted stand-ins that only fixtures fill are marked `PreviewOnly`. [bridge.ts](frontend/src/lib/bridge.ts), [bridge.typecheck.ts](frontend/src/lib/bridge.typecheck.ts)
+  - [api/mock/](frontend/src/lib/api/mock/)
+- **Build tags** (development only):
   - `fakeauth`: a local fake of Microsoft, Xbox and Minecraft. [fakeauth.go](internal/app/fakeauth.go), [authtest.go](internal/auth/authtest/authtest.go)
   - `e2e`: native dialogs answered from `QUARTZ_E2E_DIALOGS`. [dialogs_e2e.go](internal/api/dialogs_e2e.go)
-- **Tests:** Go integration tests cover browse, content, game, home, host, Java, launchers and loaders. [internal/integration/](internal/integration/)
+  - `pprof`: Go's profiler on a free loopback port, printed at start (`go tool pprof http://127.0.0.1:<port>/debug/pprof/profile`). [pprof.go](internal/app/pprof.go)
+- **Checks:** [check.sh](check.sh) runs everything a change must pass before it is merged, stopping at the first failure:
+  - gofmt on changed files, `go vet`, golangci-lint, Go tests
+  - svelte-check (including the mock type checks) and vitest
+  - a production build, then `release verify` on it
+  - `-online` adds the integration tests and govulncheck.
+- **Tests:**
+  - Go integration tests (`-tags integration`, network) cover browse, content, game, home, host, Java, launchers and loaders. [internal/integration/](internal/integration/)
+  - About 160 Go unit test files and the vitest suite.
 - **Design parity:** Playwright screenshots of the design boards and the mock app, ranked by pixel and text difference. [tools/parity/](tools/parity/)
 - **Release tool:** [tools/release/](tools/release/)
   - `keygen`: a minisign key sealed with scrypt + XChaCha20-Poly1305.
   - `build`: every OS/arch with ldflags; the macOS app is zipped and ad-hoc signed.
-  - `manifest`: a signed `update.json`.
+    - It refuses malformed service IDs, and missing Microsoft or CurseForge IDs unless given `-allow-missing`.
+    - Each output is stamped with its version in `dist/.builds.json`.
+    - Ctrl+C stops the build and puts `wails.json` back.
+  - `verify`: reads a program's build info. It must be a production build without the `fakeauth`, `e2e` or `pprof` tag, and Linux and Windows binaries must be under 20 MB. For the macOS zip, the program inside is checked.
+  - `manifest`: a signed `update.json`. Before signing, every file must carry this version's stamp and pass `verify`, so a build left over from an older release is never signed.
   - `sign`.
-- **Wrapper jar:** a reproducible Java 8 build of the stdin launcher. [tools/wrapperjar/](tools/wrapperjar/)
+- **Wrapper jar:** a reproducible Java 8 build of the stdin launcher, pinned by SHA-256. [tools/wrapperjar/](tools/wrapperjar/)
 - **Builds:**
   - [build.sh](build.sh) makes a one-command stripped production build.
-  - Build-time IDs (Microsoft client ID, CurseForge key, Discord ID, update public key) come in through ldflags with env overrides. A malformed ID turns its feature off. [brand.go](internal/brand/brand.go)
+  - Build-time IDs (Microsoft client ID, CurseForge key, Discord ID, update public key) come in through ldflags with env overrides. A malformed ID turns its feature off. One validator per ID is shared by the launcher and the release tool. [brand.go](internal/brand/brand.go)
