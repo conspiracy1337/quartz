@@ -192,7 +192,7 @@ func Run(o Options) error {
 			OnSecondInstanceLaunch: a.secondInstance,
 		},
 		// The program name is the Wayland app_id, which picks the desktop
-		// entry (and so the icon); Icon covers X11.
+		// entry (and so the icon); Icon covers X11 windows without one.
 		Linux: &linux.Options{ProgramName: brand.AppID, Icon: desktop.Icon},
 		// macOS hands links and opened files to the app bundle, not argv.
 		Mac: &mac.Options{

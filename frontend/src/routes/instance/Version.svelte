@@ -72,7 +72,7 @@
 <div class="scroll">
   <div class="page page-narrow" style="gap: 20px; padding-top: 18px">
     <section class="card" aria-label="Components">
-      <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="brand" size={20} /></span><span><span class="h3" style="display: block">Minecraft {i.minecraft}</span><span class="small faint" style="display: block">{mcLine}</span></span>{#if i.clientJar}<button class="btn btn-sm" disabled title="Remove the custom jar to change the version">Change</button>{:else}<a href={to('minecraft')} class="btn btn-sm">Change</a>{/if}</div>
+      <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="cube" size={20} /></span><span><span class="h3" style="display: block">Minecraft {i.minecraft}</span><span class="small faint" style="display: block">{mcLine}</span></span>{#if i.clientJar}<button class="btn btn-sm" disabled title="Remove the custom jar to change the version">Change</button>{:else}<a href={to('minecraft')} class="btn btn-sm">Change</a>{/if}</div>
       {#if i.clientJar}
         <div class="divider"></div>
         <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="file" size={20} sw={1.8} /></span><span style="min-width: 0"><span class="h3 trunc" style="display: block">{i.clientJar.name}</span><span class="small faint" style="display: block">Custom jar, {bytes(i.clientJar.size)}. Runs in place of the vanilla game jar.</span></span><button class="btn btn-sm btn-ghost" onclick={() => edit(() => api.instances.removeClientJar(i.id), 'Custom jar')}>Remove</button></div>

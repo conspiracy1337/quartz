@@ -82,10 +82,13 @@ const mrpackMimeXML = `<?xml version="1.0" encoding="UTF-8"?>
 `
 
 func (l linux) entry(want Want) Entry {
+	// Wayland matches the window to this entry by its app_id (brand.AppID,
+	// the entry's name); X11 by WM_CLASS, which GTK takes from the binary's
+	// file name before Wails can set the program name.
 	e := Entry{
 		Name: brand.Name, Comment: "Minecraft launcher", Exec: want.Argv(), ExecSuffix: "%U",
 		Icon: brand.AppID, Categories: []string{"Game"},
-		Extra: []string{"StartupWMClass=" + brand.AppID},
+		Extra: []string{"StartupWMClass=" + filepath.Base(want.Exe)},
 	}
 	if want.Links {
 		e.MimeTypes = associations()

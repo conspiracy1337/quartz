@@ -25,7 +25,7 @@ export const icons = {
   stop: f('<rect x="5" y="5" width="14" height="14" rx="2"/>'),
   pause: f('<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'),
   microsoft: f('<rect x="3" y="3" width="8.5" height="8.5"/><rect x="12.5" y="3" width="8.5" height="8.5"/><rect x="3" y="12.5" width="8.5" height="8.5"/><rect x="12.5" y="12.5" width="8.5" height="8.5"/>'),
-  brand: s('<path d="M12 2.5 21 7.5v9L12 21.5 3 16.5v-9z"/><path d="M12 12 21 7.5M12 12v9.5M12 12 3 7.5"/>'),
+  cube: s('<path d="M12 2.5 21 7.5v9L12 21.5 3 16.5v-9z"/><path d="M12 12 21 7.5M12 12v9.5M12 12 3 7.5"/>'),
   home: s('<path d="M4 10.5 12 4l8 6.5V20h-5v-6H9v6H4z"/>'),
   house: s('<path d="M4 10.5 12 4l8 6.5V20H4z"/>'),
   library: s('<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>'),
