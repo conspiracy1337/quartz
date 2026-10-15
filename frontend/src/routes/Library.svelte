@@ -61,9 +61,10 @@
             <div class="icard-cover" style="background: radial-gradient(120% 140% at 0% 0%, {r.art.background} 0%, #141417 85%); opacity: .9"></div>
             <div style="padding: 0 14px 12px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0">
               <span class="ico ico-lg" style="background: {r.art.background}; margin-top: -24px; box-shadow: 0 0 0 3px var(--panel); position: relative; z-index: 1"><InstanceMark art={r.art} icon={r.icon} /></span>
-              <a href={href({ name: 'instance', id: r.id, tab: 'overview' })} style="min-width: 0; text-decoration: none"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small muted" style="display: block">{instanceMeta(r)}</span></a>
+              <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small muted" style="display: block">{instanceMeta(r)}</span></span>
               <span class="small faint tnum" style="display: flex; justify-content: space-between"><span>{agoShort(r.lastPlayed)}</span><span>{hours(r.playtimeMin)}</span></span>
             </div>
+            <a class="icard-hit" href={href({ name: 'instance', id: r.id, tab: 'overview' })} aria-label="Open {r.name}"></a>
             <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={(e) => (session.running[r.id] ? session.openLaunchAs(r.id, e) : session.play(r.id))}><Icon name="play" size={14} /></button>
           </div>
         {:else}
@@ -95,6 +96,9 @@
   .icard:hover{border-color:var(--line-2)}
   /* The cover is translucent, which lifts it into its own layer; the icon sits above it explicitly. */
   .icard-cover{min-height:0}
-  .icard .play{position:absolute;right:10px;top:52px;opacity:0;transform:translateY(4px);transition:opacity 140ms ease,transform 160ms var(--ease)}
+  /* The whole card opens the instance; Play sits above it. */
+  .icard-hit{position:absolute;inset:0;z-index:2;border-radius:10px}
+  .icard-hit:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .icard .play{z-index:3;position:absolute;right:10px;top:52px;opacity:0;transform:translateY(4px);transition:opacity 140ms ease,transform 160ms var(--ease)}
   .icard:hover .play,.icard:focus-within .play{opacity:1;transform:none}
 </style>
