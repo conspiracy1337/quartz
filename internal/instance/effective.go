@@ -14,19 +14,19 @@ var ErrJavaNotChosen = errors.New("instance: pick Java automatically is off. Cho
 // place that decides what a launch actually uses (Prism's override model, as
 // the instance settings page shows it).
 type Effective struct {
-	JavaPath    string // "" picks Java automatically
-	JavaUnset   bool   // automatic picking is off and no runtime is chosen
-	MemoryMinMB int
-	MemoryMaxMB int
-	JVMArgs     string
-	Width       int // 0 keeps the game's default size
-	Height      int
-	Fullscreen  bool
-	OnGameStart string // keep-open | hide | close
-	OpenInto    Into
-	Commands    CommandSettings
-	Performance PerformanceSettings
-	Account     string // "" plays as the default account
+	JavaPath        string // "" picks Java automatically
+	JavaUnset       bool   // automatic picking is off and no runtime is chosen
+	MemoryMinMB     int
+	MemoryMaxMB     int
+	JVMArgs         string
+	Width           int // 0 keeps the game's default size
+	Height          int
+	Fullscreen      bool
+	HideOnGameStart bool // hide the launcher until the game exits
+	OpenInto        Into
+	Commands        CommandSettings
+	Performance     PerformanceSettings
+	Account         string // "" plays as the default account
 }
 
 // minHeapMB keeps an overridden minimum heap from being absurdly small.
@@ -36,8 +36,8 @@ const minHeapMB = 256
 func (in Instance) Resolve(g settings.Settings) Effective {
 	e := Effective{
 		MemoryMinMB: g.Java.MemoryMinMB, MemoryMaxMB: g.Java.MemoryMaxMB, JVMArgs: g.Java.JVMArgs,
-		OnGameStart: settings.Resolve(nonEmpty(in.Settings.Window.OnGameStart), g.General.OnGameStart),
-		Width:       in.Settings.Window.Width, Height: in.Settings.Window.Height, Fullscreen: in.Settings.Window.Fullscreen,
+		HideOnGameStart: settings.Resolve(in.Settings.Window.HideOnGameStart, g.General.HideOnGameStart),
+		Width:           in.Settings.Window.Width, Height: in.Settings.Window.Height, Fullscreen: in.Settings.Window.Fullscreen,
 		OpenInto: in.Settings.Window.OpenInto,
 		Commands: in.Settings.Commands, Performance: in.Settings.Performance, Account: in.Settings.Account,
 	}
@@ -53,12 +53,4 @@ func (in Instance) Resolve(g settings.Settings) Effective {
 	}
 	e.MemoryMinMB = min(e.MemoryMinMB, e.MemoryMaxMB)
 	return e
-}
-
-// nonEmpty is nil for "", so settings.Resolve falls back to the global value.
-func nonEmpty(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }

@@ -9,9 +9,8 @@
   import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { revs } from '$lib/revs.svelte';
-  import { ON_GAME_START } from '$lib/settings/registry';
+  import { HIDE_ON_GAME_START } from '$lib/settings/registry';
   import { session } from '$lib/session.svelte';
-  import Seg from '$lib/ui/Seg.svelte';
   import Select from '$lib/ui/Select.svelte';
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
@@ -51,7 +50,7 @@
   });
   const groupOptions = $derived([{ value: '', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
   let naming = $state(false);
-  const onStart = $derived(st.window.onGameStart || prefs.value?.general.onGameStart || 'hide');
+  const hideOnStart = $derived(st.window.hideOnGameStart ?? prefs.value?.general.hideOnGameStart ?? false);
   const num = (v: string) => Math.max(0, Math.round(Number(v)) || 0);
 
   async function save() {
@@ -139,7 +138,7 @@
         <div class="divider"></div>
         <Setting title="Start fullscreen"><Toggle on={st.window.fullscreen} label="Start fullscreen" onchange={(v) => change(() => (st.window.fullscreen = v))} /></Setting>
         <div class="divider"></div>
-        <Setting title="When the game starts"><Seg options={ON_GAME_START} value={onStart} label="When the game starts" onchange={(v) => change(() => (st.window.onGameStart = v))} /></Setting>
+        <Setting title={HIDE_ON_GAME_START.title} desc={HIDE_ON_GAME_START.desc}><Toggle on={hideOnStart} label={HIDE_ON_GAME_START.title} onchange={(v) => change(() => (st.window.hideOnGameStart = v))} /></Setting>
         <div class="divider"></div>
         <Setting title="Open straight into" desc="Skips the title screen."><Select value={into} options={intoOptions} label="Open straight into" onchange={setInto} /></Setting>
         <div class="divider"></div>

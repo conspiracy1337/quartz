@@ -287,7 +287,7 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	l.mu.Unlock()
 	l.cfg.Bus.Emit(events.GameState, State{InstanceID: inst.ID, RunID: r.id, State: "running", Copies: copies})
 	if l.cfg.Hooks.GameStarted != nil {
-		l.cfg.Hooks.GameStarted(sp.eff.OnGameStart)
+		l.cfg.Hooks.GameStarted(sp.eff.HideOnGameStart)
 	}
 
 	wait := r.con.Start(child.Stdout, child.Stderr)

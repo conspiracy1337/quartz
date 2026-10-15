@@ -637,22 +637,12 @@ func (a *app) buildContent() error {
 	return nil
 }
 
-// gameStarted applies "when a game starts": keep the launcher open, hide it
-// until the game exits, or close it (the game keeps running).
-func (a *app) gameStarted(mode string) {
-	ctx := a.ctx.Get()
-	switch mode {
-	case "hide":
+// gameStarted hides the launcher until the game exits when the player asked
+// for that; it keeps running, so playtime and downloads carry on.
+func (a *app) gameStarted(hide bool) {
+	if hide {
 		a.hidden.Store(true)
-		wruntime.WindowHide(ctx)
-	case "close":
-		if len(a.tasks.Snapshot().Active) > 0 {
-			// Closing would stop the downloads: hide until the game exits instead.
-			a.hidden.Store(true)
-			wruntime.WindowHide(ctx)
-			return
-		}
-		a.quit()
+		wruntime.WindowHide(a.ctx.Get())
 	}
 }
 

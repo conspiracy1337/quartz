@@ -50,7 +50,7 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   gpu: 'NVIDIA GeForce RTX 3070 Laptop GPU',
   settings: {
     java: { override: true, javaPath: '', memoryMinMb: 2048, memoryMaxMb: 6144, jvmArgs: '-XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+UnlockExperimentalVMOptions' },
-    window: { width: 1920, height: 1080, fullscreen: false, onGameStart: 'hide' },
+    window: { width: 1920, height: 1080, fullscreen: false },
     commands: {
       preLaunch: '$HOME/scripts/backup.sh "$INST_DIR"', wrapper: '', postExit: '',
       env: [{ name: '__GL_THREADED_OPTIMIZATIONS', value: '0' }, { name: 'MESA_GL_VERSION_OVERRIDE', value: '4.6' }],

@@ -56,9 +56,9 @@ var (
 )
 
 // Hooks let the app react to games starting and ending (hide or restore the
-// window, or close the launcher).
+// window).
 type Hooks struct {
-	GameStarted func(onGameStart string)
+	GameStarted func(hide bool)
 	AllExited   func()
 	// AfterExitFailed reports the player's after-exit command failing, which
 	// happens with no launch panel open to show it.

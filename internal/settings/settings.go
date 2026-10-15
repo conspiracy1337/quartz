@@ -28,9 +28,9 @@ type Settings struct {
 }
 
 type General struct {
-	Language          string `json:"language"`    // "system" or a locale tag
-	OnGameStart       string `json:"onGameStart"` // keep-open | hide | close
-	StartPage         string `json:"startPage"`   // home | library | last-instance
+	Language          string `json:"language"`        // "system" or a locale tag
+	HideOnGameStart   bool   `json:"hideOnGameStart"` // hide the launcher until the game exits
+	StartPage         string `json:"startPage"`       // home | library | last-instance
 	StartWithComputer bool   `json:"startWithComputer"`
 	// SetupDone is set when first-run setup finishes (or is skipped).
 	SetupDone bool `json:"setupDone"`
@@ -105,7 +105,7 @@ func Defaults() Settings {
 	return Settings{
 		Version: SchemaVersion,
 		// A settings file from before first-run setup existed reads as done.
-		General: General{Language: "system", OnGameStart: "hide", StartPage: "home", SetupDone: true},
+		General: General{Language: "system", StartPage: "home", SetupDone: true},
 		Downloads: Downloads{
 			Parallel: 8, WatchDownloads: true, Proxy: "system",
 			ProxyCustom: ProxyCustom{Type: "http", Port: 8080},
@@ -147,7 +147,6 @@ func (s Settings) Normalize() Settings {
 	if s.General.Language != "system" && !localeTag.MatchString(s.General.Language) {
 		s.General.Language = d.General.Language
 	}
-	s.General.OnGameStart = oneOf(s.General.OnGameStart, d.General.OnGameStart, "keep-open", "hide", "close")
 	s.General.StartPage = oneOf(s.General.StartPage, d.General.StartPage, "home", "library", "last-instance")
 	if len(s.General.HiddenNews) > 128 {
 		s.General.HiddenNews = ""
