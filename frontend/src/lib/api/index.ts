@@ -47,7 +47,8 @@ export const api = {
   updates: updatesApi,
   instances: {
     list: () => revs.load('instances', bridged(InstancesGo.List, () => inst.instances.map(summary))),
-    get: (id: string) => revs.load('instances', bridged(() => InstancesGo.Get(id), () => byId(id))),
+    // An instance carries its tabs' counts, so it reloads when their items change too.
+    get: (id: string) => revs.load(['instances', 'content', 'worlds', 'servers'], bridged(() => InstancesGo.Get(id), () => byId(id))),
     /** The sidebar's recent list: the instances played or created last. */
     recent: () => revs.load('instances', bridged(() => InstancesGo.List().then((l) => l.slice(0, 4)), () => inst.recentIds.map((id) => summary(byId(id))))),
     /** The instance Browse installs into by default: the most recently played one. */

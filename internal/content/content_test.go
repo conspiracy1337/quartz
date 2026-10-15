@@ -626,6 +626,29 @@ func TestWatchSeesAFolderCreatedLater(t *testing.T) {
 	}
 }
 
+// An imported instance has files but no index yet: showing it counts them
+// before any of its tabs lists them.
+func TestWatchCountsBeforeAnyList(t *testing.T) {
+	e := newEnv(t)
+	e.mod("a.jar", "a", "A", "")
+	e.mod("b.jar", "b", "B", "")
+	writeZip(t, filepath.Join(e.game, "resourcepacks", "Faithful.zip"), map[string]string{"pack.mcmeta": `{"pack":{"pack_format":34,"description":"x"}}`})
+	if n := e.svc.Counts(e.id)[Mods]; n != 0 {
+		t.Fatalf("counted %d mods before any scan", n)
+	}
+	e.svc.Watch(e.id)
+	t.Cleanup(func() { e.svc.Watch("") })
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		c := e.svc.Counts(e.id)
+		if c[Mods] == 2 && c[ResourcePacks] == 1 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("counts after showing the instance: %v", c)
+		}
+	}
+}
+
 func TestUnreadableFilesSaySo(t *testing.T) {
 	e := newEnv(t)
 	_ = os.MkdirAll(filepath.Join(e.game, "mods"), 0o700)

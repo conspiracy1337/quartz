@@ -17,9 +17,9 @@ class Revisions {
   screenshots = $state(0);
   sync = $state(0);
 
-  /** Reads the key (so the calling query tracks it), then loads. */
-  load<T>(key: RevKey, fn: () => Promise<T>): Promise<T> {
-    void this[key];
+  /** Reads the keys (so the calling query tracks them), then loads. */
+  load<T>(keys: RevKey | RevKey[], fn: () => Promise<T>): Promise<T> {
+    for (const k of Array.isArray(keys) ? keys : [keys]) void this[k];
     return fn();
   }
 

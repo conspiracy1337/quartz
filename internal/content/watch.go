@@ -35,6 +35,11 @@ func (s *Service) Watch(id string) {
 		s.watch.w = nil
 	}
 	s.watch.id = id
+	// A pending flush was for the instance shown before.
+	if s.watch.timer != nil {
+		s.watch.timer.Stop()
+		s.watch.timer = nil
+	}
 	if id == "" {
 		return
 	}
@@ -56,6 +61,13 @@ func (s *Service) Watch(id string) {
 	}
 	s.watch.w, s.watch.dirs, s.watch.dirty = w, dirs, map[Kind]bool{}
 	go s.watchLoop(w, id)
+	// The index may miss files put there while the instance wasn't shown, or not
+	// exist yet (an imported or installed instance): scan every kind once, so the
+	// tabs' counts are right before any tab is opened.
+	for _, k := range Kinds {
+		s.watch.dirty[k] = true
+	}
+	s.scheduleWatch(id)
 }
 
 func worldsAt(game string) []string {
@@ -142,14 +154,14 @@ func (s *Service) scheduleWatch(id string) {
 
 func (s *Service) flushWatch(id string) {
 	s.watch.mu.Lock()
+	if s.watch.id != id { // another instance is shown now, with its own timer
+		s.watch.mu.Unlock()
+		return
+	}
 	kinds := s.watch.dirty
 	s.watch.dirty = map[Kind]bool{}
 	s.watch.timer = nil
-	current := s.watch.id == id
 	s.watch.mu.Unlock()
-	if !current {
-		return
-	}
 	for k := range kinds {
 		_ = s.Scan(context.Background(), id, k)
 	}
