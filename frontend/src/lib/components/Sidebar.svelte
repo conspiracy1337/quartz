@@ -35,7 +35,7 @@
 
 <aside class="side" style="font-family: var(--font); color: var(--text)">
   <div class="side-brand">
-    <Logo size={18} />
+    <Logo />
     <span class="hide-c">Quartz Client</span>
   </div>
   <button class="side-link" style="border: 1px solid var(--line-2); background: var(--panel); color: var(--faint); text-align: left" onclick={() => session.open({ kind: 'palette', mode: 'commands' })}>
