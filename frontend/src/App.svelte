@@ -77,7 +77,6 @@
     void router.route;
     untrack(() => session.close());
   });
-  const overlay = $derived(session.overlay);
 
   function sideKey(r: Route): SideKey {
     switch (r.name) {
@@ -137,18 +136,21 @@
   {#if session.toast}{#key session.toastSeq}<Toast {...session.toast} />{/key}{/if}
   {#if session.launchAs}{#key session.launchAs}<InstanceMenu {...session.launchAs} />{/key}{/if}
 
-  {#if overlay?.kind === 'add-account'}<AddAccount mode={overlay.mode} accountId={overlay.accountId} />
-  {:else if overlay?.kind === 'install'}{#key overlay}<Install {...overlay} />{/key}
-  {:else if overlay?.kind === 'crash'}{#key overlay}<Crash instanceId={overlay.instanceId} runId={overlay.runId} file={overlay.file} />{/key}
-  {:else if overlay?.kind === 'server'}{#key overlay}<ServerDialog instanceId={overlay.instanceId} entry={overlay.entry} />{/key}
-  {:else if overlay?.kind === 'copy-world'}{#key overlay}<CopyWorld {...overlay} />{/key}
-  {:else if overlay?.kind === 'rename-world'}{#key overlay}<WorldEdit instanceId={overlay.instanceId} folder={overlay.folder} name={overlay.name} />{/key}
-  {:else if overlay?.kind === 'blocked'}<Blocked jobId={overlay.jobId} />
-  {:else if overlay?.kind === 'host'}<Host instanceId={overlay.instanceId} />
-  {:else if overlay?.kind === 'palette'}{#key overlay.mode}<Palette mode={overlay.mode} />{/key}
-  {:else if overlay?.kind === 'shortcuts'}<Shortcuts />
-  {:else if overlay?.kind === 'shortcut'}<ShortcutDialog instanceId={overlay.instanceId} />
-  {:else if overlay?.kind === 'export'}<ExportDialog instanceId={overlay.instanceId} />
-  {:else if overlay?.kind === 'rename' || overlay?.kind === 'icon'}{#key overlay}<InstanceEdit kind={overlay.kind} instanceId={overlay.instanceId} />{/key}
-  {/if}
+  <!-- Keyed by the overlay object: a dialog keeps reading its own props after a handler closes it. -->
+  {#each session.overlay ? [session.overlay] : [] as overlay (overlay)}
+    {#if overlay.kind === 'add-account'}<AddAccount mode={overlay.mode} accountId={overlay.accountId} />
+    {:else if overlay.kind === 'install'}<Install {...overlay} />
+    {:else if overlay.kind === 'crash'}<Crash instanceId={overlay.instanceId} runId={overlay.runId} file={overlay.file} />
+    {:else if overlay.kind === 'server'}<ServerDialog instanceId={overlay.instanceId} entry={overlay.entry} />
+    {:else if overlay.kind === 'copy-world'}<CopyWorld {...overlay} />
+    {:else if overlay.kind === 'rename-world'}<WorldEdit instanceId={overlay.instanceId} folder={overlay.folder} name={overlay.name} />
+    {:else if overlay.kind === 'blocked'}<Blocked jobId={overlay.jobId} />
+    {:else if overlay.kind === 'host'}<Host instanceId={overlay.instanceId} />
+    {:else if overlay.kind === 'palette'}<Palette mode={overlay.mode} />
+    {:else if overlay.kind === 'shortcuts'}<Shortcuts />
+    {:else if overlay.kind === 'shortcut'}<ShortcutDialog instanceId={overlay.instanceId} />
+    {:else if overlay.kind === 'export'}<ExportDialog instanceId={overlay.instanceId} />
+    {:else if overlay.kind === 'rename' || overlay.kind === 'icon'}<InstanceEdit kind={overlay.kind} instanceId={overlay.instanceId} />
+    {/if}
+  {/each}
 </div>
