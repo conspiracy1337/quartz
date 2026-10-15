@@ -208,7 +208,7 @@ func (y Sync) normalize(legacy []string) Sync {
 			join = append(join, id)
 		}
 	}
-	y.Join = nil
+	y.Join = make([]string, 0, len(join)) // never nil: the UI reads sync.join as a list
 	for _, id := range join {
 		if ValidSyncID(id) && !slices.Contains(y.Join, id) && len(y.Join) < 128 {
 			y.Join = append(y.Join, id)

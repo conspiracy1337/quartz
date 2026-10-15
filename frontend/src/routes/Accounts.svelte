@@ -9,6 +9,7 @@
   import Toggle from '$lib/ui/Toggle.svelte';
   import Empty from '$lib/ui/Empty.svelte';
   import Menu, { below } from '$lib/ui/Menu.svelte';
+  import MenuConfirm from '$lib/ui/MenuConfirm.svelte';
   import { since } from '$lib/format';
   import { avatar } from '$lib/look';
   import { prefs } from '$lib/prefs.svelte';
@@ -80,8 +81,7 @@
       {@const m = more}
       <Menu x={m.x} y={m.y} label="More for {m.account.name}" onclose={() => (more = null)}>
         {#if m.confirm}
-          <div class="small muted menu-title">Remove {m.account.name}? {m.account.kind === 'microsoft' ? 'Its stored sign-in is deleted.' : ''}</div>
-          <div style="display: flex; gap: 6px; padding: 4px 8px 6px"><button class="btn btn-sm" role="menuitem" onclick={() => (more = null)}>Cancel</button><button class="btn btn-sm btn-danger" role="menuitem" onclick={() => remove(m.account)}>Remove</button></div>
+          <MenuConfirm text="Remove {m.account.name}? {m.account.kind === 'microsoft' ? 'Its stored sign-in is deleted.' : ''}" action="Remove" oncancel={() => (more = null)} onconfirm={() => remove(m.account)} />
         {:else}
           <button class="mi" role="menuitem" onclick={() => (more = { ...m, confirm: true })}><Icon name="trash" size={14} /><span>Remove account</span><span></span></button>
         {/if}

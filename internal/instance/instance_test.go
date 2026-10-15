@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -200,6 +201,14 @@ func TestSyncMigratesShareLabels(t *testing.T) {
 		Sync: Sync{Join: []string{"saves", "Bad Id", "c-1a2b"}}})
 	if in.Shares != nil || !in.Sync.Keys || !slices.Equal(in.Sync.Join, []string{"saves", "c-1a2b", "shaderpacks"}) {
 		t.Fatalf("%+v %v", in.Sync, in.Shares)
+	}
+}
+
+func TestSyncJoinIsNeverNull(t *testing.T) {
+	in := normalize(Instance{ID: "a", Name: "A"})
+	b, err := json.Marshal(in.Sync)
+	if err != nil || !strings.Contains(string(b), `"join":[]`) {
+		t.Fatalf("%s %v", b, err)
 	}
 }
 
