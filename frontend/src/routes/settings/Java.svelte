@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import { plural } from '$lib/format';
-  import { query } from '$lib/query.svelte';
+  import { query, skeletonRows } from '$lib/query.svelte';
   import { groupsFor } from '$lib/settings/registry';
   import SettingsGroup from '$lib/settings/SettingsGroup.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -13,7 +13,7 @@
   import { session } from '$lib/session.svelte';
   import { tasks } from '$lib/tasks.svelte';
 
-  const runtimes = query(() => api.java.runtimes());
+  const runtimes = query(() => api.java.runtimes(), 'java.runtimes');
   const defs = groupsFor('java').flatMap((g) => g.defs);
   let changed = $state<JavaRuntime[] | null>(null);
   let busy = $state(false);
@@ -69,7 +69,7 @@
         {#if list}
           <div class="row empty jr-empty"><span>No Java found. Download one now, or Quartz downloads the right version when you first play.</span></div>
         {:else}
-        {#each { length: 6 } as _, k (k)}<div class="row jr" aria-hidden="true"><div class="sk" style="width: 44px; height: 32px; border-radius: 6px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk opt" style="height: 10px; width: 70px"></div><div></div></div>{/each}
+        {#each { length: skeletonRows('java.runtimes', 6) } as _, k (k)}<div class="row jr" aria-hidden="true"><div class="sk" style="width: 44px; height: 32px; border-radius: 6px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk opt" style="height: 10px; width: 70px"></div><div></div></div>{/each}
         {/if}
       {/each}
     </div>
