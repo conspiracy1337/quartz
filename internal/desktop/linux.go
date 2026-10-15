@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"quartz/internal/brand"
-	"quartz/internal/intent"
 	"quartz/internal/core/fsx"
+	"quartz/internal/intent"
 )
 
 // linux writes user-scope freedesktop.org files: the app's desktop entry
@@ -105,8 +105,26 @@ func associations() []string {
 	return out
 }
 
-func (l linux) apply(was, want Want) error {
+// iconChanged is the signal that makes running KDE apps (the taskbar) look
+// icons up again.
+var iconChanged = []string{"--session", "--type=signal", "/KIconLoader", "org.kde.KIconLoader.iconChanged", "int32:0"}
+
+// writeIcon installs the icon. Plasma caches which icon theme folders exist,
+// so an icon in a size folder made after it started stays missing (the
+// theme's placeholder in the taskbar) until it is told to look again.
+func (l linux) writeIcon() error {
+	if old, err := fsx.ReadCapped(l.iconPath(), int64(len(Icon))+1); err == nil && bytes.Equal(old, Icon) {
+		return nil
+	}
 	if err := writeFile(l.iconPath(), Icon, 0o644); err != nil {
+		return err
+	}
+	_ = l.run("dbus-send", iconChanged...)
+	return nil
+}
+
+func (l linux) apply(was, want Want) error {
+	if err := l.writeIcon(); err != nil {
 		return err
 	}
 	if err := writeFile(l.entryPath(), l.entry(want).Marshal(), 0o644); err != nil {
