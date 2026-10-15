@@ -37,6 +37,14 @@
     };
   });
 
+  // Lines wrap as on the board, so the box keeps its end in view: the newest output
+  // (a command's reply) is never clipped below.
+  let con = $state<HTMLElement>();
+  $effect(() => {
+    void lines;
+    if (con) con.scrollTop = con.scrollHeight;
+  });
+
   let command = $state('');
   async function send(e: KeyboardEvent) {
     if (e.key !== 'Enter' || !command.trim()) return;
@@ -62,7 +70,7 @@
       {#if network}<div class="addr"><span class="mono trunc">{network} <span class="faint">on your network</span></span><button class="btn btn-sm btn-ghost" onclick={() => copy(network)}>Copy</button></div>{/if}
     </div>
     <div style="padding: 10px 14px 0">
-      <div class="con" aria-label="Server console">{#each lines as l, i (i)}{#if i > 0}<br />{/if}[{l.time}] {l.message}{/each}</div>
+      <div class="con" aria-label="Server console" bind:this={con}>{#each lines as l, i (i)}{#if i > 0}<br />{/if}[{l.time}] {l.message}{/each}</div>
       <label class="input" style="margin-top: 6px; height: 30px"><span class="mono faint">/</span><span class="sr">Server command</span><input class="mono" placeholder={me ? `op ${me}` : ''} bind:value={command} onkeydown={send} /></label>
     </div>
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 12px 14px 14px">
