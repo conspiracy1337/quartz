@@ -45,3 +45,24 @@ func TestCurseForgeKey(t *testing.T) {
 	}
 	CurseForgeAPIKey = ""
 }
+
+func TestValidators(t *testing.T) {
+	for _, c := range []struct {
+		valid func(string) bool
+		good  string
+		bad   []string
+	}{
+		{ValidClientID, "11111111-2222-3333-4444-555555555555", []string{"", "11111111-2222-3333-4444-55555555555", "x=1 11111111-2222-3333-4444-555555555555"}},
+		{ValidCurseForgeKey, "$2a$10$abcdefghijklmnopqrstuv", []string{"", "short", "has a space in the middle of it"}},
+		{ValidDiscordID, "123456789012345678", []string{"", "1234", "12345678901234567a", "123456789012345678 -X main.x=1"}},
+	} {
+		if !c.valid(c.good) {
+			t.Errorf("%q should be valid", c.good)
+		}
+		for _, b := range c.bad {
+			if c.valid(b) {
+				t.Errorf("%q should be invalid", b)
+			}
+		}
+	}
+}
