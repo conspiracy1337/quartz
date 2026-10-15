@@ -18,15 +18,16 @@
   interface Props { x: number; y: number; label: string; title?: string | undefined; scroll?: boolean; onclose: () => void; children: Snippet }
   let { x, y, label, title, scroll = false, onclose, children }: Props = $props();
   let el = $state<HTMLElement>();
-  let size = $state({ w: 0, h: 0 });
+  // Bound sizes follow the menu as rows arrive (InstanceMenu's accounts, Syncing's
+  // key list), so the clamp always uses the real size, not the first empty one.
+  let w = $state(0);
+  let h = $state(0);
 
-  const left = $derived(Math.max(8, Math.min(x, window.innerWidth - size.w - 8)));
-  const top = $derived(Math.max(8, Math.min(y, window.innerHeight - size.h - 8)));
+  const left = $derived(Math.max(8, Math.min(x, window.innerWidth - w - 8)));
+  const top = $derived(Math.max(8, Math.min(y, window.innerHeight - h - 8)));
 
   $effect(() => {
-    if (!el) return;
-    size = { w: el.offsetWidth, h: el.offsetHeight };
-    el.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    el?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   });
 
   // Inner panes scroll without bubbling, so listen in the capture phase (but not to
@@ -53,12 +54,12 @@
 </script>
 
 <svelte:window onkeydown={keys} onpointerdown={outside} onresize={onclose} onblur={onclose} />
-<div class="menu um" class:um-scroll={scroll} role="menu" aria-label={label} bind:this={el} style="left: {left}px; top: {top}px">
+<div class="menu um" class:um-scroll={scroll} role="menu" aria-label={label} bind:this={el} bind:offsetWidth={w} bind:offsetHeight={h} style="left: {left}px; top: {top}px">
   {#if title}<div class="small faint menu-title trunc">{title}</div>{/if}
   {@render children()}
 </div>
 
 <style>
-  .um{position:fixed;z-index:50;min-width:240px;max-width:320px}
+  .um{position:fixed;z-index:50;min-width:240px;max-width:320px;max-height:calc(100vh - 16px);overflow:auto}
   .um-scroll{max-height:280px;overflow:auto}
 </style>

@@ -8,6 +8,8 @@
       the bar drains while it waits. */
   let { subject, text, undo, tone = 'info', action }: Toast = $props();
   const icon = $derived(tone === 'trash' ? 'trash' : tone === 'error' ? 'warn' : 'info');
+  // The toast is one 44 px line, so a long message ends in "…"; hovering shows it whole.
+  const full = $derived(tone === 'trash' ? `Moved ${subject} ${text}` : `${subject} ${text}`.trim());
 </script>
 
 <!-- Hover or focus holds it; the bar pauses with it. -->
@@ -16,9 +18,9 @@
   onfocusin={() => session.holdToast(true)} onfocusout={() => session.holdToast(false)}>
   <Icon name={icon} style="color: {tone === 'error' ? 'var(--warn)' : 'var(--muted)'}" />
   {#if tone === 'trash'}
-    <span>Moved <span style="font-weight: 500">{subject}</span> {text}</span>
+    <span class="trunc tmsg" title={full}>Moved <span style="font-weight: 500">{subject}</span> {text}</span>
   {:else}
-    <span><span style="font-weight: 500">{subject}</span> <span class="muted">{text}</span></span>
+    <span class="trunc tmsg" title={full}><span style="font-weight: 500">{subject}</span> <span class="muted">{text}</span></span>
   {/if}
   {#if undo}<button class="btn btn-sm" style="margin-left: 8px" onclick={() => { undo?.(); session.dismissToast(); }}>Undo</button>{/if}
   {#if action}<button class="btn btn-sm" style="margin-left: 8px" onclick={() => { action?.run(); session.dismissToast(); }}>{action.label}</button>{/if}
@@ -27,7 +29,9 @@
 </div>
 
 <style>
-  .tst{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);z-index:10}
+  .tst{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);z-index:10;width:max-content;max-width:min(640px,calc(100% - 48px))}
+  .tst > :global(*){flex:none}
+  .tst > .tmsg{flex:0 1 auto}
   @media (prefers-reduced-motion:no-preference){.tst{animation:tin 260ms cubic-bezier(.23,1,.32,1)}.tbar > span{animation:drain 8s linear forwards}}
   @keyframes tin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translateX(-50%)}}
   @keyframes drain{from{width:100%}to{width:0%}}

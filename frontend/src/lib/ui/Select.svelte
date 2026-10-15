@@ -84,5 +84,7 @@
 
 <style>
   .sel{position:relative;display:inline-flex;min-width:0;height:32px}
-  .sel-menu{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;max-height:280px;overflow:auto}
+  /* Anchored to the button's right edge like the fixed menu: a menu wider than a
+     narrow button grows inwards, not across what sits to its right. */
+  .sel-menu{position:absolute;top:calc(100% + 4px);left:auto;right:0;min-width:max(200px,100%);z-index:30;max-height:280px;overflow:auto}
 </style>
