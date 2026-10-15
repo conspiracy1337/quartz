@@ -7,6 +7,7 @@ frontend/package.json.md5
 frontend/node_modules/
 
 # Local tooling
+.env
 *.log
 # …except test fixtures
 !**/testdata/**/*.log

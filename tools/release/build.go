@@ -76,22 +76,48 @@ func checkIDs(allowMissing bool) error {
 	return nil
 }
 
-// ldflags builds in the version, the update key and the service IDs
-// (checked by checkIDs first).
-func ldflags(version, pub string) string {
-	set := func(name, v string) string { return fmt.Sprintf(" -X quartz/internal/brand.%s=%s", name, v) }
-	f := "-s -w" + set("Version", version) + set("UpdatePublicKey", pub)
+// setVar is the linker flag that sets one brand variable.
+func setVar(name, v string) string {
+	return fmt.Sprintf(" -X quartz/internal/brand.%s=%s", name, v)
+}
+
+// serviceFlags builds in the service IDs that are set (checked by checkIDs
+// first).
+func serviceFlags() string {
+	f := ""
 	for _, id := range serviceIDs {
 		if v := os.Getenv(id.Env); v != "" {
-			f += set(id.Var, v)
+			f += setVar(id.Var, v)
 		}
 	}
 	return f
 }
 
+// ldflags builds in the version, the update key and the service IDs.
+func ldflags(version, pub string) string {
+	return "-s -w" + setVar("Version", version) + setVar("UpdatePublicKey", pub) + serviceFlags()
+}
+
+// devFlags prints the service IDs from .env and the environment as linker
+// flags for development builds (build.sh, wails dev). They carry no version
+// and no update key, so a development build never updates itself.
+func devFlags() error {
+	if err := loadDotEnv(dotEnv); err != nil {
+		return err
+	}
+	if err := checkIDs(true); err != nil {
+		return err
+	}
+	fmt.Println(strings.TrimSpace(serviceFlags()))
+	return nil
+}
+
 func build(ctx context.Context, version string, which []string, allowMissing bool) error {
 	if !versionOK(version) {
 		return fmt.Errorf("version %q isn't x.y.z", version)
+	}
+	if err := loadDotEnv(dotEnv); err != nil {
+		return err
 	}
 	if err := checkIDs(allowMissing); err != nil {
 		return err

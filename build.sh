@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Builds a stripped production binary into build/bin/quartz.
+# Service IDs (Microsoft sign-in, CurseForge, Discord) come from .env or the environment.
 # Extra arguments are passed through to `wails build` (e.g. ./build.sh -platform windows/amd64).
 set -euo pipefail
 
@@ -12,4 +13,5 @@ if [[ "$(uname)" == "Linux" ]] && ! pkg-config --exists webkit2gtk-4.0 && pkg-co
   tags=(-tags webkit2_41)
 fi
 
-wails build -clean -trimpath -ldflags "-s -w" "${tags[@]}" "$@"
+ids=$(go run ./tools/release ldflags)
+wails build -clean -trimpath -ldflags "-s -w $ids" "${tags[@]}" "$@"
