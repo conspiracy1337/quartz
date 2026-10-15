@@ -2,7 +2,7 @@
   import { api } from '$lib/api';
   import { revs } from '$lib/revs.svelte';
   import type { Account } from '$lib/api/types';
-  import { query } from '$lib/query.svelte';
+  import { query, skeletonRows } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Setting from '$lib/ui/Setting.svelte';
@@ -14,7 +14,7 @@
   import { avatar } from '$lib/look';
   import { prefs } from '$lib/prefs.svelte';
 
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const acc = $derived(prefs.value?.accounts);
 
   async function makeDefault(id: string) {
@@ -66,7 +66,7 @@
         {#if accounts.data}
           <Empty text="No accounts yet. Sign in with Microsoft, or add an offline account to play now." action="Add account" onclick={() => session.open({ kind: 'add-account' })} />
         {:else}
-        {#each { length: 3 } as _, k (k)}
+        {#each { length: skeletonRows('accounts', 3) } as _, k (k)}
           <div class="row ar" aria-hidden="true"><div class="sk" style="width: 40px; height: 40px; border-radius: 8px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 30%"></div><div class="sk" style="height: 10px; width: 55%"></div></div><div class="sk opt" style="height: 10px; width: 80px"></div><div class="sk" style="height: 28px; width: 100px"></div></div>
         {/each}
         {/if}
