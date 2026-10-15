@@ -42,7 +42,7 @@ export interface EnvVar { name: string; value: string }
 export interface InstanceSettings {
   java: { override: boolean; javaPath: string; memoryMinMb: number; memoryMaxMb: number; jvmArgs: string };
   /** openInto skips the title screen: a world (its folder) or a server (its address); kind "" opens the title screen. */
-  window: { width: number; height: number; fullscreen: boolean; onGameStart: string; openInto?: { kind: '' | 'world' | 'server'; target: string } };
+  window: { width: number; height: number; fullscreen: boolean; hideOnGameStart?: boolean; openInto?: { kind: '' | 'world' | 'server'; target: string } };
   commands: { preLaunch: string; wrapper: string; postExit: string; env: EnvVar[]; systemGlfw: boolean; systemOpenal: boolean };
   performance: { dedicatedGpu: boolean; gameMode: boolean; mangoHud: boolean };
   /** The account this instance always plays as ("" or absent: the default one). */

@@ -39,8 +39,8 @@ export interface SettingDef {
   when?: (s: Settings) => boolean;
 }
 
-// Equivalent options use the same labels everywhere (global and instance settings).
-export const ON_GAME_START = [{ value: 'keep-open', label: 'Keep open' }, { value: 'hide', label: 'Hide' }, { value: 'close', label: 'Close' }] as const;
+// Equivalent settings use the same wording everywhere (global and instance settings).
+export const HIDE_ON_GAME_START = { title: 'Hide the launcher while playing', desc: 'It comes back when the game exits.' } as const;
 const num = (v: string) => Number(v) || 0;
 const customProxy = (s: Settings) => s.downloads.proxy === 'custom';
 
@@ -48,7 +48,7 @@ export const CHANNELS = [{ value: 'release', label: 'Release' }, { value: 'beta'
 
 export const registry: SettingDef[] = [
   { id: 'language', tab: 'general', group: 'Launcher', title: 'Language', control: { kind: 'select', options: [{ value: 'system', label: 'English' }], get: () => 'system', set: (s) => (s.general.language = 'system') } },
-  { id: 'onGameStart', tab: 'general', group: 'Launcher', title: 'When a game starts', desc: 'Instances can override this.', control: { kind: 'seg', options: ON_GAME_START, get: (s) => s.general.onGameStart, set: (s, v) => (s.general.onGameStart = v) } },
+  { id: 'hideOnGameStart', tab: 'general', group: 'Launcher', title: HIDE_ON_GAME_START.title, desc: `${HIDE_ON_GAME_START.desc} Instances can override this.`, control: { kind: 'toggle', get: (s) => s.general.hideOnGameStart, set: (s, v) => (s.general.hideOnGameStart = v) } },
   { id: 'startPage', tab: 'general', group: 'Launcher', title: 'Open on startup', control: { kind: 'seg', options: [{ value: 'home', label: 'Home' }, { value: 'library', label: 'Library' }, { value: 'last-instance', label: 'Last instance' }], get: (s) => s.general.startPage, set: (s, v) => (s.general.startPage = v) } },
   { id: 'startWithComputer', tab: 'general', group: 'Launcher', title: 'Start with the computer', desc: 'Starts minimized so updates are ready.', control: { kind: 'toggle', get: (s) => s.general.startWithComputer, set: (s, v) => (s.general.startWithComputer = v) } },
   { id: 'setup', tab: 'general', group: 'Launcher', title: 'First-run setup', desc: 'Walk through sign-in and importing from other launchers again.', control: { kind: 'link', label: 'Run again', route: { name: 'setup', step: 1 } } },

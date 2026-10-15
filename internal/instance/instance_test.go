@@ -109,12 +109,13 @@ func TestResolveLayersOverGlobals(t *testing.T) {
 	g := settings.Defaults()
 	in := Instance{Settings: Settings{Java: JavaSettings{JavaPath: "/opt/jdk/bin/java", MemoryMinMB: 100, MemoryMaxMB: 8192, JVMArgs: "-Dx"}}}
 	e := in.Resolve(g)
-	if e.JavaPath != "" || e.MemoryMaxMB != g.Java.MemoryMaxMB || e.JVMArgs != g.Java.JVMArgs || e.OnGameStart != g.General.OnGameStart {
+	if e.JavaPath != "" || e.MemoryMaxMB != g.Java.MemoryMaxMB || e.JVMArgs != g.Java.JVMArgs || e.HideOnGameStart != g.General.HideOnGameStart {
 		t.Fatalf("without override the globals apply: %+v", e)
 	}
-	in.Settings.Java.Override, in.Settings.Window.OnGameStart = true, "close"
+	hide := true
+	in.Settings.Java.Override, in.Settings.Window.HideOnGameStart = true, &hide
 	e = in.Resolve(g)
-	if e.JavaPath != "/opt/jdk/bin/java" || e.MemoryMinMB != 256 || e.MemoryMaxMB != 8192 || e.JVMArgs != "-Dx" || e.OnGameStart != "close" {
+	if e.JavaPath != "/opt/jdk/bin/java" || e.MemoryMinMB != 256 || e.MemoryMaxMB != 8192 || e.JVMArgs != "-Dx" || !e.HideOnGameStart {
 		t.Fatalf("override = %+v", e)
 	}
 }
@@ -185,11 +186,11 @@ func TestSettingsValidation(t *testing.T) {
 	if _, err := s.SetSettings(a.ID, Settings{Java: JavaSettings{JavaPath: "relative/java"}}); !errors.Is(err, ErrInvalidSettings) {
 		t.Fatal("relative java path accepted")
 	}
-	got, err := s.SetSettings(a.ID, Settings{Java: JavaSettings{Override: true, MemoryMinMB: 4096, MemoryMaxMB: 1024}, Window: WindowSettings{Width: 1280, Height: 720, OnGameStart: "bogus"}})
+	got, err := s.SetSettings(a.ID, Settings{Java: JavaSettings{Override: true, MemoryMinMB: 4096, MemoryMaxMB: 1024}, Window: WindowSettings{Width: 1280, Height: 720}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Settings.Java.MemoryMaxMB != 4096 || got.Settings.Window.OnGameStart != "" {
+	if got.Settings.Java.MemoryMaxMB != 4096 {
 		t.Fatalf("not normalised: %+v", got.Settings)
 	}
 }

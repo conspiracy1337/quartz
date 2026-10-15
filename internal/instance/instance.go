@@ -43,10 +43,10 @@ type JavaSettings struct {
 
 // WindowSettings configure the game window. Zero size keeps the game's default.
 type WindowSettings struct {
-	Width       int    `json:"width"`
-	Height      int    `json:"height"`
-	Fullscreen  bool   `json:"fullscreen"`
-	OnGameStart string `json:"onGameStart"` // "" follows the global setting
+	Width           int   `json:"width"`
+	Height          int   `json:"height"`
+	Fullscreen      bool  `json:"fullscreen"`
+	HideOnGameStart *bool `json:"hideOnGameStart,omitempty"` // nil follows the global setting
 	// OpenInto skips the title screen when nothing else is asked for.
 	OpenInto Into `json:"openInto"`
 }
@@ -318,9 +318,6 @@ func normalize(in Instance) Instance {
 	}
 	w := &in.Settings.Window
 	w.Width, w.Height = min(max(w.Width, 0), 16384), min(max(w.Height, 0), 16384)
-	if !slices.Contains([]string{"", "keep-open", "hide", "close"}, w.OnGameStart) {
-		w.OnGameStart = ""
-	}
 	if in.Settings.Account != "" && !accountRe.MatchString(in.Settings.Account) {
 		in.Settings.Account = ""
 	}

@@ -2121,7 +2121,7 @@ export namespace instance {
 	    width: number;
 	    height: number;
 	    fullscreen: boolean;
-	    onGameStart: string;
+	    hideOnGameStart?: boolean;
 	    openInto: Into;
 	
 	    static createFrom(source: any = {}) {
@@ -2133,7 +2133,7 @@ export namespace instance {
 	        this.width = source["width"];
 	        this.height = source["height"];
 	        this.fullscreen = source["fullscreen"];
-	        this.onGameStart = source["onGameStart"];
+	        this.hideOnGameStart = source["hideOnGameStart"];
 	        this.openInto = this.convertValues(source["openInto"], Into);
 	    }
 	
@@ -2950,7 +2950,7 @@ export namespace settings {
 	}
 	export class General {
 	    language: string;
-	    onGameStart: string;
+	    hideOnGameStart: boolean;
 	    startPage: string;
 	    startWithComputer: boolean;
 	    setupDone: boolean;
@@ -2964,7 +2964,7 @@ export namespace settings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.language = source["language"];
-	        this.onGameStart = source["onGameStart"];
+	        this.hideOnGameStart = source["hideOnGameStart"];
 	        this.startPage = source["startPage"];
 	        this.startWithComputer = source["startWithComputer"];
 	        this.setupDone = source["setupDone"];
