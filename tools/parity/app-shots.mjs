@@ -45,7 +45,7 @@ export const MAP = {
   RevC: ['/browse', S("session.open({ kind: 'install', ref: 'distant-horizons', source: 'modrinth', instanceId: 'fo', content: 'mods' })")],
   SetA: ['/settings/general'], SetB: ['/settings/appearance'], SetC: ['/settings/java'], SetD: ['/settings/search/memory'],
   SetupA: ['/setup/1'], SetupB: ['/setup/2'], SetupC: ['/setup/3'],
-  SyncB: ['/syncing'], VerA: ['/instance/fo/version'], VerB: ['/instance/fo/version/minecraft'], VerC: ['/instance/fo/version/loader'],
+  SyncB: ['/syncing'], VerA: ['/instance/fo/settings'], VerB: ['/instance/fo/settings/minecraft'], VerC: ['/instance/fo/settings/loader'],
 };
 
 const boards = Object.entries(MAP).filter(([b]) => !only.length || only.includes(b));

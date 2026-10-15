@@ -5,7 +5,7 @@ import type { Alert } from './types';
 const missing = (name: string): Alert => ({ tone: 'warn', subject: name, text: 'is missing Sodium', action: 'Fix', target: { kind: 'instance', id: name, tab: 'mods' } });
 const disk: Alert = { tone: 'warn', subject: 'Low disk space', text: '3 GB left', action: 'Clean up', target: { kind: 'settings', tab: 'storage' } };
 const pack: Alert = { tone: 'info', subject: 'Pack', text: '1.2 is out', action: 'Review', target: { kind: 'modpack-update', id: 'p' } };
-const follow: Alert = { tone: 'info', subject: 'Vanilla', text: 'every mod supports 1.21.5', action: 'Switch', target: { kind: 'instance', id: 'v', tab: 'version' } };
+const follow: Alert = { tone: 'info', subject: 'Vanilla', text: 'every mod supports 1.21.5', action: 'Switch', target: { kind: 'instance', id: 'v', tab: 'settings' } };
 
 describe('rankAlerts', () => {
   it('merges each kind into one alert that acts on the first', () => {

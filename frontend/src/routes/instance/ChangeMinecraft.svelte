@@ -11,7 +11,7 @@
   let { instance: i }: Props = $props();
   let sel = $state('');
   let busy = $state(false);
-  const back = $derived(href({ name: 'instance', id: i.id, tab: 'version' }));
+  const back = $derived(href({ name: 'instance', id: i.id, tab: 'settings' }));
   const check = query(() => (sel && sel !== i.minecraft ? api.instances.compatibility(i.id, sel) : Promise.resolve(null)));
   const compat = $derived(!sel || sel === i.minecraft ? 'This is the current version.' : check.data ? `${check.data.matching} of ${check.data.total} mods have a matching version` : 'Mods will be checked before switching');
 

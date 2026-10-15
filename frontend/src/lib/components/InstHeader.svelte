@@ -33,7 +33,6 @@
     { key: 'servers', label: 'Servers', count: i.counts.servers, href: to('servers') },
     { key: 'screenshots', label: 'Screenshots', href: to('screenshots') },
     { key: 'logs', label: 'Logs', href: to('logs') },
-    { key: 'version', label: 'Version', href: to('version') },
     { key: 'settings', label: 'Settings', href: to('settings') },
   ] satisfies { key: InstanceTab; label: string; count?: number; href: string }[]);
 </script>

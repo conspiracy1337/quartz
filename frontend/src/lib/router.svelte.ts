@@ -3,7 +3,7 @@
 
 export const INSTANCE_TABS = [
   'overview', 'mods', 'resourcepacks', 'shaders', 'datapacks', 'worlds',
-  'servers', 'screenshots', 'logs', 'version', 'settings',
+  'servers', 'screenshots', 'logs', 'settings',
 ] as const;
 export type InstanceTab = (typeof INSTANCE_TABS)[number];
 
@@ -86,6 +86,7 @@ export function parse(p: string): Route {
       if (isOneOf(SETTINGS_TABS, b)) return { name: 'settings', tab: b };
       return { name: 'settings', tab: 'general' };
     case 'instance':
+      if (b && c === 'version') return { name: 'instance', id: dec(b), tab: 'settings', ...(d ? { sub: dec(d) } : {}) }; // the old Version tab
       if (b && isOneOf(INSTANCE_TABS, c)) return { name: 'instance', id: dec(b), tab: c, ...(d ? { sub: dec(d) } : {}) };
       if (b) return { name: 'instance', id: dec(b), tab: 'overview' };
       break;

@@ -18,7 +18,7 @@ describe('router', () => {
     { name: 'settings', tab: 'appearance' },
     { name: 'settings-search', query: 'memory use' },
     { name: 'instance', id: 'fo', tab: 'mods' },
-    { name: 'instance', id: 'fo', tab: 'version', sub: 'loader' },
+    { name: 'instance', id: 'fo', tab: 'settings', sub: 'loader' },
     { name: 'setup', step: 3 },
   ];
   it('round-trips every route', () => {
@@ -29,6 +29,7 @@ describe('router', () => {
     expect(parse('#/nope/x')).toEqual({ name: 'home' });
     expect(parse('#/settings/bogus')).toEqual({ name: 'settings', tab: 'general' });
     expect(parse('#/instance/fo/bogus')).toEqual({ name: 'instance', id: 'fo', tab: 'overview' });
+    expect(parse('#/instance/fo/version/minecraft')).toEqual({ name: 'instance', id: 'fo', tab: 'settings', sub: 'minecraft' });
     expect(parse('#/browse/%E0%A4%A')).toEqual({ name: 'project', id: '' });
     expect(parse('#/browse/t/bogus')).toEqual({ name: 'project', id: 't' });
     expect(parse('#/library/import/x/bogus')).toEqual({ name: 'import' });
