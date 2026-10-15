@@ -413,9 +413,10 @@
 </script>
 
 <div class="page" style="gap: 12px; padding-top: 16px; font-family: var(--font); color: var(--text)">
-  <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
-    <SearchField bind:value={search} label="Search" placeholder={searchIn(cfg.noun, items.data?.length)} style="flex: 0 1 {isManaged ? 260 : 280}px" />
-    <div style="display: flex; gap: 6px; flex-wrap: wrap">
+  <!-- One line whatever the data: the search gives way first (280 down to 160 px), then the chips scroll. -->
+  <div class="ct-tools">
+    <SearchField bind:value={search} label="Search" placeholder={searchIn(cfg.noun, items.data?.length)} style="flex: 0 1000 280px; min-width: 160px" />
+    <div class="ct-chips">
       {#each chips as ch, i (ch.label)}
         <button class="chip" class:on={chip === i} onclick={() => (chip = i)} aria-pressed={chip === i}>{ch.label}<span class="count">{rows.filter(ch.test).length}</span></button>
       {/each}
@@ -548,6 +549,10 @@
 {/if}
 
 <style>
+  .ct-tools{display:flex;gap:8px;align-items:center}
+  .ct-tools > :global(*){flex:none}
+  /* The .tabs idiom; the padding keeps focus rings inside the scroll box. */
+  .ct-chips{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px;margin:-3px}
   /* Right side, in order: status (Update, Locked) or action, version text, source, more. */
   .crow{grid-template-columns:30px 32px minmax(0,1fr) 112px 104px 28px 28px}
   @media (max-width:1100px){.crow{grid-template-columns:30px 32px minmax(0,1fr) 112px 96px 28px}.crow .opt{display:none}}

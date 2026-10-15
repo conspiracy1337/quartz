@@ -251,7 +251,7 @@ func (c *Content) AddFiles(instanceID, kind, world string) (content.AddResult, e
 	paths, err := openFilesDialog(c.ctx.Get(), wruntime.OpenDialogOptions{Title: "Choose files to add",
 		Filters: []wruntime.FileFilter{{DisplayName: "Files (" + ext + ")", Pattern: ext}}})
 	if err != nil || len(paths) == 0 {
-		return content.AddResult{Added: []string{}, Rejected: []content.Rejected{}}, err
+		return content.NewAddResult(), err
 	}
 	return c.d.Service.Add(c.ctx.Get(), instanceID, k, world, paths)
 }

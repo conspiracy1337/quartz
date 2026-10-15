@@ -28,6 +28,12 @@ type AddResult struct {
 	Rejected []Rejected `json:"rejected"`
 }
 
+// NewAddResult is an empty result whose lists are never nil: the UI reads
+// both as lists.
+func NewAddResult() AddResult {
+	return AddResult{Added: []string{}, Rejected: []Rejected{}}
+}
+
 // Rejected is a file that wasn't added, and why.
 type Rejected struct {
 	Name   string `json:"name"`
@@ -40,7 +46,7 @@ type Rejected struct {
 // Files go through the store, so a dropped jar is stored once. world names
 // the world for data packs.
 func (s *Service) Add(ctx context.Context, id string, k Kind, world string, paths []string) (AddResult, error) {
-	var res AddResult
+	res := NewAddResult()
 	dir, err := s.targetFolder(id, k, world)
 	if err != nil {
 		return res, err
