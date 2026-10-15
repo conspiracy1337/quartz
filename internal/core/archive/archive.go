@@ -79,36 +79,35 @@ type link struct {
 }
 
 // name maps an archive entry name to its destination, or "" to skip it.
-func (e *extractor) name(raw string) (string, string, error) {
+func (e *extractor) name(raw string) (string, error) {
 	clean := path.Clean(strings.ReplaceAll(raw, `\`, "/"))
 	if e.o.Prefix != "" {
 		// A name that climbs out is hostile whatever folder is wanted; report it, don't skip it.
 		if clean == ".." || strings.HasPrefix(clean, "../") {
-			return "", "", fmt.Errorf("%w: %q", fsx.ErrUnsafePath, raw)
+			return "", fmt.Errorf("%w: %q", fsx.ErrUnsafePath, raw)
 		}
 		rest, ok := strings.CutPrefix(clean, strings.TrimSuffix(e.o.Prefix, "/")+"/")
 		if !ok {
-			return "", "", nil
+			return "", nil
 		}
 		clean = rest
 	}
 	parts := strings.Split(strings.TrimPrefix(clean, "/"), "/")
 	if len(parts) <= e.o.Strip {
-		return "", "", nil
+		return "", nil
 	}
 	rel := strings.Join(parts[e.o.Strip:], "/")
 	if rel == "." || rel == "" {
-		return "", "", nil
+		return "", nil
 	}
 	if e.o.Include != nil && !e.o.Include(rel) {
-		return "", "", nil
+		return "", nil
 	}
 	// Absolute names and traversal are rejected by SafeJoin, not silently re-rooted.
 	if strings.HasPrefix(raw, "/") {
-		return "", "", fmt.Errorf("%w: %q", fsx.ErrUnsafePath, raw)
+		return "", fmt.Errorf("%w: %q", fsx.ErrUnsafePath, raw)
 	}
-	dst, err := fsx.SafeJoin(e.dest, rel)
-	return dst, rel, err
+	return fsx.SafeJoin(e.dest, rel)
 }
 
 func (e *extractor) count() error {
@@ -154,7 +153,7 @@ func (e *extractor) writeFile(dst string, r io.Reader, exec bool) error {
 func (e *extractor) addLink(dst, rawTarget string, hard bool) error {
 	var target string
 	if hard {
-		t, _, err := e.name(rawTarget)
+		t, err := e.name(rawTarget)
 		if err != nil || t == "" {
 			return fmt.Errorf("%w: %q", ErrBadLink, rawTarget)
 		}
@@ -252,7 +251,7 @@ func ExtractZip(src, dest string, o Options) error {
 }
 
 func (e *extractor) zipEntry(f *zip.File) error {
-	dst, _, err := e.name(f.Name)
+	dst, err := e.name(f.Name)
 	if err != nil || dst == "" {
 		return err
 	}
@@ -331,7 +330,7 @@ func (e *extractor) tarEntry(h *tar.Header, r io.Reader) error {
 	case tar.TypeXGlobalHeader, tar.TypeXHeader:
 		return nil
 	}
-	dst, _, err := e.name(h.Name)
+	dst, err := e.name(h.Name)
 	if err != nil || dst == "" {
 		return err
 	}

@@ -105,7 +105,7 @@ func (in *installer) prepare(ctx context.Context, req Request, id, coord, repo s
 
 	stamp, _ := os.ReadFile(filepath.Join(dir, preparedName)) //nolint:gosec // inside the store
 	if len(stamp) == 0 {
-		if stamp, err = in.unpack(ctx, req, repo+rel, jar, dir); err != nil {
+		if stamp, err = in.unpack(ctx, repo+rel, jar, dir); err != nil {
 			return nil, err
 		}
 	}
@@ -114,7 +114,7 @@ func (in *installer) prepare(ctx context.Context, req Request, id, coord, repo s
 
 // unpack downloads and verifies the installer, then keeps what later
 // launches need. It returns the installer's sha1, written last as the marker.
-func (in *installer) unpack(ctx context.Context, req Request, url, jar, dir string) ([]byte, error) {
+func (in *installer) unpack(ctx context.Context, url, jar, dir string) ([]byte, error) {
 	// An installer is only trusted against the repository's own checksum.
 	sum, err := in.meta.SidecarSHA1(ctx, url)
 	if err != nil {

@@ -6,10 +6,8 @@ package wrapperjar
 
 import (
 	"bytes"
-	"crypto/sha256"
 	_ "embed"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -54,9 +52,6 @@ func (s *Script) line(parts ...string) *Script {
 // Arg appends a game argument.
 func (s *Script) Arg(v string) *Script { return s.line("arg", enc(v)) }
 
-// Prop sets a system property before launch.
-func (s *Script) Prop(k, v string) *Script { return s.line("prop", enc(k), enc(v)) }
-
 // Print asks the wrapper to print a system property (see ParseValue).
 func (s *Script) Print(k string) *Script { return s.line("print", enc(k)) }
 
@@ -84,10 +79,4 @@ func ParseValue(line string) (value string, ok bool, err error) {
 		return "", false, ErrBadValue
 	}
 	return string(b), true, nil
-}
-
-// embeddedHash is used by the drift test.
-func embeddedHash() string {
-	h := sha256.Sum256(jar)
-	return hex.EncodeToString(h[:])
 }

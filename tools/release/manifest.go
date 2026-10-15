@@ -28,10 +28,7 @@ func manifest(version, notesFile string) error {
 	if err != nil {
 		return err
 	}
-	m, err := readManifest("dist", version)
-	if err != nil {
-		return err
-	}
+	m := readManifest("dist", version)
 	m.Notes = string(notes)
 	if err := addFiles(&m, "dist", version); err != nil {
 		return err
@@ -54,18 +51,18 @@ func manifest(version, notesFile string) error {
 	return nil
 }
 
-func readManifest(dir, version string) (update.Manifest, error) {
+func readManifest(dir, version string) update.Manifest {
 	m := update.Manifest{Version: version, Date: time.Now().UTC().Format("2006-01-02"), Files: map[string]update.File{}}
 	b, err := os.ReadFile(filepath.Join(dir, "update.json")) //nolint:gosec // our own output
 	if err != nil {
-		return m, nil //nolint:nilerr // none yet
+		return m // none yet
 	}
 	var old update.Manifest
 	if json.Unmarshal(b, &old) == nil && old.Version == version && old.Files != nil {
 		old.Date = m.Date
-		return old, nil
+		return old
 	}
-	return m, nil
+	return m
 }
 
 // addFiles hashes every release file in dir into m. Each must have been

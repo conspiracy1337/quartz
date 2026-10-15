@@ -116,7 +116,7 @@ func (l linux) writeIcon() error {
 	if old, err := fsx.ReadCapped(l.iconPath(), int64(len(Icon))+1); err == nil && bytes.Equal(old, Icon) {
 		return nil
 	}
-	if err := writeFile(l.iconPath(), Icon, 0o644); err != nil {
+	if err := writeFile(l.iconPath(), Icon); err != nil {
 		return err
 	}
 	_ = l.run("dbus-send", iconChanged...)
@@ -127,11 +127,11 @@ func (l linux) apply(was, want Want) error {
 	if err := l.writeIcon(); err != nil {
 		return err
 	}
-	if err := writeFile(l.entryPath(), l.entry(want).Marshal(), 0o644); err != nil {
+	if err := writeFile(l.entryPath(), l.entry(want).Marshal()); err != nil {
 		return err
 	}
 	if want.Links {
-		if err := writeFile(l.mimePath(), []byte(mrpackMimeXML), 0o644); err != nil {
+		if err := writeFile(l.mimePath(), []byte(mrpackMimeXML)); err != nil {
 			return err
 		}
 		_ = l.run("update-mime-database", l.mimeDir())
@@ -149,7 +149,7 @@ func (l linux) apply(was, want Want) error {
 	if want.Autostart {
 		a := Entry{Name: brand.Name, Exec: want.Argv(intent.MinimizedFlag), Icon: brand.AppID, NoDisplay: true,
 			Extra: []string{"X-GNOME-Autostart-enabled=true"}}
-		return writeFile(l.autostartPath(), a.Marshal(), 0o644)
+		return writeFile(l.autostartPath(), a.Marshal())
 	}
 	return removeIfExists(l.autostartPath())
 }
@@ -193,5 +193,5 @@ func (l linux) dropDefaults() error {
 	if !changed {
 		return nil
 	}
-	return writeFile(path, out.Bytes(), 0o644)
+	return writeFile(path, out.Bytes())
 }

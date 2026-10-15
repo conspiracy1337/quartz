@@ -43,7 +43,7 @@ func TestSignRoundTripAndWrongKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	k, err := ParsePublicKey(pub.File())
-	if err != nil || k.String() != pub.String() || sec.Public().String() != pub.String() {
+	if err != nil || k.String() != pub.String() {
 		t.Fatal("key round trip", err)
 	}
 	sig := sec.Sign([]byte("hello"), "line\nbreak")

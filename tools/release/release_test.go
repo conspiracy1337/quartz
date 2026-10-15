@@ -68,7 +68,7 @@ func TestManifestCollectsAndExtends(t *testing.T) {
 	if err := stamp(dir, "quartz-linux-amd64", "1.2.3"); err != nil {
 		t.Fatal(err)
 	}
-	m, _ := readManifest(dir, "1.2.3")
+	m := readManifest(dir, "1.2.3")
 	if err := addFiles(&m, dir, "1.2.3"); err != nil {
 		t.Fatal(err)
 	}
@@ -77,11 +77,11 @@ func TestManifestCollectsAndExtends(t *testing.T) {
 		t.Fatalf("%+v", m.Files)
 	}
 	write("update.json", `{"version":"1.2.3","files":{"darwin-universal":{"name":"Quartz-macos.zip","size":1,"sha256":"`+strings.Repeat("a", 64)+`"}}}`)
-	m, _ = readManifest(dir, "1.2.3")
+	m = readManifest(dir, "1.2.3")
 	if err := addFiles(&m, dir, "1.2.3"); err != nil || len(m.Files) != 2 {
 		t.Fatal("a later Mac build extends the same version's manifest", err)
 	}
-	if m2, _ := readManifest(dir, "1.2.4"); len(m2.Files) != 0 {
+	if m2 := readManifest(dir, "1.2.4"); len(m2.Files) != 0 {
 		t.Fatal("another version starts fresh")
 	}
 }
@@ -89,7 +89,7 @@ func TestManifestCollectsAndExtends(t *testing.T) {
 func TestManifestRefusesStaleBuilds(t *testing.T) {
 	dir := t.TempDir()
 	goProgram(t, dir, "quartz-linux-amd64", "production")
-	m, _ := readManifest(dir, "1.0.1")
+	m := readManifest(dir, "1.0.1")
 	if err := addFiles(&m, dir, "1.0.1"); err == nil || !strings.Contains(err.Error(), "unknown version") {
 		t.Fatal("an unstamped build must be refused:", err)
 	}
@@ -107,7 +107,7 @@ func TestManifestRefusesDevBuilds(t *testing.T) {
 	dir := t.TempDir()
 	goProgram(t, dir, "quartz-linux-amd64", "production,fakeauth")
 	_ = stamp(dir, "quartz-linux-amd64", "1.0.0")
-	m, _ := readManifest(dir, "1.0.0")
+	m := readManifest(dir, "1.0.0")
 	if err := addFiles(&m, dir, "1.0.0"); err == nil || !strings.Contains(err.Error(), "fakeauth") {
 		t.Fatal("a development build must never be signed:", err)
 	}

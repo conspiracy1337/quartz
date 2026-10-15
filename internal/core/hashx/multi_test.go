@@ -11,6 +11,13 @@ import (
 
 // refMurmur2 is the textbook MurmurHash2 (seed 1) over the filtered bytes,
 // written independently of the incremental version under test.
+// murmur2 fingerprints data in one go, as MultiOf does while streaming.
+func murmur2(data []byte) uint32 {
+	m := newMurmur(uint32(murmurKept(data))) //nolint:gosec // CurseForge defines the length as 32 bits
+	m.write(data)
+	return m.sum()
+}
+
 func refMurmur2(data []byte) uint32 {
 	var f []byte
 	for _, c := range data {
@@ -57,11 +64,11 @@ func TestMurmur2(t *testing.T) {
 		"random":          random,
 	}
 	for name, data := range cases {
-		if got, want := Murmur2(data), refMurmur2(data); got != want {
+		if got, want := murmur2(data), refMurmur2(data); got != want {
 			t.Errorf("%s: got %d, want %d", name, got, want)
 		}
 	}
-	if Murmur2([]byte("ab cd")) != Murmur2([]byte("abcd")) {
+	if murmur2([]byte("ab cd")) != murmur2([]byte("abcd")) {
 		t.Error("whitespace must not change the fingerprint")
 	}
 }

@@ -12,11 +12,11 @@ import (
 
 // writeFile writes a user-visible system file (an entry, an icon, a mime
 // type): readable by the desktop, created with its folders.
-func writeFile(path string, data []byte, perm os.FileMode) error {
+func writeFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
-	return fsx.AtomicWrite(path, data, perm)
+	return fsx.AtomicWrite(path, data, 0o644)
 }
 
 func removeIfExists(path string) error {

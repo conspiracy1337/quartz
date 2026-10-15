@@ -1,13 +1,16 @@
 package wrapperjar
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestEmbeddedJarMatchesPin(t *testing.T) {
-	if got := embeddedHash(); got != SHA256 {
+	h := sha256.Sum256(jar)
+	if got := hex.EncodeToString(h[:]); got != SHA256 {
 		t.Fatalf("wrapper.jar hash %s, pinned %s: rebuild with tools/wrapperjar/build.sh and update SHA256", got, SHA256)
 	}
 }
@@ -30,8 +33,8 @@ func TestInstallRepairsTampering(t *testing.T) {
 }
 
 func TestScript(t *testing.T) {
-	got := string(new(Script).Arg("--username").Arg("a b\nc").Prop("k", "v").Print("java.version").Launch("net.minecraft.client.main.Main").Bytes())
-	want := "arg LS11c2VybmFtZQ==\narg YSBiCmM=\nprop aw== dg==\nprint amF2YS52ZXJzaW9u\nlaunch bmV0Lm1pbmVjcmFmdC5jbGllbnQubWFpbi5NYWlu\n"
+	got := string(new(Script).Arg("--username").Arg("a b\nc").Print("java.version").Launch("net.minecraft.client.main.Main").Bytes())
+	want := "arg LS11c2VybmFtZQ==\narg YSBiCmM=\nprint amF2YS52ZXJzaW9u\nlaunch bmV0Lm1pbmVjcmFmdC5jbGllbnQubWFpbi5NYWlu\n"
 	if got != want {
 		t.Fatalf("script = %q", got)
 	}
