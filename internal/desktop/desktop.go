@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"quartz/internal/brand"
@@ -82,9 +81,10 @@ func Executable() (string, error) {
 	return filepath.EvalSymlinks(exe)
 }
 
-// Dev reports whether this is a development build, which never registers
-// itself (wails dev runs throwaway binaries).
-func Dev() bool { return strings.HasSuffix(brand.Version, "-dev") }
+// Dev reports whether this is a `wails dev` build, which never registers
+// itself (it runs throwaway binaries). Every `wails build` binary registers,
+// whatever its version: without the desktop entry, Wayland shows no icon.
+func Dev() bool { return throwaway }
 
 // Sync registers or unregisters so the system matches want, doing nothing
 // when want equals what was recorded last time.

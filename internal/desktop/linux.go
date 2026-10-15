@@ -85,7 +85,7 @@ func (l linux) entry(want Want) Entry {
 	e := Entry{
 		Name: brand.Name, Comment: "Minecraft launcher", Exec: want.Argv(), ExecSuffix: "%U",
 		Icon: brand.AppID, Categories: []string{"Game"},
-		Extra: []string{"StartupWMClass=" + brand.Slug},
+		Extra: []string{"StartupWMClass=" + brand.AppID},
 	}
 	if want.Links {
 		e.MimeTypes = associations()
