@@ -8,7 +8,7 @@
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
   import Empty from '$lib/ui/Empty.svelte';
-  import Menu from '$lib/ui/Menu.svelte';
+  import Menu, { below } from '$lib/ui/Menu.svelte';
   import { since } from '$lib/format';
   import { avatar } from '$lib/look';
   import { prefs } from '$lib/prefs.svelte';
@@ -24,8 +24,7 @@
   /** The row's "More" menu; removing asks once more inside it. */
   let more = $state<{ account: Account; x: number; y: number; confirm: boolean } | null>(null);
   function openMore(a: Account, e: MouseEvent) {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    more = { account: a, x: r.right - 240, y: r.bottom + 4, confirm: false };
+    more = { account: a, ...below(e), confirm: false };
   }
   async function remove(a: Account) {
     more = null;

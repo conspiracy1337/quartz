@@ -11,8 +11,11 @@
   import { session } from '$lib/session.svelte';
   import SearchField from '$lib/ui/SearchField.svelte';
   import Empty from '$lib/ui/Empty.svelte';
+  import Icon from '$lib/ui/Icon.svelte';
+  import Menu, { below } from '$lib/ui/Menu.svelte';
   import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import Seg from '$lib/ui/Seg.svelte';
+  import SplitButton from '$lib/ui/SplitButton.svelte';
 
   /** The wardrobe dresses the default account. */
   const accounts = query(() => api.accounts.list());
@@ -24,6 +27,7 @@
   let capeSel = $state<string | null>(null);
   let busy = $state(false);
   let prompt = $state<'player' | 'link' | 'rename' | null>(null);
+  let addMenu = $state<{ x: number; y: number } | null>(null);
   // The model grows and shrinks with the window height.
   const tall = new MediaQuery('min-height: 940px');
   const short = new MediaQuery('max-height: 680px');
@@ -86,8 +90,7 @@
         <h1 class="h1">Skins</h1>
         <SearchField bind:value={search} label="Search skins" placeholder={searchIn('skins', skins.data?.length)} />
         <button class="btn" onclick={() => (prompt = 'player')}>Copy from player</button>
-        <button class="btn" onclick={() => (prompt = 'link')}>From link</button>
-        <button class="btn btn-accent" disabled={busy} onclick={upload}>Upload skin</button>
+        <SplitButton accent disabled={busy} onclick={upload} menuLabel="More ways to add a skin" expanded={!!addMenu} onmenu={(e) => (addMenu = below(e))}>Upload skin</SplitButton>
       </div>
       <section aria-label="Your skins" style="display: flex; flex-direction: column; gap: 10px">
         <h2 class="h3">Your skins <span class="count">{skins.data?.length ?? ''}</span></h2>
@@ -133,6 +136,12 @@
     </div>
   </aside>
 </div>
+
+{#if addMenu}
+  <Menu x={addMenu.x} y={addMenu.y} label="More ways to add a skin" onclose={() => (addMenu = null)}>
+    <button class="mi" role="menuitem" onclick={() => { addMenu = null; prompt = 'link'; }}><Icon name="link" size={14} /><span>From link…</span><span></span></button>
+  </Menu>
+{/if}
 
 {#if prompt === 'player'}
   <PromptDialog title="Copy from player" label="Player name" help="Copies the skin that player wears right now." action="Copy skin" maxlength={16}
