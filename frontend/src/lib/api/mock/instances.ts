@@ -143,10 +143,10 @@ const trashed = new Map<string, Instance>();
 export const recentIds = ['fo', 'cab', 'van', 'snap'];
 
 export const activity: ActivityEvent[] = [
-  { kind: 'session', icon: 'play', tone: 'muted', title: 'Played for 2 h 08 m', detail: 'Northwatch, closed normally', at: daysAgo(1) },
+  { kind: 'session', icon: 'play', tone: 'muted', title: 'Played for 2.1 hours', detail: 'Northwatch, closed normally', at: daysAgo(1) },
   { kind: 'session', icon: 'camera', tone: 'muted', title: 'Took 3 screenshots', detail: 'Northwatch', at: daysAgo(1) },
   { kind: 'change', icon: 'arrow-up', tone: 'accent', title: 'Updated 4 mods', detail: 'Sodium, Lithium, Fabric API, Mod Menu', at: daysAgo(2) },
-  { kind: 'session', icon: 'play', tone: 'muted', title: 'Played for 4 h 41 m', detail: 'Northwatch, closed normally', at: daysAgo(2) },
+  { kind: 'session', icon: 'play', tone: 'muted', title: 'Played for 4.6 hours', detail: 'Northwatch, closed normally', at: daysAgo(2) },
   { kind: 'session', icon: 'warn', tone: 'danger', title: 'Game crashed after 3 minutes', detail: 'Mixin apply failed in entityculling', at: daysAgo(3) },
   { kind: 'change', icon: 'plus', tone: 'accent', title: 'Added Distant Horizons', detail: 'From Modrinth, with 1 dependency', at: daysAgo(3) },
 ];

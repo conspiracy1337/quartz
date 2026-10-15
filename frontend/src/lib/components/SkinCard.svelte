@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '../api';
-  import { hmLoose } from '../format';
+  import { hours } from '../format';
   import { query } from '../query.svelte';
   import { STEVE, accountLook, capeLook } from '../look';
   import PlayerModel from './PlayerModel.svelte';
@@ -23,9 +23,9 @@
   const total = $derived((week.data ?? []).reduce((n, d) => n + d.minutes, 0));
   const max = $derived(Math.max(1, ...(week.data ?? []).map((d) => d.minutes)));
   const days = $derived((week.data ?? []).map((d, i) => ({
-    letter: DAYS[i]![0], label: `${DAYS[i]![1]}, ${hmLoose(d.minutes)}`, h: Math.round((d.minutes / max) * 100) + '%', today: d.today ?? i === 6,
+    letter: DAYS[i]![0], label: `${DAYS[i]![1]}, ${hours(d.minutes)}`, h: Math.round((d.minutes / max) * 100) + '%', today: d.today ?? i === 6,
   })));
-  const summary = $derived(`Played ${hmLoose(total)} this week. ` + days.map((d) => d.label.replace(',', '')).join(', '));
+  const summary = $derived(`Played ${hours(total)} this week. ` + days.map((d) => d.label.replace(',', '')).join(', '));
 </script>
 
 <section class="card skc" aria-label="Your skin and play activity" style="font-family: var(--font); color: var(--text)">
@@ -34,7 +34,7 @@
       {#if look}<PlayerModel {...look} {...cape} controls={false} fill {scale} />{/if}
     </div>
     <div class="skc-pt">
-      <div class="skc-head"><span class="small faint">Played this week</span><span class="mono small tnum">{week.data ? hmLoose(total) : ''}</span></div>
+      <div class="skc-head"><span class="small faint">Played this week</span><span class="mono small tnum">{week.data ? hours(total) : ''}</span></div>
       <div class="skc-chart">
         <div class="skc-bars" role="img" aria-label={summary}>
           {#each days as d, i (i)}<span class:today={d.today} style="height: {d.h}" title={d.label}></span>{/each}

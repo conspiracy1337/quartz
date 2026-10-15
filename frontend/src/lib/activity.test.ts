@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { activityFeed } from './activity';
+import { hours } from './format';
 
 describe('activity feed', () => {
   it('merges runs and content changes, newest first', () => {
@@ -10,7 +11,7 @@ describe('activity feed', () => {
       ],
       [{ at: 2, kind: 'updated', title: 'Updated 4 mods', detail: 'Sodium, Lithium' }, { at: 4, kind: 'removed', title: 'Removed Zoomify', detail: '' }],
     );
-    expect(feed.map((e) => e.title)).toEqual(['Removed Zoomify', 'Played for 2 h 08 m', 'Updated 4 mods', 'Game crashed after 3 minutes']);
+    expect(feed.map((e) => e.title)).toEqual(['Removed Zoomify', `Played for ${hours(128)}`, 'Updated 4 mods', 'Game crashed after 3 minutes']);
     expect(feed[0]).toMatchObject({ kind: 'change', icon: 'trash', tone: 'muted' });
     expect(feed[2]).toMatchObject({ kind: 'change', icon: 'arrow-up', tone: 'accent' });
     expect(feed[3]).toMatchObject({ kind: 'session', icon: 'warn', tone: 'danger' });
@@ -28,7 +29,7 @@ describe('session details', () => {
     );
     expect(feed.map((e) => [e.title, e.detail])).toEqual([
       ['Took 3 screenshots', 'Northwatch'],
-      ['Played for 2 h 08 m', 'Northwatch, closed normally'],
+      [`Played for ${hours(128)}`, 'Northwatch, closed normally'],
       ['Game crashed after 3 minutes', 'Mixin apply failed in entityculling'],
     ]);
     expect(feed[0]).toMatchObject({ icon: 'camera', tone: 'muted' });

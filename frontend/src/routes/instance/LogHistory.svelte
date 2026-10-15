@@ -3,7 +3,7 @@
   import { api } from '$lib/api';
   import type { RunResult } from '$lib/api/types';
   import LogsNav from '$lib/components/LogsNav.svelte';
-  import { Day, clock, hm } from '$lib/format';
+  import { Day, clock, hours } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import { go } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
@@ -40,7 +40,7 @@
       <div class="list">
         <div class="row row-head hrow"><span>Started</span><span class="opt">Length</span><span>Exit</span><span>Result</span></div>
         {#each runs.data ?? [] as r, i (r.id)}
-          <button class="row hrow" class:sel={cur === i} onclick={() => (picked = i)} aria-pressed={cur === i}><span class="trunc">{when(r.startedAt)}</span><span class="mono muted opt">{hm(r.lengthMin, true)}</span><span class="mono muted">{r.exitCode}</span><span><span class="badge {RESULT[r.result][1]}">{RESULT[r.result][0]}</span></span></button>
+          <button class="row hrow" class:sel={cur === i} onclick={() => (picked = i)} aria-pressed={cur === i}><span class="trunc">{when(r.startedAt)}</span><span class="mono muted opt">{hours(r.lengthMin)}</span><span class="mono muted">{r.exitCode}</span><span><span class="badge {RESULT[r.result][1]}">{RESULT[r.result][0]}</span></span></button>
         {:else}
           {#if runs.data}<Empty text="No launches yet. Each launch is kept here with its log." />{/if}
         {/each}

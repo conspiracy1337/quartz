@@ -1,7 +1,7 @@
 // The Overview's activity feed: play sessions from the launch history plus the
 // content changes Go logs, newest first.
 import type { ActivityEvent, ContentChange, Run } from './api/types';
-import { hm } from './format';
+import { hours } from './format';
 
 const MAX = 50;
 
@@ -19,9 +19,9 @@ export function sessionEvent(r: Run): ActivityEvent {
     case 'failed':
       return { kind: 'session', icon: 'warn', tone: 'danger', title: 'The game failed to start', detail: cause, at: r.startedAt };
     case 'killed':
-      return { kind: 'session', icon: 'play', tone: 'muted', title: `Played for ${hm(r.lengthMin, true)}`, detail: inWorld(r, 'Stopped from the launcher'), at: r.startedAt };
+      return { kind: 'session', icon: 'play', tone: 'muted', title: `Played for ${hours(r.lengthMin)}`, detail: inWorld(r, 'Stopped from the launcher'), at: r.startedAt };
   }
-  return { kind: 'session', icon: 'play', tone: 'muted', title: `Played for ${hm(r.lengthMin, true)}`, detail: inWorld(r, 'Closed normally'), at: r.startedAt };
+  return { kind: 'session', icon: 'play', tone: 'muted', title: `Played for ${hours(r.lengthMin)}`, detail: inWorld(r, 'Closed normally'), at: r.startedAt };
 }
 
 /** "Took 3 screenshots" after the session that took them. */
