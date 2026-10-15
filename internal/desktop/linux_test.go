@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -59,6 +60,10 @@ func TestLinuxRegisterAndUnregister(t *testing.T) {
 	if !strings.Contains(strings.Join(*calls, "\n"), "xdg-mime default "+desktopID+" application/x-modrinth-modpack+zip") {
 		t.Errorf("xdg-mime not run: %q", *calls)
 	}
+	iconSignal := "dbus-send " + strings.Join(iconChanged, " ")
+	if !slices.Contains(*calls, iconSignal) {
+		t.Errorf("a new icon must tell KDE to look again: %q", *calls)
+	}
 
 	n := len(*calls)
 	if err := r.Sync(want); err != nil || len(*calls) != n {
@@ -71,8 +76,12 @@ func TestLinuxRegisterAndUnregister(t *testing.T) {
 		t.Fatal(err)
 	}
 	want.Links, want.Autostart = false, false
+	n = len(*calls)
 	if err := r.Sync(want); err != nil {
 		t.Fatal(err)
+	}
+	if slices.Contains((*calls)[n:], iconSignal) {
+		t.Error("an unchanged icon must not refresh every app's icons")
 	}
 	if strings.Contains(read(t, l.entryPath()), "MimeType") {
 		t.Error("links off keeps no MimeType")
