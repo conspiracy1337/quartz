@@ -130,18 +130,24 @@
     const srcs = [p.modrinth, p.curseforge].filter((x) => x !== undefined);
     return { downloads: srcs.reduce((n, x) => n + x.downloads, 0), updated: Math.max(...srcs.map((x) => x.updated)) };
   };
-  /** The platform a row installs from: the one updated more recently, as the project page defaults to. */
-  const fresher = (p: ProjectHit): Src => ((p.curseforge?.updated ?? 0) > (p.modrinth?.updated ?? 0) ? 'curseforge' : 'modrinth');
 
   function pickType(t: ProjectKind) {
     type = t;
     cats = {};
   }
 
-  function install(r: ProjectHit) {
+  /** A row installs from the platform its project page defaults to. */
+  async function install(r: ProjectHit) {
     const t = projectType(type);
-    if (!t.content) return go({ name: 'import', ref: r.ref, source: fresher(r) });
-    if (target) session.open({ kind: 'install', ref: r.ref, source: fresher(r), instanceId: target.id, content: t.content });
+    const into = t.content ? target : undefined;
+    let source: Src = r.modrinth ? 'modrinth' : 'curseforge';
+    try {
+      if (r.modrinth && r.curseforge) source = await api.browse.prefer(r.ref, into?.id ?? '');
+    } catch (e) {
+      return session.fail('Install', e);
+    }
+    if (!t.content) return go({ name: 'import', ref: r.ref, source });
+    if (into) session.open({ kind: 'install', ref: r.ref, source, instanceId: into.id, content: t.content });
   }
 </script>
 

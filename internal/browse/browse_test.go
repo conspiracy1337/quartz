@@ -225,7 +225,7 @@ func TestProjectPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Ref != "mr:YL57xq9U+cf:455508" || p.Fresher != "modrinth" || p.CurseForge == nil || p.Installed == nil || p.Installed.VersionID != "v1" {
+	if p.Ref != "mr:YL57xq9U+cf:455508" || p.Preferred != "modrinth" || p.CurseForge == nil || p.Installed == nil || p.Installed.VersionID != "v1" {
 		t.Fatalf("page %+v", p)
 	}
 	m := p.Modrinth

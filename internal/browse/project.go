@@ -55,13 +55,16 @@ type InstalledVersion struct {
 
 // Page is the project page.
 type Page struct {
-	Ref        string            `json:"ref"`
-	Type       string            `json:"type"`
-	Name       string            `json:"name"`
-	Modrinth   *Side             `json:"modrinth,omitempty"`
-	CurseForge *Side             `json:"curseforge,omitempty"`
-	Fresher    string            `json:"fresher"` // the platform updated more recently
-	Installed  *InstalledVersion `json:"installed,omitempty"`
+	Ref        string `json:"ref"`
+	Type       string `json:"type"`
+	Name       string `json:"name"`
+	Modrinth   *Side  `json:"modrinth,omitempty"`
+	CurseForge *Side  `json:"curseforge,omitempty"`
+	// Preferred is the platform shown and installed from by default, and
+	// Reason why (see prefer).
+	Preferred string            `json:"preferred"`
+	Reason    string            `json:"reason"`
+	Installed *InstalledVersion `json:"installed,omitempty"`
 	// Channels are the release types the update channel offers ("release", "beta").
 	Channels []string `json:"channels"`
 }
@@ -74,6 +77,8 @@ func (s *Service) Project(ctx context.Context, ref modplatform.Ref, instance str
 	sides := map[modplatform.Source]modplatform.Detail{}
 	var firstErr error
 	var wg sync.WaitGroup
+	var vers map[modplatform.Source][]modplatform.Version
+	wg.Go(func() { vers = s.releases(ctx, ref) })
 	for _, src := range ref.Sources() {
 		wg.Go(func() {
 			d, err := s.detail(ctx, src, ref.ID(src))
@@ -96,25 +101,33 @@ func (s *Service) Project(ctx context.Context, ref modplatform.Ref, instance str
 		return Page{}, firstErr
 	}
 	page := Page{Ref: ref.String(), Channels: s.d.Channel().Types()}
-	var newest time.Time
+	var have []modplatform.Source
+	var updated time.Time
 	for _, src := range []modplatform.Source{modplatform.Modrinth, modplatform.CurseForge} {
 		d, ok := sides[src]
 		if !ok {
 			continue
 		}
+		have = append(have, src)
 		side := s.side(d)
 		if src == modplatform.CurseForge {
 			page.CurseForge = &side
 		} else {
 			page.Modrinth = &side
 		}
-		if page.Fresher == "" || d.Updated.After(newest) {
-			page.Fresher, newest, page.Name, page.Type = string(src), d.Updated, d.Title, string(d.Type)
+		if page.Name == "" || d.Updated.After(updated) {
+			updated, page.Name, page.Type = d.Updated, d.Title, string(d.Type)
 		}
 	}
-	if tgt, err := s.target(instance); err == nil && tgt != nil {
+	tgt, err := s.target(instance)
+	if err == nil && tgt != nil {
 		page.Installed = installedOf(tgt, ref)
 	}
+	if page.Type == string(modplatform.TypeModpack) {
+		tgt = nil // a pack becomes its own instance: the target's game does not narrow it
+	}
+	src, why := prefer(have, vers, s.d.Channel(), tgt)
+	page.Preferred, page.Reason = string(src), why
 	return page, nil
 }
 

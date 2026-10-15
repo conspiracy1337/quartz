@@ -14,6 +14,10 @@ export function More(arg1) {
   return window['go']['api']['Browse']['More'](arg1);
 }
 
+export function Prefer(arg1, arg2) {
+  return window['go']['api']['Browse']['Prefer'](arg1, arg2);
+}
+
 export function Project(arg1, arg2) {
   return window['go']['api']['Browse']['Project'](arg1, arg2);
 }

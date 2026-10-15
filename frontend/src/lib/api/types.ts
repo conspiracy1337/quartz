@@ -337,7 +337,10 @@ export interface InstalledVersion { item: string; source: Src; versionId: string
 export interface ProjectPage {
   ref: string; type: ProjectKind; name: string;
   modrinth?: ProjectSide; curseforge?: ProjectSide;
-  fresher: Src;
+  /** The platform shown and installed from by default: Modrinth unless CurseForge has a newer release. */
+  preferred: Src;
+  /** Why: on one platform only, the same latest release on both, or a newer one; '' when unknown. */
+  reason: 'only' | 'same' | 'newer' | '';
   installed?: InstalledVersion;
   /** The release types the update channel offers ("release", "beta"). */
   channels: string[];

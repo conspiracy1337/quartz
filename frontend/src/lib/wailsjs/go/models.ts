@@ -803,7 +803,8 @@ export namespace browse {
 	    name: string;
 	    modrinth?: Side;
 	    curseforge?: Side;
-	    fresher: string;
+	    preferred: string;
+	    reason: string;
 	    installed?: InstalledVersion;
 	    channels: string[];
 	
@@ -818,7 +819,8 @@ export namespace browse {
 	        this.name = source["name"];
 	        this.modrinth = this.convertValues(source["modrinth"], Side);
 	        this.curseforge = this.convertValues(source["curseforge"], Side);
-	        this.fresher = source["fresher"];
+	        this.preferred = source["preferred"];
+	        this.reason = source["reason"];
 	        this.installed = this.convertValues(source["installed"], InstalledVersion);
 	        this.channels = source["channels"];
 	    }

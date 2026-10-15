@@ -79,6 +79,20 @@ func (b *Browse) Project(ref, instance string) (browse.Page, error) {
 	return b.svc.Project(b.ctx.Get(), r, instance)
 }
 
+// Prefer is the platform to install a project from by default; instance
+// (optional) narrows it to the versions that run there.
+func (b *Browse) Prefer(ref, instance string) (string, error) {
+	r, err := modplatform.ParseRef(ref)
+	if err != nil {
+		return "", err
+	}
+	if err := checkOptionalInstance(instance); err != nil {
+		return "", err
+	}
+	src, err := b.svc.Prefer(b.ctx.Get(), r, instance)
+	return string(src), err
+}
+
 // Versions lists a project's versions on one platform.
 func (b *Browse) Versions(ref, source, instance string, compatible bool) ([]browse.VersionRow, error) {
 	r, err := modplatform.ParseRef(ref)

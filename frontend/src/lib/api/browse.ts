@@ -25,6 +25,8 @@ export const browseApi = {
   categories: bridged(BrowseGo.Categories, (kind: ProjectKind): string[] => mock.categories(kind)),
   /** A project page; instance (optional) is where Install goes. */
   project: (ref: string, instance: string) => revs.load('content', bridged(() => BrowseGo.Project(ref, instance), (): ProjectPage => mock.iris)),
+  /** The platform to install from by default; instance (optional) narrows it to the versions that run there. */
+  prefer: bridged(BrowseGo.Prefer, (_ref: string, _instance: string) => 'modrinth' as Src),
   versions: (ref: string, src: Src, instance: string, compatible: boolean) =>
     revs.load('content', bridged(() => BrowseGo.Versions(ref, src, instance, compatible), (): ProjectVersion[] => mock.versions(compatible))),
   /** The project a description links to ("modrinth/mod/sodium"), as a reference for its page. */
