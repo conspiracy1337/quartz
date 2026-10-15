@@ -191,7 +191,9 @@ func Run(o Options) error {
 			UniqueId:               lockID(a.paths.Root),
 			OnSecondInstanceLaunch: a.secondInstance,
 		},
-		Linux: &linux.Options{ProgramName: brand.Slug},
+		// The program name is the Wayland app_id, which picks the desktop
+		// entry (and so the icon); Icon covers X11.
+		Linux: &linux.Options{ProgramName: brand.AppID, Icon: desktop.Icon},
 		// macOS hands links and opened files to the app bundle, not argv.
 		Mac: &mac.Options{
 			OnUrlOpen:  func(u string) { a.act(intent.Args{Open: u}) },
