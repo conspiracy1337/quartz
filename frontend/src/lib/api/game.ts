@@ -10,6 +10,7 @@ import * as LogsGo from '../wailsjs/go/api/Logs';
 import * as ScreenshotsGo from '../wailsjs/go/api/Screenshots';
 import * as ServersGo from '../wailsjs/go/api/Servers';
 import * as WorldsGo from '../wailsjs/go/api/Worlds';
+import type { servers } from '../wailsjs/go/models';
 import { content as fixtures } from './mock/content';
 import * as home from './mock/home';
 import * as logs from './mock/logs';
@@ -92,7 +93,7 @@ export const serversApi = {
       const r = fixtures.servers.find((s) => s.id === row);
       return r ? { index: Number(row), name: r.name, address: r.sub.split(',')[0] ?? '', packs: 'prompt' as const } : undefined;
     })()),
-  check: bridged(ServersGo.Check, (_id: string, _address: string) => ({ online: true, version: '1.21.4', players: 6, max: 20, pingMs: 21 })),
+  check: bridged(ServersGo.Check, (_id: string, _address: string): servers.Status => ({ online: true, version: '1.21.4', players: 6, max: 20, pingMs: 21 })),
   add: bridged(ServersGo.Add, (_id: string, _e: Omit<ServerEntry, 'index'>) => undefined),
   edit: bridged(ServersGo.Edit, (_id: string, _index: number, _address: string, _e: Omit<ServerEntry, 'index'>) => undefined),
   move: bridged(ServersGo.Move, (_id: string, _index: number, _address: string, _by: number) => undefined),

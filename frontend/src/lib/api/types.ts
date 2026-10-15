@@ -1,6 +1,8 @@
 // Domain types shared by the mock API (M0) and the real Go services that replace it
 // milestone by milestone. Timestamps are epoch milliseconds; sizes are bytes.
 
+import type { PreviewOnly } from '../bridge';
+
 export type Loader = 'fabric' | 'quilt' | 'forge' | 'neoforge';
 /** An instance's loader: `version` is what is shown ("47.3.0"), `id` the build Go stores ("1.20.1-47.3.0"). */
 export interface LoaderRef { kind: Loader; version: string; id: string }
@@ -256,7 +258,7 @@ export interface Account {
 /** A library skin. Its PNG is skinURL(hash). */
 export interface Skin { hash: string; name: string; slim: boolean; added: number; source: string }
 /** An owned cape. Its PNG is textureURL(texture); preview fixtures carry a CSS `art` instead. */
-export interface Cape { id: string; name: string; texture: string; art?: string }
+export interface Cape { id: string; name: string; texture: string; art?: PreviewOnly<string> }
 export interface Capes { capes: Cape[]; worn: string }
 /** Why a sign-in failed, with a page that fixes it when there is one. */
 export interface SignInProblem { reason: string; message: string; fixUrl: string }
@@ -289,7 +291,7 @@ export interface ProjectHit {
   summary: string;
   icon?: string;
   /** The preview's painted tile (real rows draw their icon). */
-  art?: Art;
+  art?: PreviewOnly<Art>;
   modrinth?: SourceStats;
   curseforge?: SourceStats;
   /** The target instance already has it. */
@@ -322,11 +324,11 @@ export type DocBlock =
   | { type: 'img'; src: string; alt?: string }
   | { type: 'badges'; pics: DocPic[] };
 /** A gallery picture: a same-origin picture, or (in the preview) a painted stand-in. */
-export interface GalleryItem { src?: string; art?: string; title: string }
+export interface GalleryItem { src?: string; art?: PreviewOnly<string>; title: string }
 export interface ProjectLink { icon: string; label: string; url: string }
 /** A project as one platform shows it. */
 export interface ProjectSide {
-  name: string; author: string; summary: string; icon?: string; art?: Art;
+  name: string; author: string; summary: string; icon?: string; art?: PreviewOnly<Art>;
   downloads: number; updated: number; url: string; versions: number;
   badges: string[]; body: DocBlock[]; gallery: GalleryItem[]; links: ProjectLink[];
   blocked?: boolean;
@@ -347,7 +349,7 @@ export interface ProjectVersion {
 }
 export interface VersionNotes { id: string; number: string; published: number; items: string[] }
 export interface InstallDep {
-  id: string; name: string; summary?: string; icon?: string; art?: Art; required: boolean; installed: boolean; size: number; blocked?: boolean;
+  id: string; name: string; summary?: string; icon?: string; art?: PreviewOnly<Art>; required: boolean; installed: boolean; size: number; blocked?: boolean;
   /** Installed but turned off: the install turns it on. */
   off?: boolean;
   /** Required, but no build fits this instance: it is left out. */
@@ -361,14 +363,14 @@ export interface PackStats { mods: number; modBytes: number; files: number; fold
 /** The Import screen's Detected card. */
 export interface ImportPreview {
   token: string; name: string; version: string; minecraft: string; loader: string; source: string;
-  icon?: string; art?: Art; stats: PackStats; warnings: string[];
+  icon?: string; art?: PreviewOnly<Art>; stats: PackStats; warnings: string[];
   /** Files the pack lets the player choose; they install turned off unless picked. */
   optional: { path: string; name: string }[];
   /** An instance already installed from this pack: it can move to this version (`target`) instead. */
   existing?: { id: string; name: string; version: string; target: string };
 }
 export interface PackUpdate { instanceId: string; name: string; version: string }
-export interface ManualItem { id: string; name: string; fileName: string; size: number; state: 'waiting' | 'fetching' | 'found' | 'skipped'; twin: boolean; page?: string; art?: Art }
+export interface ManualItem { id: string; name: string; fileName: string; size: number; state: 'waiting' | 'fetching' | 'found' | 'skipped'; twin: boolean; page?: string; art?: PreviewOnly<Art> }
 /** The blocked-downloads dialog of one job. */
 export interface ManualView { jobId: string; folder: string; watching?: boolean; items: ManualItem[]; done: boolean }
 
