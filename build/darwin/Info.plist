@@ -21,6 +21,8 @@
         <string>10.13.0</string>
         <key>NSHighResolutionCapable</key>
         <string>true</string>
+        <key>NSAudioCaptureUsageDescription</key>
+        <string>Quartz mutes a game while you use another window.</string>
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
         {{if .Info.FileAssociations}}

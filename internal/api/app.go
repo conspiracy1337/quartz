@@ -88,7 +88,8 @@ type AppInfo struct {
 	OS           string `json:"os"`
 	MemoryMB     int    `json:"memoryMb"` // installed RAM, 0 if unknown
 	Discord      bool   `json:"discord"`  // Discord status is set up in this build
-	// MuteUnfocused: games can be muted while unfocused here (Linux with X and pactl).
+	// MuteUnfocused: games can be muted while unfocused here (Linux with X
+	// and pactl, Windows, macOS 14.2 and later).
 	MuteUnfocused bool `json:"muteUnfocused"`
 }
 

@@ -36,8 +36,8 @@ export interface SettingDef {
   /** Static text, or text built from facts about this PC (installed memory). */
   desc?: string | ((info: AppInfo | undefined) => string);
   control: Control;
-  /** Shown only while this holds (e.g. custom proxy rows, or a setting only some systems have). */
-  when?: (s: Settings, info: AppInfo | undefined) => boolean;
+  /** Shown only while this holds (e.g. custom proxy rows). */
+  when?: (s: Settings) => boolean;
 }
 
 // Equivalent settings use the same wording everywhere (global and instance settings).
@@ -47,14 +47,20 @@ const customProxy = (s: Settings) => s.downloads.proxy === 'custom';
 
 export const CHANNELS = [{ value: 'release', label: 'Release' }, { value: 'beta', label: 'Beta' }, { value: 'alpha', label: 'Alpha' }] as const;
 
+function muteDesc(info?: AppInfo): string {
+  const mac = info?.os === 'darwin';
+  if (info && !info.muteUnfocused) return mac ? 'Needs macOS 14.2 or later.' : 'Needs an X or XWayland display and pactl.';
+  return `Silences a game while you use another window.${mac ? ' macOS asks once to allow audio access.' : ''}`;
+}
+
 export const registry: SettingDef[] = [
   { id: 'language', tab: 'general', group: 'Launcher', title: 'Language', control: { kind: 'select', options: [{ value: 'system', label: 'English' }], get: () => 'system', set: (s) => (s.general.language = 'system') } },
   { id: 'hideOnGameStart', tab: 'general', group: 'Launcher', title: HIDE_ON_GAME_START.title, desc: `${HIDE_ON_GAME_START.desc} Instances can override this.`, control: { kind: 'toggle', get: (s) => s.general.hideOnGameStart, set: (s, v) => (s.general.hideOnGameStart = v) } },
   { id: 'startPage', tab: 'general', group: 'Launcher', title: 'Open on startup', control: { kind: 'seg', options: [{ value: 'home', label: 'Home' }, { value: 'library', label: 'Library' }, { value: 'last-instance', label: 'Last instance' }], get: (s) => s.general.startPage, set: (s, v) => (s.general.startPage = v) } },
   { id: 'startWithComputer', tab: 'general', group: 'Launcher', title: 'Start with the computer', desc: 'Starts minimized so updates are ready.', control: { kind: 'toggle', get: (s) => s.general.startWithComputer, set: (s, v) => (s.general.startWithComputer = v) } },
   { id: 'setup', tab: 'general', group: 'Launcher', title: 'First-run setup', desc: 'Walk through sign-in and importing from other launchers again.', control: { kind: 'link', label: 'Run again', route: { name: 'setup', step: 1 } } },
-  // Linux only for now: elsewhere the system offers no per-program volume to set.
-  { id: 'muteUnfocused', tab: 'general', group: 'While playing', title: 'Mute the game when it isn’t focused', desc: (info) => (info && !info.muteUnfocused ? 'Needs an X or XWayland display and pactl.' : 'Silences a game while you use another window.'), when: (_s, info) => info?.os === 'linux', control: { kind: 'toggle', get: (s) => s.general.muteUnfocused, set: (s, v) => (s.general.muteUnfocused = v), disabled: (info) => !!info && !info.muteUnfocused } },
+  // Each system mutes its own way; where this one lacks what that needs, the switch stays off.
+  { id: 'muteUnfocused', tab: 'general', group: 'While playing', title: 'Mute the game when it isn’t focused', desc: muteDesc, control: { kind: 'toggle', get: (s) => s.general.muteUnfocused, set: (s, v) => (s.general.muteUnfocused = v), disabled: (info) => !!info && !info.muteUnfocused } },
 
   { id: 'parallel', tab: 'downloads', group: 'Downloads', title: 'Parallel downloads', control: { kind: 'range', min: 1, max: 16, get: (s) => s.downloads.parallel, set: (s, v) => (s.downloads.parallel = v) } },
   { id: 'watchDownloads', tab: 'downloads', group: 'Downloads', title: 'Watch the Downloads folder', desc: 'Picks up CurseForge files that must be downloaded by hand.', control: { kind: 'toggle', get: (s) => s.downloads.watchDownloads, set: (s, v) => (s.downloads.watchDownloads = v) } },
@@ -91,7 +97,7 @@ export const registry: SettingDef[] = [
 ];
 
 /** Whether a setting is currently shown (rows with `when` hide until it holds). */
-export const visible = (d: SettingDef, s: Settings | null, info?: AppInfo) => !d.when || (!!s && d.when(s, info));
+export const visible = (d: SettingDef, s: Settings | null) => !d.when || (!!s && d.when(s));
 
 /** The settings of one tab, grouped by section heading in registry order. */
 export function groupsFor(tab: SettingsTab): { group: string; defs: SettingDef[] }[] {

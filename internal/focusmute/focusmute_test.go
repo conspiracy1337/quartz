@@ -8,21 +8,37 @@ import (
 
 func TestPlan(t *testing.T) {
 	games := []Game{{Run: "a", PID: 10}, {Run: "b", PID: 20}}
-	tagged := func(i int, run string, mute bool) Stream {
-		return Stream{Index: i, Mute: mute, Properties: map[string]string{runProp: run}}
-	}
-	streams := []Stream{tagged(1, "a", false), tagged(2, "b", false), tagged(3, "b", true), tagged(4, "gone", false), {Index: 5, Properties: map[string]string{}}}
+	noTree := func() func(int) int { t.Fatal("tagged streams need no process tree"); return nil }
+	streams := []Stream{{ID: 1, Run: "a"}, {ID: 2, Run: "b"}, {ID: 3, Run: "b", Mute: true}, {ID: 4, Run: "gone"}, {ID: 5}}
 	// a has focus: b's streams get muted, the rest are left alone.
-	if got := plan(streams, games, "a", false); !slices.Equal(got, []Change{{Index: 2, Mute: true}}) {
+	if got := plan(streams, games, "a", false, noTree); !slices.Equal(got, []Change{{ID: 2, Mute: true}}) {
 		t.Fatalf("a focused: %+v", got)
 	}
 	// Nothing of ours has focus: every running game is muted.
-	if got := plan(streams, games, "", false); !slices.Equal(got, []Change{{Index: 1, Mute: true}, {Index: 2, Mute: true}}) {
+	if got := plan(streams, games, "", false, noTree); !slices.Equal(got, []Change{{ID: 1, Mute: true}, {ID: 2, Mute: true}}) {
 		t.Fatalf("none focused: %+v", got)
 	}
 	// Turned off: everything tagged comes back.
-	if got := plan(streams, games, "", true); !slices.Equal(got, []Change{{Index: 3, Mute: false}}) {
+	if got := plan(streams, games, "", true, noTree); !slices.Equal(got, []Change{{ID: 3, Mute: false}}) {
 		t.Fatalf("off: %+v", got)
+	}
+}
+
+// Windows and macOS streams carry the playing process, found up the tree.
+func TestPlanByProcess(t *testing.T) {
+	games := []Game{{Run: "a", PID: 10}, {Run: "b", PID: 20}}
+	reads := 0
+	parents := func() func(int) int {
+		reads++
+		tree := map[int]int{11: 10, 21: 20, 30: 1}
+		return func(pid int) int { return tree[pid] }
+	}
+	streams := []Stream{{ID: 1, PID: 11}, {ID: 2, PID: 21}, {ID: 3, PID: 30}, {ID: 4, PID: 20, Mute: true}}
+	if got := plan(streams, games, "b", false, parents); !slices.Equal(got, []Change{{ID: 1, Mute: true}, {ID: 4, Mute: false}}) {
+		t.Fatalf("b focused: %+v", got)
+	}
+	if reads != 1 {
+		t.Fatalf("read the process tree %d times", reads)
 	}
 }
 

@@ -32,7 +32,7 @@ type General struct {
 	HideOnGameStart   bool   `json:"hideOnGameStart"` // hide the launcher until the game exits
 	StartPage         string `json:"startPage"`       // home | library | last-instance
 	StartWithComputer bool   `json:"startWithComputer"`
-	// MuteUnfocused mutes a game while its window isn't focused (Linux).
+	// MuteUnfocused mutes a game while its window isn't focused.
 	MuteUnfocused bool `json:"muteUnfocused"`
 	// SetupDone is set when first-run setup finishes (or is skipped).
 	SetupDone bool `json:"setupDone"`

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { groupsFor, registry, search } from './registry';
+import type { AppInfo } from '../api/system';
+import { descText, groupsFor, registry, search } from './registry';
 
 describe('settings registry', () => {
   it('has unique ids', () => {
@@ -12,5 +13,13 @@ describe('settings registry', () => {
   it('searches titles', () => {
     expect(search('memory').map((d) => d.id)).toEqual(['memory', 'warnLowMemory', 'suggestMemory']);
     expect(search('   ')).toEqual([]);
+  });
+  it('says what muting needs on each system', () => {
+    const mute = registry.find((d) => d.id === 'muteUnfocused')!;
+    const on = (os: string, muteUnfocused: boolean) => descText(mute, { os, muteUnfocused } as AppInfo);
+    expect(on('linux', false)).toBe('Needs an X or XWayland display and pactl.');
+    expect(on('darwin', false)).toBe('Needs macOS 14.2 or later.');
+    expect(on('darwin', true)).toMatch(/asks once to allow audio access/);
+    expect(on('windows', true)).toBe('Silences a game while you use another window.');
   });
 });
