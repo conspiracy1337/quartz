@@ -38,6 +38,8 @@ export const browseApi = {
     (_instance: string, _kind: ContentKind, _world: string, _ref: string, _src: Src, _version: string): InstallPlan => misc.installPlan),
   /** Starts the install job with the optional dependencies picked; resolves with its id. */
   applyInstall: bridged(ContentGo.ApplyInstall, (_planId: string, _optional: string[]) => ''),
+  /** Downloads a CurseForge world (a version, or "" for the newest) into an instance as a job; resolves with its id. */
+  installWorld: bridged(BrowseGo.InstallWorld, (_instance: string, _ref: string, _version: string) => ''),
 };
 
 export const importsApi = {

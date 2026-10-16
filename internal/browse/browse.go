@@ -180,3 +180,29 @@ func (s *Service) allVersions(ctx context.Context, src modplatform.Source, id st
 		return p.Versions(ctx, id, modplatform.Query{})
 	})
 }
+
+// World picks a world's file on CurseForge (the only platform with worlds):
+// the version asked for, else the newest. It returns the world's title too.
+func (s *Service) World(ctx context.Context, ref modplatform.Ref, version string) (string, modplatform.File, error) {
+	id := ref.ID(modplatform.CurseForge)
+	if id == "" {
+		return "", modplatform.File{}, errors.New("browse: worlds come from CurseForge")
+	}
+	d, err := s.detail(ctx, modplatform.CurseForge, id)
+	if err != nil {
+		return "", modplatform.File{}, err
+	}
+	if d.Type != modplatform.TypeWorld {
+		return "", modplatform.File{}, errors.New("browse: not a world")
+	}
+	vs, err := s.allVersions(ctx, modplatform.CurseForge, id)
+	if err != nil {
+		return "", modplatform.File{}, err
+	}
+	for _, v := range vs {
+		if version == "" || v.ID == version {
+			return d.Title, v.File, nil
+		}
+	}
+	return "", modplatform.File{}, errors.New("browse: no such version")
+}

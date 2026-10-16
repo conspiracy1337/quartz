@@ -6,6 +6,8 @@ export function Categories(arg1:string):Promise<Array<string>>;
 
 export function Changelog(arg1:string,arg2:string,arg3:Array<string>):Promise<Array<browse.Notes>>;
 
+export function InstallWorld(arg1:string,arg2:string,arg3:string):Promise<string>;
+
 export function More(arg1:string):Promise<browse.Results>;
 
 export function Prefer(arg1:string,arg2:string):Promise<string>;

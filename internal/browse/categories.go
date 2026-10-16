@@ -54,6 +54,14 @@ var categories = map[modplatform.ProjectType][]category{
 		{"Utility", []string{"utility"}, []string{"utility"}},
 		{"Game mechanics", []string{"game-mechanics"}, nil},
 	},
+	modplatform.TypeWorld: { // CurseForge only
+		{"Adventure", nil, []string{"adventure"}},
+		{"Creation", nil, []string{"creation"}},
+		{"Game map", nil, []string{"game-map"}},
+		{"Parkour", nil, []string{"parkour"}},
+		{"Puzzle", nil, []string{"puzzle"}},
+		{"Survival", nil, []string{"survival"}},
+	},
 }
 
 // Categories lists Browse's category names for a project type.

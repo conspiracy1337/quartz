@@ -22,7 +22,7 @@ const (
 
 // Query is what the Browse page asks for.
 type Query struct {
-	Type     string `json:"type"` // mod | modpack | resourcepack | shader | datapack
+	Type     string `json:"type"` // mod | modpack | resourcepack | shader | datapack | world
 	Text     string `json:"text"`
 	Sort     string `json:"sort"` // relevance | downloads | updated
 	Instance string `json:"instance"`
@@ -160,6 +160,9 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 		sq := base
 		switch p.Source() {
 		case modplatform.Modrinth:
+			if t == modplatform.TypeWorld {
+				continue // Modrinth hosts no worlds
+			}
 			sq.Categories = mrCats
 			if q.HideAI {
 				sq.Exclude = append(sq.Exclude, aiDisclosures...)
@@ -394,4 +397,3 @@ func matchKey(title, author string) string {
 	}
 	return t + "/" + modplatform.Normalize(author)
 }
-

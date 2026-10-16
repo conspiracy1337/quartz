@@ -27,6 +27,7 @@ export const PROJECT_TYPES: { kind: ProjectKind; label: ProjectType; content?: C
   { kind: 'resourcepack', label: 'Resource packs', content: 'resourcepacks', noun: 'resource pack' },
   { kind: 'shader', label: 'Shaders', content: 'shaders', noun: 'shader pack' },
   { kind: 'datapack', label: 'Data packs', content: 'datapacks', noun: 'data pack' },
+  { kind: 'world', label: 'Worlds', content: 'worlds', noun: 'world' },
 ];
 export const projectType = (k: ProjectKind) => PROJECT_TYPES.find((t) => t.kind === k) ?? PROJECT_TYPES[0]!;
 /** The project type a content tab installs. */

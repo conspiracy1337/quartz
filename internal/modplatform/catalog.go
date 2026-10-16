@@ -14,10 +14,11 @@ const (
 	TypeResourcePack ProjectType = "resourcepack"
 	TypeShader       ProjectType = "shader"
 	TypeDataPack     ProjectType = "datapack"
+	TypeWorld        ProjectType = "world" // CurseForge only: Modrinth hosts no worlds
 )
 
 // Types lists every project type, in the order Browse shows them.
-var Types = []ProjectType{TypeMod, TypeModpack, TypeResourcePack, TypeShader, TypeDataPack}
+var Types = []ProjectType{TypeMod, TypeModpack, TypeResourcePack, TypeShader, TypeDataPack, TypeWorld}
 
 // Valid reports whether t is a known type.
 func (t ProjectType) Valid() bool {

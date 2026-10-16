@@ -20,7 +20,7 @@ var (
 	}
 	cursePaths = map[string]modplatform.ProjectType{
 		"mc-mods": modplatform.TypeMod, "modpacks": modplatform.TypeModpack, "texture-packs": modplatform.TypeResourcePack,
-		"shaders": modplatform.TypeShader, "data-packs": modplatform.TypeDataPack,
+		"shaders": modplatform.TypeShader, "data-packs": modplatform.TypeDataPack, "worlds": modplatform.TypeWorld,
 	}
 	linkSlugRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 )

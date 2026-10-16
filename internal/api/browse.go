@@ -6,16 +6,40 @@ import (
 
 	"quartz/internal/browse"
 	"quartz/internal/modplatform"
+	"quartz/internal/worlds"
 )
 
 // Browse exposes the merged search and the project page.
 type Browse struct {
-	ctx *Ctx
-	svc *browse.Service
+	ctx    *Ctx
+	svc    *browse.Service
+	worlds *worlds.Service
 }
 
 // NewBrowse returns the facade.
-func NewBrowse(ctx *Ctx, svc *browse.Service) *Browse { return &Browse{ctx: ctx, svc: svc} }
+func NewBrowse(ctx *Ctx, svc *browse.Service, w *worlds.Service) *Browse {
+	return &Browse{ctx: ctx, svc: svc, worlds: w}
+}
+
+// InstallWorld downloads a CurseForge world (a version, or the newest) into
+// an instance as a job and returns its id.
+func (b *Browse) InstallWorld(instanceID, ref, version string) (string, error) {
+	if err := checkInstanceID(instanceID); err != nil {
+		return "", err
+	}
+	r, err := modplatform.ParseRef(ref)
+	if err != nil {
+		return "", err
+	}
+	if version != "" && !versionIDRe.MatchString(version) {
+		return "", ErrBadSource
+	}
+	title, f, err := b.svc.World(b.ctx.Get(), r, version)
+	if err != nil {
+		return "", err
+	}
+	return b.worlds.Install(instanceID, title, f)
+}
 
 // Validation errors.
 var (

@@ -15,7 +15,7 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
 export type SetupStep = 1 | 2 | 3;
 
 /** Browse's tabs (Go's project types). */
-export const PROJECT_KINDS = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'] as const;
+export const PROJECT_KINDS = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'] as const;
 type Kind = (typeof PROJECT_KINDS)[number];
 const SOURCES = ['modrinth', 'curseforge'] as const;
 

@@ -220,7 +220,7 @@ func Run(o Options) error {
 				Syncing: a.syncing, Shortcuts: a.shortcuts, Follow: a.follow, Opens: a.opens, Blobs: a.store,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
-			api.NewBrowse(a.ctx, a.browse),
+			api.NewBrowse(a.ctx, a.browse, a.worlds),
 			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Opens: a.opens, Picture: a.pictures.Src}),
 			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
 			api.NewLaunchers(a.ctx, api.LaunchersDeps{Instances: a.instances, Packs: a.packs, Meta: a.meta, Java: a.java, Tasks: a.tasks,
@@ -459,7 +459,8 @@ func (a *app) buildGame() {
 	a.favicons = servers.NewFavicons(filepath.Join(a.paths.Cache(), "favicons"))
 	// Worlds may be shared: another instance playing them counts too.
 	worldsBusy := func(id string) bool { return a.syncing.Busy(id, "saves") }
-	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: worldsBusy, Bus: a.bus, Log: a.log})
+	a.worlds = worlds.New(worlds.Deps{Instances: a.instances, Images: a.gameImages, Busy: worldsBusy, Tasks: a.tasks,
+		Downloads: filepath.Join(a.paths.Cache(), "worlds"), Bus: a.bus, Log: a.log})
 	a.servers = servers.New(servers.Deps{
 		Instances: a.instances, Busy: busy, Runs: runs, Favicons: a.favicons, Bus: a.bus, Log: a.log,
 		Saved: func(id string) {
