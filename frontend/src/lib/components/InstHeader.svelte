@@ -7,20 +7,15 @@
   import Icon from '../ui/Icon.svelte';
   import InstanceMark from '../ui/InstanceMark.svelte';
   import Tabs from '../ui/Tabs.svelte';
-  import Menu from '../ui/Menu.svelte';
-  import InstanceActions from './InstanceActions.svelte';
+  import { below } from '../ui/Menu.svelte';
   import { loaderLabel } from '../labels';
 
   interface Props { instance: Instance; tab: InstanceTab }
   let { instance: i, tab }: Props = $props();
 
   const running = $derived(!!session.running[i.id]);
-  // "More actions" (composed from the Accounts "…" menu); the right-click menu shares its rows.
-  let menu = $state<{ x: number; y: number } | null>(null);
-  function openMenu(e: MouseEvent) {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    menu = { x: r.right - 220, y: r.bottom + 6 };
-  }
+  // ⋮ opens the same menu as a right-click on the instance.
+  const menuOpen = $derived(session.instanceMenu?.instanceId === i.id);
   const host = $derived(session.hosting?.instanceId === i.id ? session.hosting : null);
   const to = (t: InstanceTab) => href({ name: 'instance', id: i.id, tab: t });
   const tabs = $derived([
@@ -53,26 +48,19 @@
       </div>
     </div>
     <div style="display: flex; gap: 8px; align-items: center">
-      <button class="btn btn-icon" aria-label="Open folder" onclick={() => api.instances.openFolder(i.id)}><Icon name="folder" /></button>
-      <button class="btn btn-icon" aria-label="More actions" aria-haspopup="menu" aria-expanded={!!menu} onclick={openMenu}><Icon name="more" /></button>
+      <!-- Host lives in the ⋮ menu; while the server runs its address shows here and toggles its panel. -->
       {#if host?.state === 'running'}
         <button class="btn" style="height: 40px; border-color: color-mix(in srgb, var(--accent) 45%, transparent)" title="Server running" aria-pressed={session.hostPanel} onclick={() => (session.hostPanel = !session.hostPanel)}><span class="dot live" aria-hidden="true"></span><span class="mono" style="font-size: 12px">localhost:{host.port}</span></button>
-      {:else}
-        <!-- While its server starts, Host brings the starting panel back instead of a second dialog. -->
-        <button class="btn" style="height: 40px" title="Run this instance as a server on your computer" onclick={() => (host ? (session.hostPanel = true) : session.open({ kind: 'host', instanceId: i.id }))}><Icon name="server" />Host</button>
       {/if}
+      <button class="btn-bare" aria-label="Open folder" title="Open folder" onclick={() => api.instances.openFolder(i.id)}><Icon name="folder" size={18} /></button>
       {#if running}
         <button class="btn btn-stop" onclick={() => session.stop(i.id)}><Icon name="stop" size={12} />Stop</button>
       {:else}
         <button class="btn btn-play" onclick={() => session.play(i.id)}><Icon name="play-wide" size={14} />Play</button>
       {/if}
+      <button class="btn btn-icon" style="height: 40px; width: 40px" aria-label="More actions" aria-haspopup="menu" aria-expanded={menuOpen} onclick={(e) => (session.instanceMenu = { instanceId: i.id, ...below(e) })}><Icon name="more" /></button>
     </div>
   </div>
   <Tabs items={tabs} active={tab} label="Instance" style="margin-top: 18px" />
 </header>
 
-{#if menu}
-  <Menu x={menu.x} y={menu.y} label="More for {i.name}" onclose={() => (menu = null)}>
-    <InstanceActions instance={i} header onpick={() => (menu = null)} />
-  </Menu>
-{/if}
