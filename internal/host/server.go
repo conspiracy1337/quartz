@@ -116,15 +116,11 @@ func (s *Service) Start(id string, o Options) error {
 		world = fsx.FreeName(saves, "New world", true)
 	} else if info, err := os.Stat(filepath.Join(saves, world)); err != nil || !info.IsDir() {
 		return ErrNoWorld
-	} else if fsx.Locked(filepath.Join(saves, world, "session.lock")) {
+	} else if s.d.WorldOpen(filepath.Join(saves, world)) {
 		return ErrWorldOpen
 	}
 	if err := s.free(); err != nil {
 		return err
-	}
-	// Asked without the lock: InUse may ask Running in turn.
-	if s.d.InUse != nil && s.d.InUse(id) {
-		return ErrBusy
 	}
 	s.mu.Lock()
 	if err := s.freeLocked(); err != nil {
@@ -261,6 +257,10 @@ func (s *Service) prepare(ctx context.Context, srv *server, in instance.Instance
 	}
 	world := filepath.Join(srv.saves, srv.world)
 	if srv.opts.World != "" {
+		// Installing can take a while, and the game may open the world meanwhile.
+		if s.d.WorldOpen(world) {
+			return "", nil, ErrWorldOpen
+		}
 		if err := backupWorld(world, filepath.Join(s.d.Instances.Dir(in.ID), "backups", "host", srv.world), time.Now()); err != nil {
 			return "", nil, fmt.Errorf("host: backing up %s: %w", srv.world, err)
 		}

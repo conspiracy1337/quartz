@@ -46,7 +46,6 @@ type Options = instance.Host
 var (
 	ErrRunning    = errors.New("host: a server is already running")
 	ErrNotRunning = errors.New("host: no server is running")
-	ErrBusy       = errors.New("host: close the game first")
 	ErrPortInUse  = errors.New("host: that port is in use")
 	ErrNoWorld    = errors.New("host: that world is gone")
 	ErrWorldOpen  = errors.New("host: that world is open in a game; close it first")
@@ -78,8 +77,9 @@ type Deps struct {
 	Bus       *events.Bus
 	Redactor  gamelog.Redactor
 	Log       *slog.Logger
-	// InUse reports whether a game uses the instance's worlds right now.
-	InUse func(id string) bool
+	// WorldOpen reports whether a game has the world folder open, or will
+	// merge its own copy of it back: such a world can't be hosted.
+	WorldOpen func(dir string) bool
 	// Sandbox runs a sandboxed instance's server in its sandbox (headless;
 	// not on Windows, where an app container can't take connections from
 	// this computer). StoreRead are the store folders the server reads.
@@ -96,7 +96,12 @@ type Service struct {
 }
 
 // New returns the service.
-func New(d Deps) *Service { return &Service{d: d, last: map[string]*gamelog.Buffer{}} }
+func New(d Deps) *Service {
+	if d.WorldOpen == nil {
+		d.WorldOpen = func(dir string) bool { return fsx.Locked(filepath.Join(dir, "session.lock")) }
+	}
+	return &Service{d: d, last: map[string]*gamelog.Buffer{}}
+}
 
 // Check validates options.
 func Check(o Options) error {

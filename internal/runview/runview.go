@@ -180,6 +180,32 @@ func (v *View) Binds() map[string]string {
 	return out
 }
 
+// Touched reports whether the run has its own copy of the world folder at
+// world (a real path) and opened it: the copy then merges back over the
+// real one on exit. The game writes session.lock whenever it opens a world,
+// in every version. A run that sees the real folder has no copy: the real
+// session.lock tells instead.
+func (v *View) Touched(world string) bool {
+	for _, m := range v.st.Mounts {
+		if (m.Kind != clone && m.Kind != overlay) || !fsx.Inside(m.Target, world) {
+			continue
+		}
+		rel, err := filepath.Rel(m.Target, world)
+		if err != nil || rel == "." || slices.ContainsFunc(m.Skip, func(s string) bool { return fsx.Inside(filepath.FromSlash(s), rel) }) {
+			continue // another mount holds it
+		}
+		base := m.Path
+		if m.Kind == overlay {
+			base = m.Upper // a file is there only once the run wrote it
+		}
+		lock := filepath.Join(base, rel, "session.lock")
+		if info, err := os.Stat(lock); err == nil && (info.ModTime().After(v.st.Start) || fsx.Locked(lock)) {
+			return true
+		}
+	}
+	return false
+}
+
 // Backend names how the view was built, for the log.
 func (v *View) Backend() string {
 	if v.st.Bin != "" {

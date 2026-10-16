@@ -921,6 +921,10 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 **Basics**
 - **What it does:** the **Host** button runs the instance as a dedicated server on this computer, with the same version and loader. One server at a time.
 - **Where it lives:** `instances/<id>/server/`, outside the game folder.
+- **While you play:** the instance can be played and hosted at once (and Join is a second copy). The server shares nothing writable with the game but the hosted world:
+  - Hosting refuses a world a game has open (its `session.lock` is locked), or that a running copy opened in its own private view, which would merge back over it on exit ([runview `Touched`](internal/runview/runview.go), [launch `WorldOpen`](internal/launch/launch.go)). It is checked again just before the world is backed up, since installing can take a while.
+  - Playing into the hosted world is refused. The game itself won't open it from its menu while the server holds the lock (1.16+).
+  - A "New world" can always be hosted.
 
 **Host dialog** (settings are remembered per instance)
 - **World:** pick an existing one (played in place, including shared worlds) or "New world".

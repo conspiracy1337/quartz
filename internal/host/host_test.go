@@ -18,6 +18,7 @@ import (
 	"quartz/internal/core/events"
 	"quartz/internal/core/nbt"
 	"quartz/internal/gamelog"
+	"quartz/internal/instance"
 )
 
 func TestWriteProps(t *testing.T) {
@@ -404,5 +405,34 @@ func TestRecordedPid(t *testing.T) {
 	}
 	if _, ours := recorded("junk", dir); ours {
 		t.Fatal("junk read as a pid")
+	}
+}
+
+// Hosting asks only whether a game has the chosen world open: the instance
+// may be played meanwhile, and a new world needs no asking.
+func TestStartAsksForTheWorldOnly(t *testing.T) {
+	dir := t.TempDir()
+	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
+	in, _ := insts.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4"})
+	saves := insts.Path(in.ID, "saves")
+	if err := os.MkdirAll(filepath.Join(saves, "W"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var asked []string
+	open := false
+	s := New(Deps{Instances: insts, WorldOpen: func(d string) bool { asked = append(asked, d); return open }})
+	s.cur = &server{st: State{State: "running"}} // stops Start right after the world checks
+	o := Options{Port: 25565, MaxPlayers: 10, MemoryMB: 1024, World: "W"}
+	if err := s.Start(in.ID, o); !errors.Is(err, ErrRunning) || len(asked) != 1 || asked[0] != filepath.Join(saves, "W") {
+		t.Fatalf("%v, asked %v", err, asked)
+	}
+	open = true
+	if err := s.Start(in.ID, o); !errors.Is(err, ErrWorldOpen) {
+		t.Fatal(err)
+	}
+	asked = nil
+	o.World = ""
+	if err := s.Start(in.ID, o); !errors.Is(err, ErrRunning) || len(asked) != 0 {
+		t.Fatalf("%v, asked %v", err, asked)
 	}
 }
