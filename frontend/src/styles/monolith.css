@@ -42,6 +42,10 @@ a{color:inherit}
 .side-link{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:var(--radius);color:var(--muted);text-decoration:none;transition:background-color 120ms ease,color 120ms ease}
 .side-link:hover{background:var(--raise);color:var(--text)}
 .side-link.on{background:var(--raise);color:var(--text)}
+/* A row in a side rail (the Logs tab's sources and files): icon, label, trailing note. */
+.rail-row{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:40px;padding:4px 10px;border-radius:6px;border:0;background:transparent;width:100%;text-align:left;color:var(--muted)}
+.rail-row:hover{background:var(--raise);color:var(--text)}
+.rail-row.on{background:var(--hover);color:var(--text)}
 .side-label{height:24px;padding:0 10px;font-size:12px;color:var(--faint);display:flex;align-items:center;justify-content:space-between}
 .side-inst{display:grid;grid-template-columns:20px minmax(0,1fr) 8px;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:var(--radius);color:var(--muted);text-decoration:none}
 .side-inst:hover{background:var(--raise);color:var(--text)}
@@ -92,6 +96,8 @@ a{color:inherit}
 .btn-danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
 .btn-danger:hover{background:color-mix(in srgb,var(--danger) 10%,transparent)}
 .btn-block{width:100%}
+/* A toggle button that is on (Wrap in the live console). */
+.btn[aria-pressed="true"]{background:var(--hover);border-color:var(--faint)}
 /* One width for a card's row of action buttons (Repair, Move, Delete), so they line up whatever the label. */
 .btn-w{width:84px}
 /* Icon-only control with no box: refresh, check for updates, the instance folder. */
@@ -120,9 +126,9 @@ a{color:inherit}
 .tab.on{color:var(--text);border-bottom-color:var(--text)}
 .count{font-family:var(--mono);font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
 .seg{display:inline-flex;padding:2px;gap:2px;border-radius:var(--radius);background:var(--panel);border:1px solid var(--line-2)}
-.seg button{height:26px;padding:0 10px;border:0;border-radius:4px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.seg button.on{background:var(--hover);color:var(--text)}
-.seg button:hover{color:var(--text)}
+.seg button,.seg a{height:26px;padding:0 10px;border:0;border-radius:4px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.seg button.on,.seg a.on{background:var(--hover);color:var(--text)}
+.seg button:hover,.seg a:hover{color:var(--text)}
 .seg button:disabled{opacity:.45;cursor:default;color:var(--muted)}
 
 /* ---------- page header: a title row over a tab strip, built like the instance header ---------- */

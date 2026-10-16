@@ -132,7 +132,9 @@ export const api = {
   host: hostApi,
   sandbox: sandboxApi,
   logs: {
-    live: bridged(LogsGo.Live, (_instanceId: string) => logs.liveLog),
+    /** A running copy's console (runId, or "" for the newest), else the last run's. */
+    live: bridged(LogsGo.Live, (_instanceId: string, _runId: string) => logs.liveLog),
+    copies: bridged(LogsGo.Copies, (_instanceId: string) => logs.copies),
     runs,
     ...logFilesApi,
   },

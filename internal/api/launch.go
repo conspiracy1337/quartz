@@ -92,12 +92,24 @@ func checkRun(id, runID string) error {
 	return nil
 }
 
-// Live returns the console of the running (or last) run.
-func (a *Logs) Live(id string) ([]gamelog.Line, error) {
+// Live returns the console of a running copy (runID, or "" for the newest),
+// or of the last run.
+func (a *Logs) Live(id, runID string) ([]gamelog.Line, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
 	}
-	return asListErr(a.l.Live(id), nil)
+	if runID != "" && !launch.ValidRunID(runID) {
+		return nil, launch.ErrNoRun
+	}
+	return asListErr(a.l.Live(id, runID), nil)
+}
+
+// Copies lists the instance's running copies, oldest first.
+func (a *Logs) Copies(id string) ([]launch.Copy, error) {
+	if err := checkInstanceID(id); err != nil {
+		return nil, err
+	}
+	return asListErr(a.l.Copies(id), nil)
 }
 
 // Runs returns the launch history, newest first.

@@ -280,11 +280,35 @@ func (l *Launcher) CancelLaunch(id string) {
 	}
 }
 
-// Live returns the console lines of the newest running copy (or the last run).
-func (l *Launcher) Live(id string) []gamelog.Line {
+// Copy is one running copy of an instance, for the live console's sources.
+type Copy struct {
+	RunID     string `json:"runId"`
+	AccountID string `json:"accountId"`
+	Started   int64  `json:"started"` // unix ms
+}
+
+// Copies lists an instance's running copies, oldest first.
+func (l *Launcher) Copies(id string) []Copy {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make([]Copy, 0, len(l.running[id]))
+	for _, r := range l.running[id] {
+		out = append(out, Copy{RunID: r.id, AccountID: r.accountID, Started: r.started.UnixMilli()})
+	}
+	return out
+}
+
+// Live returns the console lines of a running copy (runID), or with runID ""
+// of the newest one, or of the last run when none is running.
+func (l *Launcher) Live(id, runID string) []gamelog.Line {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if copies := l.running[id]; len(copies) > 0 {
+		for _, r := range copies {
+			if r.id == runID {
+				return r.con.Lines()
+			}
+		}
 		return copies[len(copies)-1].con.Lines()
 	}
 	if b, ok := l.last[id]; ok {

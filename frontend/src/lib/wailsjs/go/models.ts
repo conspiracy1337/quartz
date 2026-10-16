@@ -2256,6 +2256,22 @@ export namespace instance {
 
 export namespace launch {
 	
+	export class Copy {
+	    runId: string;
+	    accountId: string;
+	    started: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Copy(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.runId = source["runId"];
+	        this.accountId = source["accountId"];
+	        this.started = source["started"];
+	    }
+	}
 	export class Crash {
 	    title: string;
 	    detail?: string;
