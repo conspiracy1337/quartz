@@ -89,7 +89,7 @@
           <div style="display: flex; gap: 6px; flex-wrap: wrap">{#each side.badges as b (b)}<span class="badge">{b}</span>{/each}<span class="small faint tnum" style="margin-left: 6px">by {side.author}, {compact(side.downloads)} downloads on {SRC_NAMES[p[src] ? src : other]}</span></div>
         </div>
         <div class="seg" role="group" aria-label="Source" style="margin-right: 4px">
-          {#each SOURCES as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]}>{SRC_NAMES[s]}</button>{/each}
+          {#each SOURCES as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]}><Icon name={s} size={14} />{SRC_NAMES[s]}</button>{/each}
         </div>
         <!-- A modpack installs as its own instance, so only content gets the instance chooser. -->
         {#if kind?.content}

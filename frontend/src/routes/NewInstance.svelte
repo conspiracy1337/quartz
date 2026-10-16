@@ -9,6 +9,7 @@
   import { go, href } from '$lib/router.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Seg from '$lib/ui/Seg.svelte';
+  import LoaderIcon from '$lib/ui/LoaderIcon.svelte';
   import Select from '$lib/ui/Select.svelte';
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
@@ -115,7 +116,8 @@
     </div>
     <div class="field"><span class="field-label">Minecraft version</span><VersionPicker start={jar?.minecraft ?? ''} startBadge="From jar" onpick={(v) => (version = v)} /></div>
     <div class="field"><span class="field-label">Mod loader</span>
-      <Seg options={loaderOptions} bind:value={loader} label="Mod loader" fill center />
+      {#snippet mark(v: number)}<LoaderIcon kind={LOADERS[v]?.kind ?? 'none'} size={14} />{/snippet}
+      <Seg options={loaderOptions} bind:value={loader} label="Mod loader" icon={mark} fill center />
       <span class="small faint">{jar ? 'Custom jars run without a mod loader.' : `${line} You can change it later under Version and loader.`}</span>
     </div>
     <section class="field" aria-label="Share with other instances">

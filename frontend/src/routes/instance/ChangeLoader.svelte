@@ -8,6 +8,7 @@
   import { href } from '$lib/router.svelte';
   import Empty from '$lib/ui/Empty.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import LoaderIcon from '$lib/ui/LoaderIcon.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
   interface Props { instance: Instance }
@@ -49,10 +50,10 @@
         <div class="plabel"><span>Loader</span></div>
         <div class="list" role="radiogroup" aria-label="Loader">
           {#each loaders.data ?? [] as o, k (o.kind)}
-            <button class="prow" class:on={li === k} onclick={() => ((l = k), (v = 0))} role="radio" aria-checked={li === k}><span style="min-width: 0"><span style="display: block; font-weight: 500">{o.name}</span><span class="trunc small faint" style="display: block">{o.note}{o.stable[0] ? `, latest ${o.stable[0].name}` : ''}</span></span>{#if k === currentIndex}<span class="badge">Current</span>{/if}</button>
+            <button class="prow ic" class:on={li === k} onclick={() => ((l = k), (v = 0))} role="radio" aria-checked={li === k}><LoaderIcon kind={o.kind} size={18} /><span style="min-width: 0"><span style="display: block; font-weight: 500">{o.name}</span><span class="trunc small faint" style="display: block">{o.note}{o.stable[0] ? `, latest ${o.stable[0].name}` : ''}</span></span>{#if k === currentIndex}<span class="badge">Current</span>{/if}</button>
           {:else}
             {#if loaders.error}<Empty text="Couldn't load versions. Check your connection." action="Retry" onclick={() => tries++} />
-            {:else}{#each { length: 5 } as _, k (k)}<div class="prow" aria-hidden="true"><span style="display: flex; flex-direction: column; gap: 6px"><span class="sk" style="height: 12px; width: {[30, 24, 36, 28, 32][k]}%"></span><span class="sk" style="height: 10px; width: 55%"></span></span></div>{/each}{/if}
+            {:else}{#each { length: 5 } as _, k (k)}<div class="prow ic" aria-hidden="true"><span class="sk" style="width: 18px; height: 18px"></span><span style="display: flex; flex-direction: column; gap: 6px"><span class="sk" style="height: 12px; width: {[30, 24, 36, 28, 32][k]}%"></span><span class="sk" style="height: 10px; width: 55%"></span></span></div>{/each}{/if}
           {/each}
         </div>
       </section>

@@ -17,7 +17,9 @@
   const def = $derived(icons[name]);
 </script>
 
-{#if 'fill' in def && !outline}
+{#if 'brand' in def}
+  <svg width={size} height={size} viewBox="0 0 24 24" class={cls} {style} aria-hidden="true">{@html def.body}</svg>
+{:else if 'fill' in def && !outline}
   <svg width={size} height={size} viewBox="0 0 24 24" fill={color} class={cls} {style} aria-hidden="true">{@html def.body}</svg>
 {:else}
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} stroke-width={sw} class={cls} {style} aria-hidden="true">{@html def.body}</svg>

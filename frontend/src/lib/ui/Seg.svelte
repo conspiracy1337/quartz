@@ -1,4 +1,6 @@
 <script lang="ts" generics="T extends string | number">
+  import type { Snippet } from 'svelte';
+
   /** Segmented control. `fill` stretches it and its buttons to the full width; `center` centres
    *  their labels (New instance's loaders) instead of starting them at the left (Add account's tabs). */
   interface Props {
@@ -8,9 +10,11 @@
     label?: string;
     fill?: boolean;
     center?: boolean;
+    /** Drawn before each option's label (New instance's loader marks). */
+    icon?: Snippet<[T]>;
     onchange?: (v: T) => void;
   }
-  let { options, value = $bindable(), label, fill = false, center = false, onchange }: Props = $props();
+  let { options, value = $bindable(), label, fill = false, center = false, icon, onchange }: Props = $props();
 
   // Assign first: inside `onchange?.(value = v)` the assignment is skipped when no
   // onchange is passed, which silently broke bind:value.
@@ -28,6 +32,6 @@
       aria-checked={value === o.value}
       disabled={o.disabled}
       style={fill ? `flex: 1 1 0${center ? '; justify-content: center' : ''}` : undefined}
-      onclick={() => pick(o.value)}>{o.label}</button>
+      onclick={() => pick(o.value)}>{@render icon?.(o.value)}{o.label}</button>
   {/each}
 </div>
