@@ -8,6 +8,7 @@ import type { UpdateState } from './api/system';
 import type { ContentKind, PlayInto, ServerEntry, Src } from './api/types';
 import { copyText } from './clipboard';
 import { errorText } from './format';
+import type { TargetPick } from './instances';
 import { hasBridge, onEvent } from './bridge';
 import { revs } from './revs.svelte';
 import { go } from './router.svelte';
@@ -69,10 +70,16 @@ class Session {
   toast = $state<Toast | null>(null);
   /** An instance's menu (right-click, or the header's ⋮), at a window position. */
   instanceMenu = $state<{ instanceId: string; x: number; y: number } | null>(null);
-  /** The bottom bar's download queue is open; starting an install opens it. */
+  /** The bottom bar's download queue is open. */
   downloadTray = $state(true);
+  /** An install started from Browse or a project page shows its queue in a floating panel until it ends or is closed. */
+  downloadPanel = $state(false);
   /** The instance Browse and project pages install into, once picked (else the most recent). */
-  browseTarget = $state<string | null>(null);
+  browseTarget = $state<TargetPick | null>(null);
+  /** Picks the instance Browse and project pages add to. */
+  addTo(id: string) {
+    this.browseTarget = { id, at: Date.now() };
+  }
   /** What Browse or a project page already shows of the modpack it sends to Import, so its name,
       picture and summary appear at once while Go reads the pack. */
   packHint = $state<{ ref: string; name: string; author: string; summary: string; icon?: string } | null>(null);

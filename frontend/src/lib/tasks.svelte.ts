@@ -3,6 +3,7 @@
 import { api } from './api';
 import type { Job, TaskSnapshot } from './api/types';
 import { onEvent } from './bridge';
+import { percent, plural, rate } from './format';
 
 type Control = 'pause' | 'resume' | 'cancel' | 'retry';
 type BulkControl = 'pauseAll' | 'resumeAll' | 'cancelAll' | 'retryAllFailed' | 'clearFinished';
@@ -13,6 +14,18 @@ class Tasks {
   speed = $state(0);
   etaSec = $state(0);
   loaded = $state(false);
+  /** The running queue as the status bar and the download panel show it. */
+  summary = $derived.by(() => {
+    const jobs = this.active;
+    const done = jobs.reduce((n, j) => n + j.doneBytes, 0);
+    const total = jobs.reduce((n, j) => n + j.totalBytes, 0);
+    return {
+      label: jobs.length === 1 ? jobs[0]!.meta.title : plural(jobs.length, 'download'),
+      pct: percent(done, total),
+      speed: this.speed > 0 ? rate(this.speed) : '',
+      items: jobs.map((j) => ({ id: j.id, name: j.meta.title, art: j.meta.art, pct: j.state === 'queued' ? null : percent(j.doneBytes, j.totalBytes) })),
+    };
+  });
   #rev = -1;
   #waiters = new Map<string, (ok: boolean) => void>();
 

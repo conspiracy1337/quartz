@@ -11,6 +11,7 @@
   import CopyWorld from '$lib/overlays/CopyWorld.svelte';
   import Crash from '$lib/overlays/Crash.svelte';
   import Host from '$lib/overlays/Host.svelte';
+  import DownloadPanel from '$lib/overlays/DownloadPanel.svelte';
   import HostPanel from '$lib/overlays/HostPanel.svelte';
   import Install from '$lib/overlays/Install.svelte';
   import LaunchPanel from '$lib/overlays/LaunchPanel.svelte';
@@ -72,6 +73,12 @@
   void session.load();
 
   const route = $derived(router.route);
+  const hostPanel = $derived(!!session.hostShown && session.hostPanel && route.name === 'instance' && route.id === session.hostShown.instanceId);
+  // The download panel holds the bottom-right corner only when the launch and server panels don't.
+  const downloadPanel = $derived(session.downloadPanel && tasks.active.length > 0 && route.name !== 'downloads' && !session.launch && !hostPanel);
+  $effect(() => {
+    if (tasks.loaded && !tasks.active.length) session.downloadPanel = false;
+  });
   // Dialogs belong to the screen they were opened on; navigating closes them.
   $effect(() => {
     void router.route;
@@ -125,15 +132,17 @@
     <main class="main">
       {#if session.updateReady && route.name !== 'home'}<UpdateBanner />{/if}
       {@render page(route)}
-      <!-- The Downloads page shows the same queue in full, so its bar would only repeat it. -->
-      {#if route.name !== 'downloads'}<StatusBar />{/if}
+      <!-- The Downloads page and the download panel show the same queue, so the bar would only repeat it. -->
+      {#if route.name !== 'downloads' && !downloadPanel}<StatusBar />{/if}
     </main>
   {/if}
 
   <!-- Downloads shows the launch's downloads in full, so the panel would only cover them. -->
   {#if session.launch && route.name !== 'downloads'}<LaunchPanel instanceId={session.launch.instanceId} accountId={session.launch.accountId} stage={session.launch.stage} details={session.launch.details} pct={session.launch.pct} />{/if}
   <!-- The server's panel shows on its instance's pages; the header's address chip hides it. -->
-  {#if session.hostShown && session.hostPanel && route.name === 'instance' && route.id === session.hostShown.instanceId}<HostPanel host={session.hostShown} />{/if}
+  <!-- An install from Browse or a project page: its queue floats until it ends (the launch panel wins the corner). -->
+  {#if downloadPanel}<DownloadPanel />{/if}
+  {#if hostPanel && session.hostShown}<HostPanel host={session.hostShown} />{/if}
   {#if session.toast}{#key session.toastSeq}<Toast {...session.toast} />{/key}{/if}
   {#if session.instanceMenu}{#key session.instanceMenu}<InstanceMenu {...session.instanceMenu} />{/key}{/if}
 

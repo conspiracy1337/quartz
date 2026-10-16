@@ -10,8 +10,8 @@ import (
 
 // category is one of Browse's categories and what it means on each
 // platform: any of the Modrinth tags, any of the CurseForge category slugs. A
-// category CurseForge has no match for leaves CurseForge out of the results
-// while it is picked.
+// category one platform has no match for leaves that platform out of the
+// results while it is picked.
 type category struct {
 	Name     string
 	Modrinth []string
@@ -54,13 +54,30 @@ var modCategories = []category{
 	{"World generation", []string{"worldgen"}, []string{"world-gen", "world-biomes", "world-dimensions", "world-structures", "world-ores-resources"}},
 }
 
+// curseModCategories are CurseForge's mod categories Modrinth has no tag for;
+// data packs share modCategories but not these, which CurseForge files only
+// under mods.
+var curseModCategories = []category{
+	{"Addons", nil, []string{"mc-addons", "applied-energistics-2", "blood-magic", "addons-buildcraft", "crafttweaker", "create", "farmers-delight", "addons-forestry", "galacticraft", "addons-industrialcraft", "integrated-dynamics", "kubejs", "refined-storage", "skyblock", "addons-thaumcraft", "addons-thermalexpansion", "addons-tinkers-construct", "twilight-forest"}},
+	{"Bug fixes", nil, []string{"bug-fixes"}},
+	{"Creative mode", nil, []string{"creativemode"}},
+	{"Education", nil, []string{"education"}},
+	{"Horror", nil, []string{"horror"}},
+	{"Map and information", nil, []string{"map-information"}},
+	{"MCreator", nil, []string{"mc-creator"}},
+	{"Miscellaneous", nil, []string{"mc-miscellaneous"}},
+	{"Redstone", nil, []string{"redstone"}},
+	{"Twitch integration", nil, []string{"twitch-integration"}},
+}
+
 // Each type's groups. The Modrinth tags are /v2/tag/category's, the
 // CurseForge slugs /v1/categories' for the type's class; slugs a class
 // doesn't have are ignored, so mods and data packs share one list. Plain
 // slices (not a map) so they are laid out at build time, with no init code.
 var (
-	modGroups     = []group{{"Categories", modCategories}}
-	modpackGroups = []group{{"Categories", []category{
+	modGroups      = []group{{"Categories", modCategories}, {"CurseForge", curseModCategories}}
+	dataPackGroups = []group{{"Categories", modCategories}}
+	modpackGroups  = []group{{"Categories", []category{
 		{"Adventure", []string{"adventure"}, []string{"adventure-and-rpg"}},
 		{"Challenging", []string{"challenging"}, []string{"expert", "hardcore"}},
 		{"Combat", []string{"combat"}, []string{"combat-pvp"}},
@@ -71,6 +88,15 @@ var (
 		{"Optimization", []string{"optimization"}, nil},
 		{"Quests", []string{"quests"}, []string{"quests"}},
 		{"Technology", []string{"technology"}, []string{"tech"}},
+	}}, {"CurseForge", []category{
+		{"Exploration", nil, []string{"exploration"}},
+		{"FTB", nil, []string{"ftb-official-pack"}},
+		{"Horror", nil, []string{"horror"}},
+		{"Map based", nil, []string{"map-based"}},
+		{"Mini game", nil, []string{"mini-game"}},
+		{"Sci-fi", nil, []string{"sci-fi"}},
+		{"Skyblock", nil, []string{"skyblock"}},
+		{"Vanilla+", nil, []string{"vanilla"}},
 	}}}
 	resourcePackGroups = []group{
 		{"Categories", []category{
@@ -150,8 +176,10 @@ var (
 // groupsOf is a project type's category groups.
 func groupsOf(t modplatform.ProjectType) []group {
 	switch t {
-	case modplatform.TypeMod, modplatform.TypeDataPack:
+	case modplatform.TypeMod:
 		return modGroups
+	case modplatform.TypeDataPack:
+		return dataPackGroups
 	case modplatform.TypeModpack:
 		return modpackGroups
 	case modplatform.TypeResourcePack:
@@ -189,15 +217,18 @@ func find(t modplatform.ProjectType, name string) *category {
 	return nil
 }
 
-// categoryFilter turns picked names into each platform's filter. curse is
-// false when CurseForge can't filter by one of them.
-func (s *Service) categoryFilter(ctx context.Context, t modplatform.ProjectType, names []string) (mr, cf [][]string, curse bool) {
-	curse = true
+// categoryFilter turns picked names into each platform's filter. modrinth and
+// curse are false when that platform can't filter by one of them.
+func (s *Service) categoryFilter(ctx context.Context, t modplatform.ProjectType, names []string) (mr, cf [][]string, modrinth, curse bool) {
+	modrinth, curse = true, true
 	var ids map[string]string
 	for _, name := range names {
 		c := find(t, name)
 		if c == nil {
 			continue
+		}
+		if len(c.Modrinth) == 0 {
+			modrinth = false
 		}
 		mr = append(mr, c.Modrinth)
 		if ids == nil {
@@ -214,7 +245,7 @@ func (s *Service) categoryFilter(ctx context.Context, t modplatform.ProjectType,
 		}
 		cf = append(cf, group)
 	}
-	return mr, cf, curse
+	return mr, cf, modrinth, curse
 }
 
 // curseCategories maps CurseForge category slugs to ids for a class, cached

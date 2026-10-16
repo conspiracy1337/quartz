@@ -86,11 +86,11 @@ export async function switchVersion(i: Instance, minecraft: string, kind: string
   }
 }
 
-/** A started install keeps the page where it is and opens the download queue in the bottom bar. */
+/** A started install keeps the page where it is and shows the download queue in a floating panel. */
 export async function downloading(job: unknown) {
   if (!job) return;
-  session.downloadTray = true;
   await tasks.load();
+  session.downloadPanel = true;
 }
 
 /** Installs a project into an instance: content opens the Install dialog (version and

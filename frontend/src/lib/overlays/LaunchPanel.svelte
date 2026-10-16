@@ -22,7 +22,7 @@
   const pct = $derived(realPct ?? Math.round((stage / LAUNCH_STEPS.length) * 100));
 </script>
 
-<section class="lp" role="status" aria-label="Launching {inst.data?.name ?? ''}">
+<section class="float lp" role="status" aria-label="Launching {inst.data?.name ?? ''}">
   <div style="display: grid; grid-template-columns: 32px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 14px 14px 10px">
     {#if inst.data}<Tile art={inst.data.art} icon={inst.data.icon} />{:else}<span></span>{/if}
     <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">Starting {inst.data?.name ?? ''}</span><span class="small faint tnum">{details ? `${pct}% ready` : sample ? `About ${Math.max(1, LAUNCH_STEPS.length - stage)} seconds` : 'Starting…'}</span></span>
@@ -41,9 +41,7 @@
 </section>
 
 <style>
-  .lp{position:absolute;right:20px;bottom:20px;width:340px;border:1px solid var(--line-2);border-radius:12px;background:var(--raise);box-shadow:0 24px 64px -16px rgba(0,0,0,.8);z-index:10}
-  @media (prefers-reduced-motion:no-preference){.lp{animation:in 220ms cubic-bezier(.23,1,.32,1)}}
-  @keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .lp{width:340px}
   .step{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:center;height:30px}
   .step :global(.ok){color:var(--accent)} .wait{color:var(--faint)}
 </style>

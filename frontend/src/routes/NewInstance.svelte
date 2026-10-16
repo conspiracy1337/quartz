@@ -1,7 +1,7 @@
 <script lang="ts">
   import { NEW_INSTANCE_SHARES } from '$lib/shares';
   import { api } from '$lib/api';
-  import { bytes, gb, gbField } from '$lib/format';
+  import { bytes, gbField } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import VersionPicker from '$lib/components/VersionPicker.svelte';
   import { revs } from '$lib/revs.svelte';
@@ -14,7 +14,6 @@
   import Toggle from '$lib/ui/Toggle.svelte';
   import ToggleRow from '$lib/ui/ToggleRow.svelte';
   import LookEditor from '$lib/components/LookEditor.svelte';
-  import { prefs } from '$lib/prefs.svelte';
   import type { ClientJarPick, Look } from '$lib/api/types';
 
   // The loader segment, in the design's order. Fabric and Quilt name their newest stable
@@ -111,7 +110,7 @@
     <button class="adv" class:open={more} onclick={() => (more = !more)} aria-expanded={more}><Icon name="chevron-right" size={12} sw={2.2} />More options</button>
     {#if more}
       <div class="card">
-        <Setting title="Memory" desc="Empty uses the global setting."><label class="input" style="width: 96px"><span class="sr">Memory</span><input class="tnum" bind:value={memory} placeholder={prefs.value ? String(gb(prefs.value.java.memoryMaxMb)) : ''} inputmode="numeric" /><span class="suffix">GB</span></label></Setting>
+        <Setting title="Memory" desc="Automatic uses the global setting."><label class="input" style="width: 128px"><span class="sr">Memory</span><input class="tnum" bind:value={memory} placeholder="Automatic" inputmode="numeric" /><span class="suffix">GB</span></label></Setting>
         <div class="divider"></div>
         <Setting title="Sandbox" desc="Recommended for mods from unknown sources."><Toggle bind:on={sandbox} label="Sandbox" /></Setting>
         <div class="divider"></div>

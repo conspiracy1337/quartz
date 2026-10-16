@@ -7,7 +7,8 @@ import (
 )
 
 // Names are how the UI picks a category, so they must be unique per type, and
-// every type but worlds (CurseForge only) must filter Modrinth.
+// each must filter Modrinth, or CurseForge under its "CurseForge" heading
+// (worlds are CurseForge only).
 func TestCategories(t *testing.T) {
 	for _, typ := range modplatform.Types {
 		groups := Categories(typ)
@@ -22,7 +23,8 @@ func TestCategories(t *testing.T) {
 				}
 				seen[name] = true
 				c := find(typ, name)
-				if c == nil || typ != modplatform.TypeWorld && len(c.Modrinth) == 0 || typ == modplatform.TypeWorld && len(c.Curse) == 0 {
+				curseOnly := typ == modplatform.TypeWorld || g.Title == "CurseForge"
+				if c == nil || !curseOnly && len(c.Modrinth) == 0 || curseOnly && (len(c.Modrinth) != 0 || len(c.Curse) == 0) {
 					t.Errorf("%s: %q has no filter", typ, name)
 				}
 			}

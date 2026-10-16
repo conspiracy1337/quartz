@@ -10,7 +10,7 @@
   import { query } from '$lib/query.svelte';
   import { go, href, isPackSource } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
-  import { lastTouched } from '$lib/instances';
+  import { browseTarget } from '$lib/instances';
   import { session } from '$lib/session.svelte';
   import Check from '$lib/ui/Check.svelte';
   import PageHeader from '$lib/ui/PageHeader.svelte';
@@ -52,9 +52,9 @@
   const hide = session.browseHide;
 
   // svelte-ignore state_referenced_locally
-  if (startInstance) session.browseTarget = startInstance;
+  if (startInstance) session.addTo(startInstance);
   const instances = query(() => api.instances.list());
-  const target = $derived(instances.data?.find((i) => i.id === session.browseTarget) ?? lastTouched(instances.data ?? []));
+  const target = $derived(browseTarget(instances.data ?? [], session.browseTarget));
   const showTarget = $derived(type !== 'modpack');
   // Worlds come from CurseForge alone, untracked: no loader, side or Modrinth-only filters apply.
   const isWorld = $derived(type === 'world');
@@ -201,7 +201,7 @@
     {#if showTarget && target}
       {@const t = target}
       <div class="fg"><span class="field-label">Adding to</span>
-        <Select value={t.id} options={(instances.data ?? []).map((i) => ({ value: i.id, label: i.name }))} label="Instance to add to" style="width: 100%" onchange={(v) => (session.browseTarget = v)}>
+        <Select value={t.id} options={(instances.data ?? []).map((i) => ({ value: i.id, label: i.name }))} label="Instance to add to" style="width: 100%" onchange={(v) => session.addTo(v)}>
           {#snippet lead()}<Tile art={t.art} icon={t.icon} size="sm" />{/snippet}
         </Select>
       </div>

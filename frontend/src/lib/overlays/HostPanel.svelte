@@ -63,7 +63,7 @@
   const openFolder = () => api.host.openFolder(id).catch((e) => session.fail('Open folder', e));
 </script>
 
-<section class="panel" aria-label="Server">
+<section class="float panel" aria-label="Server">
   <div style="display: flex; align-items: center; gap: 10px; padding: 12px 10px 10px 14px">
     {#if host.state === 'starting'}<Icon name="spinner" size={14} sw={2.4} class="spin" color="var(--text)" />{:else}<span class="dot" class:live={running} aria-hidden="true"></span>{/if}
     <span style="font-weight: 500; margin-right: auto">{running ? 'Server running' : host.state === 'starting' ? 'Starting server' : 'Server stopped'}</span>
@@ -89,9 +89,7 @@
 </section>
 
 <style>
-  .panel{position:absolute;right:20px;bottom:20px;width:360px;border:1px solid var(--line-2);border-radius:12px;background:var(--raise);box-shadow:0 24px 64px -16px rgba(0,0,0,.8);z-index:10}
-  @media (prefers-reduced-motion:no-preference){.panel{animation:in 200ms cubic-bezier(.23,1,.32,1)}}
-  @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .panel{width:360px}
   .row1{padding:0 14px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:12px;align-items:center}
   .addr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;height:36px;padding:0 6px 0 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
   .dim{opacity:.55}
