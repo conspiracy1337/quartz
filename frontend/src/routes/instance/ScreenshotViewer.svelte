@@ -71,7 +71,8 @@
     <div style="display: flex; flex-direction: column; gap: 6px">
       <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Copy image', () => api.screenshots.copy(instanceId, cur.id), 'copied')}>Copy image</button>
       <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Show in folder', () => api.screenshots.showInFolder(instanceId, cur.id))}>Show in folder</button>
-      <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Use as instance cover', () => api.screenshots.useAsCover(instanceId, cur.id).then(() => revs.bump('instances')), 'is the instance cover now')}>Use as instance cover</button>
+      <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Use as picture', () => api.screenshots.useAsPicture(instanceId, cur.id).then(() => revs.bump('instances')), 'is the instance picture now')}>Use as picture</button>
+      <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Use as banner', () => api.screenshots.useAsBanner(instanceId, cur.id).then(() => revs.bump('instances')), 'is the instance banner now')}>Use as banner</button>
       <button class="btn btn-block btn-danger" disabled={!cur} onclick={trash}>Move to trash</button>
     </div>
   </aside>

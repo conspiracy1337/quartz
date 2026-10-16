@@ -26,7 +26,7 @@ export type Overlay =
   | { kind: 'palette'; mode: 'commands' | 'instances' }
   | { kind: 'shortcuts' }
   | { kind: 'rename'; instanceId: string }
-  | { kind: 'icon'; instanceId: string }
+  | { kind: 'look'; instanceId: string }
   | { kind: 'shortcut'; instanceId: string }
   | { kind: 'export'; instanceId: string };
 
@@ -69,6 +69,9 @@ class Session {
   instanceMenu = $state<{ instanceId: string; x: number; y: number } | null>(null);
   /** The instance Browse and project pages install into, once picked (else the most recent). */
   browseTarget = $state<string | null>(null);
+  /** What Browse or a project page already shows of the modpack it sends to Import, so its name,
+      picture and summary appear at once while Go reads the pack. */
+  packHint = $state<{ ref: string; name: string; author: string; summary: string; icon?: string } | null>(null);
   /** A pack version the Import screen sends to an instance's update page, picked there instead of the offered one. */
   packPick = $state<{ instanceId: string; version: string } | null>(null);
   /** Items a content tab's selection sends to the update review, ticked there instead of its defaults. */

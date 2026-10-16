@@ -40,7 +40,7 @@ func (m Manifest) Find(id string) (ManifestEntry, bool) {
 
 // OldestSupported is 1.6.1's release: versions 1.5 and older need the applet
 // launcher and were cut from scope.
-var OldestSupported = time.Date(2013, 7, 1, 0, 0, 0, 0, time.UTC)
+var OldestSupported = time.Date(2013, 6, 28, 14, 48, 41, 0, time.UTC)
 
 // Supported reports whether the launcher can run this version.
 func (e ManifestEntry) Supported() bool {

@@ -258,6 +258,9 @@ func TestFamilies(t *testing.T) {
 			}
 		}
 	}
+	if last := fams[len(fams)-1]; last.ID != "1.6" || last.Releases[len(last.Releases)-1].ID != "1.6.1" {
+		t.Fatalf("the oldest family must end at 1.6.1: %+v", last)
+	}
 	if f121 == nil || f121.Note != "2024 to 2025" || !slices.ContainsFunc(f121.Snapshots, func(r Release) bool { return r.ID == "25w14a" || strings.HasPrefix(r.ID, "1.21") }) {
 		t.Fatalf("1.21 family = %+v", f121)
 	}

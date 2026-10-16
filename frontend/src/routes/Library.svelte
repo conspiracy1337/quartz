@@ -1,5 +1,5 @@
 <script lang="ts">
-  import InstanceMark from '$lib/ui/InstanceMark.svelte';
+  import InstanceCard from '$lib/components/InstanceCard.svelte';
   import { api } from '$lib/api';
   import type { InstanceSummary } from '$lib/api/types';
   import { agoShort, hours, searchIn } from '$lib/format';
@@ -57,20 +57,14 @@
     <div class="lgrid">
       {#if list.data}
         {#each rows as r (r.id)}
-          <div class="icard" role="group" aria-label={r.name} oncontextmenu={(e) => session.openInstanceMenu(r.id, e)}>
-            <div class="icard-cover" style="background: radial-gradient(120% 140% at 0% 0%, {r.art.background} 0%, #141417 85%); opacity: .9"></div>
-            <div style="padding: 0 14px 12px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0">
-              <span class="ico ico-lg" style="background: {r.art.background}; margin-top: -24px; box-shadow: 0 0 0 3px var(--panel); position: relative; z-index: 1"><InstanceMark art={r.art} icon={r.icon} /></span>
-              <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small muted" style="display: block">{instanceMeta(r)}</span></span>
-              <span class="small faint tnum" style="display: flex; justify-content: space-between"><span>{agoShort(r.lastPlayed)}</span><span>{hours(r.playtimeMin)}</span></span>
-            </div>
+          <InstanceCard art={r.art} icon={r.icon} banner={r.banner} name={r.name} meta={instanceMeta(r)} left={agoShort(r.lastPlayed)} right={hours(r.playtimeMin)} oncontextmenu={(e) => session.openInstanceMenu(r.id, e)}>
             <a class="icard-hit" href={href({ name: 'instance', id: r.id, tab: 'overview' })} aria-label="Open {r.name}"></a>
             {#if session.busy(r.id)}
               <button class="btn btn-stop btn-icon play live" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Stop {r.name}" onclick={() => session.stop(r.id)}><Icon name="stop" size={12} /></button>
             {:else}
               <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={() => session.play(r.id)}><Icon name="play" size={14} /></button>
             {/if}
-          </div>
+          </InstanceCard>
         {:else}
           {#if list.data.length}
             <Empty text="No instances match this filter." style="grid-column: 1 / -1" />
@@ -96,13 +90,9 @@
 
 <style>
   .lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:14px}
-  .icard{height:184px;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;display:grid;grid-template-rows:72px auto;text-decoration:none;color:var(--text);position:relative;transition:border-color 120ms ease}
-  .icard:hover{border-color:var(--line-2)}
-  /* The cover is translucent, which lifts it into its own layer; the icon sits above it explicitly. */
-  .icard-cover{min-height:0}
   /* The whole card opens the instance; Play sits above it. */
   .icard-hit{position:absolute;inset:0;z-index:2;border-radius:10px}
   .icard-hit:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-  .icard .play{z-index:3;position:absolute;right:10px;top:52px;opacity:0;transform:translateY(4px);transition:opacity 140ms ease,transform 160ms var(--ease)}
-  .icard:hover .play,.icard:focus-within .play,.icard .play.live{opacity:1;transform:none}
+  :global(.icard) .play{z-index:3;position:absolute;right:10px;top:52px;opacity:0;transform:translateY(4px);transition:opacity 140ms ease,transform 160ms var(--ease)}
+  :global(.icard):hover .play,:global(.icard):focus-within .play,:global(.icard) .play.live{opacity:1;transform:none}
 </style>

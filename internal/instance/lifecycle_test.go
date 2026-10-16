@@ -45,50 +45,31 @@ func TestEdits(t *testing.T) {
 	if _, err := s.SetNotes(in.ID, strings.Repeat("n", maxNotes+1)); err == nil {
 		t.Fatal("overlong notes accepted")
 	}
-	if _, err := s.SetArt(in.ID, Art{Background: "red"}); err == nil {
+	if _, err := s.SetLook(in.ID, Look{Art: Art{Background: "red"}}); err == nil {
 		t.Fatal("bad colour accepted")
 	}
-	got, _ = s.SetIcon(in.ID, strings.Repeat("a", 64))
-	got, _ = s.SetArt(got.ID, Art{Background: "#3ecf8e"})
-	if got.Icon != "" || got.Art.Initial != "H" {
-		t.Fatalf("a colour replaces the picture and keeps a letter: %+v", got)
+	pic, banner := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	got, _ = s.SetLook(in.ID, Look{Art: Art{Background: "#e2a03f"}, Icon: pic, Banner: banner})
+	got, _ = s.SetLook(got.ID, Look{Art: Art{Background: "#3ecf8e"}, Icon: got.Icon, Banner: got.Banner})
+	if got.Icon != pic || got.Banner != banner || got.Art.Background != "#3ecf8e" || got.Art.Initial != "H" {
+		t.Fatalf("a new colour keeps the picture, the banner and a letter: %+v", got)
+	}
+	if got, _ = s.SetBanner(in.ID, ""); got.Banner != "" || got.Icon != pic {
+		t.Fatalf("removing the banner keeps the picture: %+v", got)
+	}
+	for _, l := range []Look{{Art: Art{Background: "#3ecf8e"}, Icon: "../x.png"}, {Art: Art{Background: "#3ecf8e"}, Banner: "../x.png"}, {Art: Art{Background: "#3ecf8e", Initial: "abc"}}} {
+		if _, err := s.SetLook(in.ID, l); err == nil {
+			t.Fatalf("bad look accepted: %+v", l)
+		}
 	}
 	if _, err := s.SetIcon(in.ID, "../x.png"); err == nil {
 		t.Fatal("bad icon hash accepted")
 	}
 }
 
-func TestGroups(t *testing.T) {
-	s, _ := newStore(t)
-	a, b := create(t, s, "A"), create(t, s, "B")
-	if _, err := s.CreateGroup("Modded"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.CreateGroup("modded"); !errors.Is(err, ErrGroupExists) {
-		t.Fatal("duplicate group (ignoring case) accepted")
-	}
-	_, _ = s.SetGroup(a.ID, "modded") // existing spelling wins
-	_, _ = s.SetGroup(b.ID, "Testing")
-	if g, _ := s.Get(a.ID); g.Group != "Modded" {
-		t.Fatalf("group = %q", g.Group)
-	}
-	if names := groupNames(s); names != "Modded,Testing" {
-		t.Fatalf("groups = %s", names)
-	}
-}
-
-func groupNames(s *Store) string {
-	var n []string
-	for _, g := range s.Groups() {
-		n = append(n, g.Name)
-	}
-	return strings.Join(n, ",")
-}
-
 func TestTrashRestoreAndPurge(t *testing.T) {
 	s, root := newStore(t)
 	in := create(t, s, "World")
-	_, _ = s.SetGroup(in.ID, "Keep")
 	_ = os.WriteFile(filepath.Join(s.GameDir(in.ID), "options.txt"), []byte("fov:90"), 0o600)
 	now := time.Now()
 	e, err := s.Trash(in.ID, now)
@@ -98,7 +79,7 @@ func TestTrashRestoreAndPurge(t *testing.T) {
 	if _, err := s.Get(in.ID); !errors.Is(err, ErrUnknown) {
 		t.Fatal("trashed instance still listed")
 	}
-	if list := s.TrashList(); len(list) != 1 || list[0].Name != "World" || list[0].Group != "Keep" {
+	if list := s.TrashList(); len(list) != 1 || list[0].Name != "World" {
 		t.Fatalf("trash = %+v", list)
 	}
 	// Someone takes the id meanwhile: the restore gets a new one.
@@ -109,7 +90,7 @@ func TestTrashRestoreAndPurge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if back.ID == in.ID || back.Name != "World" || back.Group != "Keep" {
+	if back.ID == in.ID || back.Name != "World" {
 		t.Fatalf("restored = %+v", back)
 	}
 	if b, _ := os.ReadFile(filepath.Join(s.GameDir(back.ID), "options.txt")); string(b) != "fov:90" {

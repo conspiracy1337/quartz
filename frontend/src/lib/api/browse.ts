@@ -11,7 +11,7 @@ import * as ModpacksGo from '../wailsjs/go/api/Modpacks';
 import * as mock from './mock/browse';
 import * as misc from './mock/misc';
 import type {
-  Art, BrowseQuery, BrowseResults, ContentKind, DiffKind, ImportPreview, InstallPlan, ManualView, ModpackDiff, PackUpdate, PackVersion,
+  BrowseQuery, BrowseResults, ContentKind, DiffKind, ImportPreview, InstallPlan, ManualView, ModpackDiff, PackLook, PackUpdate, PackVersion,
   ProjectKind, ProjectPage, ProjectVersion, Src, VersionNotes,
 } from './types';
 
@@ -52,7 +52,7 @@ export const importsApi = {
   /** A pack the launcher was asked to open from outside (a link or a file), by its open id. */
   inspectOpened: bridged(ImportsGo.InspectOpened, (_openId: string): ImportPreview | null => misc.importPreview),
   /** Creates the instance as a job; resolves with its id. */
-  install: bridged(ImportsGo.Install, (_token: string, _name: string, _art: Art, _enable: string[]) => ''),
+  install: bridged(ImportsGo.Install, (_token: string, _name: string, _look: PackLook, _enable: string[]) => ''),
 };
 
 type GoDiff = Omit<ModpackDiff, 'rows'> & { rows: { name: string; version: string; kind: string }[] | null };

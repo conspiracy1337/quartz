@@ -33,6 +33,7 @@ type InstanceDeps struct {
 	Meta     *meta.Service
 	Loaders  *loader.Registry
 	Icons    *icons.Library
+	Banners  *icons.Library
 	Settings *settings.Store
 	Tasks    *tasks.Engine
 	Bus      *events.Bus
@@ -83,11 +84,11 @@ type InstanceSummary struct {
 	ID          string       `json:"id"`
 	Name        string       `json:"name"`
 	Art         instance.Art `json:"art"`
-	Icon        string       `json:"icon,omitempty"` // sha256 of a picture, served at /tex/icon/<icon>.png
+	Icon        string       `json:"icon,omitempty"`   // sha256 of a picture, served at /tex/icon/<icon>.png
+	Banner      string       `json:"banner,omitempty"` // sha256 of a banner, served at /tex/banner/<banner>.png
 	Minecraft   string       `json:"minecraft"`
 	Loader      *LoaderRef   `json:"loader,omitempty"`
 	Kind        string       `json:"kind"` // vanilla | modded | modpack
-	Group       string       `json:"group,omitempty"`
 	Tags        []string     `json:"tags"`
 	HasServers  bool         `json:"hasServers"`
 	LastPlayed  int64        `json:"lastPlayed,omitempty"` // unix ms
@@ -161,8 +162,8 @@ func (s *Instances) guard(id string) error {
 
 func (s *Instances) summary(in instance.Instance) InstanceSummary {
 	v := InstanceSummary{
-		ID: in.ID, Name: in.Name, Art: in.Art, Icon: in.Icon, Minecraft: in.Minecraft, Kind: "vanilla",
-		Group: in.Group, Tags: in.Tags, PlaytimeMin: in.PlaytimeMin, Running: s.d.Running(in.ID), Created: in.Created.UnixMilli(),
+		ID: in.ID, Name: in.Name, Art: in.Art, Icon: in.Icon, Banner: in.Banner, Minecraft: in.Minecraft, Kind: "vanilla",
+		Tags: in.Tags, PlaytimeMin: in.PlaytimeMin, Running: s.d.Running(in.ID), Created: in.Created.UnixMilli(),
 		HasServers: s.d.Servers != nil && s.d.Servers.Count(in.ID) > 0, ClientJar: clientJarRef(in),
 	}
 	if v.Tags == nil {
@@ -287,6 +288,12 @@ func (s *Instances) Create(req instance.CreateRequest) (InstanceView, error) {
 	if len(req.Shares) > 32 {
 		return InstanceView{}, fmt.Errorf("%w: shares", instance.ErrInvalidSettings)
 	}
+	if req.MemoryMB != 0 && (req.MemoryMB < minMemoryMB || req.MemoryMB > sysinfo.TotalMB()) {
+		return InstanceView{}, fmt.Errorf("%w: memory is at least 1 GB and at most what this computer has", instance.ErrInvalidSettings)
+	}
+	if err := picturesStored(s.d.Icons, s.d.Banners, req.Icon, req.Banner); err != nil {
+		return InstanceView{}, err
+	}
 	var jar ClientJarPick
 	if req.ClientJar != "" {
 		if req.Loader != "" {
@@ -298,6 +305,9 @@ func (s *Instances) Create(req instance.CreateRequest) (InstanceView, error) {
 		}
 	}
 	in, err := s.d.Store.Create(req)
+	if err == nil && req.MemoryMB > 0 {
+		in, err = s.d.Store.SetSettings(in.ID, ownMemory(in.Settings, s.d.Settings.Get().Java, req.MemoryMB))
+	}
 	if err == nil && req.ClientJar != "" {
 		in, err = s.attachJar(in, jar)
 	}
@@ -308,6 +318,16 @@ func (s *Instances) Create(req instance.CreateRequest) (InstanceView, error) {
 		in, err = s.d.Store.Get(in.ID)
 	}
 	return s.changed(in, err)
+}
+
+// minMemoryMB is the least memory an instance may be given.
+const minMemoryMB = 1024
+
+// ownMemory turns the Java card's override on with mb of memory, starting
+// from the global values as switching the override on in settings does.
+func ownMemory(st instance.Settings, g settings.Java, mb int) instance.Settings {
+	st.Java = instance.JavaSettings{Override: true, MemoryMinMB: min(g.MemoryMinMB, mb), MemoryMaxMB: mb, JVMArgs: g.JVMArgs}
+	return st
 }
 
 // SetSync joins or leaves a shared target (see package syncing).
@@ -377,30 +397,47 @@ func (s *Instances) Rename(id, name string) (InstanceView, error) {
 	return s.changed(s.d.Store.Rename(id, name))
 }
 
-// SetArt sets the tile colour and letter.
-func (s *Instances) SetArt(id string, art instance.Art) (InstanceView, error) {
+// SetLook sets an instance's colour, letter, picture and banner. The
+// pictures must already be in their libraries (ChooseIcon, ChooseBanner).
+func (s *Instances) SetLook(id string, l instance.Look) (InstanceView, error) {
 	if err := checkInstanceID(id); err != nil {
 		return InstanceView{}, err
 	}
-	return s.changed(s.d.Store.SetArt(id, art))
+	if err := picturesStored(s.d.Icons, s.d.Banners, l.Icon, l.Banner); err != nil {
+		return InstanceView{}, err
+	}
+	return s.changed(s.d.Store.SetLook(id, l))
 }
 
-// SetIcon uses a picture already in the icon library ("" goes back to the tile).
-func (s *Instances) SetIcon(id, hash string) (InstanceView, error) {
-	if err := checkInstanceID(id); err != nil {
-		return InstanceView{}, err
-	}
-	if hash != "" {
-		if _, err := s.d.Icons.Path(hash); err != nil {
-			return InstanceView{}, icons.ErrNotIcon
+// picturesStored reports a picture or banner name ("" for none) that isn't
+// in its library: a look may only name pictures the player picked.
+func picturesStored(pictures, banners *icons.Library, icon, banner string) error {
+	for _, p := range []struct {
+		lib  *icons.Library
+		hash string
+	}{{pictures, icon}, {banners, banner}} {
+		if p.hash == "" {
+			continue
+		}
+		if p.lib == nil {
+			return icons.ErrNotIcon
+		}
+		if _, err := p.lib.Path(p.hash); err != nil {
+			return icons.ErrNotIcon
 		}
 	}
-	return s.changed(s.d.Store.SetIcon(id, hash))
+	return nil
 }
 
-// ChooseIcon picks a picture for an instance that doesn't exist yet (New
-// instance); it returns the icon's name, or "" when cancelled.
-func (s *Instances) ChooseIcon() (string, error) {
+// ChooseIcon picks an instance picture (native dialog) and returns its
+// name, or "" when cancelled.
+func (s *Instances) ChooseIcon() (string, error) { return s.choosePicture(s.d.Icons) }
+
+// ChooseBanner picks an instance banner (native dialog) and returns its
+// name, or "" when cancelled.
+func (s *Instances) ChooseBanner() (string, error) { return s.choosePicture(s.d.Banners) }
+
+func (s *Instances) choosePicture(lib *icons.Library) (string, error) {
 	path, err := openFileDialog(s.ctx.Get(), wruntime.OpenDialogOptions{
 		Title:   "Choose a picture",
 		Filters: []wruntime.FileFilter{{DisplayName: "Pictures (*.png, *.jpg)", Pattern: "*.png;*.jpg;*.jpeg"}},
@@ -408,7 +445,7 @@ func (s *Instances) ChooseIcon() (string, error) {
 	if err != nil || path == "" {
 		return "", err
 	}
-	return s.d.Icons.Import(path)
+	return lib.Import(path)
 }
 
 // SetNotes stores an instance's notes.
@@ -427,27 +464,7 @@ func (s *Instances) SetTags(id string, tags []string) (InstanceView, error) {
 	return s.changed(s.d.Store.SetTags(id, tags))
 }
 
-// Groups lists the groups in their order.
-func (s *Instances) Groups() []instance.Group { return asList(s.d.Store.Groups()) }
-
-// SetGroup moves an instance into a group ("" for none).
-func (s *Instances) SetGroup(id, group string) (InstanceView, error) {
-	if err := checkInstanceID(id); err != nil {
-		return InstanceView{}, err
-	}
-	return s.changed(s.d.Store.SetGroup(id, group))
-}
-
-// CreateGroup adds an empty group.
-func (s *Instances) CreateGroup(name string) (instance.Group, error) {
-	g, err := s.d.Store.CreateGroup(name)
-	if err == nil {
-		s.d.Bus.Emit(events.InstancesChanged, nil)
-	}
-	return g, err
-}
-
-func (s *Instances) groupsChanged(err error) error {
+func (s *Instances) listChanged(err error) error {
 	if err == nil {
 		s.d.Bus.Emit(events.InstancesChanged, nil)
 	}
@@ -603,7 +620,7 @@ func (s *Instances) CreateShortcut(id, where, accountID, kind, target string) er
 
 // Purge deletes a trashed instance for good.
 func (s *Instances) Purge(key string) error {
-	return s.groupsChanged(s.d.Store.Purge(key))
+	return s.listChanged(s.d.Store.Purge(key))
 }
 
 // Move lets the user pick a folder (native dialog) and moves the game folder

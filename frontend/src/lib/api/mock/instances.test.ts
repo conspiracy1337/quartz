@@ -4,7 +4,7 @@ import { loaders } from './versions';
 
 describe('preview instance store', () => {
   it('creates modded instances and moves them between versions', () => {
-    const made = mockInstances.create({ name: 'Test', art: { background: '#3ecf8e' }, icon: '', minecraft: '1.21.1', loader: 'fabric', loaderVersion: '0.16.10', group: '', sandbox: true, shares: [], clientJar: '' });
+    const made = mockInstances.create({ name: 'Test', art: { background: '#3ecf8e' }, icon: '', banner: '', minecraft: '1.21.1', loader: 'fabric', loaderVersion: '0.16.10', sandbox: true, memoryMB: 0, shares: [], clientJar: '' });
     expect(made.kind).toBe('modded');
     expect(made.loader).toEqual({ kind: 'fabric', version: '0.16.10', id: '0.16.10' });
     mockInstances.setVersion(made.id, '1.21.4', '', '');

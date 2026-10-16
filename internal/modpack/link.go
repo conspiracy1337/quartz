@@ -50,7 +50,7 @@ func (r *Reader) Link(ctx context.Context, raw string) (*Pack, error) {
 		if len(segs) >= 4 && segs[2] == "version" {
 			version = segs[3]
 		}
-		return r.modrinth(ctx, segs[1], version)
+		return r.modrinth(ctx, segs[1], version, true)
 	case "curseforge.com":
 		// /minecraft/modpacks/<slug>[/files/<id>]
 		if len(segs) < 3 || segs[0] != "minecraft" || segs[1] != "modpacks" {
@@ -60,7 +60,7 @@ func (r *Reader) Link(ctx context.Context, raw string) (*Pack, error) {
 		if len(segs) >= 5 && (segs[3] == "files" || segs[3] == "download") {
 			file = segs[4]
 		}
-		return r.curse(ctx, segs[2], "", file)
+		return r.curse(ctx, segs[2], "", file, true)
 	case "feed-the-beast.com":
 		if m := ftbPath.FindStringSubmatch(u.Path); m != nil {
 			return r.ftb(ctx, m[1], "")
@@ -81,17 +81,27 @@ func (r *Reader) Link(ctx context.Context, raw string) (*Pack, error) {
 	return r.File(ctx, dest)
 }
 
-// Project reads a pack from Browse (a Modrinth or CurseForge project).
+// Project reads a pack from a Modrinth or CurseForge project, whole.
 func (r *Reader) Project(ctx context.Context, src modplatform.Source, id, version string) (*Pack, error) {
+	return r.project(ctx, src, id, version, false)
+}
+
+// Preview reads a pack for the Import screen: a large one in place, so it
+// shows at once; Complete makes it installable.
+func (r *Reader) Preview(ctx context.Context, src modplatform.Source, id, version string) (*Pack, error) {
+	return r.project(ctx, src, id, version, true)
+}
+
+func (r *Reader) project(ctx context.Context, src modplatform.Source, id, version string, peek bool) (*Pack, error) {
 	if src == modplatform.CurseForge {
-		return r.curse(ctx, "", id, version)
+		return r.curse(ctx, "", id, version, peek)
 	}
-	return r.modrinth(ctx, id, version)
+	return r.modrinth(ctx, id, version, peek)
 }
 
 // modrinth reads a Modrinth pack: the version asked for (by id or number)
 // or the newest one, whose .mrpack is fetched and read.
-func (r *Reader) modrinth(ctx context.Context, project, version string) (*Pack, error) {
+func (r *Reader) modrinth(ctx context.Context, project, version string, peek bool) (*Pack, error) {
 	mr := r.d.Modrinth
 	if mr == nil {
 		return nil, ErrLink
@@ -115,11 +125,7 @@ func (r *Reader) modrinth(ctx context.Context, project, version string) (*Pack, 
 	if len(v.File.SHA512) == 128 {
 		sum = hashx.Of(hashx.SHA512, v.File.SHA512)
 	}
-	dest, err := r.fetch(ctx, v.File.URL, v.File.Size, sum)
-	if err != nil {
-		return nil, err
-	}
-	p, err := r.File(ctx, dest)
+	p, err := r.open(ctx, v.File.URL, v.File.Size, sum, peek)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +136,7 @@ func (r *Reader) modrinth(ctx context.Context, project, version string) (*Pack, 
 }
 
 // curse reads a CurseForge pack by slug or id: the file asked for, or the newest.
-func (r *Reader) curse(ctx context.Context, slug, id, file string) (*Pack, error) {
+func (r *Reader) curse(ctx context.Context, slug, id, file string, peek bool) (*Pack, error) {
 	cf := r.d.CurseForge
 	if cf == nil || !cf.Ready() {
 		return nil, errors.New("modpack: CurseForge isn't set up in this build, so its packs can't be read")
@@ -170,11 +176,7 @@ func (r *Reader) curse(ctx context.Context, slug, id, file string) (*Pack, error
 	if hexOf(v.File.SHA1, 40) {
 		sum = hashx.Of(hashx.SHA1, v.File.SHA1)
 	}
-	dest, err := r.fetch(ctx, v.File.URL, v.File.Size, sum)
-	if err != nil {
-		return nil, err
-	}
-	p, err := r.File(ctx, dest)
+	p, err := r.open(ctx, v.File.URL, v.File.Size, sum, peek)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +211,10 @@ func pickVersion(vs []modplatform.Version, want string) (modplatform.Version, bo
 // Discard deletes the archive a pack was fetched into, once nothing needs
 // it any more (packs read from the player's own files are left alone).
 func (r *Reader) Discard(p *Pack) {
+	if p != nil && p.download != nil {
+		r.discardPending(p.download)
+		p.download = nil
+	}
 	if p == nil || p.Archive == "" || r.d.Cache == "" {
 		return
 	}

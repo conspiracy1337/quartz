@@ -6,7 +6,6 @@
   import { move, repair, trash } from '$lib/instanceActions';
   import { capitalize, gb, gbField, plural } from '$lib/format';
   import { suggestMemoryGb } from '$lib/look';
-  import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
   import { revs } from '$lib/revs.svelte';
   import { HIDE_ON_GAME_START } from '$lib/settings/registry';
@@ -37,7 +36,6 @@
   let st = $state($state.snapshot(i.settings));
   const info = query(() => api.app.info());
   const runtimes = query(() => api.java.runtimes());
-  const groups = query(() => api.instances.groups());
   const javaOptions = $derived([{ value: '', label: `Automatic (${i.javaAuto})` }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
   const suggestGb = $derived(prefs.value?.java.suggestMemory ? suggestMemoryGb(i.counts.mods, info.data?.memoryMb ?? 0) : 0);
   const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${gb(info.data.memoryMb)} GB.${suggestGb ? ` ${suggestGb} GB suits ${plural(i.counts.mods, 'mod')}.` : ''}` : undefined);
@@ -48,8 +46,6 @@
     if (st.account && !opts.some((o) => o.value === st.account)) opts.push({ value: st.account, label: 'Removed account' });
     return opts;
   });
-  const groupOptions = $derived([{ value: '', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
-  let naming = $state(false);
   const hideOnStart = $derived(st.window.hideOnGameStart ?? prefs.value?.general.hideOnGameStart ?? false);
   const num = (v: string) => Math.max(0, Math.round(Number(v)) || 0);
 
@@ -110,10 +106,6 @@
     } catch (e) {
       session.fail(what, e);
     }
-  }
-  function setGroup(v: string) {
-    if (v === '\u0000new') naming = true;
-    else void edit(() => api.instances.setGroup(i.id, v), 'Group');
   }
   const tagsText = $derived(i.tags.join(', '));
 </script>
@@ -178,8 +170,6 @@
     <section class="sec" aria-label="About this instance">
       <div class="sec-h"><h2 class="h3">About this instance</h2></div>
       <div class="card">
-        <Setting title="Group"><Select value={i.group ?? ''} options={groupOptions} label="Group" onchange={setGroup} /></Setting>
-        <div class="divider"></div>
         <Setting title="Tags" desc="Separate tags with commas."><label class="input"><span class="sr">Tags</span><input value={tagsText} placeholder="for example: survival, friends" onchange={(e) => edit(() => api.instances.setTags(i.id, e.currentTarget.value.split(',')), 'Tags')} /></label></Setting>
         <div class="divider"></div>
         <div style="padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 6px"><span class="setting-title">Notes</span><textarea class="textarea" rows="3" aria-label="Notes" maxlength="4000" value={i.notes} onchange={(e) => edit(() => api.instances.setNotes(i.id, e.currentTarget.value), 'Notes')}></textarea></div>
@@ -197,11 +187,6 @@
     </section>
   </div>
 </div>
-
-{#if naming}
-  <PromptDialog title="New group" label="Name" help="The instance moves into it." action="Create group" maxlength={32}
-    submit={(v) => edit(() => api.instances.setGroup(i.id, v), 'Group')} onclose={() => (naming = false)} />
-{/if}
 
 <style>
   .ov{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--faint);border:0;background:transparent;padding:0}

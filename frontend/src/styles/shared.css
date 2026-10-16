@@ -18,3 +18,9 @@
 /* Inline text action or link: underlined, in the main text colour, the size of the text around it. */
 .tlink{font:inherit;color:var(--text);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;padding:0;border-radius:2px;border:0;background:none;cursor:pointer}
 .tlink:hover{text-decoration-thickness:2px}
+
+/* A Library card (InstanceCard; Library's skeletons too): cover, tile, name and meta, footer. */
+.icard{height:184px;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;display:grid;grid-template-rows:72px auto;text-decoration:none;color:var(--text);position:relative;transition:border-color 120ms ease}
+.icard:hover{border-color:var(--line-2)}
+/* The cover is translucent, which lifts it into its own layer; the icon sits above it explicitly. */
+.icard-cover{min-height:0}

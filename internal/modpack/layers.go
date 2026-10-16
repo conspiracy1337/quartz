@@ -35,18 +35,21 @@ func (p *Pack) Stats() (Stats, error) {
 			st.Foreign = append(st.Foreign, path.Base(f.Path))
 		}
 	}
-	if p.Archive == "" {
+	entries := func(layer string) []archive.Entry { return p.listing[layer] }
+	if p.Archive != "" {
+		zr, err := archive.Open(p.Archive)
+		if err != nil {
+			return st, err
+		}
+		defer func() { _ = zr.Close() }()
+		entries = zr.Entries
+	} else if p.listing == nil {
 		return st, nil
 	}
-	zr, err := archive.Open(p.Archive)
-	if err != nil {
-		return st, err
-	}
-	defer func() { _ = zr.Close() }()
 	folders := map[string]int{}
 	seen := map[string]bool{}
 	for _, layer := range p.Layers {
-		for _, e := range zr.Entries(layer) {
+		for _, e := range entries(layer) {
 			rel, ok := p.layerPath(layer, e)
 			if !ok || seen[rel] {
 				continue

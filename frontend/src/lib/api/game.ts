@@ -104,7 +104,8 @@ export const screenshotsApi = {
   copy: bridged(ScreenshotsGo.Copy, (_id: string, _name: string) => undefined),
   showInFolder: bridged(ScreenshotsGo.ShowInFolder, (_id: string, _name: string) => undefined),
   openFolder: bridged(ScreenshotsGo.OpenFolder, (_id: string) => undefined),
-  useAsCover: bridged(ScreenshotsGo.UseAsCover, (_id: string, _name: string) => undefined),
+  useAsPicture: bridged(ScreenshotsGo.UseAsPicture, (_id: string, _name: string) => undefined),
+  useAsBanner: bridged(ScreenshotsGo.UseAsBanner, (_id: string, _name: string) => undefined),
   trash: bridged(ScreenshotsGo.Trash, (_id: string, _names: string[]) => 'preview'),
   undo: bridged(ScreenshotsGo.Undo, (_id: string, _token: string) => undefined),
 };

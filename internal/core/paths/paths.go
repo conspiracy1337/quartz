@@ -197,6 +197,9 @@ func (p Paths) Skins() string { return filepath.Join(p.Root, "skins") }
 // Icons holds the pictures chosen for instances.
 func (p Paths) Icons() string { return filepath.Join(p.Root, "icons") }
 
+// Banners holds the banners people choose for their instances.
+func (p Paths) Banners() string { return filepath.Join(p.Root, "banners") }
+
 // Textures caches skin and cape textures from textures.minecraft.net.
 func (p Paths) Textures() string { return filepath.Join(p.Cache(), "textures") }
 

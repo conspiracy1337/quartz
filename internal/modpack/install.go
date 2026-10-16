@@ -2,9 +2,9 @@ package modpack
 
 import (
 	"context"
-	"encoding/json"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -104,6 +104,9 @@ func (s *Service) Stage(p *Pack) string {
 	for k, v := range s.staged {
 		if time.Since(v.at) > stagedLife {
 			delete(s.staged, k)
+			if s.d.Reader != nil {
+				s.d.Reader.Discard(v.pack) // a preview's background download stops too
+			}
 		}
 	}
 	s.staged[tok] = staged{pack: p, at: time.Now()}
@@ -135,14 +138,28 @@ func (s *Service) take(token string) (*Pack, error) {
 	return p, err
 }
 
+// Look is how an installed pack's instance shows: Art, Icon and Banner as
+// in instance.Look, or with PackIcon the pack's own icon instead of Icon.
+type Look struct {
+	Art      instance.Art `json:"art"`
+	Icon     string       `json:"icon"`
+	Banner   string       `json:"banner"`
+	PackIcon bool         `json:"packIcon"`
+}
+
 // Install creates an instance from a staged pack as one job: the game and
 // loader, the pack's files (the optional ones in enable turned on), any
 // manual downloads, then the instance itself.
 // The instance appears only when everything is in place; a failed or
 // cancelled job leaves nothing behind.
-func (s *Service) Install(ctx context.Context, token, name string, art instance.Art, enable []string) (string, error) {
+func (s *Service) Install(ctx context.Context, token, name string, look Look, enable []string) (string, error) {
+	art := look.Art
 	p, err := s.take(token)
 	if err != nil {
+		return "", err
+	}
+	if err := s.d.Reader.Complete(ctx, p); err != nil {
+		s.d.Reader.Discard(p)
 		return "", err
 	}
 	p.Enable(enable)
@@ -162,7 +179,11 @@ func (s *Service) Install(ctx context.Context, token, name string, art instance.
 		return "", err
 	}
 	packSpec.After("Installing", tasks.Count, tasks.Func("create the instance", func(ctx context.Context) error {
-		err := s.create(ctx, p, files, set, target, game, instance.CreateRequest{Name: orElse(name, p.Name), Art: art, Sandbox: s.d.Sandboxed != nil && s.d.Sandboxed()})
+		req := instance.CreateRequest{Name: orElse(name, p.Name), Art: art, Icon: look.Icon, Banner: look.Banner, Sandbox: s.d.Sandboxed != nil && s.d.Sandboxed()}
+		if look.PackIcon {
+			req.Icon = s.icon(ctx, p)
+		}
+		err := s.create(ctx, p, files, set, target, game, req)
 		if err != nil {
 			return &netx.PermanentError{Err: err}
 		}
@@ -322,7 +343,6 @@ func (s *Service) create(ctx context.Context, p *Pack, files []planned, set *man
 	}
 	_ = root.Close() // Windows can't rename a folder that is open
 	req.Minecraft, req.Loader, req.LoaderVersion = t.Minecraft, string(t.Loader), t.LoaderVersion
-	req.Icon = s.icon(ctx, p)
 	defaults := instance.JavaSettings{}
 	if s.d.Defaults != nil {
 		defaults = s.d.Defaults()

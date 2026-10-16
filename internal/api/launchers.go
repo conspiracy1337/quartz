@@ -178,7 +178,7 @@ func (l *Launchers) Import(ids []string, inPlace bool) error {
 		for _, it := range items {
 			p := it.s.Pack(it.f, inPlace)
 			tok := l.d.Packs.Stage(p)
-			if _, err := l.d.Packs.Install(ctx, tok, p.Name, instance.ArtFor(p.Name), nil); err != nil {
+			if _, err := l.d.Packs.Install(ctx, tok, p.Name, modpack.Look{Art: instance.ArtFor(p.Name), PackIcon: true}, nil); err != nil {
 				l.d.Log.Warn("importing an instance failed", "launcher", it.f.ID, "instance", p.Name, "err", err)
 				l.d.Opens.Fail("Couldn't import "+p.Name, err)
 			}

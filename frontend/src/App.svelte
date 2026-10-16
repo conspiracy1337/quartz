@@ -151,7 +151,7 @@
     {:else if overlay.kind === 'shortcuts'}<Shortcuts />
     {:else if overlay.kind === 'shortcut'}<ShortcutDialog instanceId={overlay.instanceId} />
     {:else if overlay.kind === 'export'}<ExportDialog instanceId={overlay.instanceId} />
-    {:else if overlay.kind === 'rename' || overlay.kind === 'icon'}<InstanceEdit kind={overlay.kind} instanceId={overlay.instanceId} />
+    {:else if overlay.kind === 'rename' || overlay.kind === 'look'}<InstanceEdit kind={overlay.kind} instanceId={overlay.instanceId} />
     {/if}
   {/each}
 </div>

@@ -27,7 +27,6 @@ type TrashEntry struct {
 	Icon      string `json:"icon,omitempty"`
 	Minecraft string `json:"minecraft"`
 	Loader    string `json:"loader,omitempty"`
-	Group     string `json:"group,omitempty"`
 	TrashedAt int64  `json:"trashedAt"` // unix ms
 	Location  string `json:"location,omitempty"`
 }
@@ -77,7 +76,7 @@ type trashMeta struct {
 
 func entryOf(key string, in Instance, at int64) TrashEntry {
 	return TrashEntry{Key: key, ID: in.ID, Name: in.Name, Art: in.Art, Icon: in.Icon, Minecraft: in.Minecraft,
-		Loader: in.Loader, Group: in.Group, TrashedAt: at, Location: in.Location}
+		Loader: in.Loader, TrashedAt: at, Location: in.Location}
 }
 
 // TrashDirs lists the folders of trashed instances (each still holds its
@@ -128,7 +127,7 @@ func (s *Store) readEntry(key string) (TrashEntry, error) {
 }
 
 // Restore brings an instance back. If another instance took its id in the
-// meantime, it comes back under a new one; its group is kept.
+// meantime, it comes back under a new one.
 func (s *Store) Restore(key string) (Instance, error) {
 	e, err := s.readEntry(key)
 	if err != nil {
@@ -158,7 +157,6 @@ func (s *Store) Restore(key string) (Instance, error) {
 	if e.Location != "" {
 		writeMarker(e.Location, id) // the moved folder now belongs to the new id
 	}
-	s.ensureGroup(e.Group)
 	return f.Get(), f.Flush()
 }
 

@@ -93,11 +93,31 @@ func Square(img image.Image, side int) *image.NRGBA {
 	n := min(b.Dx(), b.Dy())
 	x0, y0 := b.Min.X+(b.Dx()-n)/2, b.Min.Y+(b.Dy()-n)/2
 	out := min(n, side)
-	dst := image.NewNRGBA(image.Rect(0, 0, out, out))
-	for y := range out {
-		sy0, sy1 := y0+y*n/out, y0+(y+1)*n/out
-		for x := range out {
-			sx0, sx1 := x0+x*n/out, x0+(x+1)*n/out
+	return scale(img, image.Rect(x0, y0, x0+n, y0+n), out, out)
+}
+
+// Within scales img down, keeping its shape, until it fits in w×h pixels
+// (a smaller picture keeps its size). It uses Square's box filter.
+func Within(img image.Image, w, h int) *image.NRGBA {
+	b := img.Bounds()
+	ow, oh := b.Dx(), b.Dy()
+	if ow > w {
+		ow, oh = w, max(1, oh*w/ow)
+	}
+	if oh > h {
+		ow, oh = max(1, ow*h/oh), h
+	}
+	return scale(img, b, ow, oh)
+}
+
+// scale box-filters the src part of img to an outW×outH picture.
+func scale(img image.Image, src image.Rectangle, outW, outH int) *image.NRGBA {
+	x0, y0, sw, sh := src.Min.X, src.Min.Y, src.Dx(), src.Dy()
+	dst := image.NewNRGBA(image.Rect(0, 0, outW, outH))
+	for y := range outH {
+		sy0, sy1 := y0+y*sh/outH, y0+(y+1)*sh/outH
+		for x := range outW {
+			sx0, sx1 := x0+x*sw/outW, x0+(x+1)*sw/outW
 			var r, g, bl, a, count uint64
 			for sy := sy0; sy < max(sy1, sy0+1); sy++ {
 				for sx := sx0; sx < max(sx1, sx0+1); sx++ {

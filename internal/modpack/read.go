@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"path"
 	"sort"
@@ -26,6 +27,9 @@ type Deps struct {
 	HTTP       modplatform.Doer
 	// Fetch downloads a pack archive to dest (https only; sum may be zero).
 	Fetch func(ctx context.Context, rawURL string, size int64, sum hashx.Sum, dest string) error
+	// Get sends a GET with extra headers, for previewing a pack in place
+	// (see remotezip.go); nil always downloads packs whole.
+	Get   func(ctx context.Context, rawURL string, h http.Header) (*http.Response, error)
 	Cache string // where fetched packs go
 	Log   *slog.Logger
 }
@@ -48,7 +52,18 @@ func (r *Reader) File(ctx context.Context, file string) (*Pack, error) {
 		return nil, ErrNotPack
 	}
 	defer func() { _ = zr.Close() }()
+	p, err := r.read(ctx, zr)
+	if err != nil {
+		return nil, err
+	}
+	p.Archive = file
+	return p, nil
+}
+
+// read reads a pack from its zip, wherever the zip's bytes come from.
+func (r *Reader) read(ctx context.Context, zr *archive.Reader) (*Pack, error) {
 	var p *Pack
+	var err error
 	switch {
 	case zr.Has("modrinth.index.json"):
 		p, err = readMrpack(zr)
@@ -62,7 +77,6 @@ func (r *Reader) File(ctx context.Context, file string) (*Pack, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.Archive = file
 	if p.Icon == nil {
 		for _, name := range []string{"icon.png", "overrides/icon.png"} {
 			if b, err := zr.Read(name, maxIcon); err == nil {

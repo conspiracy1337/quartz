@@ -18,8 +18,8 @@ func TestPlanThreeWay(t *testing.T) {
 	old := Manifest{Files: map[string]ManifestFile{
 		"mods/same.jar":     {SHA1: "s"},
 		"mods/upd.jar":      {SHA1: "u1"},
-		"mods/removed.jar":  {SHA1: "r1"},        // the player removed it
-		"mods/dropped.jar":  {SHA1: "d1"},        // the pack drops it, unchanged on disk
+		"mods/removed.jar":  {SHA1: "r1"}, // the player removed it
+		"mods/dropped.jar":  {SHA1: "d1"}, // the pack drops it, unchanged on disk
 		"config/edited.txt": {SHA1: "e1", Layer: true},
 		"config/kept.txt":   {SHA1: "k1", Layer: true}, // the pack drops it, the player changed it
 		"config/gone.txt":   {SHA1: "g1", Layer: true}, // missing on disk, still in the pack
@@ -123,7 +123,7 @@ func packUpdate(t *testing.T) (context.Context, *installEnv, instance.Instance, 
 		t.Fatal(err)
 	}
 	p.Origin = Origin{Source: "modrinth", Project: "PACK", Version: "V1"}
-	job, err := env.svc.Install(ctx, env.svc.Stage(p), "Pack", instance.Art{Background: "#3ecf8e"}, nil)
+	job, err := env.svc.Install(ctx, env.svc.Stage(p), "Pack", Look{Art: instance.Art{Background: "#3ecf8e"}, PackIcon: true}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
