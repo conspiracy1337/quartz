@@ -7,13 +7,12 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gomedium"
-	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/pngx"
+	"quartz/internal/core/ttf"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
 )
@@ -85,25 +84,19 @@ func insideRounded(x, y, side, r float64) bool {
 
 var (
 	fontOnce sync.Once
-	fontData *opentype.Font
+	fontData *ttf.Font
 )
 
 func drawLetter(img *image.NRGBA, s string, size float64) {
-	fontOnce.Do(func() { fontData, _ = opentype.Parse(gomedium.TTF) })
+	fontOnce.Do(func() { fontData, _ = ttf.Parse(gomedium.TTF) })
 	if fontData == nil {
 		return
 	}
-	face, err := opentype.NewFace(fontData, &opentype.FaceOptions{Size: size, DPI: 72, Hinting: font.HintingNone})
-	if err != nil {
-		return
-	}
-	defer func() { _ = face.Close() }()
-	d := font.Drawer{Dst: img, Src: image.NewUniform(ink), Face: face}
-	b, adv := d.BoundString(s)
+	face := ttf.NewFace(fontData, size)
+	b, adv := face.BoundString(s)
 	side := fixed.I(img.Bounds().Dx())
 	// Centre the advance horizontally and the ink box vertically.
-	d.Dot = fixed.Point26_6{X: (side - adv) / 2, Y: (side-(b.Max.Y-b.Min.Y))/2 - b.Min.Y}
-	d.DrawString(s)
+	face.DrawString(img, image.NewUniform(ink), fixed.Point26_6{X: (side - adv) / 2, Y: (side-(b.Max.Y-b.Min.Y))/2 - b.Min.Y}, s)
 }
 
 // parseHex reads #rrggbb; anything else is the default tile blue.
