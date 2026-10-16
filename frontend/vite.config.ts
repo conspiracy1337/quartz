@@ -5,6 +5,8 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 // textures: /tex/default/<key>.png, and /tex/skin/<key>.png for fixture library skins (real
 // library skins are named by SHA-256, so they never match and still reach Go).
 const DEFAULTS = '../internal/skins/defaults/';
+// The launcher's pictures and fonts live in src/assets, shared with Go.
+const ASSETS = '../assets/';
 const DEFAULT_SKIN = /^\/tex\/(?:default|skin)\/(slim|wide)-(alex|ari|efe|kai|makena|noor|steve|sunny|zuri)\.png$/;
 
 // Go serves pictures on /tex/ and /img/ (internal/imagesrv). Under `wails dev` the
@@ -34,7 +36,7 @@ const goImages: Plugin = {
 
 export default defineConfig({
   plugins: [svelte(), goImages],
-  resolve: { alias: { $lib: '/src/lib' } },
+  resolve: { alias: { $lib: '/src/lib', $assets: new URL(ASSETS, import.meta.url).pathname } },
   base: './',
   build: {
     outDir: 'dist',
@@ -44,6 +46,6 @@ export default defineConfig({
     cssCodeSplit: false,
     assetsInlineLimit: 0,
   },
-  server: { strictPort: true, port: 5173, fs: { allow: ['.', DEFAULTS] } },
+  server: { strictPort: true, port: 5173, fs: { allow: ['.', DEFAULTS, ASSETS] } },
   test: { environment: 'node', include: ['src/**/*.test.ts'] },
 });

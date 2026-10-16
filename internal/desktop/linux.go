@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"quartz/assets"
 	"quartz/internal/brand"
 	"quartz/internal/core/fsx"
 	"quartz/internal/intent"
@@ -113,10 +114,10 @@ var iconChanged = []string{"--session", "--type=signal", "/KIconLoader", "org.kd
 // so an icon in a size folder made after it started stays missing (the
 // theme's placeholder in the taskbar) until it is told to look again.
 func (l linux) writeIcon() error {
-	if old, err := fsx.ReadCapped(l.iconPath(), int64(len(Icon))+1); err == nil && bytes.Equal(old, Icon) {
+	if old, err := fsx.ReadCapped(l.iconPath(), int64(len(assets.Icon))+1); err == nil && bytes.Equal(old, assets.Icon) {
 		return nil
 	}
-	if err := writeFile(l.iconPath(), Icon); err != nil {
+	if err := writeFile(l.iconPath(), assets.Icon); err != nil {
 		return err
 	}
 	_ = l.run("dbus-send", iconChanged...)

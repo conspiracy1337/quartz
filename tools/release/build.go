@@ -137,6 +137,9 @@ func build(ctx context.Context, version string, which []string, allowMissing boo
 	if err := os.MkdirAll("dist", 0o750); err != nil {
 		return err
 	}
+	if err := stageIcons(); err != nil {
+		return err
+	}
 	frontendBuilt := false
 	for _, w := range which {
 		t, ok := targets[w]
@@ -179,6 +182,26 @@ func wailsArgs(w, flags, file string, skipFrontend bool) []string {
 		args = append(args, "-s") // the frontend is the same for every target
 	}
 	return args
+}
+
+// stageIcons puts assets/appicon.png where wails build reads it. Without
+// it Wails quietly writes its own default icon there. The Windows .ico files
+// are removed so Wails makes them again from the staged icon (it only makes
+// missing ones).
+func stageIcons() error {
+	b, err := os.ReadFile(filepath.Join("assets", "appicon.png"))
+	if err != nil {
+		return fmt.Errorf("run this from the repository root: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join("build", "appicon.png"), b, 0o644); err != nil { //nolint:gosec // build input
+		return err
+	}
+	for _, ico := range []string{"icon.ico", "appicon.ico"} {
+		if err := os.Remove(filepath.Join("build", "windows", ico)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 // runTool runs a fixed build tool with our own arguments, stopped by ctx.

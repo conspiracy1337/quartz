@@ -1,5 +1,8 @@
 # Build output
 build/bin/
+# Staged from assets/ by tools/release; Wails makes the .ico files from it
+build/appicon.png
+build/windows/*.ico
 frontend/dist/
 frontend/package.json.md5
 
