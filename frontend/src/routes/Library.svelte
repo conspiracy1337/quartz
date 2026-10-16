@@ -43,8 +43,8 @@
   <div class="page">
     <div style="display: flex; align-items: center; gap: 8px; height: 32px">
       <h1 class="h1" style="margin-right: auto">Library</h1>
-      <a href={href({ name: 'import' })} class="btn">Import</a>
-      <a href={href({ name: 'new-instance' })} class="btn btn-accent"><Icon name="plus" size={14} sw={2} />New instance</a>
+      <!-- As wide as the Sort select below, so both right-aligned controls line up. -->
+      <a href={href({ name: 'new-instance' })} class="btn btn-accent" style="width: 150px"><Icon name="plus" size={14} sw={2} />New instance</a>
     </div>
     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
       <SearchField bind:value={search} label="Search instances" placeholder={searchIn('instances', list.data?.length)} style="flex: 0 1 260px" />
@@ -65,7 +65,11 @@
               <span class="small faint tnum" style="display: flex; justify-content: space-between"><span>{agoShort(r.lastPlayed)}</span><span>{hours(r.playtimeMin)}</span></span>
             </div>
             <a class="icard-hit" href={href({ name: 'instance', id: r.id, tab: 'overview' })} aria-label="Open {r.name}"></a>
-            <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={(e) => (session.running[r.id] ? session.openLaunchAs(r.id, e) : session.play(r.id))}><Icon name="play" size={14} /></button>
+            {#if session.running[r.id]}
+              <button class="btn btn-stop btn-icon play live" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Stop {r.name}" onclick={() => session.stop(r.id)}><Icon name="stop" size={12} /></button>
+            {:else}
+              <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={() => session.play(r.id)}><Icon name="play" size={14} /></button>
+            {/if}
           </div>
         {:else}
           {#if list.data.length}
@@ -100,5 +104,5 @@
   .icard-hit{position:absolute;inset:0;z-index:2;border-radius:10px}
   .icard-hit:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   .icard .play{z-index:3;position:absolute;right:10px;top:52px;opacity:0;transform:translateY(4px);transition:opacity 140ms ease,transform 160ms var(--ease)}
-  .icard:hover .play,.icard:focus-within .play{opacity:1;transform:none}
+  .icard:hover .play,.icard:focus-within .play,.icard .play.live{opacity:1;transform:none}
 </style>

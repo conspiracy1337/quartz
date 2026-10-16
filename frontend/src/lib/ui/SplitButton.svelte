@@ -38,7 +38,10 @@
 </span>
 
 <style>
-  .split{display:inline-flex}
+  /* Pressing either half presses the whole button, so the two halves never pull apart. */
+  .split{display:inline-flex;transition:transform 140ms var(--ease)}
+  .split:has(> .btn:active:not(:disabled)){transform:scale(.97)}
+  .split > .btn:active{transform:none}
   .split > :first-child{border-radius:6px 0 0 6px}
   .split > :last-child{border-radius:0 6px 6px 0;padding:0}
   .split-sm > :last-child{width:24px}

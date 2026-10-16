@@ -92,6 +92,12 @@ a{color:inherit}
 .btn-danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
 .btn-danger:hover{background:color-mix(in srgb,var(--danger) 10%,transparent)}
 .btn-block{width:100%}
+/* One width for a card's row of action buttons (Repair, Move, Delete), so they line up whatever the label. */
+.btn-w{width:84px}
+/* Icon-only control with no box: refresh, check for updates, the instance folder. */
+.btn-bare{width:28px;height:28px;flex:0 0 28px;display:inline-grid;place-items:center;padding:0;border:0;border-radius:4px;background:none;color:var(--faint);cursor:pointer;transition:color 120ms ease}
+.btn-bare:hover{color:var(--text)}
+.btn-bare:disabled{opacity:.45;cursor:default;color:var(--faint)}
 
 /* ---------- inputs ---------- */
 .field{display:flex;flex-direction:column;gap:6px;min-width:0}
@@ -181,6 +187,9 @@ button.chip:not(.on):hover{color:var(--text)}
 .kv > :nth-child(odd){color:var(--faint)}
 .setting{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:24px;min-height:56px;padding:10px 16px}
 .setting-title{font-weight:500}
+/* A row that opens a sub-page: its control, then a chevron. */
+.set-go{display:flex;align-items:center;justify-content:flex-end;gap:10px;color:var(--faint)}
+a.setting:hover .set-go{color:var(--text)}
 .setting-desc{font-size:12px;line-height:16px;color:var(--faint);margin-top:2px}
 /* Settings rows: every control sits in one 300px column. Pickers, selects, inputs and sliders fill it, so they
    line up row to row; toggles, buttons and badges keep their size and sit on its right edge. */

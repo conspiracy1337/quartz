@@ -4,7 +4,7 @@
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import { move, repair, trash } from '$lib/instanceActions';
-  import { capitalize, plural } from '$lib/format';
+  import { capitalize, gb, gbField, plural } from '$lib/format';
   import { suggestMemoryGb } from '$lib/look';
   import PromptDialog from '$lib/ui/PromptDialog.svelte';
   import { prefs } from '$lib/prefs.svelte';
@@ -40,7 +40,7 @@
   const groups = query(() => api.instances.groups());
   const javaOptions = $derived([{ value: '', label: `Automatic (${i.javaAuto})` }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
   const suggestGb = $derived(prefs.value?.java.suggestMemory ? suggestMemoryGb(i.counts.mods, info.data?.memoryMb ?? 0) : 0);
-  const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${Math.round(info.data.memoryMb / 1024)} GB.${suggestGb ? ` ${suggestGb} GB suits ${plural(i.counts.mods, 'mod')}.` : ''}` : undefined);
+  const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${gb(info.data.memoryMb)} GB.${suggestGb ? ` ${suggestGb} GB suits ${plural(i.counts.mods, 'mod')}.` : ''}` : undefined);
   // The account this instance always plays as (Prism, Pandora); one that was removed stays listed.
   const accounts = query(() => api.accounts.list());
   const accountOptions = $derived.by(() => {
@@ -126,7 +126,7 @@
       <div class="card" class:inherited={!st.java.override}>
         <Setting title="Java runtime" desc="Automatic picks the version this Minecraft needs."><Select value={java.javaPath} options={javaOptions} label="Java runtime" onchange={(v) => editJava(() => (st.java.javaPath = v))} /></Setting>
         <div class="divider"></div>
-        <Setting title="Memory" desc={memoryDesc}><span style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"><label class="input"><span class="sr">Minimum</span><input value={java.memoryMinMb} class="tnum" inputmode="numeric" onchange={(e) => { const v = num(e.currentTarget.value); editJava(() => (st.java.memoryMinMb = v)); }} /><span class="suffix">MB min</span></label><label class="input"><span class="sr">Maximum</span><input value={java.memoryMaxMb} class="tnum" inputmode="numeric" onchange={(e) => { const v = num(e.currentTarget.value); editJava(() => (st.java.memoryMaxMb = v)); }} /><span class="suffix">MB max</span></label></span></Setting>
+        <Setting title="Memory" desc={memoryDesc}><span style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"><label class="input"><span class="sr">Minimum</span><input value={gb(java.memoryMinMb)} class="tnum" inputmode="numeric" onchange={(e) => { const v = gbField(e.currentTarget.value); editJava(() => (st.java.memoryMinMb = v)); }} /><span class="suffix">GB min</span></label><label class="input"><span class="sr">Maximum</span><input value={gb(java.memoryMaxMb)} class="tnum" inputmode="numeric" onchange={(e) => { const v = gbField(e.currentTarget.value); editJava(() => (st.java.memoryMaxMb = v)); }} /><span class="suffix">GB max</span></label></span></Setting>
         <div class="divider"></div>
         <div style="padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 6px"><span class="setting-title">JVM arguments</span><textarea class="textarea" rows="2" aria-label="JVM arguments" value={java.jvmArgs} onchange={(e) => { const v = e.currentTarget.value; editJava(() => (st.java.jvmArgs = v)); }}></textarea></div>
       </div>
@@ -187,11 +187,11 @@
     <section class="sec" aria-label="Advanced">
       <div class="sec-h"><h2 class="h3">Advanced</h2><a href={sub('commands')} class="btn btn-sm btn-ghost">Commands and variables</a></div>
       <div class="card">
-        <Setting title="Repair game files" desc="Re-checks libraries, assets and the loader against their hashes."><button class="btn btn-sm" onclick={() => repair(i)}>Repair</button></Setting>
+        <Setting title="Repair game files" desc="Re-checks libraries, assets and the loader against their hashes."><button class="btn btn-sm btn-w" onclick={() => repair(i)}>Repair</button></Setting>
         <div class="divider"></div>
-        <Setting title="Game folder" desc={i.folder}><span style="display: flex; gap: 6px; justify-content: flex-end">{#if i.moved}<button class="btn btn-sm btn-ghost" onclick={() => move(i, true)}>Default location</button>{/if}<button class="btn btn-sm" onclick={() => move(i)}>Move</button></span></Setting>
+        <Setting title="Game folder" desc={i.folder}><span style="display: flex; gap: 6px; justify-content: flex-end">{#if i.moved}<button class="btn btn-sm btn-ghost" onclick={() => move(i, true)}>Default location</button>{/if}<button class="btn btn-sm btn-w" onclick={() => move(i)}>Move</button></span></Setting>
         <div class="divider"></div>
-        <Setting title="Move to trash" desc="You can undo this for 30 days."><button class="btn btn-sm btn-danger" onclick={() => trash(i)}>Move to trash</button></Setting>
+        <Setting title="Delete instance" desc="It goes to the trash, where you can restore it for 30 days."><button class="btn btn-sm btn-w btn-danger" onclick={() => trash(i)}>Delete</button></Setting>
       </div>
     </section>
   </div>

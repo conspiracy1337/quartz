@@ -20,7 +20,7 @@ export const icons = {
   'arrow-left': s('<path d="M19 12H5M11 6l-6 6 6 6"/>'),
   'arrow-right': s('<path d="M5 12h14M13 6l6 6-6 6"/>'),
   'arrow-up': s('<path d="M12 19V5M6 11l6-6 6 6"/>'),
-  more: f('<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'),
+  more: f('<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>'),
   play: f('<path d="M7 4v16l13-8z"/>'),
   'play-wide': f('<path d="M6 3.5v17l14-8.5z"/>'),
   stop: f('<rect x="5" y="5" width="14" height="14" rx="2"/>'),

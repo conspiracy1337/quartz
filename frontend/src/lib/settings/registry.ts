@@ -2,6 +2,7 @@
 // this list and the settings search filters it, so a setting can never appear in two
 // places with two different labels or behaviours.
 import { settingsApi, type AppInfo, type Settings } from '../api/system';
+import { gb, gbField } from '../format';
 import type { Route, SettingsTab } from '../router.svelte';
 
 type Opt = { value: string; label: string };
@@ -76,9 +77,9 @@ export const registry: SettingDef[] = [
 
   { id: 'autoJava', tab: 'java', group: 'Java', title: 'Pick Java automatically', desc: 'Uses the version each Minecraft release needs.', control: { kind: 'toggle', get: (s) => s.java.autoPick, set: (s, v) => (s.java.autoPick = v) } },
   { id: 'javaVendor', tab: 'java', group: 'Java', title: 'Download missing versions', desc: 'From', control: { kind: 'select', options: [{ value: 'temurin', label: 'Eclipse Temurin' }, { value: 'zulu', label: 'Azul Zulu' }, { value: 'mojang', label: 'Mojang' }], get: (s) => s.java.downloadVendor, set: (s, v) => (s.java.downloadVendor = v) } },
-  { id: 'memory', tab: 'java', group: 'Java', title: 'Default memory', desc: (info) => (info?.memoryMb ? `${Math.round(info.memoryMb / 1024)} GB installed. ` : '') + 'Instances can override.', control: { kind: 'inputs', fields: [
-    { label: 'Minimum', numeric: true, suffix: 'MB min', get: (s) => s.java.memoryMinMb, set: (s, v) => (s.java.memoryMinMb = num(v)) },
-    { label: 'Maximum', numeric: true, suffix: 'MB max', get: (s) => s.java.memoryMaxMb, set: (s, v) => (s.java.memoryMaxMb = num(v)) },
+  { id: 'memory', tab: 'java', group: 'Java', title: 'Default memory', desc: (info) => (info?.memoryMb ? `${gb(info.memoryMb)} GB installed. ` : '') + 'Instances can override.', control: { kind: 'inputs', fields: [
+    { label: 'Minimum', numeric: true, suffix: 'GB min', get: (s) => gb(s.java.memoryMinMb), set: (s, v) => (s.java.memoryMinMb = gbField(v)) },
+    { label: 'Maximum', numeric: true, suffix: 'GB max', get: (s) => gb(s.java.memoryMaxMb), set: (s, v) => (s.java.memoryMaxMb = gbField(v)) },
   ] } },
   { id: 'jvmArgs', tab: 'java', group: 'Java', title: 'Default JVM arguments', control: { kind: 'textarea', rows: 2, get: (s) => s.java.jvmArgs, set: (s, v) => (s.java.jvmArgs = v) } },
   { id: 'warnLowMemory', tab: 'java', group: 'Java', title: 'Warn when free memory is low', desc: 'Checks before each launch.', control: { kind: 'toggle', get: (s) => s.java.warnLowMemory, set: (s, v) => (s.java.warnLowMemory = v) } },

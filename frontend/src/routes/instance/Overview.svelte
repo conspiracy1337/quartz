@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { ActivityKind, Instance, SyncEntry } from '$lib/api/types';
-  import { Day, fullDate, sentenceList } from '$lib/format';
+  import { Day, fullDate, gb, plural } from '$lib/format';
   import { loaderLabel } from '$lib/labels';
   import { query } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
@@ -30,18 +30,14 @@
   const FILTERS = [{ value: 'all', label: 'All' }, { value: 'session', label: 'Sessions' }, { value: 'change', label: 'Changes' }] as const;
   const TONES = { muted: 'var(--muted)', accent: 'var(--accent)', danger: 'var(--danger)' } as const;
   const events = $derived((activity.data ?? []).filter((e) => filter === 'all' || e.kind === filter));
-  const gb = (mb: number) => Math.round(mb / 1024);
   const contentLine = $derived(`${i.counts.mods} mods, ${i.counts.resourcepacks} packs, ${i.counts.worlds} worlds`);
-  // What this instance shares, by the Syncing page's names (the shared keybinds first).
+  // How many shared targets this instance joins that are on, the shared keybinds counting as one.
   const sync = query(() => api.sync.groups());
-  const syncText = $derived.by(() => {
+  const syncCount = $derived.by(() => {
     const g = sync.data;
-    if (!g) return '';
-    // Built-in targets read as words ("server list"); mod names and custom paths keep their case.
-    const joined = (l: SyncEntry[], lower: boolean) => l.filter((t) => t.enabled && i.sync.join.includes(t.id)).map((t) => (lower ? t.name.toLowerCase() : t.name || t.path));
-    const names = [...joined(g.files, true), ...joined(g.folders, true), ...joined(g.mods, false), ...joined(g.custom, false)];
-    if (i.sync.keys) names.unshift('keybinds');
-    return names.length ? `${sentenceList(names)}.` : 'Nothing shared.';
+    if (!g) return undefined;
+    const joined = (l: SyncEntry[]) => l.filter((t) => t.enabled && i.sync.join.includes(t.id)).length;
+    return joined(g.files) + joined(g.folders) + joined(g.mods) + joined(g.custom) + (i.sync.keys ? 1 : 0);
   });
 </script>
 
@@ -78,7 +74,7 @@
       </div>
     </section>
     <section class="card ov-card" aria-label="Updates" style="grid-area: updates">
-      <div class="card-head"><h2 class="h3">Updates <span class="count">{updates.data?.length ?? ''}</span></h2><a href={href({ name: 'instance', id: i.id, tab: 'mods', sub: 'updates' })} class="btn btn-sm btn-accent">Review</a></div>
+      <div class="card-head"><h2 class="h3">Updates <span class="count">{updates.data?.length ?? ''}</span></h2>{#if updates.data?.length}<a href={href({ name: 'instance', id: i.id, tab: 'mods', sub: 'updates' })} class="btn btn-sm btn-accent">Review</a>{/if}</div>
       <div class="ov-body">
         {#each updates.data ?? [] as u (u.name)}
           <div class="up"><Tile art={u.art} size="sm" /><span class="trunc">{u.name}</span><span class="mono muted">{u.from} to {u.to}</span></div>
@@ -93,7 +89,7 @@
       <div class="ov-body">
         <Setting title="Sandbox" desc={i.sandboxed ? "Mods only reach this instance's folder." : 'Off. Mods can reach your files.'} oneLine href={href({ name: 'instance', id: i.id, tab: 'settings', sub: 'sandbox' })}><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
         <div class="divider"></div>
-        <Setting title="Syncing" desc={syncText} oneLine href={href({ name: 'syncing' })}><span class="badge">{i.syncTargets} targets</span></Setting>
+        <Setting title="Syncing" desc={syncCount === undefined ? '' : syncCount ? `Syncing ${plural(syncCount, 'target')}` : 'Nothing shared.'} oneLine href={href({ name: 'syncing' })}><span class="badge badge-info">{syncCount ? 'On' : 'Off'}</span></Setting>
         <div class="divider"></div>
         <Setting title="Discord status" desc="Show this instance while you play." oneLine><Toggle on={i.discordStatus} label="Discord status" onchange={setDiscord} /></Setting>
       </div>

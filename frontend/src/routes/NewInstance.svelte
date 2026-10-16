@@ -1,7 +1,7 @@
 <script lang="ts">
   import { NEW_INSTANCE_SHARES } from '$lib/shares';
   import { api } from '$lib/api';
-  import { bytes } from '$lib/format';
+  import { bytes, gb } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import VersionPicker from '$lib/components/VersionPicker.svelte';
   import { revs } from '$lib/revs.svelte';
@@ -66,7 +66,7 @@
   const download = $derived(estimate.data === undefined ? '' : estimate.data > 0 ? `Downloads about ${bytes(estimate.data)} the first time you play.` : 'Everything it needs is already downloaded.');
   const initial = $derived(art.initial || name.trim().charAt(0).toUpperCase());
   const groupOptions = $derived([{ value: 'none', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
-  const memory = $derived(prefs.value ? `Automatic, ${Math.round(prefs.value.java.memoryMaxMb / 1024)} GB` : 'Automatic');
+  const memory = $derived(prefs.value ? `Automatic, ${gb(prefs.value.java.memoryMaxMb)} GB` : 'Automatic');
 
   function pickGroup(v: string) {
     if (v === '\u0000new') {
