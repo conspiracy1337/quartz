@@ -1407,7 +1407,6 @@ Gathered here from the sections above for quick review.
 - **Tests:**
   - Go integration tests (`-tags integration`, network) cover browse, content, game, home, host, Java, launchers and loaders. [internal/integration/](internal/integration/)
   - About 160 Go unit test files and the vitest suite.
-- **Embedded frontend:** `pnpm run build` gzips the bundle's text files after Vite (`name.gz` in place of `name`, [gzip-dist.mjs](frontend/gzip-dist.mjs)), which keeps about 400 KB out of the binary. [core/gzfs](internal/core/gzfs/gzfs.go) serves them to Wails under their own names, inflated once on first open; fonts and pictures stay as they are.
 - **Design parity:** Playwright screenshots of the design boards and the mock app, ranked by pixel and text difference. [tools/parity/](tools/parity/)
 - **Release tool:** [tools/release/](tools/release/)
   - `keygen`: a minisign key sealed with scrypt + XChaCha20-Poly1305.
