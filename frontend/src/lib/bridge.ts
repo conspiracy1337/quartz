@@ -1,5 +1,7 @@
 // The Wails bridge exists only inside the desktop window. In a plain browser (vite dev,
 // Playwright against vite, unit tests) it is absent and callers use their fallback.
+// A production build only ever runs in the window, so there the check is constant and
+// the bundler drops every preview fallback with its fixtures.
 import { EventsOn } from './wailsjs/runtime/runtime';
 
 declare global {
@@ -9,7 +11,14 @@ declare global {
   }
 }
 
-export const hasBridge = (): boolean => typeof window !== 'undefined' && !!window.go && !!window.runtime;
+export const hasBridge = (): boolean => !import.meta.env.DEV || (typeof window !== 'undefined' && !!window.go && !!window.runtime);
+
+/**
+ * A preview-only object (a fixture-backed stand-in for a Go service). A production build
+ * gets an empty object instead, so the bundler drops the stand-in and its fixtures; its
+ * methods are only ever reached through bridged()'s fallback, which production never takes.
+ */
+export const previewStandIn = <T extends object>(make: () => T): T => (import.meta.env.DEV ? make() : ({} as T));
 
 /** Subscribes to a Go event; returns the unsubscribe function. A no-op without the bridge. */
 export function onEvent<T>(topic: string, cb: (payload: T) => void): () => void {
@@ -131,5 +140,6 @@ export function bridged<GA extends unknown[], G, A extends unknown[], R>(
   fallback: ((...a: A) => R) & Fit<A, GA, R, G>,
 ): (...a: A) => Promise<R> {
   const call = go as unknown as (...a: A) => Promise<R>;
+  if (!import.meta.env.DEV) return call;
   return (...a: A) => (hasBridge() ? call(...a) : preview(fallback(...a)));
 }

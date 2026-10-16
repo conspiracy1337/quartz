@@ -1,10 +1,10 @@
 // The job engine (Go's tasks.Engine): live snapshot, 24-hour history and controls.
-import { bridged } from '../bridge';
+import { bridged, previewStandIn } from '../bridge';
 import * as Go from '../wailsjs/go/api/Downloads';
 import { MockTasks } from './mock/downloads';
 import type { Job, TaskSnapshot } from './types';
 
-const mock = new MockTasks();
+const mock = previewStandIn(() => new MockTasks());
 
 export const downloadsApi = {
   snapshot: bridged(Go.Snapshot, (): TaskSnapshot => mock.snapshot()),

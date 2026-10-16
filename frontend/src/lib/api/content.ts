@@ -1,6 +1,6 @@
 // Mods, resource packs, shaders and data packs: Go's content service. The browser
 // preview serves the design's fixtures and keeps its edits in memory.
-import { bridged } from '../bridge';
+import { bridged, previewStandIn } from '../bridge';
 import { artOf } from '../look';
 import { revs } from '../revs.svelte';
 import * as Go from '../wailsjs/go/api/Content';
@@ -108,7 +108,7 @@ class MockContent {
   changelog = (_check: string, id: string): ChangelogVersion[] => misc.modUpdates.find((u) => u.id === id)?.versions ?? [];
 }
 
-const mock = new MockContent();
+const mock = previewStandIn(() => new MockContent());
 
 const list = bridged((id: string, kind: ContentKind) => Go.List(id, kind).then((rows) => rows.map(toItem)), mock.list);
 const check = bridged((id: string, kind: ContentKind) => Go.CheckUpdates(id, kind).then(toReview), mock.check);
