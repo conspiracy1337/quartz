@@ -11,6 +11,8 @@
   /* layout rhythm: one page gutter, one gap between cards, one inset inside cards */
   --gutter:24px; --gap:16px; --inset:16px; --alert-h:40px; --strip-h:72px;
   --ease:cubic-bezier(.23,1,.32,1);
+  /* Brand colours: the platforms' logos and each mod loader's mark. */
+  --modrinth:#1bd96a; --curseforge:#f16436; --fabric:#dbc18e; --quilt:#b58cf5; --forge:#9fb1c8; --neoforge:#e68c37;
   --font:'Geist',system-ui,sans-serif; --mono:'Geist Mono',ui-monospace,monospace;
 }
 }

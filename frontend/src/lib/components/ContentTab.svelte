@@ -50,7 +50,8 @@
     servers: { noun: 'servers', secondary: 'Refresh', primary: 'Add server', toggles: false, projects: false,
       chips: () => [all, { label: 'Online', test: (c) => c.online === true }] },
   };
-  const SOURCES: Record<Source, [string, string]> = { modrinth: ['M', 'Modrinth'], curseforge: ['C', 'CurseForge'], file: ['F', 'Added from file'] };
+  // Where a row came from: the platform's logo, or a file icon.
+  const SOURCES: Record<Source, ['modrinth' | 'curseforge' | 'file', string]> = { modrinth: ['modrinth', 'Modrinth'], curseforge: ['curseforge', 'CurseForge'], file: ['file', 'Added from file'] };
   const SKELETON: [string, string][] = [['42%', '22%'], ['30%', '24%'], ['48%', '18%'], ['36%', '20%'], ['56%', '30%'], ['40%', '16%'], ['44%', '26%'], ['32%', '20%']];
 
   const cfg = $derived(CONFIG[kind]);
@@ -449,7 +450,7 @@
             {#if c.action}<button class="btn btn-sm" onclick={() => rowAction(c)}>{c.action}</button>{/if}
           </span>
           <span class="mono muted trunc">{c.meta}</span>
-          <span class="opt">{#if c.source}<span class="src" title={SOURCES[c.source][1]}>{SOURCES[c.source][0]}</span>{/if}</span>
+          <span class="opt">{#if c.source}<span class="src" title={SOURCES[c.source][1]}><Icon name={SOURCES[c.source][0]} size={16} /></span>{/if}</span>
           <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {c.name}" aria-haspopup="menu" disabled={!hasMenu} onclick={(e) => openMenu(e, c)}><Icon name="more" size={14} /></button>
         </div>
       {:else}
@@ -557,7 +558,7 @@
   .crow{grid-template-columns:30px 32px minmax(0,1fr) 112px 104px 28px 28px}
   @media (max-width:1100px){.crow{grid-template-columns:30px 32px minmax(0,1fr) 112px 96px 28px}.crow .opt{display:none}}
   .c-stat{display:flex;justify-content:flex-end;gap:6px;min-width:0}
-  .src{width:20px;height:20px;border-radius:4px;display:grid;place-items:center;font-family:var(--mono);font-size:10px;font-weight:500;background:var(--raise);color:var(--muted)}
+  .src{width:20px;height:20px;display:grid;place-items:center;color:var(--faint)}
   .media{width:32px;height:32px;border-radius:6px;display:grid;place-items:center;font-weight:600;font-size:13px;color:#0a0a0b}
   /* The selection checkbox sits over the icon: shown on hover or focus, and on every row once something is selected. */
   .pickcell{position:relative;width:32px;height:32px}

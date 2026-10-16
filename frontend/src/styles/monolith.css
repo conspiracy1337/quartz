@@ -145,6 +145,7 @@ button.tab.on{border-bottom-color:var(--text)}
 .prow.on{background:var(--raise);box-shadow:inset 2px 0 0 var(--accent)}
 .prow:disabled{opacity:.45;cursor:default;background:transparent}
 .prow.min{grid-template-columns:16px minmax(0,1fr) 96px}
+.prow.ic{grid-template-columns:18px minmax(0,1fr) auto}
 
 /* ---------- chips and badges ---------- */
 .chip{height:24px;padding:0 9px;border-radius:12px;border:1px solid var(--line-2);display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap;background:transparent}
