@@ -9,6 +9,7 @@ import (
 
 	"quartz/internal/app"
 	"quartz/internal/cli"
+	"quartz/internal/core/gzfs"
 	"quartz/internal/core/paths"
 	"quartz/internal/core/procx"
 	"quartz/internal/intent"
@@ -47,5 +48,5 @@ func main() {
 	os.Args = append(os.Args[:1], args.Forward()...)
 	dist, err := fs.Sub(assets, "frontend/dist")
 	app.ExitOnError(err)
-	app.ExitOnError(app.Run(app.Options{DataDir: args.Dir, Assets: dist, Args: args}))
+	app.ExitOnError(app.Run(app.Options{DataDir: args.Dir, Assets: gzfs.New(dist), Args: args}))
 }

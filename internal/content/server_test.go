@@ -36,18 +36,28 @@ func TestServerMods(t *testing.T) {
 		t.Fatal("Zoomify isn't known to be client-only before Modrinth is asked")
 	}
 
-	set, err := e.svc.ServerMods(context.Background(), e.id)
+	mods, err := e.svc.ServerMods(context.Background(), e.id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"Old Client Mod", "Sodium", "Zoomify"}; !reflect.DeepEqual(set.ClientOnly, want) {
-		t.Fatalf("client-only %v, want %v", set.ClientOnly, want)
+	var names, clientOnly []string
+	for _, m := range mods {
+		names = append(names, m.Name)
+		if m.ClientOnly {
+			clientOnly = append(clientOnly, m.Name)
+		}
 	}
-	if set.Total != 5 || len(set.Keep) != 2 || set.Keep[0].File != "ferrite.jar" || set.Keep[1].File != "lithium.jar" {
-		t.Fatalf("set %+v", set)
+	if want := []string{"FerriteCore", "Lithium", "Old Client Mod", "Sodium", "Zoomify"}; !reflect.DeepEqual(names, want) {
+		t.Fatalf("enabled mods by name %v, want %v", names, want)
 	}
-	if _, err := os.Stat(e.svc.d.Store.Path(set.Keep[0].SHA1)); err != nil {
-		t.Fatalf("kept mods are blobs in the store: %v", err)
+	if want := []string{"Old Client Mod", "Sodium", "Zoomify"}; !reflect.DeepEqual(clientOnly, want) {
+		t.Fatalf("client-only %v, want %v", clientOnly, want)
+	}
+	if mods[0].File != "ferrite.jar" || mods[0].Key != "id:ferritecore" {
+		t.Fatalf("a mod is keyed by its own id: %+v", mods[0])
+	}
+	if _, err := os.Stat(e.svc.d.Store.Path(mods[0].SHA1)); err != nil {
+		t.Fatalf("mods are blobs in the store: %v", err)
 	}
 	if k, _ := e.svc.cat.get(sha["zoomify.jar"]); k.Modrinth.ServerSide != "unsupported" {
 		t.Fatal("Modrinth's answer is kept in the catalog")

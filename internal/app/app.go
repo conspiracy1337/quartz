@@ -444,7 +444,7 @@ func (a *app) buildTasks() error {
 		Instances: a.instances, Installer: a.installer, Java: a.java, Tasks: eng, Content: a.content, Store: a.store,
 		Worlds: a.worlds, Accounts: a.accounts.Store(), Settings: a.settings, Bus: a.bus, Redactor: a.redactor, Log: a.log,
 		WorldOpen: func(dir string) bool { return a.launcher.WorldOpen(dir) },
-		Sandbox:   a.sandbox, StoreRead: storeRead,
+		Sandbox:   a.sandbox, StoreRead: storeRead, Icons: a.icons,
 	})
 	a.buildBrowse(dl)
 	return nil

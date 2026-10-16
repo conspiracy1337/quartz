@@ -22,6 +22,10 @@ import (
 // level.dat each time (in-game changes are saved there). A world with
 // cheats on makes its host an operator.
 
+// namedRules is a version whose server.properties names its rules (older
+// ones write numbers), for reading a world's rules to show them.
+const namedRules = "1.14"
+
 var (
 	difficulties = []string{"peaceful", "easy", "normal", "hard"}
 	gameModes    = []string{"survival", "creative", "adventure", "spectator"}
@@ -34,7 +38,7 @@ func worldRules(world, mc string) (map[string]string, bool) {
 	if data == nil {
 		return nil, false
 	}
-	named := version.Compare(mc, "1.14") >= 0 // older servers read numbers only
+	named := version.Compare(mc, namedRules) >= 0 // older servers read numbers only
 	value := func(names []string, t *nbt.Tag) (string, bool) {
 		n := int64(-1)
 		switch {

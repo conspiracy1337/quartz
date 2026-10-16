@@ -9,6 +9,7 @@ import (
 
 	"quartz/internal/instance"
 	"quartz/internal/launchers"
+	"quartz/internal/modpack"
 )
 
 // A Prism instance (Fabric, with a mod, a world and playtime) is brought
@@ -40,7 +41,7 @@ func TestImportFromPrism(t *testing.T) {
 	src := found[0].Instances[0]
 	for _, inPlace := range []bool{false, true} {
 		p := src.Pack(found[0], inPlace)
-		job, err := svc.Install(h.ctx(), svc.Stage(p), p.Name, instance.ArtFor(p.Name), nil)
+		job, err := svc.Install(h.ctx(), svc.Stage(p), p.Name, modpack.Look{Art: instance.ArtFor(p.Name), PackIcon: true}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

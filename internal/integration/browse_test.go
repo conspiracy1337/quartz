@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"quartz/internal/browse"
 	"quartz/internal/brand"
+	"quartz/internal/browse"
 	"quartz/internal/content"
 	"quartz/internal/content/store"
 	"quartz/internal/core/download"
@@ -166,7 +166,7 @@ func TestModrinthPackInstallAndUpdate(t *testing.T) {
 		t.Fatalf("pack %s %s: %+v %v", p.Name, p.Version, st, err)
 	}
 	t.Logf("%s %s for %s: %d mods, %d override files", p.Name, p.Version, p.Minecraft, st.Mods, st.Files)
-	job, err := svc.Install(h.ctx(), svc.Stage(p), "FO old", instance.Art{Background: "#3ecf8e", Initial: "F"}, nil)
+	job, err := svc.Install(h.ctx(), svc.Stage(p), "FO old", modpack.Look{Art: instance.Art{Background: "#3ecf8e", Initial: "F"}, PackIcon: true}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

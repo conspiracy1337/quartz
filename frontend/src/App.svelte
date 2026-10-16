@@ -133,7 +133,7 @@
   <!-- Downloads shows the launch's downloads in full, so the panel would only cover them. -->
   {#if session.launch && route.name !== 'downloads'}<LaunchPanel instanceId={session.launch.instanceId} accountId={session.launch.accountId} stage={session.launch.stage} details={session.launch.details} pct={session.launch.pct} />{/if}
   <!-- The server's panel shows on its instance's pages; the header's address chip hides it. -->
-  {#if session.hosting && session.hostPanel && route.name === 'instance' && route.id === session.hosting.instanceId}<HostPanel host={session.hosting} />{/if}
+  {#if session.hostShown && session.hostPanel && route.name === 'instance' && route.id === session.hostShown.instanceId}<HostPanel host={session.hostShown} />{/if}
   {#if session.toast}{#key session.toastSeq}<Toast {...session.toast} />{/key}{/if}
   {#if session.instanceMenu}{#key session.instanceMenu}<InstanceMenu {...session.instanceMenu} />{/key}{/if}
 

@@ -1,11 +1,11 @@
 <script lang="ts">
-  /** A server's ping: milliseconds, then four bars that fill as it gets faster. */
-  interface Props { ms: number | undefined }
-  let { ms }: Props = $props();
+  /** A server's ping: milliseconds, then four bars that fill as it gets faster (`bare`: bars only). */
+  interface Props { ms: number | undefined; bare?: boolean }
+  let { ms, bare = false }: Props = $props();
   const level = $derived(ms === undefined ? '' : ms < 30 ? 'p4' : ms < 80 ? 'p3' : ms < 250 ? 'p2' : 'p1');
 </script>
 
-<span class="s-ping"><span class="s-ms">{ms !== undefined ? `${ms} ms` : ''}</span><span class="ping {level}" aria-hidden="true"><i style="height: 4px"></i><i style="height: 6px"></i><i style="height: 8px"></i><i style="height: 11px"></i></span></span>
+<span class="s-ping">{#if !bare}<span class="s-ms">{ms !== undefined ? `${ms} ms` : ''}</span>{/if}<span class="ping {level}" aria-hidden="true"><i style="height: 4px"></i><i style="height: 6px"></i><i style="height: 8px"></i><i style="height: 11px"></i></span></span>
 
 <style>
   .s-ping{display:flex;align-items:center;justify-content:flex-end;gap:8px}

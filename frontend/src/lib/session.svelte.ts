@@ -64,6 +64,8 @@ class Session {
   hosting = $state<HostState | null>(null);
   /** Whether its panel shows (the header's address chip toggles it). */
   hostPanel = $state(true);
+  /** The panel's server after it stopped (see hostShown). */
+  hostStopped = $state<HostState | null>(null);
   toast = $state<Toast | null>(null);
   /** An instance's menu (right-click, or the header's ⋮), at a window position. */
   instanceMenu = $state<{ instanceId: string; x: number; y: number } | null>(null);
@@ -203,16 +205,39 @@ class Session {
     return () => offs.forEach((off) => off());
   }
 
+  /** The server the panel shows: the running one, else the one that just stopped, which
+      stays (with Start) until the panel is closed. */
+  get hostShown(): HostState | null {
+    return this.hosting ?? this.hostStopped;
+  }
+
+  /** Closes the server panel; a stopped server's panel goes for good. */
+  closeHostPanel() {
+    this.hostPanel = false;
+    this.hostStopped = null;
+  }
+
+  /** Starts the panel's stopped server again with the options it last used. */
+  async restartHost(instanceId: string) {
+    try {
+      this.startHost(instanceId, (await api.host.setup(instanceId)).options);
+    } catch (e) {
+      this.fail("Couldn't start the server", e);
+    }
+  }
+
   /** Starts hosting an instance. Inside the app Go reports on host:state; the preview
       goes from starting to running on a timer. */
   startHost(instanceId: string, o: HostOptions) {
     this.overlay = null;
     this.hostPanel = true;
+    this.hostStopped = null;
     if (hasBridge()) {
       api.host.start(instanceId, o).catch((e) => this.fail("Couldn't start the server", e));
       return;
     }
-    const base: HostState = { instanceId, runId: 'preview', state: 'starting', stage: 'Backing up Northwatch, preparing spawn area', port: o.port, players: 0, max: o.maxPlayers, ...(o.lan ? { lan: '192.168.1.24' } : {}) };
+    const base: HostState = { instanceId, runId: 'preview', state: 'starting', stage: 'Backing up Northwatch, preparing spawn area', port: o.port, players: 0, max: o.maxPlayers,
+      address: `${o.lan ? '192.168.1.24' : 'localhost'}:${o.port}`, ...(o.lan ? { lan: '192.168.1.24' } : {}) };
     this.hosting = base;
     setTimeout(() => {
       if (this.hosting?.runId === 'preview') this.hosting = { ...base, state: 'running', players: 1 };
@@ -225,6 +250,7 @@ class Session {
       api.host.stop(instanceId).catch((e) => this.fail('Stop', e));
       return;
     }
+    if (this.hosting) this.hostStopped = { ...this.hosting, state: 'stopped', result: 'ok', players: 0 };
     this.hosting = null;
   }
 
@@ -234,7 +260,10 @@ class Session {
       this.hosting = h;
       return;
     }
-    if (this.hosting?.runId === h.runId) this.hosting = null;
+    if (this.hosting?.runId === h.runId) {
+      this.hosting = null;
+      this.hostStopped = h;
+    }
     revs.bump('worlds');
     if (h.result === 'failed') this.notify({ tone: 'error', subject: "Couldn't start the server", text: h.message ?? '' });
     else if (h.result === 'crash') {

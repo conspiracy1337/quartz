@@ -182,6 +182,8 @@ button.chip:not(.on):hover{color:var(--text)}
 .card-head{height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border-bottom:1px solid var(--line)}
 .list{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel);overflow:hidden}
 .list > *+*{border-top:1px solid var(--line)}
+/* A long list shades every other row so the eye keeps its line (the Host Manage list). */
+.list.zebra > :nth-child(even){background:color-mix(in srgb,var(--raise) 55%,transparent)}
 /* A picker list scrolls inside its fixed height; after .list, whose overflow:hidden it overrides. */
 .plist{overflow-y:auto;overscroll-behavior:contain}
 .row{display:grid;align-items:center;column-gap:14px;height:var(--row-lg);padding:0 12px}

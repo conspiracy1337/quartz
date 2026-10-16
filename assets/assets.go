@@ -10,3 +10,9 @@ import _ "embed"
 //
 //go:embed icon.png
 var Icon []byte
+
+// ServerIcon is what a hosted server shows in server lists when the player
+// picked no picture (64 px PNG, as Minecraft wants).
+//
+//go:embed server-icon.png
+var ServerIcon []byte
