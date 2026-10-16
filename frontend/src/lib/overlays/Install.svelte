@@ -3,10 +3,10 @@
   import type { ContentKind, InstallDep, Src } from '../api/types';
   import { bytes, errorText, gb, plural } from '../format';
   import { LOADER_NAMES, PROJECT_TYPES } from '../labels';
+  import { downloading } from '../instanceActions';
   import { artOf, suggestMemoryGb } from '../look';
   import { prefs } from '../prefs.svelte';
   import { query } from '../query.svelte';
-  import { go } from '../router.svelte';
   import { session } from '../session.svelte';
   import { tasks } from '../tasks.svelte';
   import Check from '../ui/Check.svelte';
@@ -54,8 +54,7 @@
       const picked = p.deps.filter((d) => !d.required && optional[d.id] !== false).map((d) => d.id);
       const job = await api.browse.applyInstall(p.planId, picked);
       session.close();
-      if (job) await tasks.load();
-      go({ name: 'downloads' });
+      await downloading(job);
     } catch (e) {
       busy = false;
       session.notify({ tone: 'error', subject: `Couldn't install ${p.name}`, text: errorText(e) });

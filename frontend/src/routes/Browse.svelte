@@ -10,6 +10,7 @@
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
+  import { lastTouched } from '$lib/instances';
   import { session } from '$lib/session.svelte';
   import Check from '$lib/ui/Check.svelte';
   import PageHeader from '$lib/ui/PageHeader.svelte';
@@ -53,11 +54,14 @@
   // svelte-ignore state_referenced_locally
   if (startInstance) session.browseTarget = startInstance;
   const instances = query(() => api.instances.list());
-  const target = $derived(instances.data?.find((i) => i.id === session.browseTarget) ?? instances.data?.[0]);
+  const target = $derived(instances.data?.find((i) => i.id === session.browseTarget) ?? lastTouched(instances.data ?? []));
   const showTarget = $derived(type !== 'modpack');
   // Worlds come from CurseForge alone, untracked: no loader, side or Modrinth-only filters apply.
   const isWorld = $derived(type === 'world');
   const categories = query(() => api.browse.categories(type));
+  // Results the search marked as not installed flip once their download lands.
+  const owned = query(() => (showTarget && target ? api.browse.installed(target.id) : Promise.resolve([])));
+  const isInstalled = (r: ProjectHit) => r.installed || r.ref.split('+').some((p) => owned.data?.includes(p));
 
   // Typing searches once it pauses.
   $effect(() => {
@@ -159,17 +163,7 @@
 
 <svelte:window onkeydown={closeFilters} onpointerdown={closeFilters} />
 
-<PageHeader title="Browse" style="padding-bottom: 16px; border-bottom: 1px solid var(--line)">
-  {#snippet actions()}
-    {#if showTarget && target}
-      {@const t = target}
-      <span class="small faint">Adding to</span>
-      <Select value={t.id} options={(instances.data ?? []).map((i) => ({ value: i.id, label: i.name }))} label="Instance to add to" style="width: 200px" onchange={(v) => (session.browseTarget = v)}>
-        {#snippet lead()}<Tile art={t.art} icon={t.icon} size="sm" />{/snippet}
-      </Select>
-    {/if}
-  {/snippet}
-</PageHeader>
+<PageHeader title="Browse" style="padding-bottom: 16px; border-bottom: 1px solid var(--line)" />
 <div class="bw">
   <section class="scroll" aria-label="Results">
     <div class="page" style="gap: 12px; padding-top: 4px">
@@ -188,7 +182,7 @@
               <Tile art={r.art ?? artOf(r.name, r.icon)} size="lg" />
               <a href={href({ name: 'project', id: r.ref })} style="min-width: 0; text-decoration: none"><span style="display: flex; gap: 8px; align-items: baseline; min-width: 0"><span class="trunc" style="font-weight: 600">{r.name}</span><span class="small faint trunc" style="flex: 0 1 auto">by {r.author}</span></span><span class="muted clamp2" style="display: -webkit-box; margin-top: 2px; height: 40px">{r.summary}</span></a>
               <span class="opt" style="flex-direction: column; gap: 2px"><span class="tnum muted small">{compact(m.downloads)} downloads</span><span class="small faint">Updated {ago(m.updated)}</span></span>
-              <span style="display: flex; justify-content: flex-end">{#if r.installed}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={showTarget && !target} onclick={() => install(r)}>Install</button>{/if}</span>
+              <span style="display: flex; justify-content: flex-end">{#if isInstalled(r)}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={showTarget && !target} onclick={() => install(r)}>Install</button>{/if}</span>
             </div>
           {:else}
             <Empty text={failed || 'No projects match these filters.'} />
@@ -204,16 +198,26 @@
     </div>
   </section>
   <aside id="browse-filters" class="filters scroll" class:open={filtersOpen} aria-label="Filters" bind:this={filtersEl} style="border-left: 1px solid var(--line); padding: 16px; flex-direction: column; gap: 18px">
+    {#if showTarget && target}
+      {@const t = target}
+      <div class="fg"><span class="field-label">Adding to</span>
+        <Select value={t.id} options={(instances.data ?? []).map((i) => ({ value: i.id, label: i.name }))} label="Instance to add to" style="width: 100%" onchange={(v) => (session.browseTarget = v)}>
+          {#snippet lead()}<Tile art={t.art} icon={t.icon} size="sm" />{/snippet}
+        </Select>
+      </div>
+    {/if}
     {#if showTarget}
       <div class="fg"><span class="field-label">{isWorld ? 'Minecraft version' : 'Version and loader'}</span><div style="display: flex; gap: 6px">{#if target}<button class="chip" class:on={useVersion} aria-pressed={useVersion} onclick={() => (useVersion = !useVersion)}>{target.minecraft}</button>{#if target.loader && !isWorld}<button class="chip" class:on={useLoader} aria-pressed={useLoader} onclick={() => (useLoader = !useLoader)}>{LOADER_NAMES[target.loader.kind]}</button>{/if}{/if}</div></div>
     {:else}
       <div class="fg"><span class="field-label">Minecraft version</span><Select bind:value={game} options={GAMES} label="Minecraft version" style="width: 100%" /></div>
     {/if}
-    <div class="fg"><span class="field-label">Categories</span>
-      {#each categories.data ?? [] as c (c)}
-        <button class="fl" onclick={() => (cats[c] = !cats[c])} aria-pressed={!!cats[c]}><Check on={!!cats[c]} /><span>{c}</span><span></span></button>
-      {/each}
-    </div>
+    {#each categories.data ?? [] as g (g.title)}
+      <div class="fg"><span class="field-label">{g.title}</span>
+        {#each g.names as c (c)}
+          <button class="fl" onclick={() => (cats[c] = !cats[c])} aria-pressed={!!cats[c]}><Check on={!!cats[c]} /><span>{c}</span><span></span></button>
+        {/each}
+      </div>
+    {/each}
     {#if !isWorld}
     <div class="fg"><span class="field-label">Runs on</span>
       {#each [['client', 'Client side'], ['server', 'Server side']] as const as [v, l] (v)}

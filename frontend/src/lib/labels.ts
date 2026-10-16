@@ -8,6 +8,8 @@ export const LOADER_NAMES: Record<Loader, string> = { fabric: 'Fabric', quilt: '
 export const LOADER_PRODUCTS: Record<Loader, string> = { fabric: 'Fabric Loader', quilt: 'Quilt Loader', forge: 'Forge', neoforge: 'NeoForge' };
 
 /** "Fabric 0.16.10" */
+/** Every loader a version can name: mod loaders and shader loaders. */
+export const ANY_LOADER_NAMES: Record<string, string> = { ...LOADER_NAMES, iris: 'Iris', optifine: 'OptiFine', canvas: 'Canvas' };
 export const loaderLabel = (l: LoaderRef) => `${LOADER_NAMES[l.kind]} ${l.version}`;
 
 /** "1.21.4, Fabric" or just "1.21.4" for vanilla. */

@@ -86,13 +86,19 @@ export async function switchVersion(i: Instance, minecraft: string, kind: string
   }
 }
 
+/** A started install keeps the page where it is and opens the download queue in the bottom bar. */
+export async function downloading(job: unknown) {
+  if (!job) return;
+  session.downloadTray = true;
+  await tasks.load();
+}
+
 /** Installs a project into an instance: content opens the Install dialog (version and
-    dependencies); a world has neither, so it downloads straight away and Downloads shows it. */
+    dependencies); a world has neither, so it downloads straight away. */
 export async function installInto(instanceId: string, ref: string, source: Src, content: ContentKind, version = '') {
   if (content !== 'worlds') return session.open({ kind: 'install', ref, source, instanceId, content, ...(version ? { version } : {}) });
   try {
-    if (await api.browse.installWorld(instanceId, ref, version)) await tasks.load();
-    go({ name: 'downloads' });
+    await downloading(await api.browse.installWorld(instanceId, ref, version));
   } catch (e) {
     session.fail('Install', e);
   }

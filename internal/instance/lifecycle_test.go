@@ -369,3 +369,21 @@ func TestDuplicate(t *testing.T) {
 		t.Fatalf("left behind: %v", entries)
 	}
 }
+
+func TestOpened(t *testing.T) {
+	s, _ := newStore(t)
+	in := create(t, s, "Survival")
+	now := time.Now()
+	if changed, err := s.Opened(in.ID, now); err != nil || !changed {
+		t.Fatalf("first open = %v, %v", changed, err)
+	}
+	if changed, _ := s.Opened(in.ID, now.Add(30*time.Second)); changed {
+		t.Fatal("opening again within a minute wrote again")
+	}
+	if changed, _ := s.Opened(in.ID, now.Add(2*time.Minute)); !changed {
+		t.Fatal("a later open was not recorded")
+	}
+	if got, _ := s.Get(in.ID); got.LastOpened == nil || !got.LastOpened.Equal(now.Add(2*time.Minute).UTC()) {
+		t.Fatalf("LastOpened = %v", got.LastOpened)
+	}
+}

@@ -19,6 +19,17 @@ func (s *Store) Rename(id, name string) (Instance, error) {
 	return s.Update(id, func(in *Instance) error { in.Name = n; return nil })
 }
 
+// Opened records that the instance's page was opened. It writes at most once
+// a minute; changed is false when nothing was written.
+func (s *Store) Opened(id string, now time.Time) (changed bool, err error) {
+	in, err := s.Get(id)
+	if err != nil || in.LastOpened != nil && now.Sub(*in.LastOpened) < time.Minute {
+		return false, err
+	}
+	_, err = s.Update(id, func(in *Instance) error { t := now.UTC(); in.LastOpened = &t; return nil })
+	return err == nil, err
+}
+
 // Look is how an instance shows: its tile colour and letter, its picture
 // and its banner ("" for none). Colour, picture and banner are independent:
 // a new colour keeps the pictures, and shows behind a transparent one.

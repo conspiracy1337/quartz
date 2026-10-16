@@ -268,6 +268,7 @@ export namespace api {
 	    tags: string[];
 	    hasServers: boolean;
 	    lastPlayed?: number;
+	    lastOpened?: number;
 	    created: number;
 	    playtimeMin: number;
 	    running: boolean;
@@ -290,6 +291,7 @@ export namespace api {
 	        this.tags = source["tags"];
 	        this.hasServers = source["hasServers"];
 	        this.lastPlayed = source["lastPlayed"];
+	        this.lastOpened = source["lastOpened"];
 	        this.created = source["created"];
 	        this.playtimeMin = source["playtimeMin"];
 	        this.running = source["running"];
@@ -356,6 +358,7 @@ export namespace api {
 	    tags: string[];
 	    hasServers: boolean;
 	    lastPlayed?: number;
+	    lastOpened?: number;
 	    created: number;
 	    playtimeMin: number;
 	    running: boolean;
@@ -396,6 +399,7 @@ export namespace api {
 	        this.tags = source["tags"];
 	        this.hasServers = source["hasServers"];
 	        this.lastPlayed = source["lastPlayed"];
+	        this.lastOpened = source["lastOpened"];
 	        this.created = source["created"];
 	        this.playtimeMin = source["playtimeMin"];
 	        this.running = source["running"];
@@ -677,6 +681,20 @@ export namespace api {
 
 export namespace browse {
 	
+	export class CategoryGroup {
+	    title: string;
+	    names: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CategoryGroup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.names = source["names"];
+	    }
+	}
 	export class InstalledVersion {
 	    item: string;
 	    source: string;
@@ -988,6 +1006,8 @@ export namespace browse {
 	    minecraft: string;
 	    published: number;
 	    bytes: number;
+	    downloads: number;
+	    loaders: string[];
 	    action: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1002,6 +1022,8 @@ export namespace browse {
 	        this.minecraft = source["minecraft"];
 	        this.published = source["published"];
 	        this.bytes = source["bytes"];
+	        this.downloads = source["downloads"];
+	        this.loaders = source["loaders"];
 	        this.action = source["action"];
 	    }
 	}

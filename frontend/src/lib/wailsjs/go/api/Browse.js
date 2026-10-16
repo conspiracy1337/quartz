@@ -14,6 +14,10 @@ export function InstallWorld(arg1, arg2, arg3) {
   return window['go']['api']['Browse']['InstallWorld'](arg1, arg2, arg3);
 }
 
+export function Installed(arg1) {
+  return window['go']['api']['Browse']['Installed'](arg1);
+}
+
 export function More(arg1) {
   return window['go']['api']['Browse']['More'](arg1);
 }

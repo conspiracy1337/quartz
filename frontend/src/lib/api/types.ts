@@ -26,6 +26,8 @@ export interface InstanceSummary {
   tags: string[];
   hasServers: boolean;
   lastPlayed?: number;
+  /** When its page was last opened (unix ms). */
+  lastOpened?: number;
   created: number;
   playtimeMin: number;
   running: boolean;
@@ -296,6 +298,8 @@ export type ProjectType = 'Mods' | 'Modpacks' | 'Resource packs' | 'Shaders' | '
 /** Go's project types, in Browse's tab order. */
 export type ProjectKind = 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datapack' | 'world';
 export type Src = 'modrinth' | 'curseforge';
+/** One heading of Browse's category filters and its names. */
+export interface CategoryGroup { title: string; names: string[] }
 export interface SourceStats { downloads: number; updated: number }
 /** One merged search result; `id` stays the same when a twin from the other platform merges in. */
 export interface ProjectHit {
@@ -361,7 +365,9 @@ export interface ProjectPage {
   channels: string[];
 }
 export interface ProjectVersion {
-  id: string; number: string; channel: 'Release' | 'Beta' | 'Alpha'; minecraft: string; published: number; bytes: number;
+  id: string; number: string; channel: 'Release' | 'Beta' | 'Alpha'; minecraft: string; published: number; bytes: number; downloads: number;
+  /** Loaders it runs on: mod loaders, or a shader pack's (iris, optifine, canvas). */
+  loaders: string[];
   /** What the row's button does for the target; "" for the installed version. */
   action: '' | 'Install' | 'Update' | 'Switch';
 }

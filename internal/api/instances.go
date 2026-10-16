@@ -92,6 +92,7 @@ type InstanceSummary struct {
 	Tags        []string     `json:"tags"`
 	HasServers  bool         `json:"hasServers"`
 	LastPlayed  int64        `json:"lastPlayed,omitempty"` // unix ms
+	LastOpened  int64        `json:"lastOpened,omitempty"` // unix ms
 	Created     int64        `json:"created"`              // unix ms
 	PlaytimeMin int          `json:"playtimeMin"`
 	Running     bool         `json:"running"`
@@ -179,6 +180,9 @@ func (s *Instances) summary(in instance.Instance) InstanceSummary {
 	}
 	if in.LastPlayed != nil {
 		v.LastPlayed = in.LastPlayed.UnixMilli()
+	}
+	if in.LastOpened != nil {
+		v.LastOpened = in.LastOpened.UnixMilli()
 	}
 	return v
 }
@@ -454,6 +458,18 @@ func (s *Instances) SetNotes(id, notes string) (InstanceView, error) {
 		return InstanceView{}, err
 	}
 	return s.changed(s.d.Store.SetNotes(id, notes))
+}
+
+// Opened records that an instance's page was opened (Browse's default target).
+func (s *Instances) Opened(id string) error {
+	if err := checkInstanceID(id); err != nil {
+		return err
+	}
+	changed, err := s.d.Store.Opened(id, time.Now())
+	if changed {
+		s.d.Bus.Emit(events.InstancesChanged, nil)
+	}
+	return err
 }
 
 // SetTags replaces an instance's tags.

@@ -236,6 +236,9 @@ type VersionRow struct {
 	Minecraft string `json:"minecraft"` // "1.21, 1.21.1"
 	Published int64  `json:"published"` // unix ms
 	Bytes     int64  `json:"bytes"`
+	Downloads int64  `json:"downloads"`
+	// Loaders are the loaders it runs on that Browse knows ("fabric", "iris"…).
+	Loaders []string `json:"loaders"`
 	// Action is what the row's button does for the target: Install, Update,
 	// Switch (to an older version), or "" for the installed one.
 	Action string `json:"action"`
@@ -296,7 +299,12 @@ var channels = map[string]string{"release": "Release", "beta": "Beta", "alpha": 
 
 func versionRow(v modplatform.Version, inst *InstalledVersion) VersionRow {
 	r := VersionRow{ID: v.ID, Number: v.Number, Channel: channels[v.Type], Minecraft: strings.Join(v.Game, ", "),
-		Published: v.Published.UnixMilli(), Bytes: v.File.Size, Action: "Install"}
+		Published: v.Published.UnixMilli(), Bytes: v.File.Size, Downloads: v.Downloads, Loaders: []string{}, Action: "Install"}
+	for _, l := range v.Loaders {
+		if _, ok := loaderNames[l]; ok && !slices.Contains(r.Loaders, l) {
+			r.Loaders = append(r.Loaders, l)
+		}
+	}
 	if r.Channel == "" {
 		r.Channel = "Release"
 	}

@@ -96,6 +96,7 @@ type Version struct {
 	Published time.Time `json:"published"`
 	Loaders   []string  `json:"loaders"`
 	Game      []string  `json:"game"`
+	Downloads int64     `json:"downloads,omitempty"`
 	File      File      `json:"file"`
 	Deps      []Dep     `json:"deps,omitempty"`
 	// Class is the project's type, when the answer says (CurseForge Files).

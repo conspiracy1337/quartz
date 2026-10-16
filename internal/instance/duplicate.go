@@ -83,7 +83,7 @@ func (s *Store) Duplicate(ctx context.Context, id string, place func(rel, dst st
 	in := src
 	base := []rune(src.Name)
 	in.Name = s.freeName(strings.TrimSpace(string(base[:min(len(base), maxName-len(copySuffix))])) + copySuffix)
-	in.PlaytimeMin, in.PlaytimeSec, in.LastPlayed, in.Created = 0, 0, nil, time.Now().UTC()
+	in.PlaytimeMin, in.PlaytimeSec, in.LastPlayed, in.LastOpened, in.Created = 0, 0, nil, nil, time.Now().UTC()
 	in.Location, in.InPlace, in.ImportedFrom, in.Host = "", false, nil, nil
 
 	s.mu.Lock()

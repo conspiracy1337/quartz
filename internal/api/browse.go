@@ -86,8 +86,17 @@ func (b *Browse) More(searchID string) (browse.Results, error) {
 	return b.svc.More(b.ctx.Get(), searchID)
 }
 
+// Installed lists the projects an instance has, one "mr:<id>" or "cf:<id>"
+// ref per platform.
+func (b *Browse) Installed(instanceID string) ([]string, error) {
+	if err := checkInstanceID(instanceID); err != nil {
+		return nil, err
+	}
+	return asListErr(b.svc.Installed(instanceID))
+}
+
 // Categories lists a project type's categories.
-func (b *Browse) Categories(t string) []string {
+func (b *Browse) Categories(t string) []browse.CategoryGroup {
 	return asList(browse.Categories(modplatform.ProjectType(t)))
 }
 

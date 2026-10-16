@@ -12,7 +12,7 @@ import * as mock from './mock/browse';
 import * as misc from './mock/misc';
 import type {
   BrowseQuery, BrowseResults, ContentKind, DiffKind, ImportPreview, InstallPlan, ManualView, ModpackDiff, PackLook, PackUpdate, PackVersion,
-  ProjectKind, ProjectPage, ProjectVersion, Src, VersionNotes,
+  CategoryGroup, ProjectKind, ProjectPage, ProjectVersion, Src, VersionNotes,
 } from './types';
 
 const KINDS: Record<string, DiffKind> = { added: 'Added', updated: 'Updated', removed: 'Removed' };
@@ -22,7 +22,9 @@ export const browseApi = {
   search: bridged(BrowseGo.Search, (q: BrowseQuery): BrowseResults => mock.search(q)),
   /** The next page: rows to append and rows a twin merged into. */
   more: bridged(BrowseGo.More, (_searchId: string): BrowseResults => ({ searchId: 'preview', rows: [], changed: [], more: false, failed: [] })),
-  categories: bridged(BrowseGo.Categories, (kind: ProjectKind): string[] => mock.categories(kind)),
+  categories: bridged(BrowseGo.Categories, (kind: ProjectKind): CategoryGroup[] => mock.categories(kind)),
+  /** The projects an instance has, one "mr:<id>" or "cf:<id>" ref per platform. */
+  installed: (instance: string) => revs.load('content', bridged(() => BrowseGo.Installed(instance), (): string[] => [])),
   /** A project page; instance (optional) is where Install goes. */
   project: (ref: string, instance: string) => revs.load('content', bridged(() => BrowseGo.Project(ref, instance), (): ProjectPage => mock.iris)),
   /** The platform to install from by default; instance (optional) narrows it to the versions that run there. */

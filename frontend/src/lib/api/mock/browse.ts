@@ -1,4 +1,4 @@
-import type { BrowseQuery, BrowseResults, DocBlock, ProjectHit, ProjectKind, ProjectPage, ProjectVersion, ProjectType, Span, VersionNotes } from '../types';
+import type { BrowseQuery, BrowseResults, CategoryGroup, DocBlock, ProjectHit, ProjectKind, ProjectPage, ProjectVersion, ProjectType, Span, VersionNotes } from '../types';
 import { daysAgo, date } from './time';
 
 const P = (name: string, author: string, summary: string, tint: string, mr: [number, number] | null, cf: [number, number] | null): ProjectHit => {
@@ -59,7 +59,10 @@ export function search(q: BrowseQuery): BrowseResults {
   return { searchId: 'preview', rows, changed: [], more: false, failed: [] };
 }
 
-export const categories = (kind: ProjectKind) => catalog[LABELS[kind]].categories;
+export const categories = (kind: ProjectKind): CategoryGroup[] => [
+  { title: 'Categories', names: catalog[LABELS[kind]].categories },
+  ...(kind === 'resourcepack' ? [{ title: 'Resolution', names: ['16x', '32x', '64x'] }] : []),
+];
 
 const t = (text: string): Span[] => text.split('`').map((part, i) => (i % 2 ? { text: part, code: true } : { text: part })).filter((s) => s.text);
 
@@ -70,7 +73,7 @@ const notes = [
 ];
 const INSTALLED = '1.8.1+mc1.21.4';
 const PV = (number: string, channel: ProjectVersion['channel'], minecraft: string, published: number, mb: number, i: number): ProjectVersion =>
-  ({ id: number, number, channel, minecraft, published, bytes: mb * 1e6, action: number === INSTALLED ? '' : i < 2 ? 'Update' : 'Switch' });
+  ({ id: number, number, channel, minecraft, published, bytes: mb * 1e6, downloads: 412_000 >> i, loaders: i % 3 ? ['iris'] : ['iris', 'optifine'], action: number === INSTALLED ? '' : i < 2 ? 'Update' : 'Switch' });
 const VERSIONS: ProjectVersion[] = [
   PV('1.8.3+mc1.21.4', 'Release', '1.21.4', date(2025, 2, 28), 2.4, 0),
   PV('1.8.2+mc1.21.4', 'Release', '1.21.4', date(2025, 1, 30), 2.4, 1),
