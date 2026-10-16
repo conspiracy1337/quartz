@@ -205,10 +205,9 @@ func (s *Service) List(ctx context.Context, id string, force bool) ([]Server, er
 	if err != nil {
 		return nil, err
 	}
-	proto := s.d.Protocol(inst.Minecraft)
 	var wg sync.WaitGroup
 	for i := range list {
-		wg.Go(func() { list[i].Status = s.status(ctx, list[i].Address, proto, force) })
+		wg.Go(func() { list[i].Status = s.status(ctx, list[i].Address, inst.Minecraft, force) })
 	}
 	wg.Wait()
 	for i := range list {
@@ -226,7 +225,7 @@ func (s *Service) Check(ctx context.Context, id, address string) (Status, error)
 	if err != nil {
 		return Status{}, err
 	}
-	return s.status(ctx, address, s.d.Protocol(inst.Minecraft), false), nil
+	return s.status(ctx, address, inst.Minecraft, false), nil
 }
 
 // validate cleans an entry the player typed.

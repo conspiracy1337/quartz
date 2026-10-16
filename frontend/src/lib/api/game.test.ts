@@ -14,12 +14,17 @@ describe('world and server rows', () => {
 
   it('shows servers online, mismatched and offline', () => {
     const base = { index: 0, name: 'Friends SMP', address: 'smp.kestrel.gg', packs: 'prompt', players: 6, max: 20 };
-    expect(serverItem({ ...base, online: true, pingMs: 21 })).toMatchObject({ sub: 'smp.kestrel.gg, 6 of 20 online', meta: '21 ms', action: 'Join', online: true });
-    expect(serverItem({ ...base, online: true, pingMs: 182, needs: '1.20.1' }).sub).toBe('Needs 1.20.1');
+    expect(serverItem({ ...base, online: true, pingMs: 21, version: '1.21.4', fit: 'ok', fitVersion: '1.21.4' })).toMatchObject({
+      sub: 'smp.kestrel.gg', action: 'Join', online: true,
+      server: { online: true, version: '1.21.4', fit: 'ok', players: { online: 6, max: 20 }, pingMs: 21 },
+    });
+    // A server that takes another version shows the newest one it takes.
+    expect(serverItem({ ...base, online: true, pingMs: 182, version: '1.20.1', fit: 'major', fitVersion: '1.20.1' }).server).toMatchObject({ version: '1.20.1', fit: 'major' });
     const off = serverItem({ ...base, online: false, players: 0 });
-    expect(off).toMatchObject({ sub: 'Can not connect', meta: 'Offline', status: { kind: 'offline' }, online: false });
+    expect(off).toMatchObject({ sub: 'smp.kestrel.gg', online: false, server: { online: false, fit: '' } });
     expect(off.action).toBeUndefined();
-    expect(serverItem({ ...base, online: true, players: 41208, max: 0, pingMs: 38 }).sub).toBe('smp.kestrel.gg, 41,208 online');
+    expect(off.server?.players).toBeUndefined();
+    expect(serverItem({ ...base, online: true, players: 41208, max: 0, pingMs: 38 }).server?.players).toEqual({ online: 41208 });
   });
 
   it('draws screenshots from their thumbnail and keeps the full image', () => {

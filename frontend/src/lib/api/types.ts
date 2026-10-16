@@ -103,7 +103,6 @@ export type ContentStatus =
   | { kind: 'unknown' }
   | { kind: 'outdated'; label: string }
   | { kind: 'world'; world: string }
-  | { kind: 'offline' }
   /**
    * A mod for another loader or Minecraft, a missing or wrong-version dependency, a conflict,
    * a duplicate, a library nothing needs, or a file that can't be read. `problem` names which
@@ -131,12 +130,12 @@ export interface ContentItem {
   project?: string;
   /** Its reference for the launcher's own project page (identified items). */
   ref?: string;
-  /** The file's name, its size in bytes and when it appeared (unix seconds), for search and sorting. */
+  /** The file's name, for search. */
   file?: string;
-  size?: number;
-  added?: number;
   /** A mod a local server leaves out. */
   clientOnly?: boolean;
+  /** A server row's ping answer. */
+  server?: ServerStats;
 }
 
 /** What a content tab shows besides its rows. */
@@ -166,14 +165,23 @@ export interface DayPlay { day: number; minutes: number; today: boolean }
 /** Free space on the data folder's drive; `low` under 5 GB. */
 export interface DiskSpace { free: number; low: boolean }
 
-export interface MergedServer {
+/**
+ * A server's answer to a ping, as both server lists show it. `version` is the one to show:
+ * the instance's own when the server takes it (`fit` ok), else the newest the server takes,
+ * `minor` when that shares the instance's major version and `major` when it doesn't.
+ */
+export interface ServerStats {
+  online: boolean;
+  version: string;
+  fit: '' | 'ok' | 'minor' | 'major';
+  players?: { online: number; max?: number };
+  pingMs?: number;
+}
+
+export interface MergedServer extends ServerStats {
   id: string;
   name: string;
   address: string;
-  version: string;
-  online: boolean;
-  players?: { online: number; max?: number };
-  pingMs?: number;
   art: Art;
   /** Instances that list this server, last used first. */
   instances: string[];

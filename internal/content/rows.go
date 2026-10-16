@@ -34,11 +34,8 @@ type Row struct {
 	Ref string `json:"ref,omitempty"`
 	// ClientOnly marks a mod a local server leaves out.
 	ClientOnly bool `json:"clientOnly,omitempty"`
-	// File is the item's file name, Size its bytes (0 for a folder) and Added
-	// when it appeared (unix seconds), for search and sorting.
-	File  string `json:"file"`
-	Size  int64  `json:"size"`
-	Added int64  `json:"added"`
+	// File is the item's file name, for search.
+	File string `json:"file"`
 }
 
 // Status is the one badge a row shows, most important first.
@@ -189,7 +186,7 @@ func (s *Service) row(v *view, id string, e Entry, problems map[string]Problem) 
 	pw, hasPW := s.pwFor(v, e)
 	ident := k.Ident()
 	r := Row{ID: id, Kind: e.Kind, Name: displayName(e, k), Version: info.Version, Icon: info.Icon, Source: "file",
-		File: strings.TrimSuffix(path.Base(e.Rel), Disabled), Size: e.Size, Added: e.Added,
+		File:  strings.TrimSuffix(path.Base(e.Rel), Disabled),
 		Group: e.Group, Locked: hasPW && pw.Pin}
 	switch e.Kind {
 	case ResourcePacks:

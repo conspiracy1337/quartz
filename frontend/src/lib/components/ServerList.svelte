@@ -1,10 +1,12 @@
 <script lang="ts">
   import { api } from '../api';
   import type { MergedServer } from '../api/types';
-  import { count } from '../format';
+  import { players } from '../format';
   import { query, skeletonRows } from '../query.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
+  import ServerPing from '../ui/ServerPing.svelte';
+  import ServerVersion from '../ui/ServerVersion.svelte';
   import SplitButton from '../ui/SplitButton.svelte';
   import Tile from '../ui/Tile.svelte';
   import Empty from '../ui/Empty.svelte';
@@ -34,8 +36,6 @@
   const openIndex = $derived(rows.findIndex((r) => r.id === open));
   const menuFor = $derived(rows[openIndex]);
 
-  const players = (s: MergedServer) => (s.players ? (s.players.max ? `${s.players.online} / ${s.players.max}` : count(s.players.online)) : 'No reply');
-  const pingClass = (ms?: number) => (ms === undefined ? '' : ms < 30 ? 'p4' : ms < 80 ? 'p3' : ms < 250 ? 'p2' : 'p1');
   const inst = (id: string) => instances.data?.find((i) => i.id === id);
 
   /** Joins the server with an instance (the one last used on it by default). */
@@ -64,9 +64,9 @@
         <div class="srow">
           <span class="fav" style="background: {s.art.background}" aria-hidden="true"></span>
           <span class="s-id"><span class="s-name trunc">{s.name}</span><span class="s-ip trunc">{s.address}</span></span>
-          <span class="c-ver"><span class="badge" class:badge-danger={!s.online}>{s.version}</span></span>
-          <span class="c-play small tnum trunc" style="color: {s.online ? 'var(--text)' : 'var(--faint)'}">{players(s)}</span>
-          <span class="s-ping"><span class="s-ms">{s.pingMs !== undefined ? `${s.pingMs} ms` : ''}</span><span class="ping {pingClass(s.pingMs)}" aria-hidden="true"><i style="height: 4px"></i><i style="height: 6px"></i><i style="height: 8px"></i><i style="height: 11px"></i></span></span>
+          <span class="c-ver"><ServerVersion server={s} /></span>
+          <span class="c-play small tnum trunc" style="color: {s.online ? 'var(--text)' : 'var(--faint)'}">{s.online ? players(s.players) : 'No reply'}</span>
+          <ServerPing ms={s.pingMs} />
           <SplitButton size="sm" accent={s.online} menuAccent={false} style="justify-self: end" onclick={() => join(s, s.instances[0])}
             onmenu={() => (open = open === s.id ? null : s.id)} expanded={open === s.id} menuLabel="Join {s.name} with another instance">Join</SplitButton>
         </div>
@@ -111,11 +111,6 @@
   .s-id{display:flex;align-items:baseline;gap:10px;min-width:0}
   .s-name{font-weight:500;flex:0 1 auto}
   .s-ip{flex:0 100 auto;font-family:var(--mono);font-size:12px;color:var(--faint)}
-  .s-ping{display:flex;align-items:center;gap:8px}
-  .s-ms{width:46px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
   .fav{width:32px;height:32px;border-radius:6px}
-  .ping{display:inline-flex;align-items:flex-end;gap:2px;height:11px}
-  .ping i{width:3px;background:var(--line-2);border-radius:1px}
-  .ping.p4 i,.ping.p3 i:nth-child(-n+3),.ping.p2 i:nth-child(-n+2),.ping.p1 i:nth-child(1){background:var(--accent)}
   .jm{position:absolute;right:var(--inset);z-index:5;min-width:240px}
 </style>
