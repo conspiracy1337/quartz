@@ -1,8 +1,9 @@
 package exporting
 
 import (
+	"bytes"
 	"context"
-	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -11,60 +12,150 @@ import (
 	"strings"
 
 	"quartz/internal/content"
+	"quartz/internal/instance"
+	"quartz/internal/loader"
 )
 
-// listRow is one enabled mod in a mod list.
-type listRow struct{ name, version, link, authors string }
+// ModList is a mod list as JSON: the file a JSON export writes and the
+// document a code shares. Every mod in it can be downloaded again from the
+// platform it names, so another launcher can rebuild the instance from it.
+type ModList struct {
+	Schema    int         `json:"schema"` // 1
+	Name      string      `json:"name"`
+	Minecraft string      `json:"minecraft"`
+	Loader    *ListLoader `json:"loader,omitempty"`
+	Mods      []ListMod   `json:"mods"`
+}
 
-func (s *Service) listRows(ctx context.Context, id string) ([]listRow, error) {
-	items, err := s.d.Content.Manifest(ctx, id)
+// ListLoader is the mod loader a list runs on.
+type ListLoader struct {
+	Kind    string `json:"kind"`
+	Version string `json:"version"`
+}
+
+// ListMod is one mod and where it downloads from.
+type ListMod struct {
+	Name    string   `json:"name"`
+	Version string   `json:"version,omitempty"`
+	Authors []string `json:"authors,omitempty"`
+	Source  string   `json:"source"` // modrinth | curseforge
+	Project string   `json:"project"`
+	File    string   `json:"file"`
+	URL     string   `json:"url"`
+	SHA1    string   `json:"sha1,omitempty"`
+	Page    string   `json:"page,omitempty"`
+}
+
+// maxListMods caps a list: no real instance comes near it, and a code's
+// upload stays small.
+const maxListMods = 2000
+
+// listed is an instance's mod list and the mods left out of it: unlisted
+// ones no platform serves, and turned-off ones.
+type listed struct {
+	list     ModList
+	unlisted []content.ManifestItem
+	off      []content.ManifestItem
+}
+
+// modList builds id's mod list, asking the platforms about files nobody
+// identified yet so as few mods as possible are left out.
+func (s *Service) modList(ctx context.Context, id string) (listed, error) {
+	in, err := s.d.Instances.Get(id)
 	if err != nil {
-		return nil, err
+		return listed{}, err
 	}
-	var rows []listRow
+	items, err := s.items(ctx, id)
+	if err != nil {
+		return listed{}, err
+	}
+	out := listed{list: ModList{Schema: 1, Name: in.Name, Minecraft: in.Minecraft, Loader: listLoader(in), Mods: []ListMod{}}}
 	for _, it := range items {
-		if it.Kind != content.Mods || !it.Enabled {
+		switch {
+		case it.Kind != content.Mods:
+		case !it.Enabled:
+			out.off = append(out.off, it)
+		default:
+			if m, ok := listMod(it); ok && len(out.list.Mods) < maxListMods {
+				out.list.Mods = append(out.list.Mods, m)
+			} else {
+				out.unlisted = append(out.unlisted, it)
+			}
+		}
+	}
+	if len(out.list.Mods) == 0 && len(out.unlisted) == 0 {
+		return listed{}, ErrNoMods
+	}
+	slices.SortFunc(out.list.Mods, func(a, b ListMod) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	return out, nil
+}
+
+func listLoader(in instance.Instance) *ListLoader {
+	k, err := loader.ParseKind(in.Loader)
+	if err != nil || in.Loader == "" {
+		return nil
+	}
+	return &ListLoader{Kind: in.Loader, Version: loader.Display(k, in.Minecraft, in.LoaderVersion)}
+}
+
+// listMod is a mod as a list names it: on Modrinth, else on CurseForge,
+// with a download address. A mod neither serves can't be in a list.
+func listMod(it content.ManifestItem) (ListMod, bool) {
+	for _, id := range []*content.Ident{it.Modrinth, it.CurseForge} {
+		if id == nil || httpsOnly(id.URL) == "" || id.ProjectID == "" || id.VersionID == "" {
 			continue
 		}
-		rows = append(rows, listRow{name: it.Name, version: it.Version, link: httpsOnly(it.Page), authors: strings.Join(it.Authors, ", ")})
+		return ListMod{Name: it.Name, Version: it.Version, Authors: it.Authors, Source: id.Source, Project: id.ProjectID, File: id.VersionID,
+			URL: id.URL, SHA1: it.SHA1, Page: httpsOnly(it.Page)}, true
 	}
-	if len(rows) == 0 {
-		return nil, ErrNoMods
+	return ListMod{}, false
+}
+
+// render writes a list file: a Markdown table or the JSON document.
+func render(w io.Writer, l ModList, f ListFormat) error {
+	if f == JSON {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		enc.SetEscapeHTML(false)
+		return enc.Encode(l)
 	}
-	slices.SortFunc(rows, func(a, b listRow) int { return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name)) })
-	return rows, nil
+	return writeMarkdown(w, l.Mods)
+}
+
+// renderedSize is how large a list file comes out.
+func renderedSize(l ModList, f ListFormat) int64 {
+	var buf bytes.Buffer
+	_ = render(&buf, l, f)
+	return int64(buf.Len())
 }
 
 func (s *Service) writeList(ctx context.Context, w io.Writer, id string, f ListFormat) error {
-	rows, err := s.listRows(ctx, id)
+	l, err := s.modList(ctx, id)
 	if err != nil {
 		return err
 	}
-	switch f {
-	case CSV:
-		return writeCSV(w, rows)
-	case HTML:
-		return writeHTML(w, rows)
+	if len(l.list.Mods) == 0 {
+		return ErrNoMods
 	}
-	return writeMarkdown(w, rows)
+	return render(w, l.list, f)
 }
 
-// writeHTML writes the list as an HTML list, every text escaped (a
-// CurseForge zip carries the same list as modlist.html).
-func writeHTML(w io.Writer, rows []listRow) error {
+// writeHTML writes the list as an HTML list, every text escaped (the
+// modlist.html a CurseForge zip carries).
+func writeHTML(w io.Writer, mods []ListMod) error {
 	var b strings.Builder
 	b.WriteString("<ul>\n")
-	for _, r := range rows {
-		name := html.EscapeString(r.name)
-		if r.link != "" {
-			name = `<a href="` + html.EscapeString(r.link) + `">` + name + `</a>`
+	for _, m := range mods {
+		name := html.EscapeString(m.Name)
+		if m.Page != "" {
+			name = `<a href="` + html.EscapeString(m.Page) + `">` + name + `</a>`
 		}
 		b.WriteString("<li>" + name)
-		if r.version != "" {
-			b.WriteString(" " + html.EscapeString(r.version))
+		if m.Version != "" {
+			b.WriteString(" " + html.EscapeString(m.Version))
 		}
-		if r.authors != "" {
-			b.WriteString(" (by " + html.EscapeString(r.authors) + ")")
+		if len(m.Authors) > 0 {
+			b.WriteString(" (by " + html.EscapeString(strings.Join(m.Authors, ", ")) + ")")
 		}
 		b.WriteString("</li>\n")
 	}
@@ -73,34 +164,15 @@ func writeHTML(w io.Writer, rows []listRow) error {
 	return err
 }
 
-func writeCSV(w io.Writer, rows []listRow) error {
-	cw := csv.NewWriter(w)
-	_ = cw.Write([]string{"Name", "Version", "Link", "Authors"})
-	for _, r := range rows {
-		_ = cw.Write([]string{cell(r.name), cell(r.version), cell(r.link), cell(r.authors)})
-	}
-	cw.Flush()
-	return cw.Error()
-}
-
-// cell keeps a spreadsheet from reading a value as a formula (CSV
-// injection): a leading = + - @ tab or carriage return gets a quote mark.
-func cell(s string) string {
-	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
-		return "'" + s
-	}
-	return s
-}
-
-func writeMarkdown(w io.Writer, rows []listRow) error {
+func writeMarkdown(w io.Writer, mods []ListMod) error {
 	var b strings.Builder
 	b.WriteString("| Mod | Version | Authors |\n| --- | --- | --- |\n")
-	for _, r := range rows {
-		name := md(r.name)
-		if r.link != "" {
-			name = "[" + name + "](" + strings.NewReplacer("(", "%28", ")", "%29", " ", "%20").Replace(r.link) + ")"
+	for _, m := range mods {
+		name := md(m.Name)
+		if m.Page != "" {
+			name = "[" + name + "](" + strings.NewReplacer("(", "%28", ")", "%29", " ", "%20").Replace(m.Page) + ")"
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", name, md(r.version), md(r.authors))
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", name, md(m.Version), md(strings.Join(m.Authors, ", ")))
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
@@ -115,7 +187,7 @@ var mdEscaper = strings.NewReplacer(
 
 func md(s string) string { return mdEscaper.Replace(s) }
 
-// httpsOnly keeps a project link only when it is a plain https address.
+// httpsOnly keeps a link only when it is a plain https address.
 func httpsOnly(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {

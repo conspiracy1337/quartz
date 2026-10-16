@@ -7,6 +7,7 @@ import (
 	"crypto/sha1" //nolint:gosec // fixture checksums
 	"crypto/sha512"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -88,10 +89,12 @@ func names(t *testing.T, file string) []string {
 
 func TestMrpackRoundTrip(t *testing.T) {
 	e := newEnv(t)
-	sodium, own := []byte("sodium jar"), []byte("a jar from nowhere")
+	sodium, own, zoom := []byte("sodium jar"), []byte("a jar from nowhere"), []byte("zoom jar")
 	s1, s5 := sums(sodium)
 	o1, o5 := sums(own)
-	e.write(e.game, "mods/sodium.jar.disabled", sodium)
+	z1, z5 := sums(zoom)
+	e.write(e.game, "mods/sodium.jar", sodium)
+	e.write(e.game, "mods/zoom.jar.disabled", zoom)
 	e.write(e.game, "mods/own.jar", own)
 	e.write(e.game, "mods/.index/sodium.pw.toml", []byte("x"))
 	e.write(e.game, "config/sodium.json", []byte("{}"))
@@ -102,14 +105,23 @@ func TestMrpackRoundTrip(t *testing.T) {
 	e.write(e.game, "session.lock", nil)
 	e.write(e.shared, "shaderpacks/Complementary.zip", []byte("shader"))
 	e.items = manifest{
-		{Kind: content.Mods, Rel: "mods/sodium.jar.disabled", SHA1: s1, SHA512: s5, Size: int64(len(sodium)), URL: "https://cdn.modrinth.com/data/AANobbMI/versions/x/sodium.jar"},
+		{Kind: content.Mods, Rel: "mods/sodium.jar", Enabled: true, Name: "Sodium", SHA1: s1, SHA512: s5, Size: int64(len(sodium)), URL: "https://cdn.modrinth.com/data/AANobbMI/versions/x/sodium.jar"},
+		{Kind: content.Mods, Rel: "mods/zoom.jar.disabled", Name: "Zoomify", SHA1: z1, SHA512: z5, Size: int64(len(zoom)), URL: "https://cdn.modrinth.com/data/w7ThoJFB/versions/y/zoom.jar"},
 		{Kind: content.Mods, Rel: "mods/own.jar", Enabled: true, SHA1: o1, SHA512: o5, Size: int64(len(own)), URL: "https://edge.forgecdn.net/files/1/2/own.jar"},
 	}
 	dest := filepath.Join(t.TempDir(), "Survival.mrpack")
 	p := Plan{Format: Mrpack, Include: Include{Options: true, Config: true}}
 	pv, err := e.svc.Preview(context.Background(), e.in.ID, p)
-	if err != nil || pv.Linked != 1 || pv.Bundled != 4 {
+	if err != nil || len(pv.Linked) != 1 || pv.Linked[0].Name != "Sodium" || len(pv.Off) != 1 || pv.Off[0].Name != "Zoomify" {
 		t.Fatalf("preview %+v %v", pv, err)
+	}
+	// own.jar and options.txt by name; config/ and the shared shaderpacks/ as folders.
+	var bundled []string
+	for _, b := range pv.Bundled {
+		bundled = append(bundled, b.Name+" "+b.Detail)
+	}
+	if !slices.Equal(bundled, []string{"config/ 1 file", "options.txt ", "own.jar ", "shaderpacks/ 1 file"}) {
+		t.Fatalf("bundled %q", bundled)
 	}
 	if err := e.svc.Write(context.Background(), e.in.ID, p, dest); err != nil {
 		t.Fatal(err)
@@ -121,7 +133,7 @@ func TestMrpackRoundTrip(t *testing.T) {
 		}
 	}
 	for _, name := range got {
-		for _, bad := range []string{"logs/", "saves/", "usercache", "session.lock", "/.index/", "sodium.jar"} {
+		for _, bad := range []string{"logs/", "saves/", "usercache", "session.lock", "/.index/", "sodium.jar", "zoom"} {
 			if strings.Contains(name, bad) {
 				t.Errorf("%s must not be exported", name)
 			}
@@ -131,7 +143,7 @@ func TestMrpackRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pack.Minecraft != "1.21.1" || pack.Loader != "fabric" || pack.LoaderVersion != "0.16.9" || len(pack.Files) != 1 || pack.Files[0].Path != "mods/sodium.jar.disabled" {
+	if pack.Minecraft != "1.21.1" || pack.Loader != "fabric" || pack.LoaderVersion != "0.16.9" || len(pack.Files) != 1 || pack.Files[0].Path != "mods/sodium.jar" {
 		t.Fatalf("read back %+v", pack)
 	}
 	if _, err := os.Stat(dest + ".part"); !os.IsNotExist(err) {
@@ -179,34 +191,54 @@ func TestDestinationAndLinks(t *testing.T) {
 	}
 }
 
-func TestModListEscapes(t *testing.T) {
+func mr(id string) *content.Ident {
+	return &content.Ident{Source: "modrinth", ProjectID: id, VersionID: "v" + id, URL: "https://cdn.modrinth.com/data/" + id + "/f.jar"}
+}
+
+func TestModList(t *testing.T) {
 	e := newEnv(t)
 	e.items = manifest{
-		{Kind: content.Mods, Rel: "mods/b.jar", Enabled: true, Name: "=HYPERLINK(\"http://x\")", Version: "-1", Authors: []string{"@me"}},
-		{Kind: content.Mods, Rel: "mods/a.jar", Enabled: true, Name: "Sodium | <b>fast</b>", Version: "0.6", Page: "https://modrinth.com/project/sodium", Authors: []string{"Caffeine_MC"}},
-		{Kind: content.Mods, Rel: "mods/c.jar.disabled", Name: "Off"},
-		{Kind: content.ResourcePacks, Rel: "resourcepacks/p.zip", Enabled: true, Name: "Pack"},
-		{Kind: content.Mods, Rel: "mods/d.jar", Enabled: true, Name: "Bad link", Page: "javascript:alert(1)"},
+		{Kind: content.Mods, Rel: "mods/a.jar", Enabled: true, Name: "Sodium | <b>fast</b>", Version: "0.6", Page: "https://modrinth.com/project/sodium", Authors: []string{"Caffeine_MC"}, SHA1: "s1", Modrinth: mr("AANobbMI")},
+		{Kind: content.Mods, Rel: "mods/b.jar", Enabled: true, Name: "Bad link", Page: "javascript:alert(1)", Modrinth: mr("BBBBBBBB")},
+		{Kind: content.Mods, Rel: "mods/c.jar.disabled", Name: "Off", Modrinth: mr("CCCCCCCC")},
+		{Kind: content.Mods, Rel: "mods/own.jar", Enabled: true, Name: "Own"},
+		{Kind: content.Mods, Rel: "mods/blocked.jar", Enabled: true, Name: "Blocked", CurseForge: &content.Ident{Source: "curseforge", ProjectID: "1", VersionID: "2"}},
+		{Kind: content.ResourcePacks, Rel: "resourcepacks/p.zip", Enabled: true, Name: "Pack", Modrinth: mr("PPPPPPPP")},
 	}
 	dir := t.TempDir()
-	if err := e.svc.Write(context.Background(), e.in.ID, Plan{Format: List, List: CSV}, filepath.Join(dir, "mods.csv")); err != nil {
-		t.Fatal(err)
-	}
-	csv, _ := os.ReadFile(filepath.Join(dir, "mods.csv"))
-	want := "Name,Version,Link,Authors\n\"'=HYPERLINK(\"\"http://x\"\")\",'-1,,'@me\n"
-	if !strings.HasPrefix(string(csv), want) || strings.Contains(string(csv), "Off") || strings.Contains(string(csv), "Pack") || strings.Contains(string(csv), "javascript") {
-		t.Fatalf("csv:\n%s", csv)
-	}
 	if err := e.svc.Write(context.Background(), e.in.ID, Plan{Format: List, List: Markdown}, filepath.Join(dir, "mods.md")); err != nil {
 		t.Fatal(err)
 	}
 	md, _ := os.ReadFile(filepath.Join(dir, "mods.md"))
-	if !bytes.Contains(md, []byte(`| [Sodium \| &lt;b&gt;fast&lt;/b&gt;](https://modrinth.com/project/sodium) | 0.6 | Caffeine\_MC |`)) {
+	if !bytes.Contains(md, []byte(`| [Sodium \| &lt;b&gt;fast&lt;/b&gt;](https://modrinth.com/project/sodium) | 0.6 | Caffeine\_MC |`)) || bytes.Contains(md, []byte("javascript")) {
 		t.Fatalf("md:\n%s", md)
 	}
-	e.items = nil
-	if err := e.svc.Write(context.Background(), e.in.ID, Plan{Format: List, List: CSV}, filepath.Join(dir, "none.csv")); !errors.Is(err, ErrNoMods) {
+	for _, left := range []string{"Off", "Own", "Blocked", "Pack"} {
+		if bytes.Contains(md, []byte("| "+left)) {
+			t.Errorf("%s is in the list", left)
+		}
+	}
+	if err := e.svc.Write(context.Background(), e.in.ID, Plan{Format: List, List: JSON}, filepath.Join(dir, "mods.json")); err != nil {
 		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, "mods.json"))
+	var l ModList
+	if err := json.Unmarshal(raw, &l); err != nil || l.Schema != 1 || l.Minecraft != "1.21.1" || l.Loader == nil || l.Loader.Kind != "fabric" || len(l.Mods) != 2 {
+		t.Fatalf("json %+v %v", l, err)
+	}
+	if m := l.Mods[1]; m.Name != "Sodium | <b>fast</b>" || m.Source != "modrinth" || m.Project != "AANobbMI" || m.File != "vAANobbMI" || m.SHA1 != "s1" {
+		t.Fatalf("mod %+v", m)
+	}
+	pv, err := e.svc.Preview(context.Background(), e.in.ID, Plan{Format: List, List: JSON})
+	if err != nil || len(pv.Listed) != 2 || len(pv.Unlisted) != 2 || len(pv.Off) != 1 || pv.Bytes != int64(len(raw)) {
+		t.Fatalf("preview %+v %v", pv, err)
+	}
+	e.items = nil
+	if err := e.svc.Write(context.Background(), e.in.ID, Plan{Format: List, List: Markdown}, filepath.Join(dir, "none.md")); !errors.Is(err, ErrNoMods) {
+		t.Fatal(err)
+	}
+	if (Plan{Format: List, List: "csv"}).Valid() {
+		t.Fatal("csv is still a list format")
 	}
 }
 
@@ -264,14 +296,14 @@ func TestCurseForgeZip(t *testing.T) {
 	e.write(e.game, "mods/own.jar", own)
 	e.items = manifest{
 		{Kind: content.Mods, Rel: "mods/jei.jar", Enabled: true, SHA1: j1, Name: "JEI <3", Version: "15.2", Page: "https://www.curseforge.com/minecraft/mc-mods/jei",
-			CurseForge: &content.Ident{ProjectID: "238222", VersionID: "5101366"}},
+			CurseForge: &content.Ident{Source: "curseforge", ProjectID: "238222", VersionID: "5101366", URL: "https://edge.forgecdn.net/files/5101/366/jei.jar"}},
 		{Kind: content.Mods, Rel: "mods/own.jar", Enabled: true, SHA1: o1, Name: "Own"},
 	}
 	if _, err := e.svc.d.Instances.SetVersion(e.in.ID, "1.20.1", "neoforge", "1.20.1-47.1.106"); err != nil {
 		t.Fatal(err)
 	}
 	p := Plan{Format: CurseForge, Meta: instance.ExportMeta{Name: "Pack", Version: "1.0", Author: "me"}}
-	if pv, err := e.svc.Preview(context.Background(), e.in.ID, p); err != nil || pv.Linked != 1 || pv.Bundled != 1 {
+	if pv, err := e.svc.Preview(context.Background(), e.in.ID, p); err != nil || len(pv.Linked) != 1 || pv.Linked[0].Source != "curseforge" || len(pv.Bundled) != 1 {
 		t.Fatalf("preview %+v %v", pv, err)
 	}
 	dest := filepath.Join(t.TempDir(), "Pack.zip")

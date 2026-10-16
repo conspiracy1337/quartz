@@ -168,8 +168,10 @@ export const api = {
   exports: {
     /** The name and version the dialog starts from: the last export's, else the instance's name and 1.0.0. */
     meta: bridged(ExportsGo.Meta, (_id: string): ExportMeta => ({ name: 'Survival', version: '1.0.0' })),
-    preview: bridged(ExportsGo.Preview, (_id: string, _plan: ExportPlan): ExportPreview => ({ linked: 41, bundled: 7, bytes: 2_400_000 })),
-    run: bridged(ExportsGo.Export, (_id: string, plan: ExportPlan): ExportResult => ({ file: plan.format === 'list' ? `Survival-mods.${plan.list}` : `Survival.${plan.format}` })),
+    /** What an export holds: linked, bundled, listed and left-out files. */
+    preview: bridged(ExportsGo.Preview, (_id: string, plan: ExportPlan): ExportPreview => misc.exportPreview(plan)),
+    run: bridged(ExportsGo.Export, (_id: string, plan: ExportPlan): ExportResult =>
+      plan.list === 'code' && plan.format === 'list' ? { code: { code: 'K7QXM', expiresAt: Date.now() + 7 * 864e5 } } : { file: plan.format === 'list' ? `Survival-mods.${plan.list}` : `Survival.${plan.format}` }),
   },
   java: {
     runtimes: bridged(JavaGo.Runtimes, () => misc.runtimes),

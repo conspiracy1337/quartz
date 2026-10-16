@@ -441,14 +441,20 @@ export interface BulkCheck { instanceId: string; name: string; updates: number }
 
 // ---- export ----
 export type ExportFormat = 'mrpack' | 'curseforge' | 'zip' | 'list';
-export type ExportListFormat = 'md' | 'csv' | 'html';
+/** A mod list as Markdown, as JSON, or stored online behind a code. */
+export type ExportListFormat = 'md' | 'json' | 'code';
 export interface ExportInclude { worlds: boolean; screenshots: boolean; options: boolean; servers: boolean; config: boolean }
 /** What an exported pack is called (remembered per instance). */
 export interface ExportMeta { name: string; version: string; summary?: string; author?: string }
 export interface ExportPlan { format: ExportFormat; list: ExportListFormat; include: ExportInclude; meta?: ExportMeta }
-export interface ExportPreview { linked: number; bundled: number; bytes: number }
+/** One line of an export's contents: a file, or a folder's files counted together ("config/", "48 files"). */
+export interface ExportEntry { name: string; detail?: string; bytes: number; source?: Src }
+/** What an export holds and leaves out; bytes is the bundled size (a list: its file's). */
+export interface ExportPreview { linked: ExportEntry[]; bundled: ExportEntry[]; listed: ExportEntry[]; unlisted: ExportEntry[]; off: ExportEntry[]; bytes: number }
+/** A shared mod list's code and when it stops working (unix ms). */
+export interface ExportCode { code: string; expiresAt: number }
 /** A pack export's job, or a mod list's saved file name; empty when the save dialog was cancelled. */
-export interface ExportResult { job?: string; file?: string }
+export interface ExportResult { job?: string; file?: string; code?: ExportCode }
 
 export interface JavaRuntime {
   id: string; major: number; name: string; source: 'Managed' | 'System' | 'SDKMAN' | 'Found'; path: string; usedBy: number;

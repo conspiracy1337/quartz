@@ -179,6 +179,7 @@ export namespace api {
 	export class ExportResult {
 	    job?: string;
 	    file?: string;
+	    code?: exporting.Code;
 	
 	    static createFrom(source: any = {}) {
 	        return new ExportResult(source);
@@ -188,7 +189,26 @@ export namespace api {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.job = source["job"];
 	        this.file = source["file"];
+	        this.code = this.convertValues(source["code"], exporting.Code);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class ImportPreview {
 	    token: string;
@@ -1653,6 +1673,38 @@ export namespace docs {
 
 export namespace exporting {
 	
+	export class Code {
+	    code: string;
+	    expiresAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Code(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.expiresAt = source["expiresAt"];
+	    }
+	}
+	export class Entry {
+	    name: string;
+	    detail?: string;
+	    bytes: number;
+	    source?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.detail = source["detail"];
+	        this.bytes = source["bytes"];
+	        this.source = source["source"];
+	    }
+	}
 	export class Include {
 	    worlds: boolean;
 	    screenshots: boolean;
@@ -1710,8 +1762,11 @@ export namespace exporting {
 		}
 	}
 	export class Preview {
-	    linked: number;
-	    bundled: number;
+	    linked: Entry[];
+	    bundled: Entry[];
+	    listed: Entry[];
+	    unlisted: Entry[];
+	    off: Entry[];
 	    bytes: number;
 	
 	    static createFrom(source: any = {}) {
@@ -1720,10 +1775,31 @@ export namespace exporting {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.linked = source["linked"];
-	        this.bundled = source["bundled"];
+	        this.linked = this.convertValues(source["linked"], Entry);
+	        this.bundled = this.convertValues(source["bundled"], Entry);
+	        this.listed = this.convertValues(source["listed"], Entry);
+	        this.unlisted = this.convertValues(source["unlisted"], Entry);
+	        this.off = this.convertValues(source["off"], Entry);
 	        this.bytes = source["bytes"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

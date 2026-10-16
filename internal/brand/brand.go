@@ -107,6 +107,9 @@ func DiscordID() string {
 	return ""
 }
 
+// WebAPI is the launcher's own web API; shared mod lists are stored there.
+const WebAPI = "https://quartz.conspiracy.moe/api/"
+
 // UpdateRepo is the GitHub repository whose releases update the launcher.
 const UpdateRepo = "conspiracy1337/quartz"
 

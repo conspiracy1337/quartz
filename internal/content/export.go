@@ -21,7 +21,8 @@ type ManifestItem struct {
 	URL     string // the identified file's download address, when known
 	// ClientOnly is a mod that runs only on the client (see ServerMods).
 	ClientOnly bool
-	// CurseForge is the file on CurseForge, when identified there.
+	// Modrinth and CurseForge are the file on each platform that knows it.
+	Modrinth   *Ident
 	CurseForge *Ident
 }
 
@@ -46,7 +47,7 @@ func (s *Service) Manifest(ctx context.Context, id string) ([]ManifestItem, erro
 		}
 		k := v.known[e.SHA1]
 		it := ManifestItem{Kind: e.Kind, Rel: e.Rel, Enabled: !strings.HasSuffix(e.Rel, Disabled), SHA1: e.SHA1, Size: e.Size, Name: displayName(e, k),
-			ClientOnly: e.Kind == Mods && s.clientOnly(&v, e), CurseForge: k.CurseForge}
+			ClientOnly: e.Kind == Mods && s.clientOnly(&v, e), Modrinth: k.Modrinth, CurseForge: k.CurseForge}
 		if b, ok := s.d.Store.Blob(e.SHA1); ok {
 			it.SHA512, it.Size = b.SHA512, b.Size
 		}

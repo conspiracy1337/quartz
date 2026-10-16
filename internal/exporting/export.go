@@ -1,11 +1,13 @@
 // Package exporting writes an instance out for sharing: a Modrinth .mrpack that
-// links every file Modrinth can serve and bundles the rest, a full zip of the
-// same shape with everything bundled (Quartz, Prism and the Modrinth App all
-// import it), or a plain mod list in Markdown or CSV.
+// links every file Modrinth can serve and bundles the rest, a CurseForge zip,
+// a full zip of the .mrpack's shape with everything bundled (Quartz, Prism
+// and the Modrinth App all import it), or a mod list as Markdown, JSON or a
+// code that shares it for a week.
 //
 // Only the instance's game folder and the folders it shares are read, through
 // os.Root and regular files only. Accounts, settings, instance.json, launch
-// history, logs and crash reports never get in.
+// history, logs and crash reports never get in, and neither do turned-off
+// (.disabled) files.
 package exporting
 
 import (
@@ -22,9 +24,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"quartz/internal/content"
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/netx"
 	"quartz/internal/core/hashx"
 	"quartz/internal/icons"
 	"quartz/internal/instance"
@@ -39,16 +43,16 @@ const (
 	Mrpack     Format = "mrpack"     // links what Modrinth serves, bundles the rest
 	CurseForge Format = "curseforge" // a CurseForge zip: links what CurseForge serves
 	Zip        Format = "zip"        // the .mrpack index, every file bundled
-	List       Format = "list"       // the enabled mods as a table
+	List       Format = "list"       // the enabled mods that can be downloaded again
 )
 
 // ListFormat is a mod list's file type.
 type ListFormat string
 
 const (
-	Markdown ListFormat = "md"
-	CSV      ListFormat = "csv"
-	HTML     ListFormat = "html"
+	Markdown ListFormat = "md"   // a readable table
+	JSON     ListFormat = "json" // a ModList file
+	ShareCode ListFormat = "code" // a ModList stored online behind a code
 )
 
 // Include chooses the optional parts of a pack. Mods, resource packs,
@@ -76,7 +80,7 @@ func (p Plan) Valid() bool {
 	case Mrpack, CurseForge, Zip:
 		return true
 	case List:
-		return p.List == Markdown || p.List == CSV || p.List == HTML
+		return p.List == Markdown || p.List == JSON || p.List == ShareCode
 	}
 	return false
 }
@@ -92,11 +96,23 @@ func (p Plan) Ext() string {
 	return "." + string(p.List)
 }
 
-// Preview is what a pack export will hold.
+// Entry is one line of a preview: a content file, a top-level file, or a
+// folder's files counted together ("config/", "48 files").
+type Entry struct {
+	Name   string `json:"name"`
+	Detail string `json:"detail,omitempty"` // its version, or how many files
+	Bytes  int64  `json:"bytes"`
+	Source string `json:"source,omitempty"` // where a linked or listed file downloads from
+}
+
+// Preview is what an export holds and leaves out.
 type Preview struct {
-	Linked  int   `json:"linked"`  // files the importer downloads
-	Bundled int   `json:"bundled"` // files inside the pack
-	Bytes   int64 `json:"bytes"`   // bundled bytes before compression
+	Linked   []Entry `json:"linked"`   // packs: files the importer downloads
+	Bundled  []Entry `json:"bundled"`  // packs: files inside the pack
+	Listed   []Entry `json:"listed"`   // lists: the mods in it
+	Unlisted []Entry `json:"unlisted"` // lists: mods no platform serves, left out
+	Off      []Entry `json:"off"`      // turned-off content, never exported
+	Bytes    int64   `json:"bytes"`    // bundled bytes before compression; a list's file size
 }
 
 // Errors callers branch on.
@@ -121,6 +137,11 @@ type Deps struct {
 	// Shared lists the instance-relative folders an instance shares (they
 	// live outside its game folder between runs); nil shares nothing.
 	Shared func(id string) []string
+	// HTTP reaches the launcher's web API for codes; nil makes none.
+	HTTP *netx.Client
+	Now  func() time.Time
+
+	shareURL string // tests only
 }
 
 // Service is safe for concurrent use.
@@ -137,31 +158,84 @@ type file struct {
 	size int64
 }
 
-// Preview counts what a pack export of id would hold.
+// Preview lists what an export of id would hold and leave out.
 func (s *Service) Preview(ctx context.Context, id string, p Plan) (Preview, error) {
-	if !p.Valid() || p.Format == List {
-		return Preview{}, ErrPlan
+	pv := Preview{Linked: []Entry{}, Bundled: []Entry{}, Listed: []Entry{}, Unlisted: []Entry{}, Off: []Entry{}}
+	if !p.Valid() {
+		return pv, ErrPlan
+	}
+	if p.Format == List {
+		l, err := s.modList(ctx, id)
+		if err != nil {
+			return pv, err
+		}
+		for _, m := range l.list.Mods {
+			pv.Listed = append(pv.Listed, Entry{Name: m.Name, Detail: m.Version, Source: m.Source})
+		}
+		pv.Unlisted, pv.Off = entries(l.unlisted), entries(l.off)
+		if p.List != ShareCode {
+			pv.Bytes = renderedSize(l.list, p.List)
+		}
+		return pv, nil
 	}
 	files, err := s.files(id, p.Include)
 	if err != nil {
-		return Preview{}, err
+		return pv, err
 	}
 	pc, err := s.content(ctx, id, p)
 	if err != nil {
-		return Preview{}, err
+		return pv, err
 	}
-	var pv Preview
+	folders := map[string]*Entry{} // other files, counted by top-level folder
+	counts := map[string]int{}
 	for _, f := range files {
-		_, mr := pc.links[f.rel]
-		if _, cf := pc.curse[f.rel]; mr || cf {
-			pv.Linked++
+		it, isItem := pc.items[f.rel]
+		switch {
+		case pc.linked(f.rel):
+			pv.Linked = append(pv.Linked, Entry{Name: nameOf(it), Detail: it.Version, Bytes: f.size, Source: pc.source(f.rel)})
 			continue
+		case isItem:
+			pv.Bundled = append(pv.Bundled, Entry{Name: nameOf(it), Detail: it.Version, Bytes: f.size})
+		case !strings.Contains(f.rel, "/"):
+			pv.Bundled = append(pv.Bundled, Entry{Name: f.rel, Bytes: f.size})
+		default:
+			top, _, _ := strings.Cut(f.rel, "/")
+			e := folders[top]
+			if e == nil {
+				e = &Entry{Name: top + "/"}
+				folders[top] = e
+			}
+			e.Bytes += f.size
+			counts[top]++
 		}
-		pv.Bundled++
 		pv.Bytes += f.size
+	}
+	for top, e := range folders {
+		e.Detail = strconv.Itoa(counts[top]) + " files"
+		if counts[top] == 1 {
+			e.Detail = "1 file"
+		}
+		pv.Bundled = append(pv.Bundled, *e)
+	}
+	pv.Off = entries(pc.off)
+	for _, l := range [][]Entry{pv.Linked, pv.Bundled} {
+		slices.SortFunc(l, func(a, b Entry) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
 	}
 	return pv, nil
 }
+
+// entries names content files for a preview.
+func entries(items []content.ManifestItem) []Entry {
+	out := make([]Entry, 0, len(items))
+	for _, it := range items {
+		out = append(out, Entry{Name: nameOf(it), Detail: it.Version, Bytes: it.Size})
+	}
+	return out
+}
+
+// nameOf is a content file's name, else its file name.
+func nameOf(it content.ManifestItem) string { return orElse(it.Name, path.Base(it.Rel)) }
+
 
 // Write exports id to dest, an absolute path a save dialog returned. The file
 // is written beside it and renamed into place once complete.
@@ -326,6 +400,9 @@ func keepDir(rel string, inc Include) bool {
 
 func keepFile(rel string, inc Include) bool {
 	name := path.Base(rel)
+	if strings.HasSuffix(name, content.Disabled) {
+		return false // turned off: the player doesn't want it, so no one gets it
+	}
 	if name == "session.lock" || strings.HasSuffix(name, ".part") || strings.HasSuffix(name, ".tmp") {
 		return false
 	}
@@ -345,15 +422,32 @@ func keepFile(rel string, inc Include) bool {
 
 // packContent is what a pack export knows about the content, by path: the
 // files an .mrpack may link, the files a CurseForge zip may name (a full zip
-// links nothing), and the client-only mods.
+// links nothing), the client-only mods, and every content file it ships;
+// off are the turned-off files it leaves out.
 type packContent struct {
 	links  map[string]modpack.IndexFile
 	curse  map[string]modpack.CurseFile
 	client map[string]bool
+	items  map[string]content.ManifestItem
+	off    []content.ManifestItem
+}
+
+func (pc packContent) linked(rel string) bool {
+	_, mr := pc.links[rel]
+	_, cf := pc.curse[rel]
+	return mr || cf
+}
+
+// source is where a linked file downloads from.
+func (pc packContent) source(rel string) string {
+	if _, ok := pc.curse[rel]; ok {
+		return "curseforge"
+	}
+	return "modrinth"
 }
 
 func (s *Service) content(ctx context.Context, id string, p Plan) (packContent, error) {
-	pc := packContent{links: map[string]modpack.IndexFile{}, curse: map[string]modpack.CurseFile{}, client: map[string]bool{}}
+	pc := packContent{links: map[string]modpack.IndexFile{}, curse: map[string]modpack.CurseFile{}, client: map[string]bool{}, items: map[string]content.ManifestItem{}}
 	var items []content.ManifestItem
 	var err error
 	if p.Format == Mrpack || p.Format == CurseForge {
@@ -365,6 +459,11 @@ func (s *Service) content(ctx context.Context, id string, p Plan) (packContent, 
 		return pc, err
 	}
 	for _, it := range items {
+		if !it.Enabled {
+			pc.off = append(pc.off, it)
+			continue
+		}
+		pc.items[it.Rel] = it
 		if it.ClientOnly {
 			pc.client[it.Rel] = true
 		}
@@ -377,8 +476,7 @@ func (s *Service) content(ctx context.Context, id string, p Plan) (packContent, 
 		if p.Format != Mrpack {
 			continue
 		}
-		f := modpack.IndexFile{Path: strings.TrimSuffix(it.Rel, content.Disabled), SHA1: it.SHA1, SHA512: it.SHA512, Size: it.Size, URL: it.URL,
-			Optional: !it.Enabled, ClientOnly: it.ClientOnly}
+		f := modpack.IndexFile{Path: it.Rel, SHA1: it.SHA1, SHA512: it.SHA512, Size: it.Size, URL: it.URL, ClientOnly: it.ClientOnly}
 		if f.SHA512 == "" && strings.HasPrefix(f.URL, "https://cdn.modrinth.com/") {
 			// The store didn't record it (a file in a linked folder): hashed now.
 			if sum, err := hashx.File(s.d.Instances.Path(id, it.Rel), hashx.SHA512); err == nil {
@@ -403,7 +501,7 @@ func curseFile(it content.ManifestItem) (modpack.CurseFile, bool) {
 	if err1 != nil || err2 != nil || project <= 0 || file <= 0 {
 		return modpack.CurseFile{}, false
 	}
-	return modpack.CurseFile{Project: project, File: file, Required: it.Enabled}, true
+	return modpack.CurseFile{Project: project, File: file, Required: true}, true
 }
 
 // items lists the instance's content after asking the platforms about
@@ -498,15 +596,15 @@ func (s *Service) curseIndex(ctx context.Context, zw *zip.Writer, id string, cm 
 	if err := put(zw, "manifest.json", bytes.NewReader(buf.Bytes())); err != nil {
 		return err
 	}
-	rows, err := s.listRows(ctx, id)
-	if errors.Is(err, ErrNoMods) {
+	l, err := s.modList(ctx, id)
+	if errors.Is(err, ErrNoMods) || err == nil && len(l.list.Mods) == 0 {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
 	buf.Reset()
-	if err := writeHTML(&buf, rows); err != nil {
+	if err := writeHTML(&buf, l.list.Mods); err != nil {
 		return err
 	}
 	return put(zw, "modlist.html", bytes.NewReader(buf.Bytes()))

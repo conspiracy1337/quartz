@@ -30,11 +30,13 @@ type Exports struct {
 
 func NewExports(ctx *Ctx, d ExportDeps) *Exports { return &Exports{ctx: ctx, d: d} }
 
-// ExportResult is a started export: a job for packs, or the saved file's
-// name for a mod list (written at once). Empty when the dialog was cancelled.
+// ExportResult is a started export: a job for packs, the saved file's name
+// for a mod list (written at once), or a shared list's code. Empty when the
+// save dialog was cancelled.
 type ExportResult struct {
-	Job  string `json:"job,omitempty"`
-	File string `json:"file,omitempty"`
+	Job  string          `json:"job,omitempty"`
+	File string          `json:"file,omitempty"`
+	Code *exporting.Code `json:"code,omitempty"`
 }
 
 // Meta is what the export dialog fills in: what the last export was
@@ -53,7 +55,7 @@ func (x *Exports) Meta(id string) (instance.ExportMeta, error) {
 	return instance.ExportMeta{Name: in.Name, Version: "1.0.0"}, nil
 }
 
-// Preview counts what a pack export would link and bundle.
+// Preview lists what an export would hold and leave out.
 func (x *Exports) Preview(id string, p exporting.Plan) (exporting.Preview, error) {
 	if err := checkInstanceID(id); err != nil {
 		return exporting.Preview{}, err
@@ -75,6 +77,10 @@ func (x *Exports) Export(id string, p exporting.Plan) (ExportResult, error) {
 	}
 	if err := x.guard(id); err != nil {
 		return ExportResult{}, err
+	}
+	if p.Format == exporting.List && p.List == exporting.ShareCode {
+		code, err := x.d.Service.Share(x.ctx.Get(), id)
+		return ExportResult{Code: &code}, err
 	}
 	in, err := x.d.Instances.Get(id)
 	if err != nil {
