@@ -25,6 +25,7 @@ import (
 	"quartz/internal/core/procx"
 	"quartz/internal/core/shlex"
 	"quartz/internal/core/slp"
+	"quartz/internal/focusmute"
 	"quartz/internal/gamelog"
 	"quartz/internal/install"
 	"quartz/internal/instance"
@@ -187,7 +188,8 @@ func (l *Launcher) command(sp *spec) (procx.Spec, []byte, string, error) {
 	}
 	argv = append(argv, java.LaunchBinary(sp.rt.Path))
 	argv = append(argv, args...)
-	cmd := procx.Spec{Argv: argv, Dir: sp.gameDir, Env: gameEnv(sp.vars, eff, sp.sandboxed)}
+	// The game's audio streams carry its run, so focusmute can find them.
+	cmd := procx.Spec{Argv: argv, Dir: sp.gameDir, Env: append(gameEnv(sp.vars, eff, sp.sandboxed), focusmute.Env(sp.runID)...)}
 	switch {
 	case sp.sandboxed:
 		if cmd, sp.jail, err = l.cfg.Sandbox.Wrap(l.sandboxRun(sp, argv), cmd); err != nil {

@@ -16,6 +16,7 @@ import (
 	"quartz/internal/core/logging"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
+	"quartz/internal/focusmute"
 	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
@@ -294,6 +295,11 @@ func TestTwoCopies(t *testing.T) {
 	})
 	states := make(chan launch.State, 8)
 	failed := make(chan launch.Failure, 2)
+	// QUARTZ_IT_MUTE=1 also mutes the copies whose window isn't focused.
+	if os.Getenv("QUARTZ_IT_MUTE") == "1" && focusmute.Available() {
+		w := focusmute.New(focusmute.Config{Games: l.Games, Enabled: func() bool { return true }, Log: h.log})
+		bus.Subscribe(events.GameState, func(any) { go w.Update() })
+	}
 	bus.Subscribe(events.GameState, func(p any) { states <- p.(launch.State) })
 	bus.Subscribe(events.LaunchFailed, func(p any) { failed <- p.(launch.Failure) })
 	wait := func(want string) launch.State {

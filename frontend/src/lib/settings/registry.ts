@@ -36,8 +36,8 @@ export interface SettingDef {
   /** Static text, or text built from facts about this PC (installed memory). */
   desc?: string | ((info: AppInfo | undefined) => string);
   control: Control;
-  /** Shown only while this holds (e.g. custom proxy rows). */
-  when?: (s: Settings) => boolean;
+  /** Shown only while this holds (e.g. custom proxy rows, or a setting only some systems have). */
+  when?: (s: Settings, info: AppInfo | undefined) => boolean;
 }
 
 // Equivalent settings use the same wording everywhere (global and instance settings).
@@ -53,6 +53,8 @@ export const registry: SettingDef[] = [
   { id: 'startPage', tab: 'general', group: 'Launcher', title: 'Open on startup', control: { kind: 'seg', options: [{ value: 'home', label: 'Home' }, { value: 'library', label: 'Library' }, { value: 'last-instance', label: 'Last instance' }], get: (s) => s.general.startPage, set: (s, v) => (s.general.startPage = v) } },
   { id: 'startWithComputer', tab: 'general', group: 'Launcher', title: 'Start with the computer', desc: 'Starts minimized so updates are ready.', control: { kind: 'toggle', get: (s) => s.general.startWithComputer, set: (s, v) => (s.general.startWithComputer = v) } },
   { id: 'setup', tab: 'general', group: 'Launcher', title: 'First-run setup', desc: 'Walk through sign-in and importing from other launchers again.', control: { kind: 'link', label: 'Run again', route: { name: 'setup', step: 1 } } },
+  // Linux only for now: elsewhere the system offers no per-program volume to set.
+  { id: 'muteUnfocused', tab: 'general', group: 'While playing', title: 'Mute the game when it isn’t focused', desc: (info) => (info && !info.muteUnfocused ? 'Needs an X or XWayland display and pactl.' : 'Silences a game while you use another window.'), when: (_s, info) => info?.os === 'linux', control: { kind: 'toggle', get: (s) => s.general.muteUnfocused, set: (s, v) => (s.general.muteUnfocused = v), disabled: (info) => !!info && !info.muteUnfocused } },
 
   { id: 'parallel', tab: 'downloads', group: 'Downloads', title: 'Parallel downloads', control: { kind: 'range', min: 1, max: 16, get: (s) => s.downloads.parallel, set: (s, v) => (s.downloads.parallel = v) } },
   { id: 'watchDownloads', tab: 'downloads', group: 'Downloads', title: 'Watch the Downloads folder', desc: 'Picks up CurseForge files that must be downloaded by hand.', control: { kind: 'toggle', get: (s) => s.downloads.watchDownloads, set: (s, v) => (s.downloads.watchDownloads = v) } },
@@ -89,7 +91,7 @@ export const registry: SettingDef[] = [
 ];
 
 /** Whether a setting is currently shown (rows with `when` hide until it holds). */
-export const visible = (d: SettingDef, s: Settings | null) => !d.when || (!!s && d.when(s));
+export const visible = (d: SettingDef, s: Settings | null, info?: AppInfo) => !d.when || (!!s && d.when(s, info));
 
 /** The settings of one tab, grouped by section heading in registry order. */
 export function groupsFor(tab: SettingsTab): { group: string; defs: SettingDef[] }[] {

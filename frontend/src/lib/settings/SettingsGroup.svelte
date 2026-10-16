@@ -9,8 +9,8 @@
   /** A heading over a card of setting rows. A textarea setting renders as a full-width block. */
   interface Props { title?: string; defs: SettingDef[]; mark?: string }
   let { title, defs: all, mark }: Props = $props();
-  const defs = $derived(all.filter((d) => visible(d, prefs.value)));
   const info = query(() => api.app.info());
+  const defs = $derived(all.filter((d) => visible(d, prefs.value, info.data)));
 </script>
 
 {#snippet rows()}
@@ -33,7 +33,9 @@
   {#if at < 0 || !mark?.trim()}{text}{:else}{text.slice(0, at)}<mark>{text.slice(at, at + mark.trim().length)}</mark>{text.slice(at + mark.trim().length)}{/if}
 {/snippet}
 
-{#if title}
+{#if !defs.length}
+  <!-- Every row is hidden here (a setting this system doesn't have). -->
+{:else if title}
   <section class="grp" aria-label={title}>
     <h2 class="h3">{title}</h2>
     <div class="card">{@render rows()}</div>

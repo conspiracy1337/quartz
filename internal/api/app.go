@@ -12,6 +12,7 @@ import (
 	"quartz/internal/core/paths"
 	"quartz/internal/core/procx"
 	"quartz/internal/core/sysinfo"
+	"quartz/internal/focusmute"
 )
 
 // App exposes product and environment information.
@@ -87,6 +88,8 @@ type AppInfo struct {
 	OS           string `json:"os"`
 	MemoryMB     int    `json:"memoryMb"` // installed RAM, 0 if unknown
 	Discord      bool   `json:"discord"`  // Discord status is set up in this build
+	// MuteUnfocused: games can be muted while unfocused here (Linux with X and pactl).
+	MuteUnfocused bool `json:"muteUnfocused"`
 }
 
 func (a *App) Info() AppInfo {
@@ -94,7 +97,7 @@ func (a *App) Info() AppInfo {
 	return AppInfo{
 		Name: brand.Name, ShortName: brand.ShortName, Version: brand.Version,
 		DataDir: a.paths.Root, Portable: a.paths.Portable, OS: runtime.GOOS, MemoryMB: int(mem.Total >> 20), //nolint:gosec // RAM in MB fits an int
-		Discord: a.d.Discord, DataDirFixed: a.paths.Chosen != paths.ByDefault && a.paths.Chosen != paths.ByPointer,
+		Discord: a.d.Discord, MuteUnfocused: focusmute.Available(), DataDirFixed: a.paths.Chosen != paths.ByDefault && a.paths.Chosen != paths.ByPointer,
 	}
 }
 

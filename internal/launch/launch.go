@@ -26,6 +26,7 @@ import (
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
 	"quartz/internal/core/version"
+	"quartz/internal/focusmute"
 	"quartz/internal/gamelog"
 	"quartz/internal/install"
 	"quartz/internal/instance"
@@ -191,6 +192,20 @@ func (l *Launcher) AccountInUse(id string) bool {
 		}
 	}
 	return false
+}
+
+// Games lists every running copy of every instance: its run and the process
+// the launcher started, for focusmute.
+func (l *Launcher) Games() []focusmute.Game {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []focusmute.Game
+	for _, copies := range l.running {
+		for _, r := range copies {
+			out = append(out, focusmute.Game{Run: r.id, PID: r.pid})
+		}
+	}
+	return out
 }
 
 // Running reports whether an instance's game is running.
