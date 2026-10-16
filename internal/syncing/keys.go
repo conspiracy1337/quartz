@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 
@@ -104,14 +105,15 @@ func (s *Service) KeyCatalog() []KeyChoice {
 		}
 		out = append(out, KeyChoice{ID: id, Name: n.name, Category: n.mod, Key: label(current[id]), Shared: shared[id], key: current[id]})
 	}
-	slices.SortStableFunc(out, func(a, b KeyChoice) int {
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
 		if ra, rb := rank(a.Category), rank(b.Category); ra != rb {
-			return ra - rb
+			return ra < rb
 		}
-		if c := strings.Compare(a.Category, b.Category); c != 0 {
-			return c
+		if a.Category != b.Category {
+			return a.Category < b.Category
 		}
-		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 	})
 	return out
 }

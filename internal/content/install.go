@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"sort"
 	"strings"
 
 	"quartz/internal/instance"
@@ -271,15 +272,7 @@ func (s *Service) planInstallDeps(ctx context.Context, pl *plan, out *InstallPla
 		}
 	}
 	// Required first, as the dialog lists them.
-	slices.SortStableFunc(out.Deps, func(a, b InstallDep) int {
-		switch {
-		case a.Required == b.Required:
-			return 0
-		case a.Required:
-			return -1
-		}
-		return 1
-	})
+	sort.SliceStable(out.Deps, func(i, j int) bool { return out.Deps[i].Required && !out.Deps[j].Required })
 }
 
 // ApplyInstall downloads the plan's version, its required dependencies and

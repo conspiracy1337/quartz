@@ -6,7 +6,6 @@
 package screenshots
 
 import (
-	"cmp"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -14,7 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -150,7 +149,13 @@ func (s *Service) List(id string) ([]Shot, error) {
 			Width: w, Height: h, Bytes: fi.Size(), Image: localimg.URL("shot", token), Thumb: localimg.URL("thumb", token),
 		})
 	}
-	slices.SortFunc(out, func(a, b Shot) int { return cmp.Or(cmp.Compare(b.TakenAt, a.TakenAt), strings.Compare(b.ID, a.ID)) })
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.TakenAt != b.TakenAt {
+			return b.TakenAt < a.TakenAt
+		}
+		return b.ID < a.ID
+	})
 	return out, nil
 }
 
@@ -181,7 +186,7 @@ func (s *Service) Recent(n int) []Shot {
 			}
 		}
 	}
-	slices.SortStableFunc(all, func(a, b Shot) int { return cmp.Compare(b.TakenAt, a.TakenAt) })
+	sort.SliceStable(all, func(i, j int) bool { return all[j].TakenAt < all[i].TakenAt })
 	return all[:min(n, len(all))]
 }
 

@@ -7,7 +7,6 @@
 package worlds
 
 import (
-	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -17,7 +16,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -132,8 +131,12 @@ func (s *Service) List(ctx context.Context, id string) ([]World, error) {
 		})
 	}
 	_ = g.Wait()
-	slices.SortFunc(out, func(a, b World) int {
-		return cmp.Or(cmp.Compare(b.LastPlayed, a.LastPlayed), strings.Compare(a.Folder, b.Folder))
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.LastPlayed != b.LastPlayed {
+			return b.LastPlayed < a.LastPlayed
+		}
+		return a.Folder < b.Folder
 	})
 	return out, nil
 }

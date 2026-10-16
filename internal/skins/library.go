@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -104,7 +105,7 @@ func (l *Library) Flush() error { return l.file.Flush() }
 // List returns every skin, newest first.
 func (l *Library) List() []Skin {
 	out := slices.Clone(l.file.Get().Skins)
-	slices.SortStableFunc(out, func(a, b Skin) int { return b.Added.Compare(a.Added) })
+	sort.SliceStable(out, func(i, j int) bool { return out[j].Added.Before(out[i].Added) })
 	return out
 }
 

@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -101,7 +101,7 @@ func (s *Store) TrashList() []TrashEntry {
 			out = append(out, e)
 		}
 	}
-	slices.SortFunc(out, func(a, b TrashEntry) int { return int(b.TrashedAt - a.TrashedAt) })
+	sort.Slice(out, func(i, j int) bool { return out[i].TrashedAt > out[j].TrashedAt })
 	return out
 }
 

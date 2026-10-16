@@ -3,7 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
-	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,15 +92,7 @@ func (m *Manager) next(now time.Time) (string, time.Duration) {
 		return "", idleCheck
 	}
 	list, def := m.cfg.Store.List()
-	slices.SortStableFunc(list, func(a, b Account) int {
-		switch {
-		case a.ID == def:
-			return -1
-		case b.ID == def:
-			return 1
-		}
-		return 0
-	})
+	sort.SliceStable(list, func(i, j int) bool { return list[i].ID == def })
 	wait := idleCheck
 	for _, a := range list {
 		if a.Kind != Microsoft || a.Reauth || m.cfg.InUse(a.ID) {

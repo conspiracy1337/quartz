@@ -106,7 +106,12 @@ func pickOffload(gpus []gpu) (gpu, bool) {
 		}
 		return s
 	}
-	best := slices.MaxFunc(gpus, func(a, b gpu) int { return score(a) - score(b) })
+	best := gpus[0]
+	for _, g := range gpus[1:] {
+		if score(g) > score(best) {
+			best = g
+		}
+	}
 	return best, !best.boot
 }
 

@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -160,7 +161,7 @@ func (m *Manager) Runtimes(ctx context.Context) []Runtime {
 	m.mu.Lock()
 	out := append(m.managed(), m.detected...)
 	m.mu.Unlock()
-	slices.SortStableFunc(out, func(a, b Runtime) int { return b.Major - a.Major })
+	sort.SliceStable(out, func(i, j int) bool { return out[j].Major < out[i].Major })
 	return out
 }
 

@@ -2,7 +2,7 @@ package content
 
 import (
 	"context"
-	"slices"
+	"sort"
 	"strings"
 )
 
@@ -72,6 +72,6 @@ func (s *Service) Manifest(ctx context.Context, id string) ([]ManifestItem, erro
 		}
 		out = append(out, it)
 	}
-	slices.SortFunc(out, func(a, b ManifestItem) int { return strings.Compare(a.Rel, b.Rel) })
+	sort.Slice(out, func(i, j int) bool { return out[i].Rel < out[j].Rel })
 	return out, nil
 }
