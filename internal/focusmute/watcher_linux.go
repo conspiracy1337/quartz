@@ -5,112 +5,65 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"log/slog"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
 // pactlTimeout bounds one pactl call.
 const pactlTimeout = 5 * time.Second
 
-// Available reports whether games can be muted on focus loss here: a local
-// X display (XWayland counts) to follow the focus and pactl to mute with.
-func Available() bool {
+// available: a local X display (XWayland counts) to follow the focus and
+// pactl to mute with.
+func available() bool {
 	_, _, ok := displaySocket(os.Getenv("DISPLAY"))
 	_, err := exec.LookPath("pactl")
 	return ok && err == nil
 }
 
-// Watcher follows the focus while the setting is on and a game runs.
-type Watcher struct {
-	c Config
+// pulse follows the focus over X11 and mutes sink inputs through pactl.
+type pulse struct{ pactl string }
 
-	mu      sync.Mutex
-	cancel  context.CancelFunc // the running watch, nil while idle
-	pactl   string
-	focused string // the run whose window has focus ("" for none)
-}
-
-// New returns a Watcher; call Update when the setting or the games change.
-func New(c Config) *Watcher {
-	if c.Log == nil {
-		c.Log = slog.New(slog.DiscardHandler)
-	}
-	return &Watcher{c: c}
-}
-
-// Update starts or stops watching to match the setting and the running
-// games, and applies the mute state for games that started or exited.
-func (w *Watcher) Update() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	on := w.c.Enabled() && len(w.c.Games()) > 0
-	switch {
-	case on && w.cancel == nil:
-		w.start()
-	case !on && w.cancel != nil:
-		w.cancel()
-		w.cancel = nil
-		w.apply(true) // the setting went off: unmute what we muted
-	case on:
-		w.apply(false)
-	}
-}
-
-// start connects to X and runs the two watches: focus changes and new
-// audio streams (a game opens its stream after its window). w.mu is held.
-func (w *Watcher) start() {
+func newBackend() (backend, error) {
 	p, err := exec.LookPath("pactl")
 	if err != nil {
-		return
+		return nil, err
 	}
+	return &pulse{pactl: p}, nil
+}
+
+func (p *pulse) watch(ctx context.Context, focus func(int), changed func()) (int, error) {
 	x, err := dialX()
 	if err == nil {
 		err = x.watch()
 	}
 	if err != nil {
-		w.c.Log.Warn("can't follow the focused window", "err", err)
 		if x != nil {
 			_ = x.Close()
 		}
-		return
+		return 0, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	w.cancel, w.pactl = cancel, p
 	go func() {
 		<-ctx.Done()
 		_ = x.Close()
 	}()
-	w.focus(x)
-	w.apply(false)
+	// The connection is this goroutine's alone from here on.
+	pid := x.focusedPID()
 	go func() {
 		for x.focusChanged() == nil {
-			w.mu.Lock()
-			if ctx.Err() == nil { // not stopped meanwhile (stopping unmutes)
-				w.focus(x)
-				w.apply(false)
-			}
-			w.mu.Unlock()
+			focus(x.focusedPID())
 		}
 	}()
-	go w.streams(ctx)
+	go p.subscribe(ctx, changed)
+	return pid, nil
 }
 
-// focus records which game owns the focused window. w.mu is held.
-func (w *Watcher) focus(x *xconn) {
-	w.focused = ""
-	if pid := x.focusedPID(); pid > 0 {
-		w.focused = gameOf(pid, w.c.Games(), parentPID)
-	}
-}
-
-// streams re-applies the mute state whenever an audio stream appears.
-func (w *Watcher) streams(ctx context.Context) {
-	cmd := exec.CommandContext(ctx, w.pactl, "subscribe") //nolint:gosec // pactl from PATH, fixed arguments
+// subscribe calls changed whenever an audio stream appears (a game opens
+// its stream after its window).
+func (p *pulse) subscribe(ctx context.Context, changed func()) {
+	cmd := exec.CommandContext(ctx, p.pactl, "subscribe") //nolint:gosec // pactl from PATH, fixed arguments
 	out, err := cmd.StdoutPipe()
 	if err != nil || cmd.Start() != nil {
 		return
@@ -118,42 +71,49 @@ func (w *Watcher) streams(ctx context.Context) {
 	sc := bufio.NewScanner(out)
 	for sc.Scan() {
 		if strings.Contains(sc.Text(), "'new' on sink-input") {
-			w.mu.Lock()
-			if ctx.Err() == nil {
-				w.apply(false)
-			}
-			w.mu.Unlock()
+			changed()
 		}
 	}
 	_ = cmd.Wait()
 }
 
-// apply mutes every game's streams but the focused one's (off unmutes all
-// of them). w.mu is held.
-func (w *Watcher) apply(off bool) {
-	if w.pactl == "" {
-		return
-	}
+// sinkInput is one playing stream as pactl lists it.
+type sinkInput struct {
+	Index      uint64            `json:"index"`
+	Mute       bool              `json:"mute"`
+	Properties map[string]string `json:"properties"`
+}
+
+func (p *pulse) streams() ([]Stream, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), pactlTimeout)
 	defer cancel()
-	raw, err := exec.CommandContext(ctx, w.pactl, "-f", "json", "list", "sink-inputs").Output() //nolint:gosec // fixed arguments
+	raw, err := exec.CommandContext(ctx, p.pactl, "-f", "json", "list", "sink-inputs").Output() //nolint:gosec // fixed arguments
 	if err != nil {
-		return
+		return nil, err
 	}
-	var list []Stream
-	if json.Unmarshal(raw, &list) != nil {
-		return
+	var list []sinkInput
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return nil, err
 	}
-	for _, c := range plan(list, w.c.Games(), w.focused, off) {
-		mute := "0"
-		if c.Mute {
-			mute = "1"
-		}
-		if err := exec.CommandContext(ctx, w.pactl, "set-sink-input-mute", strconv.Itoa(c.Index), mute).Run(); err != nil { //nolint:gosec // a number and 0/1
-			w.c.Log.Warn("muting a game failed", "stream", c.Index, "err", err)
-		}
+	out := make([]Stream, len(list))
+	for i, s := range list {
+		// Only the tag counts: the process ids a sandboxed game reports are its own.
+		out[i] = Stream{ID: s.Index, Run: s.Properties[runProp], Mute: s.Mute}
 	}
+	return out, nil
 }
+
+func (p *pulse) setMute(id uint64, mute bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), pactlTimeout)
+	defer cancel()
+	v := "0"
+	if mute {
+		v = "1"
+	}
+	return exec.CommandContext(ctx, p.pactl, "set-sink-input-mute", strconv.FormatUint(id, 10), v).Run() //nolint:gosec // a number and 0/1
+}
+
+func (*pulse) parents() func(int) int { return parentPID }
 
 // parentPID is a process's parent from /proc (0 when it is gone).
 func parentPID(pid int) int {

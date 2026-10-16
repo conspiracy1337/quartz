@@ -10,7 +10,7 @@
   interface Props { title?: string; defs: SettingDef[]; mark?: string }
   let { title, defs: all, mark }: Props = $props();
   const info = query(() => api.app.info());
-  const defs = $derived(all.filter((d) => visible(d, prefs.value, info.data)));
+  const defs = $derived(all.filter((d) => visible(d, prefs.value)));
 </script>
 
 {#snippet rows()}

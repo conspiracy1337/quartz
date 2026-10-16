@@ -17,3 +17,8 @@ linters:
       - path: internal/core/(nbt|slp)/
         linters: [gosec]
         text: G115
+      # COM through method tables: every call hands pointers over as uintptr
+      # (call is //go:uintptrescapes, so they stay alive and in place).
+      - path: internal/focusmute/watcher_windows\.go
+        linters: [gosec]
+        text: G103

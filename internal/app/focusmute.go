@@ -6,8 +6,8 @@ import (
 )
 
 // watchFocus mutes games while their window isn't focused (General →
-// "Mute the game when it isn't focused"; Linux only). It runs only while
-// the setting is on and a game runs.
+// "Mute the game when it isn't focused"). It runs only while the setting
+// is on and a game runs.
 func (a *app) watchFocus() {
 	if !focusmute.Available() {
 		return

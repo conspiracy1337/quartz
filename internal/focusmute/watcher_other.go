@@ -1,15 +1,10 @@
-//go:build !linux
+//go:build !linux && !windows && !(darwin && cgo)
 
 package focusmute
 
-// Watcher does nothing outside Linux: there is no per-program volume to set.
-type Watcher struct{}
+import "errors"
 
-// Available reports whether this computer can mute games on focus loss.
-func Available() bool { return false }
+// Elsewhere there is no per-program volume to set.
+func available() bool { return false }
 
-// New returns a Watcher.
-func New(Config) *Watcher { return &Watcher{} }
-
-// Update follows the setting and the running games.
-func (*Watcher) Update() {}
+func newBackend() (backend, error) { return nil, errors.ErrUnsupported }
