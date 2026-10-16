@@ -7,6 +7,7 @@
 //	go run ./tools/release sign <file>                  sign any file (file.minisig)
 //	go run ./tools/release verify <file>…               check built programs (tags, size)
 //	go run ./tools/release ldflags                      service-ID linker flags for development builds
+//	go run ./tools/release icons                        stage assets/appicon.png for a development wails build
 //
 // Targets default to what this computer can build: linux-amd64,
 // windows-amd64 and windows-arm64 on Linux; darwin-universal on a Mac.
@@ -36,6 +37,7 @@ const usage = `usage:
   release sign <file>
   release verify <file>…
   release ldflags
+  release icons
 `
 
 func main() {
@@ -79,6 +81,8 @@ func run(ctx context.Context, args []string) error {
 		return signFile(args[1])
 	case "ldflags":
 		return devFlags()
+	case "icons":
+		return stageIcons()
 	case "verify":
 		if len(args) < 2 {
 			return fmt.Errorf("verify needs a file\n%s", usage)

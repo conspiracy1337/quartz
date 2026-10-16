@@ -7,7 +7,6 @@
 package desktop
 
 import (
-	_ "embed"
 	"errors"
 	"log/slog"
 	"os"
@@ -18,11 +17,6 @@ import (
 	"quartz/internal/core/jsonfile"
 	"quartz/internal/intent"
 )
-
-// Icon is the launcher's icon (512 px PNG).
-//
-//go:embed icon.png
-var Icon []byte
 
 // Schemes are the link schemes the launcher opens.
 var Schemes = []string{"modrinth", "curseforge", brand.Scheme}

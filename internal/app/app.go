@@ -26,6 +26,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"quartz/assets"
 	"quartz/internal/accounts"
 	"quartz/internal/api"
 	"quartz/internal/auth"
@@ -198,7 +199,7 @@ func Run(o Options) error {
 		},
 		// The program name is the Wayland app_id, which picks the desktop
 		// entry (and so the icon); Icon covers X11 windows without one.
-		Linux: &linux.Options{ProgramName: brand.AppID, Icon: desktop.Icon},
+		Linux: &linux.Options{ProgramName: brand.AppID, Icon: assets.Icon},
 		// WebView2 keeps its files in the data folder (webview.Isolate on Linux).
 		Windows: &windows.Options{WebviewUserDataPath: a.paths.Webview()},
 		// macOS hands links and opened files to the app bundle, not argv.
