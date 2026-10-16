@@ -140,7 +140,9 @@ func TestHost(t *testing.T) {
 				fabricMod(t, filepath.Join(mods, "qtest-server.jar"), "qtest_server", "*")
 			}
 			port := freePort(t)
-			if err := svc.Start(in.ID, host.Options{Port: port, MaxPlayers: 10, MemoryMB: 2048}); err != nil {
+			// QUARTZ_IT_HOST_SANDBOX=1 sandboxes the server of an unsandboxed instance (the Host dialog's switch).
+			switched := preset == "" && os.Getenv("QUARTZ_IT_HOST_SANDBOX") != ""
+			if err := svc.Start(in.ID, host.Options{Port: port, MaxPlayers: 10, MemoryMB: 2048, ViewDistance: 7, MOTD: "Quartz IT", Sandbox: switched}); err != nil {
 				t.Fatal(err)
 			}
 			// A failing case still stops its server (it runs in its own process group).
@@ -150,13 +152,36 @@ func TestHost(t *testing.T) {
 				svc.Close(ctx)
 			})
 			wait(t, states, "running", 15*time.Minute)
-			if preset != "" && runtime.GOOS == "linux" {
+			pidLine, _ := os.ReadFile(filepath.Join(svc.Dir(in.ID), ".quartz", "pid"))
+			pid := strings.Fields(string(pidLine) + " ")[0]
+			if (preset != "" || switched) && runtime.GOOS == "linux" {
 				// The recorded server process is the sandbox around java.
-				pid, _ := os.ReadFile(filepath.Join(svc.Dir(in.ID), ".quartz", "pid"))
-				comm, _ := os.ReadFile(filepath.Join("/proc", strings.TrimSpace(string(pid)), "comm"))
+				comm, _ := os.ReadFile(filepath.Join("/proc", pid, "comm"))
 				if strings.TrimSpace(string(comm)) != "bwrap" {
 					t.Fatalf("the server runs as %q, not in its sandbox", comm)
 				}
+			}
+			if runtime.GOOS == "linux" {
+				cmd, _ := os.ReadFile(filepath.Join("/proc", pid, "cmdline"))
+				for _, flag := range []string{"-Xms2048M", "-Xmx2048M", "-XX:+UseG1GC", "-XX:G1HeapRegionSize=8M", "nogui"} {
+					if !strings.Contains(string(cmd), flag+"\x00") {
+						t.Errorf("the server's command line misses %s", flag)
+					}
+				}
+			}
+			if _, err := os.Stat(filepath.Join(svc.Dir(in.ID), "server-icon.png")); err != nil {
+				t.Errorf("no server icon: %v", err)
+			}
+			// Old servers rewrite server.properties around "Done": read it once it is whole again.
+			var props []byte
+			for range 20 {
+				if props, _ = os.ReadFile(filepath.Join(svc.Dir(in.ID), "server.properties")); strings.Contains(string(props), "motd=") {
+					break
+				}
+				time.Sleep(250 * time.Millisecond)
+			}
+			if !strings.Contains(string(props), "motd=Quartz IT\n") || !strings.Contains(string(props), "view-distance=7\n") {
+				t.Errorf("server.properties misses the dialog's MOTD or render distance:\n%s", props)
 			}
 
 			// Old servers fill in players on their first status refresh after Done.
@@ -272,7 +297,7 @@ func hostAgainAsHard(t *testing.T, svc *host.Service, ws *worlds.Service, states
 	if seed, err := ws.Seed(id, "New world"); err != nil || seed == "0" {
 		t.Errorf("seed %q %v", seed, err)
 	}
-	if err := svc.Start(id, host.Options{World: "New world", Port: port, MaxPlayers: 10, MemoryMB: 2048}); err != nil {
+	if err := svc.Start(id, host.Options{World: "New world", Port: port, MaxPlayers: 10, MemoryMB: 2048, ViewDistance: 10}); err != nil {
 		t.Fatal(err)
 	}
 	wait(t, states, "running", 5*time.Minute)

@@ -17,17 +17,20 @@ import (
 	"sync/atomic"
 	"time"
 
+	"quartz/assets"
 	"quartz/internal/accounts"
 	"quartz/internal/content"
 	"quartz/internal/core/events"
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/linkx"
+	"quartz/internal/core/pngx"
 	"quartz/internal/core/procx"
-	"quartz/internal/core/shlex"
 	"quartz/internal/core/slp"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
+	"quartz/internal/core/version"
 	"quartz/internal/gamelog"
+	"quartz/internal/icons"
 	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
@@ -119,6 +122,14 @@ func (s *Service) Start(id string, o Options) error {
 	} else if s.d.WorldOpen(filepath.Join(saves, world)) {
 		return ErrWorldOpen
 	}
+	if o.Sandbox && !in.Sandbox.On && !s.canSandbox() {
+		return ErrNoSandbox
+	}
+	if o.Icon != "" && s.d.Icons != nil {
+		if _, err := s.d.Icons.Path(o.Icon); err != nil {
+			return ErrBadOption
+		}
+	}
 	if err := s.free(); err != nil {
 		return err
 	}
@@ -132,11 +143,17 @@ func (s *Service) Start(id string, o Options) error {
 		return fmt.Errorf("%w: %d", ErrPortInUse, o.Port)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	// The Manage picks are saved on their own (SaveMods), not by the dialog.
+	o.Mods = s.options(in).Mods
 	srv := &server{id: id, runID: time.Now().Format("20060102-150405.000"), name: in.Name, opts: o, dir: s.Dir(id), saves: saves, world: world,
-		rules: in.Sandbox, cancel: cancel, done: make(chan struct{}), ping: make(chan struct{}, 1)}
-	srv.st = State{InstanceID: id, RunID: srv.runID, State: "starting", Stage: startStage(o.World, world), Port: o.Port, Max: o.MaxPlayers}
+		rules: hostRules(in.Sandbox, o.Sandbox), cancel: cancel, done: make(chan struct{}), ping: make(chan struct{}, 1)}
+	srv.st = State{InstanceID: id, RunID: srv.runID, State: "starting", Stage: startStage(o.World, world), Port: o.Port, Max: o.MaxPlayers,
+		Address: "localhost:" + strconv.Itoa(o.Port)}
 	if o.LAN {
 		srv.st.LAN = lanAddress()
+		if srv.st.LAN != "" {
+			srv.st.Address = srv.st.LAN + ":" + strconv.Itoa(o.Port)
+		}
 	}
 	s.cur = srv
 	s.mu.Unlock()
@@ -161,6 +178,15 @@ func (s *Service) freeLocked() error {
 		return fmt.Errorf("%w: %s is hosting, stop it first", ErrRunning, s.cur.name)
 	}
 	return nil
+}
+
+// hostRules are the sandbox rules a server runs under: the instance's when
+// it is sandboxed, else the Standard rules when the Host dialog asks.
+func hostRules(own rules.Settings, sandbox bool) rules.Settings {
+	if own.On || !sandbox {
+		return own
+	}
+	return rules.Settings{On: true, Preset: rules.Standard}
 }
 
 // bindHost is the address the server listens on.
@@ -274,7 +300,7 @@ func (s *Service) prepare(ctx context.Context, srv *server, in instance.Instance
 	if err := s.layout(ctx, srv, in, res); err != nil {
 		return "", nil, err
 	}
-	return rt.Path, serverArgs(res, eff, srv), nil
+	return rt.Path, serverArgs(res, srv), nil
 }
 
 // gameLabel is "Minecraft 1.21.4" or "Fabric 0.16.10 on Minecraft 1.21.4".
@@ -325,11 +351,15 @@ func (s *Service) layout(ctx context.Context, srv *server, in instance.Instance,
 	}
 	var keep []content.ServerMod
 	if in.Loader != "" {
-		set, err := s.d.Content.ServerMods(ctx, in.ID)
+		mods, err := s.d.Content.ServerMods(ctx, in.ID)
 		if err != nil {
 			return err
 		}
-		keep = set.Keep
+		for _, m := range mods {
+			if runs(m, srv.opts.Mods) {
+				keep = append(keep, m)
+			}
+		}
 	}
 	if err := s.placeMods(filepath.Join(srv.dir, "mods"), keep); err != nil {
 		return err
@@ -347,7 +377,10 @@ func (s *Service) layout(ctx context.Context, srv *server, in instance.Instance,
 		return err
 	}
 	rules, cheats := worldRules(filepath.Join(srv.saves, srv.world), in.Minecraft)
-	if err := writeServerFiles(srv.dir, srv.opts, srv.world, in.Name, rules); err != nil {
+	if err := writeServerFiles(srv.dir, srv.opts, srv.world, in.Name, in.Minecraft, rules); err != nil {
+		return err
+	}
+	if err := s.writeIcon(srv.dir, srv.opts.Icon); err != nil {
 		return err
 	}
 	if cheats && srv.uuid != "" {
@@ -393,32 +426,75 @@ func (s *Service) placeMods(dir string, keep []content.ServerMod) error {
 }
 
 // writeServerFiles writes server.properties (keeping the player's own
-// edits, except where the world's rules decide) and accepts the EULA, as
-// Start server does for the player.
-func writeServerFiles(dir string, o Options, world, name string, rules map[string]string) error {
-	set := map[string]string{
-		"server-port": strconv.Itoa(o.Port), "max-players": strconv.Itoa(o.MaxPlayers), "server-ip": bindHost(o),
-		"online-mode": strconv.FormatBool(!o.Offline), "enable-rcon": "false", "enable-query": "false", "level-name": world,
-	}
-	if o.Offline {
-		set["enforce-secure-profile"] = "false"
-	}
-	maps.Copy(set, rules)
-	// As on LAN, an operator host doesn't stop friends building at spawn.
-	keep := map[string]string{"motd": motd(name), "spawn-protection": "0"}
+// edits, except where the Host dialog or the world's rules decide) and
+// accepts the EULA, as Start server does for the player.
+func writeServerFiles(dir string, o Options, world, name, mc string, rules map[string]string) error {
+	set, keep := dialogProps(o, world, name, mc, rules)
 	if err := writeProps(filepath.Join(dir, "server.properties"), set, keep); err != nil {
 		return err
 	}
 	return fsx.AtomicWrite(filepath.Join(dir, "eula.txt"), []byte("# Accepted by Quartz when you chose Start server.\neula=true\n"), fsx.FilePerm)
 }
 
-// serverArgs is the java command line after the java binary.
-func serverArgs(res *install.Server, eff instance.Effective, srv *server) []string {
-	mem := srv.opts.MemoryMB
-	argv := []string{fmt.Sprintf("-Xms%dM", min(1024, mem)), fmt.Sprintf("-Xmx%dM", mem)}
-	if user, err := shlex.Split(eff.JVMArgs); err == nil {
-		argv = append(argv, user...)
+// dialogProps are the server.properties values a start writes: set ones
+// always (the Host dialog's, then the world's rules, which the dialog's
+// difficulty overrides unless the world is hardcore), keep ones only when
+// the file has none yet.
+func dialogProps(o Options, world, name, mc string, rules map[string]string) (set, keep map[string]string) {
+	set = map[string]string{
+		"server-port": strconv.Itoa(o.Port), "max-players": strconv.Itoa(o.MaxPlayers), "server-ip": bindHost(o),
+		"online-mode": strconv.FormatBool(!o.Offline), "enable-rcon": "false", "enable-query": "false", "level-name": world,
+		"view-distance": strconv.Itoa(o.ViewDistance), "motd": motd(cmp.Or(strings.TrimSpace(o.MOTD), name)),
 	}
+	if o.Offline {
+		set["enforce-secure-profile"] = "false"
+	}
+	if o.World == "" {
+		set["level-seed"] = o.Seed
+	}
+	maps.Copy(set, rules)
+	if o.Difficulty != "" && set["hardcore"] != "true" {
+		set["difficulty"] = o.Difficulty
+		if version.Compare(mc, namedRules) < 0 {
+			set["difficulty"] = strconv.Itoa(slices.Index(difficulties, o.Difficulty))
+		}
+	}
+	// As on LAN, an operator host doesn't stop friends building at spawn.
+	return set, map[string]string{"spawn-protection": "0"}
+}
+
+// writeIcon writes the server's server-icon.png: the picked picture at
+// 64 px, else Quartz's.
+func (s *Service) writeIcon(dir, icon string) error {
+	data := assets.ServerIcon
+	if icon != "" && s.d.Icons != nil {
+		p, err := s.d.Icons.Path(icon)
+		if err != nil {
+			return ErrBadOption
+		}
+		raw, err := fsx.ReadCapped(p, icons.MaxFile)
+		if err != nil {
+			return err
+		}
+		img, err := pngx.Decode(raw, pngx.Limits{MaxBytes: icons.MaxFile, MaxSide: icons.Side})
+		if err != nil {
+			return err
+		}
+		if data, _, err = pngx.Encode(pngx.Square(img, serverIconSide)); err != nil {
+			return err
+		}
+	}
+	return fsx.AtomicWrite(filepath.Join(dir, "server-icon.png"), data, fsx.FilePerm)
+}
+
+// serverIconSide is the size Minecraft wants a server icon.
+const serverIconSide = 64
+
+// serverArgs is the java command line after the java binary: Aikar's
+// flags for the chosen memory (the instance's own JVM arguments are for
+// the game and would clash with them), then how this server starts.
+func serverArgs(res *install.Server, srv *server) []string {
+	argv := aikarFlags(srv.opts.MemoryMB)
 	argv = append(argv, java.Properties...)
 	if res.LogConfig != "" && res.LogArgument != "" {
 		argv = append(argv, strings.ReplaceAll(res.LogArgument, "${path}", res.LogConfig))

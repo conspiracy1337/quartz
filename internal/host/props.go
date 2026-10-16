@@ -1,12 +1,15 @@
 package host
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"quartz/internal/core/fsx"
 )
@@ -108,4 +111,76 @@ func motd(name string) string {
 		s = string(r[:59])
 	}
 	return strings.TrimSpace(s)
+}
+
+// vanillaProps are Minecraft's own server.properties defaults (1.21),
+// which the editor dims lines against.
+var vanillaProps = map[string]string{
+	"accepts-transfers": "false", "allow-flight": "false", "broadcast-console-to-ops": "true", "difficulty": "easy",
+	"enable-command-block": "false", "enable-query": "false", "enable-rcon": "false", "enforce-whitelist": "false",
+	"force-gamemode": "false", "gamemode": "survival", "generate-structures": "true", "hardcore": "false",
+	"level-name": "world", "max-players": "20", "max-world-size": "29999984", "motd": "A Minecraft Server",
+	"online-mode": "true", "pvp": "true", "server-ip": "", "server-port": "25565", "simulation-distance": "10",
+	"spawn-protection": "16", "view-distance": "10", "white-list": "false",
+}
+
+// Properties is what the server.properties editor shows.
+type Properties struct {
+	Text string `json:"text"`
+	// Defaults are Minecraft's values; a line that differs is shown bright,
+	// as are the Dialog keys, which the Host dialog's fields set.
+	Defaults map[string]string `json:"defaults"`
+	Dialog   []string          `json:"dialog"`
+}
+
+// Properties reads the instance's server.properties; before its first
+// start, what a start would write with the saved options.
+func (s *Service) Properties(id string) (Properties, error) {
+	out := Properties{Defaults: vanillaProps, Dialog: []string{"view-distance", "max-players", "server-port"}}
+	raw, err := fsx.ReadCapped(filepath.Join(s.Dir(id), "server.properties"), maxProps)
+	if err == nil {
+		out.Text = string(raw)
+		return out, nil
+	}
+	if !os.IsNotExist(err) {
+		return out, err
+	}
+	in, err := s.d.Instances.Get(id)
+	if err != nil {
+		return out, err
+	}
+	o := s.options(in)
+	set, keep := dialogProps(o, cmp.Or(o.World, "New world"), in.Name, in.Minecraft, nil)
+	all := maps.Clone(vanillaProps)
+	maps.Copy(all, keep)
+	maps.Copy(all, set)
+	var b strings.Builder
+	b.WriteString("#Minecraft server properties\n")
+	for _, k := range slices.Sorted(maps.Keys(all)) {
+		b.WriteString(k + "=" + escapeProp(all[k]) + "\n")
+	}
+	out.Text = b.String()
+	return out, nil
+}
+
+// SaveProperties writes the editor's text as the instance's
+// server.properties; a running server would overwrite it, so it must be
+// stopped first. The Host dialog's keys are set again at the next start.
+func (s *Service) SaveProperties(id, text string) error {
+	if len(text) > maxProps || !utf8.ValidString(text) || strings.ContainsRune(text, 0) {
+		return ErrBadProps
+	}
+	if s.Running(id) {
+		return fmt.Errorf("%w: stop it before editing server.properties", ErrRunning)
+	}
+	if _, err := s.d.Instances.Get(id); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.Dir(id), 0o700); err != nil {
+		return err
+	}
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return fsx.AtomicWrite(filepath.Join(s.Dir(id), "server.properties"), []byte(text), fsx.FilePerm)
 }

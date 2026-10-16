@@ -1811,26 +1811,50 @@ export namespace home {
 
 export namespace host {
 	
-	export class Mods {
-	    total: number;
-	    server: number;
-	    clientOnly: string[];
+	export class Mod {
+	    key: string;
+	    name: string;
+	    icon?: string;
+	    clientOnly: boolean;
+	    on: boolean;
 	
 	    static createFrom(source: any = {}) {
-	        return new Mods(source);
+	        return new Mod(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.total = source["total"];
-	        this.server = source["server"];
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.icon = source["icon"];
 	        this.clientOnly = source["clientOnly"];
+	        this.on = source["on"];
+	    }
+	}
+	export class Properties {
+	    text: string;
+	    defaults: Record<string, string>;
+	    dialog: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Properties(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.defaults = source["defaults"];
+	        this.dialog = source["dialog"];
 	    }
 	}
 	export class Setup {
 	    worlds: worlds.World[];
 	    options: instance.Host;
 	    maxMemoryMB: number;
+	    difficulty: Record<string, string>;
+	    hardcore: Record<string, boolean>;
+	    canSandbox: boolean;
+	    sandboxLocked: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Setup(source);
@@ -1841,6 +1865,10 @@ export namespace host {
 	        this.worlds = this.convertValues(source["worlds"], worlds.World);
 	        this.options = this.convertValues(source["options"], instance.Host);
 	        this.maxMemoryMB = source["maxMemoryMB"];
+	        this.difficulty = source["difficulty"];
+	        this.hardcore = source["hardcore"];
+	        this.canSandbox = source["canSandbox"];
+	        this.sandboxLocked = source["sandboxLocked"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1868,6 +1896,7 @@ export namespace host {
 	    stage?: string;
 	    port: number;
 	    lan?: string;
+	    address: string;
 	    players: number;
 	    max: number;
 	    result?: string;
@@ -1885,6 +1914,7 @@ export namespace host {
 	        this.stage = source["stage"];
 	        this.port = source["port"];
 	        this.lan = source["lan"];
+	        this.address = source["address"];
 	        this.players = source["players"];
 	        this.max = source["max"];
 	        this.result = source["result"];
@@ -2035,11 +2065,18 @@ export namespace instance {
 	}
 	export class Host {
 	    world: string;
+	    seed?: string;
 	    port: number;
 	    maxPlayers: number;
 	    memoryMB: number;
+	    viewDistance: number;
+	    motd: string;
+	    difficulty?: string;
+	    icon?: string;
 	    lan: boolean;
 	    offline: boolean;
+	    sandbox: boolean;
+	    mods?: Record<string, boolean>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Host(source);
@@ -2048,11 +2085,18 @@ export namespace instance {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.world = source["world"];
+	        this.seed = source["seed"];
 	        this.port = source["port"];
 	        this.maxPlayers = source["maxPlayers"];
 	        this.memoryMB = source["memoryMB"];
+	        this.viewDistance = source["viewDistance"];
+	        this.motd = source["motd"];
+	        this.difficulty = source["difficulty"];
+	        this.icon = source["icon"];
 	        this.lan = source["lan"];
 	        this.offline = source["offline"];
+	        this.sandbox = source["sandbox"];
+	        this.mods = source["mods"];
 	    }
 	}
 	export class Into {

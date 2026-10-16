@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"quartz/internal/content"
 	"quartz/internal/core/events"
 	"quartz/internal/core/nbt"
 	"quartz/internal/gamelog"
@@ -27,13 +28,13 @@ func TestWriteProps(t *testing.T) {
 	if err := os.WriteFile(path, []byte(orig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeServerFiles(filepath.Dir(path), Options{Port: 25570, MaxPlayers: 8, LAN: false, Offline: true}, "Wörld\\1", "Ignored", nil); err != nil {
+	if err := writeServerFiles(filepath.Dir(path), Options{Port: 25570, MaxPlayers: 8, ViewDistance: 12, LAN: false, Offline: true, World: "Wörld\\1"}, "Wörld\\1", "Hosted", "1.21.4", nil); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
 	text := string(got)
 	for _, want := range []string{
-		"#Minecraft server properties\n", "motd=My own words\n", "server-port=25570\n", "spawn-protection=0\n", "difficulty = hard\n",
+		"#Minecraft server properties\n", "motd=Hosted\n", "server-port=25570\n", "spawn-protection=0\n", "difficulty = hard\n", "view-distance=12\n",
 		"max-players=8\n", "server-ip=127.0.0.1\n", "online-mode=false\n", "enforce-secure-profile=false\n",
 		"enable-rcon=false\n", "enable-query=false\n", "level-name=W\\u00f6rld\\\\1\n",
 	} {
@@ -44,17 +45,96 @@ func TestWriteProps(t *testing.T) {
 	if eula, _ := os.ReadFile(filepath.Join(filepath.Dir(path), "eula.txt")); !strings.Contains(string(eula), "eula=true") {
 		t.Fatal("the EULA is accepted")
 	}
-	// Shown on the network: every interface, and the motd only fills a gap.
+	if strings.Contains(text, "level-seed") {
+		t.Fatal("an existing world keeps its seed")
+	}
+	// Shown on the network: every interface; an empty MOTD is the instance's name.
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeServerFiles(filepath.Dir(path), Options{Port: 25565, MaxPlayers: 10, LAN: true}, "w", "Survival §cplus\nmore", nil); err != nil {
+	if err := writeServerFiles(filepath.Dir(path), Options{Port: 25565, MaxPlayers: 10, ViewDistance: 10, LAN: true, World: "w"}, "w", "Survival §cplus\nmore", "1.21.4", nil); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = os.ReadFile(path)
 	if text := string(got); !strings.Contains(text, "server-ip=\n") || !strings.Contains(text, "online-mode=true\n") ||
 		!strings.Contains(text, "motd=Survival cplusmore\n") || strings.Contains(text, "enforce-secure-profile") {
 		t.Fatalf("lan properties:\n%s", text)
+	}
+}
+
+func TestDialogProps(t *testing.T) {
+	o := Options{Port: 25565, MaxPlayers: 10, ViewDistance: 8, MOTD: "  Friends only ", Difficulty: "hard", Seed: "-42"}
+	set, _ := dialogProps(o, "New world", "Inst", "1.21.4", map[string]string{"difficulty": "easy", "hardcore": "false", "gamemode": "creative"})
+	if set["difficulty"] != "hard" || set["gamemode"] != "creative" || set["motd"] != "Friends only" || set["level-seed"] != "-42" || set["view-distance"] != "8" {
+		t.Fatalf("the dialog's choices win over the world's rules: %v", set)
+	}
+	set, _ = dialogProps(o, "New world", "Inst", "1.21.4", map[string]string{"difficulty": "hard", "hardcore": "true"})
+	if set["difficulty"] != "hard" || set["hardcore"] != "true" {
+		t.Fatalf("a hardcore world stays hard: %v", set)
+	}
+	o.Difficulty = "peaceful"
+	set, _ = dialogProps(o, "New world", "Inst", "1.12.2", map[string]string{"hardcore": "false"})
+	if set["difficulty"] != "0" {
+		t.Fatalf("servers before 1.14 read the difficulty as a number: %v", set)
+	}
+	o.Difficulty = ""
+	set, _ = dialogProps(o, "New world", "Inst", "1.21.4", map[string]string{"difficulty": "normal"})
+	if set["difficulty"] != "normal" {
+		t.Fatalf("no choice keeps the world's difficulty: %v", set)
+	}
+}
+
+func TestAikarFlags(t *testing.T) {
+	small, big := strings.Join(aikarFlags(4096), " "), strings.Join(aikarFlags(16<<10), " ")
+	for _, want := range []string{"-Xms4096M -Xmx4096M", "-XX:G1NewSizePercent=30", "-XX:G1HeapRegionSize=8M", "-XX:G1ReservePercent=20", "-XX:InitiatingHeapOccupancyPercent=15", "-XX:+UseG1GC"} {
+		if !strings.Contains(small, want) {
+			t.Errorf("4 GB flags miss %s", want)
+		}
+	}
+	for _, want := range []string{"-Xms16384M -Xmx16384M", "-XX:G1NewSizePercent=40", "-XX:G1MaxNewSizePercent=50", "-XX:G1HeapRegionSize=16M", "-XX:G1ReservePercent=15", "-XX:InitiatingHeapOccupancyPercent=20"} {
+		if !strings.Contains(big, want) {
+			t.Errorf("16 GB flags miss %s", want)
+		}
+	}
+}
+
+func TestCheckOptions(t *testing.T) {
+	ok := Options{Port: 25565, MaxPlayers: 10, MemoryMB: 1024, ViewDistance: 10}
+	if err := Check(ok); err != nil {
+		t.Fatal(err)
+	}
+	bad := map[string]func(*Options){
+		"view":       func(o *Options) { o.ViewDistance = 40 },
+		"motd":       func(o *Options) { o.MOTD = "two\nlines" },
+		"long motd":  func(o *Options) { o.MOTD = strings.Repeat("m", 60) },
+		"seed":       func(o *Options) { o.Seed = strings.Repeat("1", 33) },
+		"difficulty": func(o *Options) { o.Difficulty = "insane" },
+		"icon":       func(o *Options) { o.Icon = "../icon.png" },
+		"pick":       func(o *Options) { o.Mods = map[string]bool{"no key": true} },
+	}
+	for name, f := range bad {
+		o := ok
+		f(&o)
+		if Check(o) == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}
+
+func TestModPicks(t *testing.T) {
+	sodium, lithium := content.ServerMod{Key: "id:sodium", ClientOnly: true}, content.ServerMod{Key: "id:lithium"}
+	if runs(sodium, nil) || !runs(lithium, nil) {
+		t.Fatal("without picks, client-only mods are left out")
+	}
+	picks := map[string]bool{"id:sodium": true, "id:lithium": false}
+	if !runs(sodium, picks) || runs(lithium, picks) {
+		t.Fatal("the player's picks win")
+	}
+	if r := hostRules(rules.Settings{}, true); !r.On || r.Preset != rules.Standard {
+		t.Fatalf("the Sandbox switch runs an unsandboxed instance's server with the Standard rules: %+v", r)
+	}
+	if r := hostRules(rules.Settings{On: true, Preset: rules.Strict}, false); r.Preset != rules.Strict {
+		t.Fatal("a sandboxed instance's server keeps its rules")
 	}
 }
 
@@ -182,7 +262,7 @@ func TestBackupPrune(t *testing.T) {
 }
 
 func TestChecks(t *testing.T) {
-	ok := Options{Port: 25565, MaxPlayers: 10, MemoryMB: 1024}
+	ok := Options{Port: 25565, MaxPlayers: 10, MemoryMB: 1024, ViewDistance: 10}
 	if err := Check(ok); err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +274,7 @@ func TestChecks(t *testing.T) {
 		{Options{Port: 70000, MaxPlayers: 10, MemoryMB: 1024}, ErrBadPort},
 		{Options{Port: 25565, MaxPlayers: 0, MemoryMB: 1024}, ErrBadPlayers},
 		{Options{Port: 25565, MaxPlayers: 10, MemoryMB: 100}, ErrBadMemory},
-		{Options{Port: 25565, MaxPlayers: 10, MemoryMB: 1024, World: "../x"}, ErrNoWorld},
+		{Options{Port: 25565, MaxPlayers: 10, MemoryMB: 1024, ViewDistance: 10, World: "../x"}, ErrNoWorld},
 	} {
 		if err := Check(c.o); !errors.Is(err, c.err) {
 			t.Errorf("%+v: %v, want %v", c.o, err, c.err)
@@ -422,7 +502,7 @@ func TestStartAsksForTheWorldOnly(t *testing.T) {
 	open := false
 	s := New(Deps{Instances: insts, WorldOpen: func(d string) bool { asked = append(asked, d); return open }})
 	s.cur = &server{st: State{State: "running"}} // stops Start right after the world checks
-	o := Options{Port: 25565, MaxPlayers: 10, MemoryMB: 1024, World: "W"}
+	o := Options{Port: 25565, MaxPlayers: 10, MemoryMB: 1024, ViewDistance: 10, World: "W"}
 	if err := s.Start(in.ID, o); !errors.Is(err, ErrRunning) || len(asked) != 1 || asked[0] != filepath.Join(saves, "W") {
 		t.Fatalf("%v, asked %v", err, asked)
 	}
@@ -434,5 +514,45 @@ func TestStartAsksForTheWorldOnly(t *testing.T) {
 	o.World = ""
 	if err := s.Start(in.ID, o); !errors.Is(err, ErrRunning) || len(asked) != 0 {
 		t.Fatalf("%v, asked %v", err, asked)
+	}
+}
+
+// The editor shows what a start would write before the first one, saves
+// only text that fits, and never while the server runs.
+func TestPropertiesEditor(t *testing.T) {
+	dir := t.TempDir()
+	insts, _ := instance.Open(filepath.Join(dir, "instances"), nil)
+	in, _ := insts.Create(instance.CreateRequest{Name: "Friends", Minecraft: "1.21.4"})
+	_, _ = insts.Update(in.ID, func(i *instance.Instance) error {
+		i.Host = &Options{Port: 25570, MaxPlayers: 6, MemoryMB: 2048, ViewDistance: 12}
+		return nil
+	})
+	s := New(Deps{Instances: insts})
+	p, err := s.Properties(in.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"server-port=25570\n", "max-players=6\n", "view-distance=12\n", "motd=Friends\n", "pvp=true\n", "level-name=New world\n"} {
+		if !strings.Contains(p.Text, want) {
+			t.Errorf("preview misses %q:\n%s", want, p.Text)
+		}
+	}
+	if p.Defaults["max-players"] != "20" || len(p.Dialog) != 3 {
+		t.Fatalf("defaults %v, dialog %v", p.Defaults, p.Dialog)
+	}
+	if err := s.SaveProperties(in.ID, "pvp=false"); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.Properties(in.ID); p.Text != "pvp=false\n" {
+		t.Fatalf("saved text read back as %q", p.Text)
+	}
+	for name, text := range map[string]string{"nul": "a\x00b", "binary": "\xff\xfe", "huge": strings.Repeat("x", maxProps+1)} {
+		if s.SaveProperties(in.ID, text) == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+	s.cur = &server{id: in.ID, st: State{State: "running"}}
+	if err := s.SaveProperties(in.ID, "pvp=true"); !errors.Is(err, ErrRunning) {
+		t.Fatalf("saved while running: %v", err)
 	}
 }

@@ -14,6 +14,22 @@ export function Mods(arg1) {
   return window['go']['api']['Host']['Mods'](arg1);
 }
 
+export function OpenFolder(arg1) {
+  return window['go']['api']['Host']['OpenFolder'](arg1);
+}
+
+export function Properties(arg1) {
+  return window['go']['api']['Host']['Properties'](arg1);
+}
+
+export function SaveMods(arg1, arg2) {
+  return window['go']['api']['Host']['SaveMods'](arg1, arg2);
+}
+
+export function SaveProperties(arg1, arg2) {
+  return window['go']['api']['Host']['SaveProperties'](arg1, arg2);
+}
+
 export function Setup(arg1) {
   return window['go']['api']['Host']['Setup'](arg1);
 }

@@ -9,52 +9,56 @@ import (
 	"quartz/internal/modplatform"
 )
 
-// ServerMod is one enabled mod a local server runs: its blob in the store
-// and the file name it gets in the server's mods folder.
+// ServerMod is one enabled mod as a dedicated server sees it: its blob in
+// the store, the file name it gets in the server's mods folder, and what
+// the Manage list shows.
 type ServerMod struct {
 	SHA1 string
 	File string
+	// Key names the mod across updates, for the player's picks: its own
+	// mod id, else its platform project, else its file name.
+	Key  string
+	Name string
+	Icon string // sha256 of its stored icon
+	// ClientOnly is set when any source says the mod runs only on the
+	// client (its own metadata, Modrinth's server_side, or a packwiz side).
+	ClientOnly bool
 }
 
-// ServerSet is how an instance's enabled mods split for a dedicated server.
-type ServerSet struct {
-	Keep []ServerMod
-	// ClientOnly names the mods left out, sorted.
-	ClientOnly []string
-	// Total counts every enabled mod.
-	Total int
-}
-
-// ServerMods splits an instance's enabled mods into those a dedicated server
-// runs and the client-only ones it leaves out. A mod is client-only when any
-// source says so (its own metadata, Modrinth's server_side, or a packwiz
-// side); unknown means kept. Sides missing from older catalog entries are
-// filled in first: jars are read again once, and Modrinth is asked once per
-// project (a failed request just leaves those mods kept).
-func (s *Service) ServerMods(ctx context.Context, id string) (ServerSet, error) {
+// ServerMods lists an instance's enabled mods for a dedicated server, by
+// name. Sides missing from older catalog entries are filled in first: jars
+// are read again once, and Modrinth is asked once per project (a failed
+// request just leaves those mods unmarked).
+func (s *Service) ServerMods(ctx context.Context, id string) ([]ServerMod, error) {
 	if err := s.Scan(ctx, id, Mods); err != nil {
-		return ServerSet{}, err
+		return nil, err
 	}
 	v, err := s.view(id)
 	if err != nil {
-		return ServerSet{}, err
+		return nil, err
 	}
 	s.fillSides(ctx, &v)
-	var set ServerSet
+	out := []ServerMod{}
 	for item, e := range entriesOf(v.idx, Mods) {
 		if e.Dir || e.SHA1 == "" || strings.HasSuffix(e.Rel, Disabled) {
 			continue
 		}
-		set.Total++
-		if s.clientOnly(&v, e) {
-			set.ClientOnly = append(set.ClientOnly, s.row(&v, item, e, nil).Name)
-			continue
+		r := s.row(&v, item, e, nil)
+		key := "file:" + r.File
+		if k := v.known[e.SHA1]; k.Info != nil && k.Info.ID != "" {
+			key = "id:" + k.Info.ID
+		} else if r.Ref != "" {
+			key = "ref:" + r.Ref
 		}
-		set.Keep = append(set.Keep, ServerMod{SHA1: e.SHA1, File: base(e)})
+		out = append(out, ServerMod{SHA1: e.SHA1, File: base(e), Key: key, Name: r.Name, Icon: r.Icon, ClientOnly: r.ClientOnly})
 	}
-	sort.Strings(set.ClientOnly)
-	sort.Slice(set.Keep, func(a, b int) bool { return set.Keep[a].File < set.Keep[b].File })
-	return set, nil
+	sort.Slice(out, func(a, b int) bool {
+		if x, y := strings.ToLower(out[a].Name), strings.ToLower(out[b].Name); x != y {
+			return x < y
+		}
+		return out[a].File < out[b].File
+	})
+	return out, nil
 }
 
 // clientOnly reports whether a mod runs only on the client.

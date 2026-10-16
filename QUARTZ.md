@@ -286,7 +286,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 
 **Header** ([InstHeader.svelte](frontend/src/lib/components/InstHeader.svelte), [InstanceActions.svelte](frontend/src/lib/components/InstanceActions.svelte))
 - **Shows:** breadcrumb, icon, Minecraft version, loader, hours played, and a "Sandboxed" badge.
-- **Buttons:** Open folder, a More-actions menu, **Host** (or a live `localhost:<port>` chip that toggles the host panel), Play/Stop.
+- **Buttons:** Open folder, a More-actions menu, **Host** (or a live chip with the join address that toggles the host panel), Play/Stop.
 - **Tabs with counts:** Overview, Mods, Resource packs, Shaders, Data packs, Worlds, Servers, Screenshots, Logs, Version, Settings.
 - While the page is open, outside file changes are watched live, including content folders created after the page opened; if the system drops events, everything is rescanned. [content/watch.go](internal/content/watch.go), [gamewatch.go](internal/gamewatch/gamewatch.go)
 
@@ -865,7 +865,7 @@ Files: [sandbox.go](internal/sandbox/sandbox.go), [rules/rules.go](internal/sand
 - `LD_LIBRARY_PATH` passes, and its folders outside the home and data folders are bound read-only.
 - Agent sockets, the session bus and tokens stay out.
 
-**Hosted servers** run headless inside the instance's sandbox on Linux and macOS.
+**Hosted servers** run headless inside the instance's sandbox on Linux and macOS, or, with the Host dialog's Sandbox switch, inside the Standard rules.
 
 ---
 
@@ -918,36 +918,42 @@ Files: [Syncing.svelte](frontend/src/routes/Syncing.svelte), [syncing/service.go
 
 ## 16. Hosting a local server
 
-Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/server.go), [Host.svelte](frontend/src/lib/overlays/Host.svelte), [HostPanel.svelte](frontend/src/lib/overlays/HostPanel.svelte), [install/server.go](internal/install/server.go)
+Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/server.go), [host/flags.go](internal/host/flags.go), [Host.svelte](frontend/src/lib/overlays/Host.svelte), [HostMods.svelte](frontend/src/lib/overlays/HostMods.svelte), [HostProps.svelte](frontend/src/lib/overlays/HostProps.svelte), [HostPanel.svelte](frontend/src/lib/overlays/HostPanel.svelte), [install/server.go](internal/install/server.go). Boards: DlgHost, DlgHostMods, DlgHostProps.
 
 **Basics**
 - **What it does:** the **Host** button runs the instance as a dedicated server on this computer, with the same version and loader. One server at a time.
-- **Where it lives:** `instances/<id>/server/`, outside the game folder.
+- **Where it lives:** `instances/<id>/server/`, outside the game folder: the same folder every time the instance is hosted. The folder icon in the dialog's header and on the panel opens it (made first if it was never hosted).
 - **While you play:** the instance can be played and hosted at once (and Join is a second copy). The server shares nothing writable with the game but the hosted world:
   - Hosting refuses a world a game has open (its `session.lock` is locked), or that a running copy opened in its own private view, which would merge back over it on exit ([runview `Touched`](internal/runview/runview.go), [launch `WorldOpen`](internal/launch/launch.go)). It is checked again just before the world is backed up, since installing can take a while.
   - Playing into the hosted world is refused. The game itself won't open it from its menu while the server holds the lock (1.16+).
   - A "New world" can always be hosted.
 
-**Host dialog** (settings are remembered per instance)
-- **World:** pick an existing one (played in place, including shared worlds) or "New world".
-- **Port:** 1024–65535, default 25565. A busy port is refused.
-- **Max players:** 1–999, default 10.
-- **Memory:** 512 MB up to the machine's RAM.
-- **Show on your local network:**
-  - Off: the server listens on localhost only.
-  - On: it is announced on multicast `224.0.2.60:4445` every 1.5 s, just like "Open to LAN". [lan.go](internal/host/lan.go)
-- **Allow offline accounts:** sets `online-mode=false` and `enforce-secure-profile=false`.
-- **Mods summary:** "N of M also run on servers; K client-only left out", with **Review**, which opens Mods on the "Client only" chip.
+**Host dialog** (settings are remembered per instance; two columns, 880 px)
+- **Left, how players see it:**
+  - **In the server list:** the server as Minecraft's server list shows it. Click the 64 px icon to pick a picture (the instance icon library; written as a 64 px `server-icon.png`), or "use the Quartz icon" ([assets/server-icon.png](assets/server-icon.png)). The MOTD is typed in place (≤59 characters); empty uses the instance name.
+  - **World:** an existing one (played in place, including shared worlds) or "New world", which takes an optional seed (`level-seed`, ≤32 characters). The list fills the column down to the right column's foot and scrolls above its note.
+- **Right, how it runs:**
+  - **Render Distance** (2–32, `view-distance`), **Server Memory** (GB, 1 up to the machine's RAM), **Max Players** (1–999), **Server Port** (1024–65535; a busy port is refused). Each has up/down steppers ([NumberField.svelte](frontend/src/lib/ui/NumberField.svelte)).
+  - **Difficulty:** Peaceful, Easy, Normal or Hard. It starts on the saved choice, else the picked world's own; a hardcore world stays Hard. Written over the world's rule (as a number before 1.14).
+  - **Mods:** "N of M go on the server", with **Manage**: every enabled mod in a shaded list (tile, name, Client only badge, select box last), Select all / Deselect all, and search. Client-only mods start unchecked. The picks are saved for the instance (keyed by mod id, else project, else file name, so they survive updates); only picks that differ from the automatic choice are stored.
+  - **server.properties:** **Edit** opens the file in a mono field. Lines matching Minecraft's defaults are dim; lines that differ, and the ones the dialog sets (render distance, max players, port), are bright. Before the first start it shows what a start would write. Saving is refused while the server runs; up to 256 KB of text.
+  - **Show on your local network:**
+    - Off: the server listens on localhost only.
+    - On: it is announced on multicast `224.0.2.60:4445` every 1.5 s, just like "Open to LAN". [lan.go](internal/host/lan.go)
+  - **Allow offline accounts:** sets `online-mode=false` and `enforce-secure-profile=false`.
+  - **Sandbox:** runs the server in the sandbox with the Standard rules even when the instance isn't sandboxed; locked on for a sandboxed instance. Hidden where servers can't be sandboxed (Windows), and refused when the sandbox can't start.
 
 **Preparing the server**
 - **Install:** the server jar and loader are installed as a job, with the right Java. Fabric and Quilt use their server launch class. Forge-style loaders use argument files pointed at the shared library store. [loader/server.go](internal/loader/server.go)
-- **Mods:** only server-capable mods go in, and the server's `mods/` folder is made to match exactly.
+- **Java:** Aikar's G1 flags with `-Xms` = `-Xmx` = the chosen memory; above 12 GB the large-heap values (G1NewSizePercent 40, MaxNew 50, 16 MB regions, reserve 15, IHOP 20). The instance's own JVM arguments are for the game and are not passed. [flags.go](internal/host/flags.go)
+- **Mods:** the Manage picks, else every mod not known to be client-only; the server's `mods/` folder is made to match exactly.
 - **Configs:** `config`, `defaultconfigs`, `kubejs` and `scripts` are copied one way; newer files win.
 - **`server.properties`:**
   - Your own edits and comments are kept, and values are escaped properly.
-  - **The world's own rules:** for an existing world, difficulty, hardcore and the game mode for new players come from its level.dat on every start, as Open to LAN does. Otherwise the server forces its own difficulty onto the world. Servers before 1.14 get numbers. [rules.go](internal/host/rules.go)
+  - **The world's own rules:** for an existing world, hardcore and the game mode for new players come from its level.dat on every start, as Open to LAN does; so does the difficulty unless the dialog picks one. Servers before 1.14 get numbers. [rules.go](internal/host/rules.go)
+  - The dialog's port, max players, render distance, MOTD, network binding, online mode and seed (new worlds) are set on every start.
   - `spawn-protection=0` unless you set it.
-  - RCON and query are forced off. The MOTD is the instance name.
+  - RCON and query are forced off.
   - [props.go](internal/host/props.go)
 - **EULA:** accepted for you on Start, with a comment saying so.
 - **Cheats:** a world with cheats on makes the host an operator (`ops.json`, or `ops.txt` before 1.7.6). Entries already there are kept.
@@ -955,11 +961,12 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 - **Inventory carry:** your singleplayer player moves into `playerdata/<uuid>.dat` for the server and back afterwards (1.9+). From 26.1 every player is `players/data/<uuid>.dat` and level.dat names the singleplayer one; its file is copied to the id the server sees (an offline server with a Microsoft account) and back. [carry.go](internal/host/carry.go)
 
 **While running**
-- **Header:** a `localhost:<port>` chip toggles the panel.
+- **Header:** a chip with the join address toggles the panel.
 - **Panel:**
-  - Player count, and localhost and LAN addresses with Copy.
-  - The last console lines and a `/` command box (≤256 characters).
-  - Join, Console, Stop.
+  - Folder and close icons in its header.
+  - One address with Copy: the network address with network joins on, else `localhost:<port>`. The player count sits beside it (the stage while starting).
+  - The console scrolls when small; a click opens it up, and only the corner icon makes it small again, so lines can be selected. A `/` command box (≤256 characters).
+  - **Start** and **Stop**, the one that doesn't apply greyed out. After Stop the panel stays, with Start (the saved options), until it is closed.
 - **Console:** 20k lines. "Done (…)!" marks the server ready. Join and leave lines trigger a ping for the player count.
 - **Stop:** sends `stop`, then kills after 30 s or on a second Stop. Quitting the launcher stops the server gracefully, after it saves.
 - **Recover:** a server left running by a dead launcher is asked to stop (then killed) only if its pid still has the start time recorded with it, so a reused pid is never hit. This works on every OS; old pid files fall back to the server folder check (Linux). [procx/ident.go](internal/core/procx/ident.go)
@@ -1400,6 +1407,7 @@ Gathered here from the sections above for quick review.
 - **Tests:**
   - Go integration tests (`-tags integration`, network) cover browse, content, game, home, host, Java, launchers and loaders. [internal/integration/](internal/integration/)
   - About 160 Go unit test files and the vitest suite.
+- **Embedded frontend:** `pnpm run build` gzips the bundle's text files after Vite (`name.gz` in place of `name`, [gzip-dist.mjs](frontend/gzip-dist.mjs)), which keeps about 400 KB out of the binary. [core/gzfs](internal/core/gzfs/gzfs.go) serves them to Wails under their own names, inflated once on first open; fonts and pictures stay as they are.
 - **Design parity:** Playwright screenshots of the design boards and the mock app, ranked by pixel and text difference. [tools/parity/](tools/parity/)
 - **Release tool:** [tools/release/](tools/release/)
   - `keygen`: a minisign key sealed with scrypt + XChaCha20-Poly1305.

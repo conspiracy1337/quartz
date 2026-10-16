@@ -8,7 +8,15 @@ export function Command(arg1:string,arg2:string):Promise<void>;
 
 export function Live(arg1:string):Promise<Array<gamelog.Line>>;
 
-export function Mods(arg1:string):Promise<host.Mods>;
+export function Mods(arg1:string):Promise<Array<host.Mod>>;
+
+export function OpenFolder(arg1:string):Promise<void>;
+
+export function Properties(arg1:string):Promise<host.Properties>;
+
+export function SaveMods(arg1:string,arg2:Record<string, boolean>):Promise<void>;
+
+export function SaveProperties(arg1:string,arg2:string):Promise<void>;
 
 export function Setup(arg1:string):Promise<host.Setup>;
 

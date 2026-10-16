@@ -57,7 +57,7 @@ func TestWorldRulesWinOverProperties(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "server.properties")
 	_ = os.WriteFile(p, []byte("difficulty=easy\nspawn-protection=16\n"), 0o600)
-	if err := writeServerFiles(dir, Options{Port: 25565, MaxPlayers: 10}, "w", "x", map[string]string{"difficulty": "hard"}); err != nil {
+	if err := writeServerFiles(dir, Options{Port: 25565, MaxPlayers: 10, ViewDistance: 10, World: "w"}, "w", "x", "1.21.4", map[string]string{"difficulty": "hard"}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(p)
@@ -65,7 +65,7 @@ func TestWorldRulesWinOverProperties(t *testing.T) {
 		t.Fatalf("%s", text)
 	}
 	_ = os.Remove(p)
-	_ = writeServerFiles(dir, Options{Port: 25565, MaxPlayers: 10}, "w", "x", nil)
+	_ = writeServerFiles(dir, Options{Port: 25565, MaxPlayers: 10, ViewDistance: 10, World: "w"}, "w", "x", "1.21.4", nil)
 	if got, _ := os.ReadFile(p); !strings.Contains(string(got), "spawn-protection=0\n") {
 		t.Fatalf("%s", got)
 	}

@@ -50,7 +50,7 @@
     <div style="display: flex; gap: 8px; align-items: center">
       <!-- Host lives in the ⋮ menu; while the server runs its address shows here and toggles its panel. -->
       {#if host?.state === 'running'}
-        <button class="btn" style="height: 40px; border-color: color-mix(in srgb, var(--accent) 45%, transparent)" title="Server running" aria-pressed={session.hostPanel} onclick={() => (session.hostPanel = !session.hostPanel)}><span class="dot live" aria-hidden="true"></span><span class="mono" style="font-size: 12px">localhost:{host.port}</span></button>
+        <button class="btn" style="height: 40px; border-color: color-mix(in srgb, var(--accent) 45%, transparent)" title="Server running" aria-pressed={session.hostPanel} onclick={() => (session.hostPanel = !session.hostPanel)}><span class="dot live" aria-hidden="true"></span><span class="mono" style="font-size: 12px">{host.address}</span></button>
       {/if}
       <button class="btn-bare" aria-label="Open folder" title="Open folder" onclick={() => api.instances.openFolder(i.id)}><Icon name="folder" size={18} /></button>
       {#if running}

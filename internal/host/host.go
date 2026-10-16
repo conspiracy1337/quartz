@@ -14,9 +14,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +34,7 @@ import (
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
 	"quartz/internal/gamelog"
+	"quartz/internal/icons"
 	"quartz/internal/install"
 	"quartz/internal/instance"
 	"quartz/internal/java"
@@ -53,15 +57,28 @@ var (
 	ErrBadPlayers = errors.New("host: max players is a number from 1 to 999")
 	ErrBadMemory  = errors.New("host: memory is at least 1 GB and at most what this computer has")
 	ErrBadCommand = errors.New("host: a command is one line of up to 256 characters")
+	ErrBadView    = errors.New("host: render distance is a number from 2 to 32")
+	ErrBadMOTD    = errors.New("host: the MOTD is one line of up to 59 characters")
+	ErrBadSeed    = errors.New("host: a seed is one line of up to 32 characters")
+	ErrBadOption  = errors.New("host: that server option isn't valid")
+	ErrBadProps   = errors.New("host: server.properties is text of up to 256 KB")
+	ErrNoSandbox  = errors.New("host: servers can't run in the sandbox on this system")
 )
 
 // Limits on options and commands.
 const (
 	DefaultPort    = 25565
 	defaultPlayers = 10
+	defaultView    = 10
 	minMemoryMB    = 1024
 	maxCommand     = 256
+	maxMOTD        = 59
+	maxSeed        = 32
+	maxPicks       = 5000
 )
+
+// pickKeyRe is a mod key (content.ServerMod.Key): printable ASCII.
+var pickKeyRe = regexp.MustCompile(`^[a-z]+:[\x21-\x7e]{1,200}$`)
 
 // Deps are what the service uses.
 type Deps struct {
@@ -85,6 +102,8 @@ type Deps struct {
 	// this computer). StoreRead are the store folders the server reads.
 	Sandbox   *sandbox.Service
 	StoreRead []string
+	// Icons holds the server icons players pick (the instance icon library).
+	Icons *icons.Library
 }
 
 // Service runs at most one server at a time.
@@ -112,8 +131,35 @@ func Check(o Options) error {
 		return ErrBadPlayers
 	case o.MemoryMB < minMemoryMB || o.MemoryMB > sysinfo.TotalMB():
 		return ErrBadMemory
+	case o.ViewDistance < 2 || o.ViewDistance > 32:
+		return ErrBadView
 	case o.World != "" && !instance.ValidWorldFolder(o.World):
 		return ErrNoWorld
+	case !oneLine(o.MOTD, maxMOTD):
+		return ErrBadMOTD
+	case !oneLine(o.Seed, maxSeed):
+		return ErrBadSeed
+	case o.Difficulty != "" && !slices.Contains(difficulties, o.Difficulty),
+		o.Icon != "" && !icons.ValidHash(o.Icon):
+		return ErrBadOption
+	}
+	return checkPicks(o.Mods)
+}
+
+// oneLine reports whether s is printable text of at most n characters.
+func oneLine(s string, n int) bool {
+	return len([]rune(s)) <= n && strings.IndexFunc(s, func(r rune) bool { return !unicode.IsPrint(r) }) < 0
+}
+
+// checkPicks validates the Manage picks.
+func checkPicks(picks map[string]bool) error {
+	if len(picks) > maxPicks {
+		return ErrBadOption
+	}
+	for k := range picks {
+		if !pickKeyRe.MatchString(k) {
+			return ErrBadOption
+		}
 	}
 	return nil
 }
@@ -133,11 +179,18 @@ type Setup struct {
 	Options Options        `json:"options"`
 	// MaxMemoryMB is the memory field's ceiling.
 	MaxMemoryMB int `json:"maxMemoryMB"`
+	// Difficulty is each world's own difficulty by folder, the Difficulty
+	// switch's start when no choice is saved; Hardcore worlds stay Hard.
+	Difficulty map[string]string `json:"difficulty"`
+	Hardcore   map[string]bool   `json:"hardcore"`
+	// CanSandbox is whether servers can run in the sandbox here, and
+	// SandboxLocked whether this one must (the instance is sandboxed).
+	CanSandbox    bool `json:"canSandbox"`
+	SandboxLocked bool `json:"sandboxLocked"`
 }
 
 // Setup lists the instance's worlds and the options to start from: the last
-// ones used, else 25565, 10 players, the instance's memory and the newest
-// world, shown on the network.
+// ones used, else the defaults (see defaults).
 func (s *Service) Setup(ctx context.Context, id string) (Setup, error) {
 	in, err := s.d.Instances.Get(id)
 	if err != nil {
@@ -147,17 +200,36 @@ func (s *Service) Setup(ctx context.Context, id string) (Setup, error) {
 	if err != nil {
 		return Setup{}, err
 	}
-	o := Options{Port: DefaultPort, MaxPlayers: defaultPlayers, MemoryMB: in.Resolve(s.d.Settings.Get()).MemoryMaxMB, LAN: true}
-	if len(ws) > 0 {
+	o := s.options(in)
+	if o.World == "" && in.Host == nil && len(ws) > 0 {
 		o.World = ws[0].Folder
 	}
-	if in.Host != nil {
-		o = *in.Host
-		if o.World != "" && !hasWorld(ws, o.World) && len(ws) > 0 {
-			o.World = ws[0].Folder
-		}
+	if o.World != "" && !hasWorld(ws, o.World) && len(ws) > 0 {
+		o.World = ws[0].Folder
 	}
-	return Setup{Worlds: ws, Options: o, MaxMemoryMB: sysinfo.TotalMB()}, nil
+	st := Setup{Worlds: ws, Options: o, MaxMemoryMB: sysinfo.TotalMB(), Difficulty: map[string]string{}, Hardcore: map[string]bool{},
+		CanSandbox: s.canSandbox(), SandboxLocked: in.Sandbox.On}
+	saves := s.d.Instances.Path(id, "saves")
+	for _, w := range ws {
+		r, _ := worldRules(filepath.Join(saves, w.Folder), namedRules)
+		st.Difficulty[w.Folder] = r["difficulty"]
+		st.Hardcore[w.Folder] = r["hardcore"] == "true"
+	}
+	return st, nil
+}
+
+// options are the instance's saved options, else the defaults: 25565, 10
+// players, the instance's memory, render distance 10, shown on the network.
+func (s *Service) options(in instance.Instance) Options {
+	if in.Host != nil {
+		return *in.Host
+	}
+	return Options{Port: DefaultPort, MaxPlayers: defaultPlayers, MemoryMB: in.Resolve(s.d.Settings.Get()).MemoryMaxMB, ViewDistance: defaultView, LAN: true}
+}
+
+// canSandbox reports whether hosted servers can run in the sandbox here.
+func (s *Service) canSandbox() bool {
+	return s.d.Sandbox != nil && runtime.GOOS != "windows" && s.d.Sandbox.Status().Available
 }
 
 func hasWorld(ws []worlds.World, folder string) bool {
@@ -169,25 +241,67 @@ func hasWorld(ws []worlds.World, folder string) bool {
 	return false
 }
 
-// Mods is how an instance's mods split for a server.
-type Mods struct {
-	Total      int      `json:"total"`
-	Server     int      `json:"server"`
-	ClientOnly []string `json:"clientOnly"`
+// Mod is one row of the Manage list.
+type Mod struct {
+	Key        string `json:"key"`
+	Name       string `json:"name"`
+	Icon       string `json:"icon,omitempty"`
+	ClientOnly bool   `json:"clientOnly"`
+	On         bool   `json:"on"` // runs on the server
 }
 
-// Mods counts the enabled mods a server runs and the client-only ones it
-// leaves out. It may ask Modrinth once for mods it has no side for yet.
-func (s *Service) Mods(ctx context.Context, id string) (Mods, error) {
+// Mods lists the instance's enabled mods and whether each runs on the
+// server: the player's pick, else every mod not known to be client-only.
+// It may ask Modrinth once for mods it has no side for yet.
+func (s *Service) Mods(ctx context.Context, id string) ([]Mod, error) {
 	in, err := s.d.Instances.Get(id)
 	if err != nil || in.Loader == "" {
-		return Mods{ClientOnly: []string{}}, err
+		return []Mod{}, err
 	}
-	set, err := s.d.Content.ServerMods(ctx, id)
+	mods, err := s.d.Content.ServerMods(ctx, id)
 	if err != nil {
-		return Mods{}, err
+		return nil, err
 	}
-	return Mods{Total: set.Total, Server: len(set.Keep), ClientOnly: append([]string{}, set.ClientOnly...)}, nil
+	picks := s.options(in).Mods
+	out := make([]Mod, 0, len(mods))
+	for _, m := range mods {
+		out = append(out, Mod{Key: m.Key, Name: m.Name, Icon: m.Icon, ClientOnly: m.ClientOnly, On: runs(m, picks)})
+	}
+	return out, nil
+}
+
+// runs reports whether a server runs mod m given the player's picks.
+func runs(m content.ServerMod, picks map[string]bool) bool {
+	if on, ok := picks[m.Key]; ok {
+		return on
+	}
+	return !m.ClientOnly
+}
+
+// SaveMods keeps the player's Manage picks for the instance's servers. A
+// pick that matches what the launcher would do anyway is dropped; picks for
+// mods not installed right now are kept for when they come back.
+func (s *Service) SaveMods(ctx context.Context, id string, picks map[string]bool) error {
+	if err := checkPicks(picks); err != nil {
+		return err
+	}
+	mods, err := s.d.Content.ServerMods(ctx, id)
+	if err != nil {
+		return err
+	}
+	keep := maps.Clone(picks)
+	for _, m := range mods {
+		if on, ok := keep[m.Key]; ok && on == !m.ClientOnly {
+			delete(keep, m.Key)
+		}
+	}
+	_, err = s.d.Instances.Update(id, func(in *instance.Instance) error {
+		o := s.options(*in)
+		o.Mods = keep
+		in.Host = &o
+		return nil
+	})
+	return err
 }
 
 // State is what host:state carries and Status lists.
@@ -198,10 +312,13 @@ type State struct {
 	Stage      string `json:"stage,omitempty"` // what a starting server is doing
 	Port       int    `json:"port"`
 	LAN        string `json:"lan,omitempty"` // this computer's network address, when shown there
-	Players    int    `json:"players"`
-	Max        int    `json:"max"`
-	Result     string `json:"result,omitempty"`  // stopped: ok | crash | failed | cancelled
-	Message    string `json:"message,omitempty"` // stopped: why it failed
+	// Address is where players join: the network address with network
+	// joins on, else localhost (with the port).
+	Address string `json:"address"`
+	Players int    `json:"players"`
+	Max     int    `json:"max"`
+	Result  string `json:"result,omitempty"`  // stopped: ok | crash | failed | cancelled
+	Message string `json:"message,omitempty"` // stopped: why it failed
 }
 
 // LogBatch is what host:log carries.

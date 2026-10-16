@@ -171,12 +171,22 @@ func (m ExportMeta) Clean() ExportMeta {
 
 // Host is how to run an instance as a local server.
 type Host struct {
-	World      string `json:"world"` // a saves folder; "" makes a new world
-	Port       int    `json:"port"`
-	MaxPlayers int    `json:"maxPlayers"`
-	MemoryMB   int    `json:"memoryMB"`
-	LAN        bool   `json:"lan"`     // reachable from the network and announced there
-	Offline    bool   `json:"offline"` // players without a Microsoft account may join
+	World        string `json:"world"`          // a saves folder; "" makes a new world
+	Seed         string `json:"seed,omitempty"` // a new world's seed ("" random)
+	Port         int    `json:"port"`
+	MaxPlayers   int    `json:"maxPlayers"`
+	MemoryMB     int    `json:"memoryMB"`
+	ViewDistance int    `json:"viewDistance"`         // render distance in chunks
+	MOTD         string `json:"motd"`                 // "" is the instance's name
+	Difficulty   string `json:"difficulty,omitempty"` // peaceful | easy | normal | hard; "" keeps the world's
+	Icon         string `json:"icon,omitempty"`       // a picture in the icon library; "" is Quartz's
+	LAN          bool   `json:"lan"`                  // reachable from the network and announced there
+	Offline      bool   `json:"offline"`              // players without a Microsoft account may join
+	Sandbox      bool   `json:"sandbox"`              // run in the sandbox even when the instance isn't
+	// Mods are the player's picks in Manage, by mod key (see
+	// content.ServerMod): true runs a mod the launcher would leave out,
+	// false leaves out one it would run. Start keeps them as saved.
+	Mods map[string]bool `json:"mods,omitempty"`
 }
 
 // Sync is which shared targets the instance joins (see package syncing).
