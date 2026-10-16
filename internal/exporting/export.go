@@ -22,6 +22,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -219,7 +220,7 @@ func (s *Service) Preview(ctx context.Context, id string, p Plan) (Preview, erro
 	}
 	pv.Off = entries(pc.off)
 	for _, l := range [][]Entry{pv.Linked, pv.Bundled} {
-		slices.SortFunc(l, func(a, b Entry) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+		sort.Slice(l, func(i, j int) bool { return strings.ToLower(l[i].Name) < strings.ToLower(l[j].Name) })
 	}
 	return pv, nil
 }

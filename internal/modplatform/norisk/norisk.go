@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -98,7 +99,6 @@ type Client struct {
 	Now                   func() time.Time
 
 	flight flightx.Group[*pack]
-	heads  flightx.Group[fileInfo]
 	mu     sync.Mutex
 	packs  map[string]cachedPack
 	files  map[string]fileInfo // by jar URL; a build never changes
@@ -212,11 +212,13 @@ func parse(cfg config, m *mod) (*pack, error) {
 	if len(p.builds) == 0 {
 		return nil, errConfig
 	}
-	slices.SortFunc(p.builds, func(a, b build) int {
-		if n := version.Compare(b.game, a.game); n != 0 {
-			return n
+	// sort.Slice, not slices.SortFunc: a generic sort costs ~15 KB of binary per element type.
+	sort.Slice(p.builds, func(i, j int) bool {
+		a, b := p.builds[i], p.builds[j]
+		if n := version.Compare(a.game, b.game); n != 0 {
+			return n > 0
 		}
-		return slices.Index(loaders, a.loader) - slices.Index(loaders, b.loader)
+		return slices.Index(loaders, a.loader) < slices.Index(loaders, b.loader)
 	})
 	return p, nil
 }
@@ -312,7 +314,8 @@ func (c *Client) refresh(v modplatform.Version) modplatform.Version {
 }
 
 // info is a jar's size and date (HEAD) and, with sum, its sha1 (the .sha1
-// file beside it), cached for good: a build never changes.
+// file beside it), cached for good: a build never changes. Two callers
+// asking at once may both ask; describe never asks twice for one jar.
 func (c *Client) info(ctx context.Context, u string, sum bool) (fileInfo, error) {
 	c.mu.Lock()
 	fi, ok := c.files[u]
@@ -320,29 +323,23 @@ func (c *Client) info(ctx context.Context, u string, sum bool) (fileInfo, error)
 	if ok && (!sum || fi.sha1 != "") {
 		return fi, nil
 	}
-	key := u
-	if sum {
-		key += "#sha1"
+	if !ok {
+		var err error
+		if fi, err = c.head(ctx, u); err != nil {
+			return fi, err
+		}
 	}
-	return c.heads.Do(ctx, key, func(ctx context.Context) (fileInfo, error) {
-		if !ok {
-			var err error
-			if fi, err = c.head(ctx, u); err != nil {
-				return fi, err
-			}
+	if sum {
+		s, err := c.sha1(ctx, u+".sha1")
+		if err != nil {
+			return fi, err
 		}
-		if sum {
-			s, err := c.sha1(ctx, u+".sha1")
-			if err != nil {
-				return fi, err
-			}
-			fi.sha1 = s
-		}
-		c.mu.Lock()
-		c.files[u] = fi
-		c.mu.Unlock()
-		return fi, nil
-	})
+		fi.sha1 = s
+	}
+	c.mu.Lock()
+	c.files[u] = fi
+	c.mu.Unlock()
+	return fi, nil
 }
 
 func (c *Client) head(ctx context.Context, u string) (fileInfo, error) {
