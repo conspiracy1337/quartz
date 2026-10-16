@@ -23,7 +23,7 @@ type Row struct {
 	Sub     string  `json:"sub"`
 	Version string  `json:"version"`
 	Icon    string  `json:"icon,omitempty"` // sha256 of a stored icon
-	Source  string  `json:"source"`         // modrinth | curseforge | file
+	Source  string  `json:"source"`         // modrinth | curseforge | norisk | file
 	Enabled bool    `json:"enabled"`
 	Locked  bool    `json:"locked"`
 	Group   string  `json:"group,omitempty"` // the world, for data packs
@@ -306,6 +306,8 @@ func projectURL(k Kind, id *Ident) string {
 		return "https://modrinth.com/project/" + orElse(id.Slug, id.ProjectID)
 	case id.Source == "curseforge" && id.Slug != "":
 		return "https://www.curseforge.com/minecraft/" + curseClass[k] + "/" + id.Slug
+	case id.Source == "norisk":
+		return "https://norisk.gg"
 	}
 	return ""
 }

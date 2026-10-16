@@ -60,6 +60,7 @@ type Page struct {
 	Name       string `json:"name"`
 	Modrinth   *Side  `json:"modrinth,omitempty"`
 	CurseForge *Side  `json:"curseforge,omitempty"`
+	NoRisk     *Side  `json:"norisk,omitempty"`
 	// Preferred is the platform shown and installed from by default, and
 	// Reason why (see prefer).
 	Preferred string            `json:"preferred"`
@@ -103,16 +104,19 @@ func (s *Service) Project(ctx context.Context, ref modplatform.Ref, instance str
 	page := Page{Ref: ref.String(), Channels: s.d.Channel().Types()}
 	var have []modplatform.Source
 	var updated time.Time
-	for _, src := range []modplatform.Source{modplatform.Modrinth, modplatform.CurseForge} {
+	for _, src := range modplatform.Sources {
 		d, ok := sides[src]
 		if !ok {
 			continue
 		}
 		have = append(have, src)
 		side := s.side(d)
-		if src == modplatform.CurseForge {
+		switch src {
+		case modplatform.CurseForge:
 			page.CurseForge = &side
-		} else {
+		case modplatform.NoRisk:
+			page.NoRisk = &side
+		default:
 			page.Modrinth = &side
 		}
 		if page.Name == "" || d.Updated.After(updated) {
@@ -132,9 +136,10 @@ func (s *Service) Project(ctx context.Context, ref modplatform.Ref, instance str
 }
 
 // twin completes a one-platform reference with the other platform's
-// project when one matches by title and author (cached).
+// project when one matches by title and author (cached). NoRisk's mods are
+// on neither platform.
 func (s *Service) twin(ctx context.Context, ref modplatform.Ref) modplatform.Ref {
-	if ref.Modrinth != "" && ref.CurseForge != "" {
+	if ref.Modrinth != "" && ref.CurseForge != "" || ref.NoRisk != "" {
 		return ref
 	}
 	have := ref.Sources()[0]
@@ -167,7 +172,7 @@ func (s *Service) twin(ctx context.Context, ref modplatform.Ref) modplatform.Ref
 	if err != nil || id == "" {
 		return ref
 	}
-	return withSource(ref, other, id)
+	return ref.With(other, id)
 }
 
 var loaderNames = map[string]string{

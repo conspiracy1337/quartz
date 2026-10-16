@@ -54,6 +54,8 @@ var Hosts = map[string]bool{
 	"i.imgur.com": true, "raw.githubusercontent.com": true, "user-images.githubusercontent.com": true,
 	"private-user-images.githubusercontent.com": true, "media.githubusercontent.com": true,
 	"firebasestorage.googleapis.com": true,
+	// NoRiskClient's built-in mods show NoRisk's own pictures (modplatform/norisk).
+	"norisk.gg": true,
 }
 
 // storageHosts are object storage services. They give every bucket its own

@@ -17,6 +17,7 @@ import (
 	"quartz/internal/instance"
 	"quartz/internal/modplatform"
 	"quartz/internal/modplatform/modrinth"
+	"quartz/internal/modplatform/norisk"
 )
 
 // fetch downloads one platform file into dir and returns its path.
@@ -197,4 +198,53 @@ func TestContentServiceWithRealMods(t *testing.T) {
 		}
 	}
 	t.Logf("%d updates applied, store holds %d files", len(rev.Updates), u.Blobs)
+}
+
+// TestNoRiskInstall installs NoRiskClient Mod Mini from NoRisk's Maven
+// repository into a Fabric instance and checks it shows as a NoRisk mod.
+func TestNoRiskInstall(t *testing.T) {
+	h := newHarness(t)
+	nr := norisk.New(h.http)
+	insts, err := instance.Open(filepath.Join(h.root, "it-instances"), h.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := insts.Create(instance.CreateRequest{Name: "NoRisk IT", Minecraft: "1.21.4", Loader: "fabric", LoaderVersion: "0.16.9"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(insts.Dir(in.ID)) })
+	st, err := store.Open(filepath.Join(h.root, "store", "content"), h.ver, h.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc, err := content.New(content.Deps{Instances: insts, Store: st, Icons: icons.OpenSized(filepath.Join(h.root, "cache", "content-icons"), 64),
+		Platforms: []modplatform.Provider{nr}, Tasks: h.tasks, Log: h.log}, filepath.Join(h.root, "store", "content"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := h.ctx()
+	page, err := nr.Search(ctx, modplatform.SearchQuery{Type: modplatform.TypeMod, Text: "NRC Mini", Game: "1.21.4", Loaders: []string{"fabric"}})
+	if err != nil || len(page.Hits) != 1 {
+		t.Fatalf("search %+v %v", page, err)
+	}
+	plan, err := svc.PlanInstall(ctx, content.InstallRequest{Instance: in.ID, Kind: content.Mods, Source: modplatform.NoRisk, Project: page.Hits[0].ID})
+	if err != nil || plan.Version == "" || plan.Blocked || len(plan.Deps) != 0 {
+		t.Fatalf("plan %+v %v", plan, err)
+	}
+	job, err := svc.ApplyInstall(plan.PlanID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.tasks.Wait(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := svc.List(ctx, in.ID, content.Mods)
+	if err != nil || len(rows) != 1 || rows[0].Source != "norisk" || rows[0].Ref != "nr:nrcmini" {
+		t.Fatalf("rows %+v %v", rows, err)
+	}
+	if rev, err := svc.CheckUpdates(ctx, in.ID, content.Mods, modplatform.Release); err != nil || len(rev.Updates) != 0 {
+		t.Fatalf("a fresh install has updates: %+v %v", rev, err)
+	}
+	t.Logf("installed %s %s", plan.Name, plan.Version)
 }

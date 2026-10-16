@@ -843,6 +843,7 @@ export namespace browse {
 	    name: string;
 	    modrinth?: Side;
 	    curseforge?: Side;
+	    norisk?: Side;
 	    preferred: string;
 	    reason: string;
 	    installed?: InstalledVersion;
@@ -859,6 +860,7 @@ export namespace browse {
 	        this.name = source["name"];
 	        this.modrinth = this.convertValues(source["modrinth"], Side);
 	        this.curseforge = this.convertValues(source["curseforge"], Side);
+	        this.norisk = this.convertValues(source["norisk"], Side);
 	        this.preferred = source["preferred"];
 	        this.reason = source["reason"];
 	        this.installed = this.convertValues(source["installed"], InstalledVersion);
@@ -941,6 +943,7 @@ export namespace browse {
 	    icon?: string;
 	    modrinth?: Stats;
 	    curseforge?: Stats;
+	    norisk?: Stats;
 	    installed?: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -957,6 +960,7 @@ export namespace browse {
 	        this.icon = source["icon"];
 	        this.modrinth = this.convertValues(source["modrinth"], Stats);
 	        this.curseforge = this.convertValues(source["curseforge"], Stats);
+	        this.norisk = this.convertValues(source["norisk"], Stats);
 	        this.installed = source["installed"];
 	    }
 	

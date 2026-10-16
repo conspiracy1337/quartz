@@ -5,7 +5,7 @@
   import { ANY_LOADER_NAMES, LOADER_NAMES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { query } from '$lib/query.svelte';
-  import { go, href } from '$lib/router.svelte';
+  import { go, href, isPackSource } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
   import { lastTouched } from '$lib/instances';
   import { session } from '$lib/session.svelte';
@@ -25,7 +25,7 @@
   let { id, tab: startTab }: Props = $props();
 
   const CHANNELS = ['Release', 'Beta', 'Alpha'] as const;
-  const SOURCES = ['modrinth', 'curseforge'] as const;
+  const SOURCES = ['modrinth', 'curseforge', 'norisk'] as const;
   /** A version's channel as one boxed letter: green R, orange B, red A. */
   const CHANNEL_BADGE = { Release: 'badge-accent', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
   const isModLoader = (l: string): l is Loader => l in LOADER_NAMES;
@@ -73,11 +73,11 @@
 
   function install(version?: string) {
     if (!p || !kind) return;
-    if (!kind.content) {
+    if (!kind.content && isPackSource(src)) {
       if (side) session.packHint = { ref: p.ref, name: side.name, author: side.author, summary: side.summary, ...(side.icon ? { icon: side.icon } : {}) };
       return go({ name: 'import', ref: p.ref, source: src, ...(version ? { version } : {}) });
     }
-    if (target) void installInto(target.id, p.ref, src, kind.content, version);
+    if (target && kind.content) void installInto(target.id, p.ref, src, kind.content, version);
   }
   const choose = (e: MouseEvent) => (chooser = below(e));
   const open = (url: string) => (e: MouseEvent) => {
@@ -95,10 +95,10 @@
         <div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
           <h1 class="h1 trunc">{side.name}</h1>
           <div class="muted trunc">{side.summary}</div>
-          <div style="display: flex; gap: 6px; flex-wrap: wrap">{#each side.badges as b (b)}<span class="badge">{b}</span>{/each}<span class="small faint tnum" style="margin-left: 6px">by {side.author}, {compact(side.downloads)} downloads on {SRC_NAMES[p[src] ? src : other]}</span></div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap">{#each side.badges as b (b)}<span class="badge">{b}</span>{/each}<span class="small faint tnum" style="margin-left: 6px">by {side.author}{side.downloads ? `, ${compact(side.downloads)} downloads` : ''} on {SRC_NAMES[p[src] ? src : other]}</span></div>
         </div>
         <div class="seg" role="group" aria-label="Source" style="margin-right: 4px">
-          {#each SOURCES as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]} title={p[s] ? undefined : `Unavailable on ${SRC_NAMES[s]}`}><Icon name={s} size={14} />{SRC_NAMES[s]}</button>{/each}
+          {#each SOURCES.filter((s) => s !== 'norisk' || p.norisk) as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]} title={p[s] ? undefined : `Unavailable on ${SRC_NAMES[s]}`}><Icon name={s} size={14} />{SRC_NAMES[s]}</button>{/each}
         </div>
         <!-- A modpack installs as its own instance, so only content gets the instance chooser. -->
         {#if kind?.content}
@@ -158,9 +158,9 @@
                   {#each v.loaders as l (l)}{#if isModLoader(l)}<LoaderIcon kind={l} size={14} />{/if}{/each}
                   {#if v.loaders.length === 1}<span class="muted trunc">{ANY_LOADER_NAMES[v.loaders[0]!] ?? v.loaders[0]}</span>{:else if !v.loaders.some(isModLoader)}<span class="muted trunc">{v.loaders.map((l) => ANY_LOADER_NAMES[l] ?? l).join(', ') || '–'}</span>{/if}
                 </span>
-                <span class="muted opt tnum">{shortMonthDay(v.published)}, {new Date(v.published).getFullYear()}</span>
+                <span class="muted opt tnum">{v.published > 0 ? `${shortMonthDay(v.published)}, ${new Date(v.published).getFullYear()}` : '–'}</span>
                 <span class="muted opt tnum">{v.downloads ? compact(v.downloads) : '–'}</span>
-                <span class="mono muted opt">{bytes(v.bytes)}</span>
+                <span class="mono muted opt">{v.bytes ? bytes(v.bytes) : '–'}</span>
                 <span style="display: flex; justify-content: flex-end">
                   {#if !v.action}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={!!kind?.content && !target} onclick={() => install(v.id)}>{v.action}</button>{/if}
                 </span>

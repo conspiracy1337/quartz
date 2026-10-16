@@ -57,7 +57,7 @@
       chips: () => [all, { label: 'Online', test: (c) => c.online === true }] },
   };
   // Where a row came from: the platform's logo, or a file icon.
-  const SOURCES: Record<Source, ['modrinth' | 'curseforge' | 'file', string]> = { modrinth: ['modrinth', 'Modrinth'], curseforge: ['curseforge', 'CurseForge'], file: ['file', 'Added from file'] };
+  const SOURCES: Record<Source, [Source, string]> = { modrinth: ['modrinth', 'Modrinth'], curseforge: ['curseforge', 'CurseForge'], norisk: ['norisk', 'NoRisk'], file: ['file', 'Added from file'] };
   const SKELETON: [string, string][] = [['42%', '22%'], ['30%', '24%'], ['48%', '18%'], ['36%', '20%'], ['56%', '30%'], ['40%', '16%'], ['44%', '26%'], ['32%', '20%']];
 
   const cfg = $derived(CONFIG[kind]);

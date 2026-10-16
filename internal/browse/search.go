@@ -56,6 +56,7 @@ type Row struct {
 	Icon       string `json:"icon,omitempty"` // same-origin picture
 	Modrinth   *Stats `json:"modrinth,omitempty"`
 	CurseForge *Stats `json:"curseforge,omitempty"`
+	NoRisk     *Stats `json:"norisk,omitempty"`
 	// Installed is true when the target instance already has the project.
 	Installed bool `json:"installed,omitempty"`
 }
@@ -144,11 +145,10 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 			base.Loaders = content.LoaderChain(content.Mods, tgt.Loader, tgt.Minecraft)
 		}
 		for _, in := range tgt.Installed {
-			if in.Modrinth != nil {
-				ss.installed[modplatform.Key(modplatform.Modrinth, in.Modrinth.ProjectID)] = true
-			}
-			if in.CurseForge != nil {
-				ss.installed[modplatform.Key(modplatform.CurseForge, in.CurseForge.ProjectID)] = true
+			for _, src := range modplatform.Sources {
+				if id := in.Ident(src); id != nil {
+					ss.installed[modplatform.Key(src, id.ProjectID)] = true
+				}
 			}
 		}
 	}
@@ -175,6 +175,8 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 				continue // CurseForge can't filter by this
 			}
 			sq.Categories = cfCats
+		case modplatform.NoRisk:
+			sq.Categories = mrCats // any category leaves its mods out
 		}
 		ss.sources = append(ss.sources, &source{plat: p, q: sq})
 	}
@@ -310,6 +312,8 @@ func order(pages [][]modplatform.Hit, srt modplatform.Sort) []modplatform.Hit {
 	case modplatform.SortUpdated:
 		sort.SliceStable(out, func(a, b int) bool { return out[a].Updated.After(out[b].Updated) })
 	}
+	// A built-in mod is only found by its own name, so it leads whatever the sort.
+	sort.SliceStable(out, func(a, b int) bool { return out[a].Source == modplatform.NoRisk && out[b].Source != modplatform.NoRisk })
 	return out
 }
 
@@ -324,7 +328,7 @@ func (s *Service) merge(ss *session, h modplatform.Hit) {
 	key := matchKey(h.Title, h.Author)
 	if r, ok := ss.byKey[key]; ok && key != "" && r.ref.ID(h.Source) == "" {
 		ss.byID[id] = r
-		r.ref = withSource(r.ref, h.Source, h.ID)
+		r.ref = r.ref.With(h.Source, h.ID)
 		r.Ref = r.ref.String()
 		setStats(&r.Row, h.Source, stats)
 		if r.Icon == "" {
@@ -341,7 +345,7 @@ func (s *Service) merge(ss *session, h modplatform.Hit) {
 		r.dirty = r.sent
 		return
 	}
-	ref := withSource(modplatform.Ref{}, h.Source, h.ID)
+	ref := modplatform.RefOf(h.Source, h.ID)
 	r := &row{key: key, ref: ref, Row: Row{ID: ref.String(), Ref: ref.String(), Name: h.Title, Author: h.Author, Summary: h.Summary, Icon: s.d.Pictures.Src(h.Icon)}}
 	setStats(&r.Row, h.Source, stats)
 	ss.byID[id] = r
@@ -370,19 +374,13 @@ func (ss *session) removeRow(r *row) {
 	}
 }
 
-func withSource(r modplatform.Ref, src modplatform.Source, id string) modplatform.Ref {
-	if src == modplatform.CurseForge {
-		r.CurseForge = id
-	} else {
-		r.Modrinth = id
-	}
-	return r
-}
-
 func setStats(r *Row, src modplatform.Source, st *Stats) {
-	if src == modplatform.CurseForge {
+	switch src {
+	case modplatform.CurseForge:
 		r.CurseForge = st
-	} else {
+	case modplatform.NoRisk:
+		r.NoRisk = st
+	default:
 		r.Modrinth = st
 	}
 }

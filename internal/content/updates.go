@@ -300,8 +300,11 @@ func (pl *plan) add(p *planned) {
 }
 
 func platformName(src string) string {
-	if src == string(modplatform.CurseForge) {
+	switch modplatform.Source(src) {
+	case modplatform.CurseForge:
 		return "CurseForge"
+	case modplatform.NoRisk:
+		return "NoRisk"
 	}
 	return "Modrinth"
 }
@@ -599,11 +602,7 @@ func (s *Service) install(inst string, k Kind, pi *planned) error {
 	s.ensureKnown(abs, sha1, sp)
 	ident := identOf(pi.v, pi.p)
 	s.cat.update(sha1, func(kn *Known) {
-		if pi.v.Source == modplatform.CurseForge {
-			kn.CurseForge = ident
-		} else {
-			kn.Modrinth = ident
-		}
+		kn.Set(pi.v.Source, ident)
 		kn.IdentAt = s.now().Unix()
 	})
 	newEntry := Entry{Kind: k, Rel: rel, SHA1: sha1}

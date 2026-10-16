@@ -21,7 +21,12 @@ type Source string
 const (
 	Modrinth   Source = "modrinth"
 	CurseForge Source = "curseforge"
+	// NoRisk is the built-in source of NoRiskClient's own mods (package norisk).
+	NoRisk Source = "norisk"
 )
+
+// Sources lists every platform, in the order a project's sources show.
+var Sources = []Source{Modrinth, CurseForge, NoRisk}
 
 // Channel is how unstable an update may be.
 type Channel int
@@ -283,10 +288,15 @@ var idRe = regexp.MustCompile(`^[A-Za-z0-9]{1,32}$`)
 // platform (Modrinth: base62; CurseForge: digits).
 func ValidID(s string) bool { return idRe.MatchString(s) }
 
+// downloadPrefixes are where platform files may download from: the two
+// platforms' CDNs, and NoRisk's Maven repository for its own mods.
+var downloadPrefixes = []string{"https://cdn.modrinth.com/", "https://edge.forgecdn.net/", "https://mediafilez.forgecdn.net/",
+	"https://maven.norisk.gg/repository/norisk-production/gg/norisk/"}
+
 // ValidURL reports whether a download URL is https on a platform CDN.
 func ValidURL(raw string) bool {
-	for _, prefix := range []string{"https://cdn.modrinth.com/", "https://edge.forgecdn.net/", "https://mediafilez.forgecdn.net/"} {
-		if strings.HasPrefix(raw, prefix) && !strings.ContainsAny(raw, " \r\n\\") {
+	for _, prefix := range downloadPrefixes {
+		if strings.HasPrefix(raw, prefix) && !strings.ContainsAny(raw, " \r\n\\") && !strings.Contains(raw, "/../") {
 			return true
 		}
 	}

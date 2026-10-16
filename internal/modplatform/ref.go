@@ -6,22 +6,39 @@ import (
 	"unicode"
 )
 
-// Ref names a project on one or both platforms, as the UI passes it around:
-// "mr:AANobbMI", "cf:394468" or "mr:AANobbMI+cf:394468".
+// Ref names a project on one or more platforms, as the UI passes it around:
+// "mr:AANobbMI", "cf:394468", "nr:nrcmini" or "mr:AANobbMI+cf:394468".
 type Ref struct {
 	Modrinth   string
 	CurseForge string
+	NoRisk     string
 }
 
 // ErrRef is returned for a malformed reference.
 var ErrRef = errors.New("modplatform: invalid project reference")
 
+// prefixes are each platform's tag in a reference.
+var prefixes = map[Source]string{Modrinth: "mr", CurseForge: "cf", NoRisk: "nr"}
+
 // RefOf names one project on one platform.
 func RefOf(src Source, id string) Ref {
-	if src == CurseForge {
-		return Ref{CurseForge: id}
+	var r Ref
+	if p := r.slot(src); p != nil {
+		*p = id
 	}
-	return Ref{Modrinth: id}
+	return r
+}
+
+func (r *Ref) slot(src Source) *string {
+	switch src {
+	case Modrinth:
+		return &r.Modrinth
+	case CurseForge:
+		return &r.CurseForge
+	case NoRisk:
+		return &r.NoRisk
+	}
+	return nil
 }
 
 // ParseRef reads a reference; every id must be valid.
@@ -31,18 +48,23 @@ func ParseRef(s string) (Ref, error) {
 		return r, ErrRef
 	}
 	for _, part := range strings.Split(s, "+") {
-		src, id, ok := strings.Cut(part, ":")
+		tag, id, ok := strings.Cut(part, ":")
 		if !ok || !ValidID(id) {
 			return Ref{}, ErrRef
 		}
-		switch {
-		case src == "mr" && r.Modrinth == "":
-			r.Modrinth = id
-		case src == "cf" && r.CurseForge == "" && isDigits(id):
-			r.CurseForge = id
-		default:
+		var slot *string
+		for src, p := range prefixes {
+			if p == tag {
+				slot = r.slot(src)
+				if src == CurseForge && !isDigits(id) {
+					return Ref{}, ErrRef
+				}
+			}
+		}
+		if slot == nil || *slot != "" {
 			return Ref{}, ErrRef
 		}
+		*slot = id
 	}
 	return r, nil
 }
@@ -56,34 +78,38 @@ func isDigits(s string) bool {
 	return s != ""
 }
 
-// String formats the reference (Modrinth first).
+// String formats the reference in Sources order.
 func (r Ref) String() string {
 	var parts []string
-	if r.Modrinth != "" {
-		parts = append(parts, "mr:"+r.Modrinth)
-	}
-	if r.CurseForge != "" {
-		parts = append(parts, "cf:"+r.CurseForge)
+	for _, src := range r.Sources() {
+		parts = append(parts, prefixes[src]+":"+r.ID(src))
 	}
 	return strings.Join(parts, "+")
 }
 
 // ID is the project's id on src, or "".
 func (r Ref) ID(src Source) string {
-	if src == CurseForge {
-		return r.CurseForge
+	if p := r.slot(src); p != nil {
+		return *p
 	}
-	return r.Modrinth
+	return ""
 }
 
-// Sources lists the platforms the reference names, Modrinth first.
+// With is the reference with the project's id on src added.
+func (r Ref) With(src Source, id string) Ref {
+	if p := r.slot(src); p != nil {
+		*p = id
+	}
+	return r
+}
+
+// Sources lists the platforms the reference names, in Sources order.
 func (r Ref) Sources() []Source {
 	var out []Source
-	if r.Modrinth != "" {
-		out = append(out, Modrinth)
-	}
-	if r.CurseForge != "" {
-		out = append(out, CurseForge)
+	for _, src := range Sources {
+		if r.ID(src) != "" {
+			out = append(out, src)
+		}
 	}
 	return out
 }

@@ -72,6 +72,7 @@ import (
 	"quartz/internal/modplatform"
 	"quartz/internal/modplatform/curseforge"
 	"quartz/internal/modplatform/modrinth"
+	"quartz/internal/modplatform/norisk"
 	"quartz/internal/network"
 	"quartz/internal/runview"
 	"quartz/internal/sandbox"
@@ -608,13 +609,14 @@ func (a *app) buildContent() error {
 	a.modIcons = icons.OpenSized(a.paths.ContentIcons(), 64)
 	a.pictures = remoteimg.New(a.paths.RemoteImages(), a.http, a.log)
 	cfReady := brand.CurseForgeKey() != ""
-	a.platforms = []modplatform.Platform{modrinth.New(a.http), curseforge.New(a.http, func() bool { return cfReady })}
+	mr := modrinth.New(a.http)
+	a.platforms = []modplatform.Platform{mr, curseforge.New(a.http, func() bool { return cfReady }), norisk.New(a.http)}
 	providers := make([]modplatform.Provider, len(a.platforms))
 	for i, p := range a.platforms {
 		providers[i] = p
 	}
 	a.manual = manual.New(manual.Deps{
-		Store: a.store, Download: download.New(a.http, a.verified), Modrinth: a.platforms[0], Bus: a.bus, Tasks: a.tasks,
+		Store: a.store, Download: download.New(a.http, a.verified), Modrinth: mr, Bus: a.bus, Tasks: a.tasks,
 		Folder: manual.DownloadsFolder(), Watch: a.settings.Get().Downloads.WatchDownloads, Log: a.log,
 	})
 	a.content, err = content.New(content.Deps{

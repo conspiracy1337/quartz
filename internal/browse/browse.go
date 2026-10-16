@@ -208,7 +208,7 @@ func (s *Service) World(ctx context.Context, ref modplatform.Ref, version string
 }
 
 // Installed lists the projects an instance has as single-platform refs
-// ("mr:<id>", "cf:<id>"), so a result shows Installed once its download ends.
+// ("mr:<id>", "cf:<id>", "nr:<id>"), so a result shows Installed once its download ends.
 func (s *Service) Installed(instance string) ([]string, error) {
 	t, err := s.target(instance)
 	if err != nil || t == nil {
@@ -216,7 +216,7 @@ func (s *Service) Installed(instance string) ([]string, error) {
 	}
 	var out []string
 	for _, in := range t.Installed {
-		for _, src := range []modplatform.Source{modplatform.Modrinth, modplatform.CurseForge} {
+		for _, src := range modplatform.Sources {
 			if id := in.Ident(src); id != nil {
 				out = append(out, modplatform.RefOf(src, id.ProjectID).String())
 			}
