@@ -146,8 +146,17 @@ class Session {
     this.launch = null;
   }
 
-  /** Asks the game to quit; a second click forces it. */
+  /** Whether an instance is starting or running: its Play button shows Stop. */
+  busy(instanceId: string) {
+    return !!this.running[instanceId] || this.launch?.instanceId === instanceId;
+  }
+
+  /** Asks the game to quit (a second click forces it), or cancels a launch still preparing. */
   stop(instanceId: string) {
+    if (!this.running[instanceId] && this.launch?.instanceId === instanceId) {
+      this.cancelLaunch();
+      return;
+    }
     if (hasBridge()) {
       api.launch.stop(instanceId).catch((e) => this.fail('Stop', e));
       return;

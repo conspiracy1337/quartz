@@ -65,7 +65,7 @@
               <span class="small faint tnum" style="display: flex; justify-content: space-between"><span>{agoShort(r.lastPlayed)}</span><span>{hours(r.playtimeMin)}</span></span>
             </div>
             <a class="icard-hit" href={href({ name: 'instance', id: r.id, tab: 'overview' })} aria-label="Open {r.name}"></a>
-            {#if session.running[r.id]}
+            {#if session.busy(r.id)}
               <button class="btn btn-stop btn-icon play live" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Stop {r.name}" onclick={() => session.stop(r.id)}><Icon name="stop" size={12} /></button>
             {:else}
               <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={() => session.play(r.id)}><Icon name="play" size={14} /></button>
