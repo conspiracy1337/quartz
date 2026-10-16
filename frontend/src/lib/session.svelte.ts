@@ -69,6 +69,8 @@ class Session {
   toast = $state<Toast | null>(null);
   /** An instance's menu (right-click, or the header's ⋮), at a window position. */
   instanceMenu = $state<{ instanceId: string; x: number; y: number } | null>(null);
+  /** The bottom bar's download queue is open; starting an install opens it. */
+  downloadTray = $state(true);
   /** The instance Browse and project pages install into, once picked (else the most recent). */
   browseTarget = $state<string | null>(null);
   /** What Browse or a project page already shows of the modpack it sends to Import, so its name,

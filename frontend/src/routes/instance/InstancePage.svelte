@@ -28,6 +28,8 @@
   const i = $derived(instance.data?.id === id ? instance.data : undefined);
   // Review screens replace the instance header with their own top bar.
   const review = $derived((managed(tab as ContentKind) && CONTENT.includes(tab) && sub === 'updates') || (tab === 'overview' && sub === 'update'));
+  // Browse adds to the instance opened last.
+  $effect(() => void api.instances.opened(id).catch(() => {}));
   // Files changed outside the launcher show up while the instance is open.
   $effect(() => {
     void api.content.watch(id);

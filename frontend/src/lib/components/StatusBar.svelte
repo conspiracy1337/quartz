@@ -1,12 +1,12 @@
 <script lang="ts">
   import { percent, plural, rate } from '../format';
+  import { session } from '../session.svelte';
   import { tasks } from '../tasks.svelte';
   import Bar from '../ui/Bar.svelte';
   import Icon from '../ui/Icon.svelte';
   import Tile from '../ui/Tile.svelte';
 
   /** The bar at the bottom of every screen while downloads run; opens a tray with the queue. */
-  let open = $state(true);
   const jobs = $derived(tasks.active);
   const done = $derived(jobs.reduce((n, j) => n + j.doneBytes, 0));
   const total = $derived(jobs.reduce((n, j) => n + j.totalBytes, 0));
@@ -19,20 +19,20 @@
 </script>
 
 {#if jobs.length}
-  {#if open}
+  {#if session.downloadTray}
     <section class="tray" aria-label="Download queue">
       {#each t.items as it (it.id)}
         <div class="tr"><Tile art={it.art} size="sm" style="width: 24px; height: 24px" /><span class="trunc">{it.name}</span><Bar pct={it.pct ?? 0} /><span class="small faint" class:mono={it.pct !== null} style="text-align: right">{it.pct === null ? 'Queued' : `${it.pct}%`}</span></div>
       {/each}
     </section>
   {/if}
-  <button class="sbar" onclick={() => (open = !open)} aria-expanded={open}>
+  <button class="sbar" onclick={() => (session.downloadTray = !session.downloadTray)} aria-expanded={session.downloadTray}>
     <Icon name="download" size={14} sw={2} color="var(--accent)" />
     <span class="small">{t.label}</span>
     <Bar pct={t.pct} style="width: 160px" />
     <span class="mono small faint">{t.pct}%</span>
     <span class="mono small faint" style="margin-left: auto">{t.speed}</span>
-    <Icon name="chevron-up" size={12} sw={2} style="transform: rotate({open ? 180 : 0}deg); transition: transform 160ms cubic-bezier(.23,1,.32,1)" />
+    <Icon name="chevron-up" size={12} sw={2} style="transform: rotate({session.downloadTray ? 180 : 0}deg); transition: transform 160ms cubic-bezier(.23,1,.32,1)" />
   </button>
 {/if}
 

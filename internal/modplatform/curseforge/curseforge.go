@@ -60,6 +60,7 @@ type cfFile struct {
 	ReleaseType  int       `json:"releaseType"`
 	FileDate     time.Time `json:"fileDate"`
 	FileLength   int64     `json:"fileLength"`
+	Downloads    int64     `json:"downloadCount"`
 	DownloadURL  string    `json:"downloadUrl"`
 	GameVersions []string  `json:"gameVersions"`
 	Fingerprint  uint32    `json:"fileFingerprint"`
@@ -79,7 +80,7 @@ var relations = map[int]modplatform.DepKind{1: modplatform.DepEmbedded, 2: modpl
 
 func (f cfFile) to() modplatform.Version {
 	v := modplatform.Version{Source: modplatform.CurseForge, ProjectID: id(f.ModID), ID: id(f.ID), Number: f.DisplayName,
-		Type: releaseTypes[f.ReleaseType], Published: f.FileDate,
+		Type: releaseTypes[f.ReleaseType], Published: f.FileDate, Downloads: f.Downloads,
 		File: modplatform.File{Name: f.FileName, URL: f.DownloadURL, Size: f.FileLength}}
 	for _, h := range f.Hashes {
 		if h.Algo == 1 {

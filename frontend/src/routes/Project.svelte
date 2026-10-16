@@ -1,15 +1,17 @@
 <script lang="ts">
   import { api } from '$lib/api';
-  import type { ProjectVersion, Src } from '$lib/api/types';
+  import type { Loader, ProjectVersion, Src } from '$lib/api/types';
   import { bytes, compact, errorText, shortMonthDay, shortDate } from '$lib/format';
-  import { LOADER_NAMES, SRC_NAMES, projectType } from '$lib/labels';
+  import { ANY_LOADER_NAMES, LOADER_NAMES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
+  import { lastTouched } from '$lib/instances';
   import { session } from '$lib/session.svelte';
   import Empty from '$lib/ui/Empty.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import LoaderIcon from '$lib/ui/LoaderIcon.svelte';
   import SplitButton from '$lib/ui/SplitButton.svelte';
   import Inline, { follow } from '$lib/ui/Inline.svelte';
   import type { IconName } from '$lib/ui/icons';
@@ -24,9 +26,12 @@
 
   const CHANNELS = ['Release', 'Beta', 'Alpha'] as const;
   const SOURCES = ['modrinth', 'curseforge'] as const;
+  /** A version's channel as one boxed letter: green R, orange B, red A. */
+  const CHANNEL_BADGE = { Release: 'badge-accent', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
+  const isModLoader = (l: string): l is Loader => l in LOADER_NAMES;
 
   const instances = query(() => api.instances.list());
-  const target = $derived(instances.data?.find((i) => i.id === session.browseTarget) ?? instances.data?.[0]);
+  const target = $derived(instances.data?.find((i) => i.id === session.browseTarget) ?? lastTouched(instances.data ?? []));
   const project = query(() => api.browse.project(id, target?.id ?? ''));
   // svelte-ignore state_referenced_locally
   let tab = $state(startTab === 'versions' ? 1 : 0);
@@ -93,7 +98,7 @@
           <div style="display: flex; gap: 6px; flex-wrap: wrap">{#each side.badges as b (b)}<span class="badge">{b}</span>{/each}<span class="small faint tnum" style="margin-left: 6px">by {side.author}, {compact(side.downloads)} downloads on {SRC_NAMES[p[src] ? src : other]}</span></div>
         </div>
         <div class="seg" role="group" aria-label="Source" style="margin-right: 4px">
-          {#each SOURCES as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]}><Icon name={s} size={14} />{SRC_NAMES[s]}</button>{/each}
+          {#each SOURCES as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]} title={p[s] ? undefined : `Unavailable on ${SRC_NAMES[s]}`}><Icon name={s} size={14} />{SRC_NAMES[s]}</button>{/each}
         </div>
         <!-- A modpack installs as its own instance, so only content gets the instance chooser. -->
         {#if kind?.content}
@@ -142,14 +147,19 @@
           {#each CHANNELS as c (c)}<button class="chip" class:on={channels[c]} onclick={() => (channels[c] = !channels[c])}>{c}</button>{/each}
         </div>
         <div class="list">
-          <div class="row row-head pv"><span>Version</span><span>Channel</span><span class="opt">Minecraft</span><span class="opt">Published</span><span class="opt">Size</span><span></span></div>
+          <div class="row row-head pv"><span title="Channel">C</span><span>Version</span><span class="opt">Minecraft</span><span class="opt">Loader</span><span class="opt">Published</span><span class="opt">Downloads</span><span class="opt">Size</span><span></span></div>
           {#each shown as v, i (v.id)}
             <div>
               <div class="row pv">
+                <span><span class="badge pv-ch {CHANNEL_BADGE[v.channel]}" title={v.channel}>{v.channel[0]}</span></span>
                 <button class="pv-id mono trunc" onclick={() => (openVersion = openVersion === i ? -1 : i)} aria-expanded={openVersion === i}>{v.number}</button>
-                <span><span class="badge" class:badge-accent={v.channel === 'Release'} class:badge-warn={v.channel !== 'Release'}>{v.channel}</span></span>
                 <span class="mono muted opt trunc">{v.minecraft}</span>
+                <span class="opt pv-ld" title={v.loaders.map((l) => ANY_LOADER_NAMES[l] ?? l).join(', ')}>
+                  {#each v.loaders as l (l)}{#if isModLoader(l)}<LoaderIcon kind={l} size={14} />{/if}{/each}
+                  {#if v.loaders.length === 1}<span class="muted trunc">{ANY_LOADER_NAMES[v.loaders[0]!] ?? v.loaders[0]}</span>{:else if !v.loaders.some(isModLoader)}<span class="muted trunc">{v.loaders.map((l) => ANY_LOADER_NAMES[l] ?? l).join(', ') || '–'}</span>{/if}
+                </span>
                 <span class="muted opt tnum">{shortMonthDay(v.published)}, {new Date(v.published).getFullYear()}</span>
+                <span class="muted opt tnum">{v.downloads ? compact(v.downloads) : '–'}</span>
                 <span class="mono muted opt">{bytes(v.bytes)}</span>
                 <span style="display: flex; justify-content: flex-end">
                   {#if !v.action}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={!!kind?.content && !target} onclick={() => install(v.id)}>{v.action}</button>{/if}
@@ -163,7 +173,7 @@
             {#if versions.data}<div class="row" style="height: 52px"><span class="small muted">{versions.error ? errorText(versions.error) : 'No versions match.'}</span></div>{/if}
           {/each}
           {#if !versions.data}
-            {#each [0, 1, 2, 3] as k (k)}<div class="row pv" aria-hidden="true"><div class="sk" style="height: 12px; width: 60%"></div><div class="sk" style="height: 18px; width: 56px"></div><div class="sk opt" style="height: 10px; width: 50%"></div><div class="sk opt" style="height: 10px; width: 70%"></div><div class="sk opt" style="height: 10px; width: 60%"></div><div class="sk" style="height: 28px; width: 64px; justify-self: end"></div></div>{/each}
+            {#each [0, 1, 2, 3] as k (k)}<div class="row pv" aria-hidden="true"><div class="sk" style="height: 20px; width: 20px"></div><div class="sk" style="height: 12px; width: 60%"></div><div class="sk opt" style="height: 10px; width: 50%"></div><div class="sk opt" style="height: 10px; width: 60%"></div><div class="sk opt" style="height: 10px; width: 70%"></div><div class="sk opt" style="height: 10px; width: 50%"></div><div class="sk opt" style="height: 10px; width: 60%"></div><div class="sk" style="height: 28px; width: 64px; justify-self: end"></div></div>{/each}
           {/if}
         </div>
       {:else if tab === 2}
@@ -220,8 +230,10 @@
   .md :global(code){font-family:var(--mono);font-size:12px;background:var(--raise);padding:1px 5px;border-radius:4px;color:var(--text)}
   .lk{display:flex;align-items:center;gap:10px;height:32px;color:var(--muted);text-decoration:none}
   .lk:hover{color:var(--text)}
-  .pv{grid-template-columns:minmax(0,1fr) 72px 120px 104px 72px 96px;height:52px}
-  @media (max-width:1100px){.pv{grid-template-columns:minmax(0,1fr) 72px 96px}.pv .opt{display:none}}
+  .pv{grid-template-columns:20px minmax(0,1fr) 112px 112px 104px 80px 72px 96px;height:52px}
+  @media (max-width:1100px){.pv{grid-template-columns:20px minmax(0,1fr) 96px}.pv .opt{display:none}}
+  .pv-ch{width:20px;padding:0;justify-content:center}
+  .pv-ld{display:flex;align-items:center;gap:6px;min-width:0}
   .pv-id{all:unset;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .pv-id:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .cl{padding:12px 16px 16px;background:var(--bg);color:var(--muted);font-size:13px;line-height:20px}

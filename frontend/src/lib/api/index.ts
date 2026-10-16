@@ -9,6 +9,7 @@ import * as misc from './mock/misc';
 import * as versions from './mock/versions';
 import type { Alert, ExportMeta, ExportPlan, FollowOffer, ExportPreview, ExportResult, Instance, InstanceSummary, JavaNeed } from './types';
 import { activityFeed } from '../activity';
+import { lastTouched } from '../instances';
 import { bridged, hasBridge, preview } from '../bridge';
 import { revs } from '../revs.svelte';
 import * as InstancesGo from '../wailsjs/go/api/Instances';
@@ -51,11 +52,13 @@ export const api = {
     get: (id: string) => revs.load(['instances', 'content', 'worlds', 'servers'], bridged(() => InstancesGo.Get(id), () => byId(id))),
     /** The sidebar's recent list: the instances played or created last. */
     recent: () => revs.load('instances', bridged(() => InstancesGo.List().then((l) => l.slice(0, 4)), () => inst.recentIds.map((id) => summary(byId(id))))),
-    /** The instance Browse installs into by default: the most recently played one. */
+    /** The instance touched last: created, opened or played (Browse's default target). */
     first: async (): Promise<Instance | undefined> => {
-      const [top] = await api.instances.list();
+      const top = lastTouched(await api.instances.list());
       return top ? api.instances.get(top.id) : undefined;
     },
+    /** Records that an instance's page was opened. */
+    opened: bridged(InstancesGo.Opened, (_id: string) => undefined),
     create: bridged(InstancesGo.Create, inst.mockInstances.create),
     updateSettings: bridged(InstancesGo.UpdateSettings, inst.mockInstances.updateSettings),
     openFolder: bridged(InstancesGo.OpenFolder, (_id: string) => undefined),

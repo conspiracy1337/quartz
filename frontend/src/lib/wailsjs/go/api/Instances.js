@@ -50,6 +50,10 @@ export function OpenFolder(arg1) {
   return window['go']['api']['Instances']['OpenFolder'](arg1);
 }
 
+export function Opened(arg1) {
+  return window['go']['api']['Instances']['Opened'](arg1);
+}
+
 export function Purge(arg1) {
   return window['go']['api']['Instances']['Purge'](arg1);
 }

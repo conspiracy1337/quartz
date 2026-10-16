@@ -112,11 +112,14 @@ type Instance struct {
 	Tags         []string `json:"tags,omitempty"`
 	Location     string   `json:"location,omitempty"` // a moved game folder; "" is instances/<id>/game
 	// Sandbox is what the game may reach.
-	Sandbox     rules.Settings `json:"sandbox"`
-	Sync        Sync           `json:"sync"`
-	Created     time.Time      `json:"created"`
-	LastPlayed  *time.Time     `json:"lastPlayed,omitempty"`
-	PlaytimeMin int            `json:"playtimeMin"`
+	Sandbox    rules.Settings `json:"sandbox"`
+	Sync       Sync           `json:"sync"`
+	Created    time.Time      `json:"created"`
+	LastPlayed *time.Time     `json:"lastPlayed,omitempty"`
+	// LastOpened is when its page was last opened (to the minute), so Browse
+	// can add to the instance looked at last.
+	LastOpened  *time.Time `json:"lastOpened,omitempty"`
+	PlaytimeMin int        `json:"playtimeMin"`
 	// PlaytimeSec carries the seconds below a whole minute, so short
 	// sessions add up instead of rounding away (Prism counts seconds).
 	PlaytimeSec int      `json:"playtimeSec,omitempty"`

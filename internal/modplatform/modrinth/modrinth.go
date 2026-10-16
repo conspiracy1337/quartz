@@ -50,6 +50,7 @@ type version struct {
 	DatePublished time.Time `json:"date_published"`
 	Loaders       []string  `json:"loaders"`
 	GameVersions  []string  `json:"game_versions"`
+	Downloads     int64     `json:"downloads"`
 	Files         []file    `json:"files"`
 	Changelog     string    `json:"changelog"`
 	Dependencies  []struct {
@@ -72,7 +73,7 @@ func (v version) to(match func(file) bool) (modplatform.Version, bool) {
 		}
 	}
 	out := modplatform.Version{Source: modplatform.Modrinth, ProjectID: v.ProjectID, ID: v.ID, Number: v.VersionNumber,
-		Type: v.VersionType, Published: v.DatePublished, Loaders: v.Loaders, Game: v.GameVersions, Changelog: v.Changelog,
+		Type: v.VersionType, Published: v.DatePublished, Loaders: v.Loaders, Game: v.GameVersions, Downloads: v.Downloads, Changelog: v.Changelog,
 		File: modplatform.File{Name: f.Filename, URL: f.URL, Size: f.Size, SHA1: f.Hashes["sha1"], SHA512: f.Hashes["sha512"]}}
 	for _, d := range v.Dependencies {
 		if d.ProjectID == "" || !modplatform.ValidID(d.ProjectID) {
