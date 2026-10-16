@@ -75,13 +75,14 @@ func atSampler(s image.Image) sampler {
 // also stops the compiler from fusing them into FMA instructions.
 func scaleABL(dst *image.RGBA, sr image.Rectangle, at sampler) {
 	dr := dst.Rect
-	sw := int32(sr.Dx())
-	sh := int32(sr.Dy())
-	yscale := float64(sh) / float64(dr.Dy())
-	xscale := float64(sw) / float64(dr.Dx())
+	// Decoded images are capped far below 2^31 pixels a side.
+	sw, sh := int32(sr.Dx()), int32(sr.Dy()) //nolint:gosec // see above
+	dw, dh := int32(dr.Dx()), int32(dr.Dy()) //nolint:gosec // see above
+	yscale := float64(sh) / float64(dh)
+	xscale := float64(sw) / float64(dw)
 	swMinus1, shMinus1 := sw-1, sh-1
 
-	for dy := int32(0); dy < int32(dr.Dy()); dy++ {
+	for dy := int32(0); dy < dh; dy++ {
 		sy := float64((float64(dy)+0.5)*yscale) - 0.5
 		// If sy < 0, sy0 is clamped to 0 anyway, so int32(sy) can stand in
 		// for int32(math.Floor(sy)). Likewise for sx below.
@@ -99,7 +100,7 @@ func scaleABL(dst *image.RGBA, sr image.Rectangle, at sampler) {
 		y0, y1 := sr.Min.Y+int(sy0), sr.Min.Y+int(sy1)
 		d := int(dy) * dst.Stride
 
-		for dx := int32(0); dx < int32(dr.Dx()); dx, d = dx+1, d+4 {
+		for dx := int32(0); dx < dw; dx, d = dx+1, d+4 {
 			sx := float64((float64(dx)+0.5)*xscale) - 0.5
 			sx0 := int32(sx)
 			xFrac0 := sx - float64(sx0)
@@ -130,10 +131,10 @@ func scaleABL(dst *image.RGBA, sr image.Rectangle, at sampler) {
 			s11g = float64(yFrac1*s10g) + float64(yFrac0*s11g)
 			s11b = float64(yFrac1*s10b) + float64(yFrac0*s11b)
 			s11a = float64(yFrac1*s10a) + float64(yFrac0*s11a)
-			dst.Pix[d+0] = uint8(uint32(s11r) >> 8)
-			dst.Pix[d+1] = uint8(uint32(s11g) >> 8)
-			dst.Pix[d+2] = uint8(uint32(s11b) >> 8)
-			dst.Pix[d+3] = uint8(uint32(s11a) >> 8)
+			dst.Pix[d+0] = uint8(uint32(s11r) >> 8) //nolint:gosec // 16-bit channel to its high byte
+			dst.Pix[d+1] = uint8(uint32(s11g) >> 8) //nolint:gosec // 16-bit channel to its high byte
+			dst.Pix[d+2] = uint8(uint32(s11b) >> 8) //nolint:gosec // 16-bit channel to its high byte
+			dst.Pix[d+3] = uint8(uint32(s11a) >> 8) //nolint:gosec // 16-bit channel to its high byte
 		}
 	}
 }

@@ -109,7 +109,8 @@ func (f *Font) parseCmap(cmap []byte) error {
 	for i := range n {
 		rec := cmap[4+8*i:]
 		pid, psid, off := u16(rec), u16(rec[2:]), u32(rec[4:])
-		if !(pid == 0 && psid == 3) && !(pid == 3 && (psid == 0 || psid == 1)) {
+		unicodeBMP := pid == 0 && psid == 3 || pid == 3 && (psid == 0 || psid == 1)
+		if !unicodeBMP {
 			continue
 		}
 		if int64(off)+14 > int64(len(cmap)) {

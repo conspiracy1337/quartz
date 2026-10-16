@@ -230,11 +230,15 @@ func appendKey(b []byte, key string) []byte {
 		return appendString(b, key)
 	}
 	for i := range len(key) {
-		if c := key[i]; !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+		if !isBareKeyByte(key[i]) {
 			return appendString(b, key)
 		}
 	}
 	return append(b, key...)
+}
+
+func isBareKeyByte(c byte) bool {
+	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_'
 }
 
 // appendString writes a literal ('…') string when s allows one, else a basic one.
