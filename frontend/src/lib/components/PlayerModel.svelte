@@ -124,7 +124,7 @@
   {#if controls}
     <div class="pm-ctrl" onpointerdown={(e) => e.stopPropagation()} role="toolbar" tabindex="-1" aria-label="Preview controls">
       <button class="btn btn-sm btn-icon btn-ghost" onclick={() => turn(-45)} aria-label="Rotate left"><Icon name="rotate-left" size={14} sw={2} /></button>
-      <button class="btn btn-sm btn-ghost" onclick={() => (walking = !walking)} aria-pressed={walking}>{walking ? 'Stop' : 'Walk'}</button>
+      <button class="btn btn-sm btn-ghost" onclick={() => (walking = !walking)} aria-pressed={walking}>Walk</button>
       <button class="btn btn-sm btn-ghost" onclick={() => face(FRONT.ry)}>Front</button>
       <button class="btn btn-sm btn-ghost" onclick={() => face(152)}>Back</button>
       <button class="btn btn-sm btn-icon btn-ghost" onclick={() => turn(45)} aria-label="Rotate right"><Icon name="rotate-right" size={14} sw={2} /></button>

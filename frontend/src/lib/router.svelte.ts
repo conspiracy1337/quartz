@@ -8,7 +8,7 @@ export const INSTANCE_TABS = [
 export type InstanceTab = (typeof INSTANCE_TABS)[number];
 
 export const SETTINGS_TABS = [
-  'general', 'appearance', 'java', 'downloads', 'storage', 'syncing', 'integrations', 'updates', 'about',
+  'general', 'appearance', 'java', 'downloads', 'storage', 'integrations', 'updates', 'about',
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
