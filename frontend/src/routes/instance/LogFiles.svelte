@@ -11,7 +11,7 @@
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
 
-  const files = query(() => api.logs.files(instanceId));
+  const files = query(() => revs.load('instances', () => api.logs.files(instanceId)));
   // A run's saved file opened from Launch history, else a file of the logs folder.
   // svelte-ignore state_referenced_locally
   const opened = session.runFile?.instanceId === instanceId ? session.runFile : null;
@@ -21,7 +21,7 @@
   let picked = $state('');
   const logs = $derived((files.data ?? []).filter((f) => !f.crash));
   const crashes = $derived((files.data ?? []).filter((f) => f.crash));
-  const selected = $derived(picked || logs[0]?.name || '');
+  const selected = $derived(logs.some((f) => f.name === picked) ? picked : (logs[0]?.name ?? ''));
   const title = $derived(run ? run.title : selected);
   const text = query(() => (run ? api.logs.runText(instanceId, run.runId, run.kind) : selected ? api.logs.text(instanceId, selected) : Promise.resolve('')));
   const old = query(() => revs.load('instances', () => api.logs.oldSize(instanceId)));
@@ -75,7 +75,7 @@
       <h2 class="h3 mono trunc" style="margin-right: auto">{title}</h2>
       <label class="input" style="width: 200px; height: 28px"><span class="sr">Find</span><input type="search" placeholder="Find" bind:value={find} /></label>
       <button class="btn btn-sm" disabled={!text.data} onclick={copy}>Copy</button>
-      <button class="btn btn-sm" disabled={!text.data} onclick={upload}>Upload</button>
+      <button class="btn btn-sm" disabled={!text.data || run?.kind === 'cmd'} onclick={upload}>Upload</button>
     </div>
     <div class="scroll" style="padding: 12px 16px">
       {#if text.error}<Empty text="This file couldn't be read. It may have been deleted." />
