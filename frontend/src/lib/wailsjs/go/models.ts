@@ -58,6 +58,7 @@ export namespace api {
 	    os: string;
 	    memoryMb: number;
 	    discord: boolean;
+	    muteUnfocused: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -74,6 +75,7 @@ export namespace api {
 	        this.os = source["os"];
 	        this.memoryMb = source["memoryMb"];
 	        this.discord = source["discord"];
+	        this.muteUnfocused = source["muteUnfocused"];
 	    }
 	}
 	export class CapeView {
@@ -2971,6 +2973,7 @@ export namespace settings {
 	    hideOnGameStart: boolean;
 	    startPage: string;
 	    startWithComputer: boolean;
+	    muteUnfocused: boolean;
 	    setupDone: boolean;
 	    keys?: Record<string, string>;
 	    hiddenNews?: string;
@@ -2985,6 +2988,7 @@ export namespace settings {
 	        this.hideOnGameStart = source["hideOnGameStart"];
 	        this.startPage = source["startPage"];
 	        this.startWithComputer = source["startWithComputer"];
+	        this.muteUnfocused = source["muteUnfocused"];
 	        this.setupDone = source["setupDone"];
 	        this.keys = source["keys"];
 	        this.hiddenNews = source["hiddenNews"];

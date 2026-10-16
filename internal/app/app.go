@@ -631,6 +631,7 @@ func (a *app) buildContent() error {
 	}
 	a.shortcuts = shortcuts.New(a.paths.Shortcuts(), a.instances, a.icons, exe, a.paths.FixedDir(), a.log)
 	a.watchDiscord()
+	a.watchFocus()
 	a.buildUpdater()
 	a.drops = api.NewDrops(a.bus)
 	a.opens = api.NewOpens(a.bus)
