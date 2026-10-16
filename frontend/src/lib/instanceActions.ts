@@ -1,7 +1,7 @@
 // Actions on one instance that several screens offer (the header's menu and the
 // instance settings), written once so they behave and word themselves the same.
 import { api } from './api';
-import type { Instance } from './api/types';
+import type { ContentKind, Instance, Src } from './api/types';
 
 /** What the shared actions need to know about an instance. */
 type Named = Pick<Instance, 'id' | 'name'>;
@@ -83,5 +83,17 @@ export async function switchVersion(i: Instance, minecraft: string, kind: string
   } catch (e) {
     session.fail(label, e);
     return false;
+  }
+}
+
+/** Installs a project into an instance: content opens the Install dialog (version and
+    dependencies); a world has neither, so it downloads straight away and Downloads shows it. */
+export async function installInto(instanceId: string, ref: string, source: Src, content: ContentKind, version = '') {
+  if (content !== 'worlds') return session.open({ kind: 'install', ref, source, instanceId, content, ...(version ? { version } : {}) });
+  try {
+    if (await api.browse.installWorld(instanceId, ref, version)) await tasks.load();
+    go({ name: 'downloads' });
+  } catch (e) {
+    session.fail('Install', e);
   }
 }

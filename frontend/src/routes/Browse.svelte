@@ -9,6 +9,7 @@
   import { artOf } from '$lib/look';
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
+  import { installInto } from '$lib/instanceActions';
   import { session } from '$lib/session.svelte';
   import Check from '$lib/ui/Check.svelte';
   import PageHeader from '$lib/ui/PageHeader.svelte';
@@ -54,6 +55,8 @@
   const instances = query(() => api.instances.list());
   const target = $derived(instances.data?.find((i) => i.id === session.browseTarget) ?? instances.data?.[0]);
   const showTarget = $derived(type !== 'modpack');
+  // Worlds come from CurseForge alone, untracked: no loader, side or Modrinth-only filters apply.
+  const isWorld = $derived(type === 'world');
   const categories = query(() => api.browse.categories(type));
 
   // Typing searches once it pauses.
@@ -75,8 +78,8 @@
   $effect(() => {
     const q = {
       type, text, sort, instance: showTarget ? (target?.id ?? '') : '', version: useVersion && showTarget && !!target, game: showTarget ? '' : game,
-      loader: useLoader && showTarget && !!target?.loader,
-      categories: Object.keys(cats).filter((c) => cats[c]), hideAi: hide.ai, hideAds: hide.ads, hideInstalled: hide.installed && showTarget, side,
+      loader: useLoader && showTarget && !isWorld && !!target?.loader,
+      categories: Object.keys(cats).filter((c) => cats[c]), hideAi: hide.ai && !isWorld, hideAds: hide.ads && !isWorld, hideInstalled: hide.installed && showTarget && !isWorld, side: isWorld ? '' : side,
     };
     untrack(() => void run(q));
   });
@@ -147,7 +150,7 @@
       return session.fail('Install', e);
     }
     if (!t.content) return go({ name: 'import', ref: r.ref, source });
-    if (into) session.open({ kind: 'install', ref: r.ref, source, instanceId: into.id, content: t.content });
+    if (into) void installInto(into.id, r.ref, source, t.content);
   }
 </script>
 
@@ -199,7 +202,7 @@
   </section>
   <aside id="browse-filters" class="filters scroll" class:open={filtersOpen} aria-label="Filters" bind:this={filtersEl} style="border-left: 1px solid var(--line); padding: 16px; flex-direction: column; gap: 18px">
     {#if showTarget}
-      <div class="fg"><span class="field-label">Version and loader</span><div style="display: flex; gap: 6px">{#if target}<button class="chip" class:on={useVersion} aria-pressed={useVersion} onclick={() => (useVersion = !useVersion)}>{target.minecraft}</button>{#if target.loader}<button class="chip" class:on={useLoader} aria-pressed={useLoader} onclick={() => (useLoader = !useLoader)}>{LOADER_NAMES[target.loader.kind]}</button>{/if}{/if}</div></div>
+      <div class="fg"><span class="field-label">{isWorld ? 'Minecraft version' : 'Version and loader'}</span><div style="display: flex; gap: 6px">{#if target}<button class="chip" class:on={useVersion} aria-pressed={useVersion} onclick={() => (useVersion = !useVersion)}>{target.minecraft}</button>{#if target.loader && !isWorld}<button class="chip" class:on={useLoader} aria-pressed={useLoader} onclick={() => (useLoader = !useLoader)}>{LOADER_NAMES[target.loader.kind]}</button>{/if}{/if}</div></div>
     {:else}
       <div class="fg"><span class="field-label">Minecraft version</span><Select bind:value={game} options={GAMES} label="Minecraft version" style="width: 100%" /></div>
     {/if}
@@ -208,6 +211,7 @@
         <button class="fl" onclick={() => (cats[c] = !cats[c])} aria-pressed={!!cats[c]}><Check on={!!cats[c]} /><span>{c}</span><span></span></button>
       {/each}
     </div>
+    {#if !isWorld}
     <div class="fg"><span class="field-label">Runs on</span>
       {#each [['client', 'Client side'], ['server', 'Server side']] as const as [v, l] (v)}
         <button class="fl" aria-pressed={side === v} onclick={() => (side = side === v ? '' : v)}><Check on={side === v} /><span>{l}</span><span></span></button>
@@ -218,6 +222,7 @@
       <button class="fl" aria-pressed={hide.ads} onclick={() => (hide.ads = !hide.ads)}><Check on={hide.ads} /><span>Ads or telemetry</span><span></span></button>
       {#if showTarget}<button class="fl" aria-pressed={hide.installed} onclick={() => (hide.installed = !hide.installed)}><Check on={hide.installed} /><span>Already installed</span><span></span></button>{/if}
     </div>
+    {/if}
   </aside>
 </div>
 

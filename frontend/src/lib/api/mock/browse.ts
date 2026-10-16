@@ -39,9 +39,13 @@ export const catalog: Record<ProjectType, { categories: string[]; hits: ProjectH
     P('Terralith', 'Stardust Labs', 'Over 95 new biomes using only vanilla blocks.', '#7fb069', [7.7, 25], [6.1, 25]),
     P('Incendium', 'Stardust Labs', 'A Nether overhaul with new structures and bosses.', '#b8432f', [2.9, 33], [2.4, 33]),
   ] },
+  Worlds: { categories: ['Adventure', 'Creation', 'Game map', 'Parkour', 'Puzzle', 'Survival'], hits: [
+    P('SkyBlock Classic', 'Noobcrew', 'The original island in the sky, with challenges.', '#5bc0be', null, [3.1, 40]),
+    P('Diversity 3', 'Qmagnet', 'A multi-genre adventure map for one to four players.', '#d97f6b', null, [1.2, 120]),
+  ] },
 };
 
-const LABELS: Record<ProjectKind, ProjectType> = { mod: 'Mods', modpack: 'Modpacks', resourcepack: 'Resource packs', shader: 'Shaders', datapack: 'Data packs' };
+const LABELS: Record<ProjectKind, ProjectType> = { mod: 'Mods', modpack: 'Modpacks', resourcepack: 'Resource packs', shader: 'Shaders', datapack: 'Data packs', world: 'Worlds' };
 
 const total = (p: ProjectHit) => (p.modrinth?.downloads ?? 0) + (p.curseforge?.downloads ?? 0);
 const newest = (p: ProjectHit) => Math.max(p.modrinth?.updated ?? 0, p.curseforge?.updated ?? 0);

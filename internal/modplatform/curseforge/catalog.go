@@ -23,13 +23,13 @@ const gameID = "432"
 // classIDs maps our types to CurseForge's class ids.
 var classIDs = map[modplatform.ProjectType]int{
 	modplatform.TypeMod: 6, modplatform.TypeModpack: 4471, modplatform.TypeResourcePack: 12,
-	modplatform.TypeShader: 6552, modplatform.TypeDataPack: 6945,
+	modplatform.TypeShader: 6552, modplatform.TypeDataPack: 6945, modplatform.TypeWorld: 17,
 }
 
 // classPaths are the website folders of each class, for page links.
 var classPaths = map[modplatform.ProjectType]string{
 	modplatform.TypeMod: "mc-mods", modplatform.TypeModpack: "modpacks", modplatform.TypeResourcePack: "texture-packs",
-	modplatform.TypeShader: "shaders", modplatform.TypeDataPack: "data-packs",
+	modplatform.TypeShader: "shaders", modplatform.TypeDataPack: "data-packs", modplatform.TypeWorld: "worlds",
 }
 
 // Site is CurseForge's website.

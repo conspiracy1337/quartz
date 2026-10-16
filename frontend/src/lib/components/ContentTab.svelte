@@ -35,7 +35,8 @@
   let { instanceId, kind, chip: startChip }: Props = $props();
 
   type Chip = { label: string; test: (c: ContentItem) => boolean };
-  interface Config { noun: string; primary: string; toggles: boolean; exclusive?: boolean; hint?: string; projects: boolean; chips: (items: ContentItem[]) => Chip[] }
+  /** browse: Add opens Browse (projects always do; worlds come from CurseForge without being tracked). */
+  interface Config { noun: string; primary: string; toggles: boolean; browse?: boolean; exclusive?: boolean; hint?: string; projects: boolean; chips: (items: ContentItem[]) => Chip[] }
   const all: Chip = { label: 'All', test: () => true };
   const CONFIG: Record<ContentKind, Config> = {
     mods: { noun: 'mods', primary: 'Add mods', toggles: true, projects: true,
@@ -49,7 +50,7 @@
       hint: 'Only one shader pack runs at a time. Uses Iris 1.8.1.', chips: () => [all] },
     datapacks: { noun: 'data packs', primary: 'Add data packs', toggles: true, projects: true,
       chips: (items) => [{ label: 'All worlds', test: () => true }, ...[...new Set(items.map((c) => c.group).filter((g) => g !== undefined))].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
-    worlds: { noun: 'worlds', primary: 'Import world', toggles: false, projects: false,
+    worlds: { noun: 'worlds', primary: 'Add world', toggles: false, projects: false, browse: true,
       // Survival and Creative always (as designed), then any other mode a world here has.
       chips: (items) => [all, ...[...new Set(['Survival', 'Creative', ...items.map((c) => c.group).filter((g): g is string => !!g)])].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
     servers: { noun: 'servers', primary: 'Add server', toggles: false, projects: false,
@@ -257,7 +258,7 @@
     }
   }
 
-  // Import world and Add server.
+  // Import (a world .zip, from Add world's ▾) and Add server.
   async function primary() {
     if (kind === 'servers') return session.open({ kind: 'server', instanceId });
     try {
@@ -452,7 +453,7 @@
       {/each}
     </div>
     <div style="flex: 1 1 0"></div>
-    {#if cfg.projects}
+    {#if cfg.projects || cfg.browse}
       <SplitButton accent href={href({ name: 'browse', type: projectKindOf(kind), instance: instanceId })} menuLabel="More ways to add {cfg.noun}" expanded={!!addMenu} onmenu={openAddMenu}><Icon name="plus" size={14} sw={2} />{cfg.primary}</SplitButton>
     {:else}
       <button class="btn btn-accent" onclick={primary}><Icon name="plus" size={14} sw={2} />{cfg.primary}</button>
@@ -542,9 +543,13 @@
 
 {#if addMenu}
   <Menu x={addMenu.x} y={addMenu.y} label="More ways to add {cfg.noun}" onclose={() => (addMenu = null)}>
+    {#if kind === 'worlds'}
+      <button class="mi" role="menuitem" onclick={() => ((addMenu = null), void primary())}><Icon name="upload" size={14} /><span>Import…</span><span></span></button>
+    {:else}
     <button class="mi" role="menuitem" onclick={addFiles}><Icon name="file" size={14} /><span>From file…</span><span></span></button>
     {#if unusedLibs.length}
       <button class="mi" role="menuitem" onclick={() => { addMenu = null; void bulkSet(false, unusedLibs); }}><Icon name="stop" size={14} /><span>Turn off unused libraries</span><span class="small faint">{unusedLibs.length}</span></button>
+    {/if}
     {/if}
   </Menu>
 {/if}

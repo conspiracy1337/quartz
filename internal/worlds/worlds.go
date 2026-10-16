@@ -32,6 +32,7 @@ import (
 	"quartz/internal/core/linkx"
 	"quartz/internal/core/localimg"
 	"quartz/internal/core/nbt"
+	"quartz/internal/core/tasks"
 	"quartz/internal/holdbin"
 	"quartz/internal/instance"
 	"quartz/internal/launch"
@@ -62,9 +63,13 @@ type Deps struct {
 	Images    *localimg.Registry
 	// Busy reports an instance that is starting or running.
 	Busy func(id string) bool
-	Bus  *events.Bus
-	Log  *slog.Logger
-	Now  func() time.Time
+	// Tasks runs world downloads (Install) into Downloads, a folder inside
+	// the data folder the download engine may write to.
+	Tasks     *tasks.Engine
+	Downloads string
+	Bus       *events.Bus
+	Log       *slog.Logger
+	Now       func() time.Time
 }
 
 // Service is safe for concurrent use.

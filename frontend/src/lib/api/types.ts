@@ -286,9 +286,9 @@ export interface SignInEvent {
 }
 
 // ---- browse (mirrors Go's browse, content.InstallPlan and modpack) ----
-export type ProjectType = 'Mods' | 'Modpacks' | 'Resource packs' | 'Shaders' | 'Data packs';
+export type ProjectType = 'Mods' | 'Modpacks' | 'Resource packs' | 'Shaders' | 'Data packs' | 'Worlds';
 /** Go's project types, in Browse's tab order. */
-export type ProjectKind = 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datapack';
+export type ProjectKind = 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datapack' | 'world';
 export type Src = 'modrinth' | 'curseforge';
 export interface SourceStats { downloads: number; updated: number }
 /** One merged search result; `id` stays the same when a twin from the other platform merges in. */

@@ -6,6 +6,7 @@
   import { artOf } from '$lib/look';
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
+  import { installInto } from '$lib/instanceActions';
   import { session } from '$lib/session.svelte';
   import Empty from '$lib/ui/Empty.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -68,7 +69,7 @@
   function install(version?: string) {
     if (!p || !kind) return;
     if (!kind.content) return go({ name: 'import', ref: p.ref, source: src, ...(version ? { version } : {}) });
-    if (target) session.open({ kind: 'install', ref: p.ref, source: src, instanceId: target.id, content: kind.content, ...(version ? { version } : {}) });
+    if (target) void installInto(target.id, p.ref, src, kind.content, version);
   }
   const choose = (e: MouseEvent) => (chooser = below(e));
   const open = (url: string) => (e: MouseEvent) => {
