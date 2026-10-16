@@ -143,13 +143,13 @@
 
 {#if addMenu}
   <Menu x={addMenu.x} y={addMenu.y} label="More ways to add a skin" onclose={() => (addMenu = null)}>
-    <button class="mi" role="menuitem" onclick={() => { addMenu = null; prompt = 'player'; }}><Icon name="user" size={14} /><span>From player…</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => { addMenu = null; prompt = 'link'; }}><Icon name="link" size={14} /><span>From link…</span><span></span></button>
+    <button class="mi" role="menuitem" onclick={() => { addMenu = null; prompt = 'player'; }}><Icon name="user" size={14} /><span>From player…</span><span></span></button>
   </Menu>
 {/if}
 
 {#if prompt === 'player'}
-  <PromptDialog title="Copy from player" label="Player name" help="Copies the skin that player wears right now." action="Copy skin" maxlength={16}
+  <PromptDialog title="From player" label="Player name" help="Copies the skin that player wears right now." action="Copy skin" maxlength={16}
     valid={(v) => /^[A-Za-z0-9_]{1,16}$/.test(v.trim())} submit={(v) => added(api.accounts.importSkinPlayer(v))} onclose={() => (prompt = null)} />
 {:else if prompt === 'link'}
   <PromptDialog title="Skin from link" label="Link to a skin PNG" help="A 64×64 or 64×32 PNG, starting with https://." action="Add skin" placeholder="https://"

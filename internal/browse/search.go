@@ -152,7 +152,7 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 			}
 		}
 	}
-	mrCats, cfCats, curse := s.categoryFilter(ctx, t, q.Categories)
+	mrCats, cfCats, modrinth, curse := s.categoryFilter(ctx, t, q.Categories)
 	for _, p := range s.d.Platforms {
 		if !p.Ready() {
 			continue
@@ -160,8 +160,8 @@ func (s *Service) Search(ctx context.Context, q Query) (Results, error) {
 		sq := base
 		switch p.Source() {
 		case modplatform.Modrinth:
-			if t == modplatform.TypeWorld {
-				continue // Modrinth hosts no worlds
+			if t == modplatform.TypeWorld || !modrinth {
+				continue // Modrinth hosts no worlds, or can't filter by this
 			}
 			sq.Categories = mrCats
 			if q.HideAI {

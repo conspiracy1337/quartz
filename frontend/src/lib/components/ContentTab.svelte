@@ -587,7 +587,7 @@
     {/if}
     {#if cfg.projects && c.ref}
       {@const ref = c.ref}
-      <button class="mi" role="menuitem" onclick={() => act(async () => { session.browseTarget = instanceId; go({ name: 'project', id: ref, tab: 'versions' }); }, 'Change version')}><Icon name="refresh" size={14} /><span>Change version…</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(async () => { session.addTo(instanceId); go({ name: 'project', id: ref, tab: 'versions' }); }, 'Change version')}><Icon name="refresh" size={14} /><span>Change version…</span><span></span></button>
     {/if}
     {#if c.source && c.source !== 'file'}
       <button class="mi" role="menuitem" onclick={() => act(() => api.content.setLocked(instanceId, c.id, !c.locked), 'Lock version')}><Icon name="lock" size={14} /><span>{c.locked ? 'Unlock version' : 'Lock version'}</span><span></span></button>

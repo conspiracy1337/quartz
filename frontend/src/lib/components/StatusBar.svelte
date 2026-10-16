@@ -1,30 +1,17 @@
 <script lang="ts">
-  import { percent, plural, rate } from '../format';
   import { session } from '../session.svelte';
   import { tasks } from '../tasks.svelte';
   import Bar from '../ui/Bar.svelte';
   import Icon from '../ui/Icon.svelte';
-  import Tile from '../ui/Tile.svelte';
+  import QueueRows from './QueueRows.svelte';
 
   /** The bar at the bottom of every screen while downloads run; opens a tray with the queue. */
-  const jobs = $derived(tasks.active);
-  const done = $derived(jobs.reduce((n, j) => n + j.doneBytes, 0));
-  const total = $derived(jobs.reduce((n, j) => n + j.totalBytes, 0));
-  const t = $derived({
-    label: jobs.length === 1 ? jobs[0]!.meta.title : plural(jobs.length, 'download'),
-    pct: percent(done, total),
-    speed: tasks.speed > 0 ? rate(tasks.speed) : '',
-    items: jobs.map((j) => ({ id: j.id, name: j.meta.title, art: j.meta.art, pct: j.state === 'queued' ? null : percent(j.doneBytes, j.totalBytes) })),
-  });
+  const t = $derived(tasks.summary);
 </script>
 
-{#if jobs.length}
+{#if tasks.active.length}
   {#if session.downloadTray}
-    <section class="tray" aria-label="Download queue">
-      {#each t.items as it (it.id)}
-        <div class="tr"><Tile art={it.art} size="sm" style="width: 24px; height: 24px" /><span class="trunc">{it.name}</span><Bar pct={it.pct ?? 0} /><span class="small faint" class:mono={it.pct !== null} style="text-align: right">{it.pct === null ? 'Queued' : `${it.pct}%`}</span></div>
-      {/each}
-    </section>
+    <section class="tray" aria-label="Download queue"><QueueRows /></section>
   {/if}
   <button class="sbar" onclick={() => (session.downloadTray = !session.downloadTray)} aria-expanded={session.downloadTray}>
     <Icon name="download" size={14} sw={2} color="var(--accent)" />
@@ -42,6 +29,4 @@
   .tray{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel);overflow:hidden}
   @media (prefers-reduced-motion:no-preference){.tray{animation:up 200ms cubic-bezier(.23,1,.32,1)}}
   @keyframes up{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
-  .tr{display:grid;grid-template-columns:24px minmax(0,1fr) 200px 56px;gap:12px;align-items:center;height:44px;padding:0 16px 0 28px}
-  @media (max-width:1100px){.tr{grid-template-columns:24px minmax(0,1fr) 120px 48px}}
 </style>

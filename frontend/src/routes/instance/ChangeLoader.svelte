@@ -28,7 +28,7 @@
   const sel = $derived(list[vi]);
   const selId = $derived(sel?.id ?? '');
   const isCurrent = $derived(i.loader ? opt?.kind === i.loader.kind && selId === i.loader.id : opt?.kind === 'none');
-  const action = $derived(!loaders.data ? 'Install' : isCurrent ? 'Already installed' : list.length ? `Install ${opt?.name} ${sel?.name}` : 'Remove loader');
+  const action = $derived(!loaders.data ? 'Install' : isCurrent ? 'Already installed' : list.length ? `Install ${opt?.name} ${sel?.name}` : 'Switch to Vanilla');
   let busy = $state(false);
   // Moving to another loader: how many mods have a build for it (same wording as Change Minecraft).
   const other = $derived(list.length > 0 && !!i.loader && opt?.kind !== i.loader.kind ? opt?.kind : undefined);

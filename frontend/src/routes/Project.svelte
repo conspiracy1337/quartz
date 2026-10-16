@@ -7,7 +7,7 @@
   import { query } from '$lib/query.svelte';
   import { go, href, isPackSource } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
-  import { lastTouched } from '$lib/instances';
+  import { browseTarget } from '$lib/instances';
   import { session } from '$lib/session.svelte';
   import Empty from '$lib/ui/Empty.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -31,7 +31,7 @@
   const isModLoader = (l: string): l is Loader => l in LOADER_NAMES;
 
   const instances = query(() => api.instances.list());
-  const target = $derived(instances.data?.find((i) => i.id === session.browseTarget) ?? lastTouched(instances.data ?? []));
+  const target = $derived(browseTarget(instances.data ?? [], session.browseTarget));
   const project = query(() => api.browse.project(id, target?.id ?? ''));
   // svelte-ignore state_referenced_locally
   let tab = $state(startTab === 'versions' ? 1 : 0);
@@ -98,7 +98,7 @@
           <div style="display: flex; gap: 6px; flex-wrap: wrap">{#each side.badges as b (b)}<span class="badge">{b}</span>{/each}<span class="small faint tnum" style="margin-left: 6px">by {side.author}{side.downloads ? `, ${compact(side.downloads)} downloads` : ''} on {SRC_NAMES[p[src] ? src : other]}</span></div>
         </div>
         <div class="seg" role="group" aria-label="Source" style="margin-right: 4px">
-          {#each SOURCES.filter((s) => s !== 'norisk' || p.norisk) as s (s)}<button class:on={src === s} onclick={() => (chosen = s)} aria-pressed={src === s} disabled={!p[s]} title={p[s] ? undefined : `Unavailable on ${SRC_NAMES[s]}`}><Icon name={s} size={14} />{SRC_NAMES[s]}</button>{/each}
+          {#each SOURCES.filter((s) => s !== 'norisk' || p.norisk) as s (s)}<button class:on={src === s} onclick={() => p[s] && (chosen = s)} aria-pressed={src === s} aria-disabled={!p[s]} title={p[s] ? undefined : `Unavailable on ${SRC_NAMES[s]}`}><Icon name={s} size={14} />{SRC_NAMES[s]}</button>{/each}
         </div>
         <!-- A modpack installs as its own instance, so only content gets the instance chooser. -->
         {#if kind?.content}
@@ -207,7 +207,7 @@
 {#if chooser}
   <Menu x={chooser.x} y={chooser.y} label="Install into" title="Install into" onclose={() => (chooser = null)}>
     {#each instances.data ?? [] as i (i.id)}
-      <button class="mi" role="menuitem" onclick={() => { session.browseTarget = i.id; chooser = null; }}>
+      <button class="mi" role="menuitem" onclick={() => { session.addTo(i.id); chooser = null; }}>
         <Tile art={i.art} icon={i.icon} size="sm" /><span class="trunc">{i.name}</span><span class="small faint">{i.id === target?.id ? 'Selected' : ''}</span>
       </button>
     {/each}
