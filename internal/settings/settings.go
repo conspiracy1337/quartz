@@ -9,14 +9,10 @@ import (
 	"unicode"
 )
 
-// SchemaVersion is bumped whenever a migration is needed.
-const SchemaVersion = 1
-
 // Settings is the whole global settings document. Every field has a default and
 // every value is validated by Normalize, so a hand-edited or older file can never
 // put the launcher into an invalid state.
 type Settings struct {
-	Version      int          `json:"version"`
 	General      General      `json:"general"`
 	Downloads    Downloads    `json:"downloads"`
 	Accounts     Accounts     `json:"accounts"`
@@ -105,7 +101,6 @@ type Updates struct {
 // Defaults returns the settings a fresh install starts with.
 func Defaults() Settings {
 	return Settings{
-		Version: SchemaVersion,
 		General: General{Language: "system", StartPage: "home"},
 		Downloads: Downloads{
 			Parallel: 8, WatchDownloads: true, Proxy: "system",
@@ -143,7 +138,6 @@ const (
 // bad value never discards the rest of the document.
 func (s Settings) Normalize() Settings {
 	d := Defaults()
-	s.Version = SchemaVersion
 
 	if s.General.Language != "system" && !localeTag.MatchString(s.General.Language) {
 		s.General.Language = d.General.Language
