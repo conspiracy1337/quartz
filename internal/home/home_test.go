@@ -46,3 +46,39 @@ func TestPickNews(t *testing.T) {
 		t.Fatalf("%+v", n)
 	}
 }
+
+func TestPickNote(t *testing.T) {
+	var n patchNotes
+	_ = json.Unmarshal([]byte(`{"version":1,"entries":[
+		{"title":"Minecraft 26.4 Snapshot 3","id":"8df0","date":"2026-10-06T12:54:26.000Z","image":{"url":"/v2/images/s3.jpg"}},
+		{"title":"Minecraft 26.4 Snapshot 4","id":"26-4-snapshot-4","date":"2026-10-13T12:05:46.000Z","image":{"url":"/v2/images/s4.jpg"}},
+		{"title":"???","id":"x","date":"2026-10-14T00:00:00.000Z"},
+		{"title":"Minecraft 27","id":"y","date":"not a date"}
+	]}`), &n)
+	p := pickNote(n, nil)
+	if p == nil || p.ID != "26-4-snapshot-4" || p.URL != "https://www.minecraft.net/en-us/article/minecraft-26-4-snapshot-4" {
+		t.Fatalf("%+v", p)
+	}
+	// The newer of an article and a patch note wins.
+	a := &News{ID: "a", Published: p.Published - 1}
+	if newer(a, p) != p || newer(p, a) != p || newer(nil, a) != a || newer(a, nil) != a {
+		t.Fatal("newer picked the older one")
+	}
+}
+
+func TestArticleSlug(t *testing.T) {
+	for title, want := range map[string]string{
+		"Minecraft 26.4 Snapshot 4":          "minecraft-26-4-snapshot-4",
+		"Minecraft: Java Edition 26.3":       "minecraft-java-edition-26-3",
+		"Minecraft 26.3 Release Candidate 3": "minecraft-26-3-release-candidate-3",
+		"26.3-snapshot-10":                   "minecraft-26-3-snapshot-10",
+		"  Minecraft 26.3 Pre-Release 1 ":    "minecraft-26-3-pre-release-1",
+		"../../evil?x=<b>":                   "minecraft-evil-x-b",
+		"Minecraft":                          "",
+		"???":                                "",
+	} {
+		if got := articleSlug(title); got != want {
+			t.Errorf("%q: got %q, want %q", title, got, want)
+		}
+	}
+}

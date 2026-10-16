@@ -1,7 +1,7 @@
 // Package home gathers what Home shows that isn't another service's list:
 // this week's play time across every instance, the latest Java Edition
-// article from the official launcher's news feed, and whether the data
-// folder's drive is running out of space.
+// article or release from the official launcher's feeds, and whether the
+// data folder's drive is running out of space.
 package home
 
 import (
@@ -21,12 +21,18 @@ import (
 	"quartz/internal/meta"
 )
 
-// Feed is the official launcher's news feed.
-const Feed = "https://launchercontent.mojang.com/v2/news.json"
+// The official launcher's feeds. The news feed leaves releases and
+// snapshots out; the Java patch notes list every one of them.
+const (
+	Feed       = "https://launchercontent.mojang.com/v2/news.json"
+	PatchNotes = "https://launchercontent.mojang.com/v2/javaPatchNotes.json"
+)
 
 const (
 	feedHost = "https://launchercontent.mojang.com"
-	newsTTL  = time.Hour
+	// articleBase is where minecraft.net keeps a patch note's article.
+	articleBase = "https://www.minecraft.net/en-us/article/"
+	newsTTL     = time.Hour
 	// LowDisk is when the drive counts as nearly full.
 	LowDisk = 5 << 30
 )
@@ -169,14 +175,42 @@ type feed struct {
 	} `json:"entries"`
 }
 
-// News returns the newest Java Edition article, or nil when there is none
-// (or the feed can't be reached).
+// patchNotes is the part of javaPatchNotes.json Home reads.
+type patchNotes struct {
+	Entries []struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+		Date  string `json:"date"`
+		Image struct {
+			URL string `json:"url"`
+		} `json:"image"`
+	} `json:"entries"`
+}
+
+// News returns the newest Java Edition article or patch note, or nil when
+// there is none. It fails only when neither feed can be reached.
 func (s *Service) News(ctx context.Context) (*News, error) {
-	f, err := meta.Fetch[feed](ctx, s.d.Meta, Feed, httpcache.Policy{TTL: newsTTL})
-	if err != nil {
-		return nil, err
+	var (
+		f          feed
+		notes      patchNotes
+		ferr, nerr error
+		wg         sync.WaitGroup
+		policy     = httpcache.Policy{TTL: newsTTL}
+	)
+	wg.Go(func() { f, ferr = meta.Fetch[feed](ctx, s.d.Meta, Feed, policy) })
+	wg.Go(func() { notes, nerr = meta.Fetch[patchNotes](ctx, s.d.Meta, PatchNotes, policy) })
+	wg.Wait()
+	if ferr != nil && nerr != nil {
+		return nil, ferr
 	}
-	return pick(f, s.d.Pictures), nil
+	return newer(pick(f, s.d.Pictures), pickNote(notes, s.d.Pictures)), nil
+}
+
+func newer(a, b *News) *News {
+	if a == nil || (b != nil && b.Published > a.Published) {
+		return b
+	}
+	return a
 }
 
 func pick(f feed, pics *remoteimg.Cache) *News {
@@ -189,16 +223,60 @@ func pick(f feed, pics *remoteimg.Cache) *News {
 		if err != nil || strings.TrimSpace(e.Title) == "" || !articleURL(e.ReadMoreLink) {
 			continue
 		}
-		if best != nil && at.UnixMilli() <= best.Published {
-			continue
-		}
-		n := &News{ID: e.ID, Title: strings.TrimSpace(e.Title), Source: "minecraft.net", Published: at.UnixMilli(), URL: e.ReadMoreLink}
-		if strings.HasPrefix(e.NewsPageImage.URL, "/") && pics != nil {
-			n.Image = pics.Src(feedHost + e.NewsPageImage.URL)
-		}
-		best = n
+		best = newer(best, article(e.ID, e.Title, at, e.ReadMoreLink, e.NewsPageImage.URL, pics))
 	}
 	return best
+}
+
+// pickNote is the newest patch note. The feed has no links, but
+// minecraft.net names each article after its title ("Minecraft 26.4
+// Snapshot 4" is /article/minecraft-26-4-snapshot-4).
+func pickNote(n patchNotes, pics *remoteimg.Cache) *News {
+	var best *News
+	for _, e := range n.Entries {
+		at, err := time.Parse(time.RFC3339, e.Date)
+		slug := articleSlug(e.Title)
+		if err != nil || slug == "" {
+			continue
+		}
+		best = newer(best, article(e.ID, e.Title, at, articleBase+slug, e.Image.URL, pics))
+	}
+	return best
+}
+
+func article(id, title string, at time.Time, link, image string, pics *remoteimg.Cache) *News {
+	n := &News{ID: id, Title: strings.TrimSpace(title), Source: "minecraft.net", Published: at.UnixMilli(), URL: link}
+	if strings.HasPrefix(image, "/") && pics != nil {
+		n.Image = pics.Src(feedHost + image)
+	}
+	return n
+}
+
+// articleSlug turns a patch note title into its article's name: lower case
+// letters and digits joined by dashes, always starting with "minecraft-"
+// (a few titles leave it out). "" when the title has nothing to use.
+func articleSlug(title string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(title) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			if dash && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			b.WriteRune(r)
+			dash = false
+		} else {
+			dash = true
+		}
+	}
+	slug := b.String()
+	if slug == "" || slug == "minecraft" || len(slug) > 100 {
+		return ""
+	}
+	if !strings.HasPrefix(slug, "minecraft-") {
+		slug = "minecraft-" + slug
+	}
+	return slug
 }
 
 // articleURL allows only https links on minecraft.net, which the UI opens
