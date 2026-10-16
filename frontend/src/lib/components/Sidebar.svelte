@@ -9,7 +9,7 @@
   import { avatar } from '../look';
   import { revs } from '../revs.svelte';
   import { query } from '../query.svelte';
-  import { href, type Route } from '../router.svelte';
+  import { back, href, router, type Route } from '../router.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
   import type { IconName } from '../ui/icons';
@@ -37,6 +37,7 @@
   <div class="side-brand">
     <Logo />
     <span class="hide-c">Quartz Client</span>
+    <button class="side-back" onclick={back} disabled={!router.canBack} aria-label="Back" title="Back ({keysOf(chords(prefs.value?.general.keys).back).join('+')})"><Icon name="arrow-left" size={16} sw={1.8} /></button>
   </div>
   <button class="side-link" style="border: 1px solid var(--line-2); background: var(--panel); color: var(--faint); text-align: left" onclick={() => session.open({ kind: 'palette', mode: 'commands' })}>
     <Icon name="search" size={14} sw={1.8} />

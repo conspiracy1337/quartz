@@ -17,6 +17,7 @@ export const icons = {
   x: s('<path d="M6 6l12 12M18 6 6 18"/>'),
   plus: s('<path d="M12 5v14M5 12h14"/>'),
   check: s('<path d="m5 12 5 5 9-10"/>'),
+  'arrow-left': s('<path d="M19 12H5M11 6l-6 6 6 6"/>'),
   'arrow-right': s('<path d="M5 12h14M13 6l6 6-6 6"/>'),
   'arrow-up': s('<path d="M12 19V5M6 11l6-6 6 6"/>'),
   more: f('<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>'),

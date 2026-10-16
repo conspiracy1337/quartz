@@ -98,27 +98,59 @@ export function parse(p: string): Route {
   return { name: 'home' };
 }
 
+/** A history entry's distance from the page the launcher opened on, or undefined for a fresh entry. */
+const depthOf = (state: unknown): number | undefined => {
+  const d = (state as { depth?: unknown } | null)?.depth;
+  return typeof d === 'number' ? d : undefined;
+};
+
 class Router {
   route = $state<Route>(parse(typeof location === 'undefined' ? '' : location.hash));
+  /** How many back steps lead to the page the launcher opened on. */
+  depth = $state(0);
+
+  get canBack() {
+    return this.depth > 0;
+  }
 
   start(): () => void {
+    this.depth = depthOf(history.state) ?? 0;
+    this.stamp();
     const sync = () => {
+      // A back or forward step lands on a stamped entry; a new one is one deeper.
+      const d = depthOf(history.state);
+      this.depth = d ?? this.depth + 1;
+      if (d === undefined) this.stamp();
       this.route = parse(location.hash);
     };
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
   }
 
-  /** Navigates to r. `replace` updates the current history entry, for per-keystroke changes. */
-  go(r: Route, { replace = false } = {}) {
-    if (!replace) {
+  /** Navigates to r. `replace` updates the current history entry, for per-keystroke changes;
+      `root` also makes it the page Back stops at. */
+  go(r: Route, { replace = false, root = false } = {}) {
+    if (!replace && !root) {
       location.hash = path(r);
       return;
     }
-    history.replaceState(history.state, '', '#' + path(r));
+    if (root) this.depth = 0;
+    history.replaceState({ ...history.state, depth: this.depth }, '', '#' + path(r));
     this.route = r;
+  }
+
+  /** Goes to the previous page; false on the page the launcher opened on. */
+  back(): boolean {
+    if (!this.canBack) return false;
+    history.back();
+    return true;
+  }
+
+  private stamp() {
+    history.replaceState({ ...history.state, depth: this.depth }, '');
   }
 }
 
 export const router = new Router();
-export const go = (r: Route, opts?: { replace?: boolean }) => router.go(r, opts);
+export const go = (r: Route, opts?: { replace?: boolean; root?: boolean }) => router.go(r, opts);
+export const back = () => router.back();
