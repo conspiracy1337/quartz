@@ -14,5 +14,4 @@ if [[ "$(uname)" == "Linux" ]] && ! pkg-config --exists webkit2gtk-4.0 && pkg-co
 fi
 
 ids=$(go run ./tools/release ldflags)
-go run ./tools/release icons
-wails build -clean -trimpath -ldflags "-s -w $ids" "${tags[@]}" "$@"
+go run ./tools/release wails build -clean -trimpath -ldflags "-s -w $ids" "${tags[@]}" "$@"

@@ -137,9 +137,6 @@ func build(ctx context.Context, version string, which []string, allowMissing boo
 	if err := os.MkdirAll("dist", 0o750); err != nil {
 		return err
 	}
-	if err := stageIcons(); err != nil {
-		return err
-	}
 	frontendBuilt := false
 	for _, w := range which {
 		t, ok := targets[w]
@@ -148,7 +145,7 @@ func build(ctx context.Context, version string, which []string, allowMissing boo
 		}
 		args := wailsArgs(w, ldflags(version, pub), t.File, frontendBuilt)
 		fmt.Println("wails", strings.Join(args[:4], " "), "…")
-		if err := runTool(ctx, "wails", args...); err != nil {
+		if err := runWails(ctx, args...); err != nil {
 			return fmt.Errorf("%s: %w", w, err)
 		}
 		frontendBuilt = true
@@ -184,24 +181,28 @@ func wailsArgs(w, flags, file string, skipFrontend bool) []string {
 	return args
 }
 
-// stageIcons puts assets/appicon.png where wails build reads it. Without
-// it Wails quietly writes its own default icon there. The Windows .ico files
-// are removed so Wails makes them again from the staged icon (it only makes
-// missing ones).
-func stageIcons() error {
-	b, err := os.ReadFile(filepath.Join("assets", "appicon.png"))
+// runWails runs wails with the app icon lent from assets/. Windows and
+// macOS builds read build/appicon.png (Wails writes its own default icon
+// there when it is missing) and make build/windows/*.ico from it, so the
+// icon is put there for the run only and everything made from it is removed
+// after, leaving assets/appicon.png the one copy.
+func runWails(ctx context.Context, args ...string) error {
+	icon, err := os.ReadFile(filepath.Join("assets", "appicon.png"))
 	if err != nil {
 		return fmt.Errorf("run this from the repository root: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join("build", "appicon.png"), b, 0o644); err != nil { //nolint:gosec // build input
-		return err
-	}
-	for _, ico := range []string{"icon.ico", "appicon.ico"} {
-		if err := os.Remove(filepath.Join("build", "windows", ico)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+	lent := []string{filepath.Join("build", "appicon.png"), filepath.Join("build", "windows", "icon.ico"), filepath.Join("build", "windows", "appicon.ico")}
+	clean := func() {
+		for _, f := range lent {
+			_ = os.Remove(f)
 		}
 	}
-	return nil
+	clean() // a stale .ico would win over the icon
+	defer clean()
+	if err := os.WriteFile(lent[0], icon, 0o644); err != nil { //nolint:gosec // build input
+		return err
+	}
+	return runTool(ctx, "wails", args...)
 }
 
 // runTool runs a fixed build tool with our own arguments, stopped by ctx.

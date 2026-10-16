@@ -1,6 +1,6 @@
 # Build output
 build/bin/
-# Staged from assets/ by tools/release; Wails makes the .ico files from it
+# Lent from assets/ by tools/release for a wails build, removed after
 build/appicon.png
 build/windows/*.ico
 frontend/dist/
