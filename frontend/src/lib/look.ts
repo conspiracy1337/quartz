@@ -58,10 +58,20 @@ export function tintOf(name: string): string {
   return TINTS[h % TINTS.length]!;
 }
 
+/** Whether s names a stored picture (an instance's icon or banner). */
+export const isPicture = (s: string | undefined): s is string => !!s && /^[0-9a-f]{64}$/.test(s);
+
+/** A picture Go serves (/tex/<kind>/<hex>.png), such as a modpack's icon before install. */
+export const isServed = (s: string | undefined): s is string => !!s && /^\/tex\/[a-z]+\/[0-9a-f]+\.png$/.test(s);
+
+/** A Library card's cover: the banner, else a glow of the tile colour. */
+export const coverOf = (art: Art, banner?: string) =>
+  isPicture(banner) ? `url(/tex/banner/${banner}.png) center/cover no-repeat` : `radial-gradient(120% 140% at 0% 0%, ${art.background} 0%, #141417 85%)`;
+
 /** A picture served by Go (an item's or project's icon) over its tint, else the tint and an initial. */
 export function artOf(name: string, src?: string): Art {
   const tint = tintOf(name);
-  if (src && /^\/tex\/[a-z]+\/[0-9a-f]+\.png$/.test(src)) return { background: `url(${src}) center/cover no-repeat, ${tint}` };
+  if (isServed(src)) return { background: `url(${src}) center/cover no-repeat, ${tint}` };
   return { background: tint, initial: (/[\p{L}\p{N}]/u.exec(name)?.[0] ?? '?').toUpperCase() };
 }
 

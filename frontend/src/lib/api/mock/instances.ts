@@ -1,4 +1,4 @@
-import type { ActivityEvent, Art, ClientJarPick, CreateInstance, Group, Instance, InstanceSettings, Loader, PendingUpdate, TrashEntry } from '../types';
+import type { ActivityEvent, ClientJarPick, CreateInstance, Instance, InstanceSettings, Loader, Look, PendingUpdate, TrashEntry } from '../types';
 import { daysAgo, date } from './time';
 
 type Seed = [id: string, name: string, initial: string, tint: string, mc: string, loader: Omit<NonNullable<Instance['loader']>, 'id'> | undefined, kind: Instance['kind'], lastDays: number | undefined, hours: number];
@@ -59,7 +59,6 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   },
 }));
 
-export const groups: Group[] = [];
 export const trash: TrashEntry[] = [];
 
 const find = (id: string) => instances.find((i) => i.id === id) ?? instances[0]!;
@@ -78,7 +77,7 @@ export const mockInstances = {
     const base = instances[2]!;
     const inst: Instance = {
       ...structuredClone(base), id: `new-${instances.length}`, name: req.name, art: req.art, minecraft: req.minecraft, playtimeMin: 0, created: Date.now(), tags: [],
-      ...(req.icon ? { icon: req.icon } : {}), ...(req.group ? { group: req.group } : {}),
+      ...(req.icon ? { icon: req.icon } : {}), ...(req.banner ? { banner: req.banner } : {}),
       kind: req.loader && req.loader !== 'none' ? 'modded' : 'vanilla',
     };
     delete inst.lastPlayed;
@@ -91,23 +90,15 @@ export const mockInstances = {
   },
   updateSettings: (id: string, settings: InstanceSettings) => edit(id, (i) => (i.settings = settings)),
   rename: (id: string, name: string) => edit(id, (i) => (i.name = name.trim() || i.name)),
-  setArt: (id: string, art: Art) => edit(id, (i) => { i.art = art; delete i.icon; }),
-  setIcon: (id: string, icon: string) => edit(id, (i) => { if (icon) i.icon = icon; else delete i.icon; }),
+  setLook: (id: string, look: Look) => edit(id, (i) => {
+    i.art = look.art;
+    if (look.icon) i.icon = look.icon; else delete i.icon;
+    if (look.banner) i.banner = look.banner; else delete i.banner;
+  }),
   setNotes: (id: string, notes: string) => edit(id, (i) => (i.notes = notes)),
   setSync: (id: string, target: string, on: boolean) => edit(id, (i) => (i.sync.join = on ? [...new Set([...i.sync.join, target])] : i.sync.join.filter((t) => t !== target))),
   setSharedKeys: (id: string, on: boolean) => edit(id, (i) => (i.sync.keys = on)),
   setTags: (id: string, tags: string[]) => edit(id, (i) => (i.tags = [...new Set(tags.map((t) => t.trim()).filter(Boolean))].slice(0, 12))),
-  setGroup: (id: string, group: string) => edit(id, (i) => {
-    if (group) {
-      i.group = group;
-      if (!groups.some((g) => g.name.toLowerCase() === group.toLowerCase())) groups.push({ name: group });
-    } else delete i.group;
-  }),
-  createGroup: (name: string): Group => {
-    const g = { name: name.trim() };
-    groups.push(g);
-    return g;
-  },
   setVersion: (id: string, minecraft: string, kind: string, version: string) => edit(id, (i) => {
     i.minecraft = minecraft;
     if (kind && kind !== 'none') i.loader = { kind: kind as Loader, version: version || i.loader?.version || 'latest', id: version || i.loader?.id || 'latest' };

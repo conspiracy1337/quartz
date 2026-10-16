@@ -18,10 +18,11 @@ export interface InstanceSummary {
   art: Art;
   /** A picture's sha256 (served at /tex/icon/<icon>.png). */
   icon?: string;
+  /** A banner's sha256 (served at /tex/banner/<banner>.png), drawn on the Library card's cover. */
+  banner?: string;
   minecraft: string;
   loader?: LoaderRef;
   kind: InstanceKind;
-  group?: string;
   tags: string[];
   hasServers: boolean;
   lastPlayed?: number;
@@ -49,7 +50,11 @@ export interface InstanceSettings {
   account?: string;
 }
 /** What the New instance screen sends; an empty loaderVersion means the newest stable build. */
-export interface CreateInstance { name: string; art: Art; icon: string; minecraft: string; loader: string; loaderVersion: string; group: string; sandbox: boolean; shares: string[]; clientJar: string }
+export interface CreateInstance { name: string; art: Art; icon: string; banner: string; minecraft: string; loader: string; loaderVersion: string; sandbox: boolean; memoryMB: number; shares: string[]; clientJar: string }
+/** How an instance shows: tile colour and letter, picture and banner ("" for none). */
+export interface Look { art: Art; icon: string; banner: string }
+/** A modpack install's look; packIcon uses the pack's own icon in place of `icon`. */
+export interface PackLook extends Look { packIcon: boolean }
 export interface Instance extends InstanceSummary {
   sandboxed: boolean;
   /** The sandbox's rules: standard | strict | custom. */
@@ -78,9 +83,8 @@ export interface Instance extends InstanceSummary {
   switch?: SwitchResult;
 }
 
-export interface Group { name: string }
 /** An instance in the launcher's trash. */
-export interface TrashEntry { key: string; id: string; name: string; art: Art; icon?: string; minecraft: string; loader?: string; group?: string; trashedAt: number }
+export interface TrashEntry { key: string; id: string; name: string; art: Art; icon?: string; minecraft: string; loader?: string; trashedAt: number }
 
 export type ActivityKind = 'session' | 'change';
 export interface ActivityEvent {

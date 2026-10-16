@@ -98,7 +98,8 @@ type Instance struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	Art           Art    `json:"art"`
-	Icon          string `json:"icon,omitempty"` // sha256 of a picture in the icon library; "" draws Art
+	Icon          string `json:"icon,omitempty"`   // sha256 of a picture in the icon library; "" draws Art
+	Banner        string `json:"banner,omitempty"` // sha256 of a picture in the banner library; "" colours the card cover
 	Minecraft     string `json:"minecraft"`
 	Loader        string `json:"loader,omitempty"` // "" is vanilla
 	LoaderVersion string `json:"loaderVersion,omitempty"`
@@ -107,7 +108,6 @@ type Instance struct {
 	// FollowLatest moves to the newest Minecraft release once every mod
 	// supports it.
 	FollowLatest bool     `json:"followLatest"`
-	Group        string   `json:"group,omitempty"`
 	Notes        string   `json:"notes,omitempty"`
 	Tags         []string `json:"tags,omitempty"`
 	Location     string   `json:"location,omitempty"` // a moved game folder; "" is instances/<id>/game
@@ -219,7 +219,6 @@ var (
 	ErrBadName         = errors.New("instance: names need 1 to 64 characters")
 	ErrBadLoader       = errors.New("instance: unknown mod loader")
 	ErrInvalidSettings = errors.New("instance: invalid settings")
-	ErrBadGroup        = errors.New("instance: group names need at most 32 characters")
 	ErrGameDirMissing  = errors.New("instance: the game folder isn't there. Is its drive connected?")
 )
 
@@ -244,7 +243,6 @@ const (
 	maxNotes   = 4000
 	maxTags    = 12
 	maxTag     = 24
-	maxGroup   = 32
 )
 
 // cleanName trims and rejects control characters.
@@ -313,6 +311,9 @@ func normalize(in Instance) Instance {
 	if !iconRe.MatchString(in.Icon) {
 		in.Icon = ""
 	}
+	if !iconRe.MatchString(in.Banner) {
+		in.Banner = ""
+	}
 	if in.ClientJar = in.ClientJar.normalize(); in.ClientJar != nil {
 		in.Loader, in.LoaderVersion, in.FollowLatest = "", "", false
 	}
@@ -320,7 +321,6 @@ func normalize(in Instance) Instance {
 	in.Sandbox = in.Sandbox.Normalize()
 	in.Notes = clip(in.Notes, maxNotes)
 	in.Tags = cleanTags(in.Tags)
-	in.Group, _ = cleanGroup(in.Group)
 	in.Shortcuts = cleanShortcuts(in.Shortcuts)
 	if in.Location != "" && !filepath.IsAbs(in.Location) {
 		in.Location = ""
@@ -362,15 +362,6 @@ func cleanTags(tags []string) []string {
 	return out
 }
 
-// cleanGroup validates a group name ("" is no group).
-func cleanGroup(g string) (string, error) {
-	g = strings.TrimSpace(g)
-	if len([]rune(g)) > maxGroup || strings.ContainsFunc(g, unicode.IsControl) {
-		return "", ErrBadGroup
-	}
-	return g, nil
-}
-
 // envBlocked are variables that could inject JVM flags; they are stripped
 // from the game's environment (java.CleanEnv) and may not be set back here.
 var envBlocked = []string{"JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "CLASSPATH", "JAVA_HOME", "JRE_HOME"}
@@ -385,10 +376,9 @@ func validEnv(e EnvVar) error {
 
 // Store holds every instance.
 type Store struct {
-	dir    string
-	trash  string // trash/, next to the instances folder
-	log    *slog.Logger
-	groups *jsonfile.Store[groupsDoc]
+	dir   string
+	trash string // trash/, next to the instances folder
+	log   *slog.Logger
 
 	mu    sync.Mutex
 	files map[string]*jsonfile.Store[Instance]
@@ -432,10 +422,6 @@ func Open(dir string, log *slog.Logger) (*Store, error) {
 		log = slog.New(slog.DiscardHandler)
 	}
 	s := &Store{dir: dir, trash: filepath.Join(filepath.Dir(dir), "trash"), log: log, files: map[string]*jsonfile.Store[Instance]{}}
-	var err error
-	if s.groups, err = openGroups(dir, s); err != nil {
-		return nil, err
-	}
 	entries, err := os.ReadDir(dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -576,11 +562,14 @@ type CreateRequest struct {
 	Name          string `json:"name"`
 	Art           Art    `json:"art"`
 	Icon          string `json:"icon"`
+	Banner        string `json:"banner"`
 	Minecraft     string `json:"minecraft"`
 	Loader        string `json:"loader"` // "" or "none" for vanilla
 	LoaderVersion string `json:"loaderVersion"`
-	Group         string `json:"group"`
 	Sandbox       bool   `json:"sandbox"`
+	// MemoryMB gives the instance its own memory (0 follows the global
+	// setting); the caller sets it once the instance exists.
+	MemoryMB int `json:"memoryMB"`
 	// Shares are the sync targets to join ("keys" for the shared keybinds);
 	// the caller joins them once the instance exists (syncing.JoinAll).
 	Shares []string `json:"shares"`
@@ -610,17 +599,13 @@ func (s *Store) Create(req CreateRequest) (Instance, error) {
 	if !versionRe.MatchString(req.Minecraft) {
 		return Instance{}, fmt.Errorf("%w: version", ErrInvalidSettings)
 	}
-	group, err := cleanGroup(req.Group)
-	if err != nil {
-		return Instance{}, err
-	}
-	if req.Icon != "" && !iconRe.MatchString(req.Icon) {
+	if !validLook(req.Art, req.Icon, req.Banner) {
 		return Instance{}, fmt.Errorf("%w: icon", ErrInvalidSettings)
 	}
 	in := Instance{
-		Version: schema, ID: s.newID(name), Name: name, Art: req.Art, Icon: req.Icon, Minecraft: req.Minecraft,
+		Version: schema, ID: s.newID(name), Name: name, Art: req.Art, Icon: req.Icon, Banner: req.Banner, Minecraft: req.Minecraft,
 		Loader: req.Loader, LoaderVersion: req.LoaderVersion, KeepLoaderUpdated: true,
-		Group: group, Sandbox: rules.Settings{On: req.Sandbox, Preset: rules.Standard}, Created: time.Now().UTC(),
+		Sandbox: rules.Settings{On: req.Sandbox, Preset: rules.Standard}, Created: time.Now().UTC(),
 	}
 	if in.Art.Initial == "" {
 		in.Art.Initial = strings.ToUpper(string([]rune(name)[:1]))
@@ -750,7 +735,7 @@ func (s *Store) SetVersion(id, minecraft, kind, ver string) (Instance, error) {
 func (s *Store) Flush() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	errs := []error{s.groups.Flush()}
+	var errs []error
 	for _, f := range s.files {
 		errs = append(errs, f.Flush())
 	}

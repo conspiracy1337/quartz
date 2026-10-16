@@ -43,9 +43,6 @@ func TestListJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &r); err != nil || !r.OK || len(r.Data) != 1 || r.Data[0].Name != "Survival" || r.Data[0].PlaytimeMin != 95 {
 		t.Fatalf("%s %v", out.String(), err)
 	}
-	if _, err := os.Stat(filepath.Join(p.Instances(), "groups.json")); !os.IsNotExist(err) {
-		t.Fatal("list must not write anything")
-	}
 }
 
 func TestTables(t *testing.T) {

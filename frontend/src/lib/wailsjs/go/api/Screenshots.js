@@ -26,6 +26,10 @@ export function Undo(arg1, arg2) {
   return window['go']['api']['Screenshots']['Undo'](arg1, arg2);
 }
 
-export function UseAsCover(arg1, arg2) {
-  return window['go']['api']['Screenshots']['UseAsCover'](arg1, arg2);
+export function UseAsBanner(arg1, arg2) {
+  return window['go']['api']['Screenshots']['UseAsBanner'](arg1, arg2);
+}
+
+export function UseAsPicture(arg1, arg2) {
+  return window['go']['api']['Screenshots']['UseAsPicture'](arg1, arg2);
 }

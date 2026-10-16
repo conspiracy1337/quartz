@@ -1,6 +1,7 @@
 // Package icons keeps the pictures people choose for their instances: each is
-// re-encoded to a square PNG of at most 128 pixels and stored once, named by
-// its SHA-256, so the same picture on two instances is one file.
+// re-encoded to a square PNG of at most 128 pixels (a banner keeps its shape
+// within 960×480) and stored once, named by its SHA-256, so the same picture
+// on two instances is one file.
 package icons
 
 import (
@@ -44,6 +45,18 @@ func Open(dir string) *Library { return &Library{dir: dir, side: Side, shape: pn
 // their whole picture: transparent borders are trimmed and a wide logo is
 // fitted, not cut (Pandora's crop-to-content).
 func OpenSized(dir string, side int) *Library { return &Library{dir: dir, side: side, shape: pngx.Fit} }
+
+// Banner bounds a stored banner; the Library card crops it to its cover.
+const (
+	BannerW = 960
+	BannerH = 480
+)
+
+// OpenBanners returns the instance banner library in dir: pictures keep
+// their shape, scaled down to fit BannerW×BannerH.
+func OpenBanners(dir string) *Library {
+	return &Library{dir: dir, shape: func(img image.Image, _ int) *image.NRGBA { return pngx.Within(img, BannerW, BannerH) }}
+}
 
 // Import reads a picture the user chose in a native dialog and returns its name.
 func (l *Library) Import(path string) (string, error) {

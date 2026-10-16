@@ -60,7 +60,6 @@ func TestCreateRejects(t *testing.T) {
 		"loader":      {Name: "Modded", Minecraft: "1.21.4", Loader: "liteloader", LoaderVersion: "1"},
 		"no build":    {Name: "Modded", Minecraft: "1.21.4", Loader: "fabric"},
 		"bad build":   {Name: "Modded", Minecraft: "1.21.4", Loader: "fabric", LoaderVersion: "../x"},
-		"long group":  {Name: "X", Minecraft: "1.21.4", Group: strings.Repeat("g", 33)},
 		"bad icon":    {Name: "X", Minecraft: "1.21.4", Icon: "../icon.png"},
 		"bad version": {Name: "X", Minecraft: "../../x"},
 	}
@@ -72,8 +71,8 @@ func TestCreateRejects(t *testing.T) {
 	if _, err := s.Create(cases["loader"]); !errors.Is(err, ErrBadLoader) {
 		t.Fatal("loader error not specific")
 	}
-	in, err := s.Create(CreateRequest{Name: "Modded", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.10", Group: " Mods "})
-	if err != nil || in.Loader != "fabric" || in.LoaderVersion != "0.16.10" || in.Group != "Mods" || !in.KeepLoaderUpdated || in.Version != schema {
+	in, err := s.Create(CreateRequest{Name: "Modded", Minecraft: "1.21.1", Loader: "fabric", LoaderVersion: "0.16.10"})
+	if err != nil || in.Loader != "fabric" || in.LoaderVersion != "0.16.10" || !in.KeepLoaderUpdated || in.Version != schema {
 		t.Fatalf("modded instance = %+v, %v", in, err)
 	}
 	if in, _ := s.Create(CreateRequest{Name: "Plain", Minecraft: "1.21.1", Loader: "none"}); in.Loader != "" {

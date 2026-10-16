@@ -34,8 +34,8 @@ export type { AppInfo, CustomCSSState, Settings } from './system';
 
 const serve = preview;
 
-const summary = ({ id, name, art, icon, minecraft, loader, kind, group, tags, hasServers, lastPlayed, created, playtimeMin, running }: Instance): InstanceSummary =>
-  ({ id, name, art, minecraft, kind, tags, hasServers, created, playtimeMin, running, ...(icon ? { icon } : {}), ...(group ? { group } : {}), ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
+const summary = ({ id, name, art, icon, banner, minecraft, loader, kind, tags, hasServers, lastPlayed, created, playtimeMin, running }: Instance): InstanceSummary =>
+  ({ id, name, art, minecraft, kind, tags, hasServers, created, playtimeMin, running, ...(icon ? { icon } : {}), ...(banner ? { banner } : {}), ...(loader ? { loader } : {}), ...(lastPlayed !== undefined ? { lastPlayed } : {}) });
 
 const byId = (id: string) => inst.instances.find((i) => i.id === id) ?? inst.instances[0]!;
 
@@ -63,12 +63,12 @@ export const api = {
     /** Puts the instance on the desktop and/or in the app menu; kind and target pick a world or server (both '' for none). */
     createShortcut: bridged(InstancesGo.CreateShortcut, (_id: string, _where: string, _accountId: string, _kind: string, _target: string) => undefined),
     rename: bridged(InstancesGo.Rename, inst.mockInstances.rename),
-    setArt: bridged(InstancesGo.SetArt, inst.mockInstances.setArt),
-    /** Opens a native picture picker; resolves unchanged when cancelled. */
-    /** Uses a picture chooseIcon returned ("" goes back to the tile). */
-    setIcon: bridged(InstancesGo.SetIcon, inst.mockInstances.setIcon),
-    /** A picture for an instance not created yet; "" when cancelled. */
+    /** Sets the colour, letter, picture and banner together; pictures come from chooseIcon and chooseBanner. */
+    setLook: bridged(InstancesGo.SetLook, inst.mockInstances.setLook),
+    /** Opens a native picture picker and stores the pick; "" when cancelled. */
     chooseIcon: bridged(InstancesGo.ChooseIcon, () => ''),
+    /** Opens a native picture picker and stores the pick as a banner; "" when cancelled. */
+    chooseBanner: bridged(InstancesGo.ChooseBanner, () => ''),
     /** A modified client jar for an instance not created yet, checked and stored; sha1 "" when cancelled. */
     chooseClientJar: bridged(InstancesGo.ChooseClientJar, () => inst.mockClientJar),
     /** Puts the instance back on the vanilla client jar. */
@@ -78,9 +78,6 @@ export const api = {
     setSync: bridged(InstancesGo.SetSync, inst.mockInstances.setSync),
     setSharedKeys: bridged(InstancesGo.SetSharedKeys, inst.mockInstances.setSharedKeys),
     setTags: bridged(InstancesGo.SetTags, inst.mockInstances.setTags),
-    groups: () => revs.load('instances', bridged(InstancesGo.Groups, () => inst.groups)),
-    setGroup: bridged(InstancesGo.SetGroup, inst.mockInstances.setGroup),
-    createGroup: bridged(InstancesGo.CreateGroup, inst.mockInstances.createGroup),
     /** Minecraft version and loader build; kind "" removes the loader, version "" picks its newest stable build. */
     setVersion: bridged(InstancesGo.SetVersion, inst.mockInstances.setVersion),
     setVersionOptions: bridged(InstancesGo.SetVersionOptions, inst.mockInstances.setVersionOptions),

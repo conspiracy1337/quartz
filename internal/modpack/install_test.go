@@ -78,7 +78,7 @@ func TestInstallCreatesTheInstanceLast(t *testing.T) {
 	env := newInstallEnv(t, cdn{url: jar})
 	index := js(map[string]any{"formatVersion": 1, "game": "minecraft", "versionId": "2.0", "name": "Vanilla Plus",
 		"dependencies": map[string]string{"minecraft": "1.21.1"},
-		"files": []any{map[string]any{"path": "mods/mod.jar", "hashes": map[string]string{"sha1": s1, "sha512": s5}, "downloads": []string{url}, "fileSize": len(jar)}}})
+		"files":        []any{map[string]any{"path": "mods/mod.jar", "hashes": map[string]string{"sha1": s1, "sha512": s5}, "downloads": []string{url}, "fileSize": len(jar)}}})
 	file := zipOf(t, entry{name: "modrinth.index.json", body: index}, entry{name: "overrides/config/a.toml", body: "a=1"})
 	p, err := env.svc.d.Reader.File(context.Background(), file)
 	if err != nil {
@@ -86,11 +86,11 @@ func TestInstallCreatesTheInstanceLast(t *testing.T) {
 	}
 	p.Origin = Origin{Source: "modrinth", Project: "P1", Version: "V2"}
 	tok := env.svc.Stage(p)
-	job, err := env.svc.Install(context.Background(), tok, "My Pack", instance.Art{Background: "#3ecf8e", Initial: "M"}, nil)
+	job, err := env.svc.Install(context.Background(), tok, "My Pack", Look{Art: instance.Art{Background: "#3ecf8e", Initial: "M"}, PackIcon: true}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.svc.Install(context.Background(), tok, "again", instance.Art{}, nil); err == nil {
+	if _, err := env.svc.Install(context.Background(), tok, "again", Look{Art: instance.Art{}, PackIcon: true}, nil); err == nil {
 		t.Fatal("a token was used twice")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -121,7 +121,7 @@ func TestInstallCreatesTheInstanceLast(t *testing.T) {
 func TestCancelledInstallLeavesNothing(t *testing.T) {
 	env := newInstallEnv(t, cdn{})
 	p := &Pack{Name: "Blocked", Minecraft: "1.21.1", Files: []File{{Path: "mods/b.jar", SHA1: strings.Repeat("b", 40), Size: 4, Page: "https://www.curseforge.com/x"}}}
-	job, err := env.svc.Install(context.Background(), env.svc.Stage(p), "", instance.Art{Background: "#3ecf8e"}, nil)
+	job, err := env.svc.Install(context.Background(), env.svc.Stage(p), "", Look{Art: instance.Art{Background: "#3ecf8e"}, PackIcon: true}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

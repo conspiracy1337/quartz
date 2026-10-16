@@ -116,6 +116,7 @@ type app struct {
 	instances *instance.Store
 	installer *install.Installer
 	icons     *icons.Library
+	banners   *icons.Library
 	stopPurge func()
 	stopPacks func()
 	browse    *browse.Service
@@ -215,13 +216,13 @@ func Run(o Options) error {
 			api.NewJava(a.ctx, api.JavaDeps{Java: a.java, Meta: a.meta, Tasks: a.tasks, Settings: a.settings, Instances: a.instances, Busy: a.launcher.Busy}),
 			api.NewAccounts(a.ctx, a.accounts, a.skins, a.bus),
 			api.NewInstances(a.ctx, api.InstanceDeps{
-				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
+				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Banners: a.banners, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
 				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Worlds: a.worlds, Servers: a.servers,
 				Syncing: a.syncing, Shortcuts: a.shortcuts, Follow: a.follow, Opens: a.opens, Blobs: a.store,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
 			api.NewBrowse(a.ctx, a.browse, a.worlds),
-			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Opens: a.opens, Picture: a.pictures.Src}),
+			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Opens: a.opens, Picture: a.pictures.Src, Icons: a.icons, Banners: a.banners}),
 			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
 			api.NewLaunchers(a.ctx, api.LaunchersDeps{Instances: a.instances, Packs: a.packs, Meta: a.meta, Java: a.java, Tasks: a.tasks,
 				Opens: a.opens, Log: a.log, Env: launchers.SystemEnv()}),
@@ -237,7 +238,7 @@ func Run(o Options) error {
 			api.NewHome(a.ctx, api.HomeDeps{Home: a.home, Servers: a.servers, Screenshots: a.screenshots}),
 			api.NewWorlds(a.ctx, a.worlds, a.drops),
 			api.NewServers(a.ctx, a.servers),
-			api.NewScreenshots(api.ScreenshotDeps{Service: a.screenshots, Instances: a.instances, Icons: a.icons, Bus: a.bus}),
+			api.NewScreenshots(api.ScreenshotDeps{Service: a.screenshots, Instances: a.instances, Icons: a.icons, Banners: a.banners, Bus: a.bus}),
 			api.NewSync(a.ctx, a.syncing),
 			api.NewSandbox(a.ctx, api.SandboxDeps{Service: a.sandbox, Store: a.instances, Syncing: a.syncing, Java: a.java, Meta: a.meta,
 				Settings: a.settings, Bus: a.bus, Root: a.paths.Root}),
@@ -253,6 +254,7 @@ func (a *app) images() http.Handler {
 		// The default skins, for accounts without one of their own.
 		"default": func(_ context.Context, k string) (string, error) { return a.textures.DefaultPath(k) },
 		"icon":    func(_ context.Context, h string) (string, error) { return a.icons.Path(h) },
+		"banner":  func(_ context.Context, h string) (string, error) { return a.banners.Path(h) },
 		// Icons read from mods and packs, re-encoded when they were stored.
 		"content": func(_ context.Context, h string) (string, error) { return a.modIcons.Path(h) },
 		// Project icons and pictures from Modrinth and CurseForge, and news pictures.
@@ -334,6 +336,7 @@ func build(o Options) (*app, error) {
 		return nil, err
 	}
 	a.icons = icons.Open(p.Icons())
+	a.banners = icons.OpenBanners(p.Banners())
 	if a.instances, err = instance.Open(p.Instances(), log); err != nil {
 		_ = logFile.Close()
 		return nil, fmt.Errorf("loading instances: %w", err)
@@ -525,7 +528,7 @@ func (a *app) buildBrowse(dl *download.Downloader) {
 		},
 	})
 	a.packRead = modpack.NewReader(modpack.Deps{
-		Modrinth: a.platforms[0], CurseForge: a.platforms[1], HTTP: a.http, Cache: filepath.Join(a.paths.Cache(), "imports"), Log: a.log,
+		Modrinth: a.platforms[0], CurseForge: a.platforms[1], HTTP: a.http, Get: a.http.Get, Cache: filepath.Join(a.paths.Cache(), "imports"), Log: a.log,
 		Fetch: func(ctx context.Context, raw string, size int64, sum hashx.Sum, dest string) error {
 			return dl.Fetch(ctx, download.Item{URLs: []string{raw}, Dest: dest, Size: size, Sum: sum}, nil)
 		},

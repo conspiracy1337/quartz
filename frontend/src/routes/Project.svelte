@@ -68,7 +68,10 @@
 
   function install(version?: string) {
     if (!p || !kind) return;
-    if (!kind.content) return go({ name: 'import', ref: p.ref, source: src, ...(version ? { version } : {}) });
+    if (!kind.content) {
+      if (side) session.packHint = { ref: p.ref, name: side.name, author: side.author, summary: side.summary, ...(side.icon ? { icon: side.icon } : {}) };
+      return go({ name: 'import', ref: p.ref, source: src, ...(version ? { version } : {}) });
+    }
     if (target) void installInto(target.id, p.ref, src, kind.content, version);
   }
   const choose = (e: MouseEvent) => (chooser = below(e));

@@ -32,7 +32,6 @@ type Instance struct {
 	Name        string     `json:"name"`
 	Minecraft   string     `json:"minecraft"`
 	Loader      string     `json:"loader"`
-	Group       string     `json:"group,omitempty"`
 	PlaytimeMin int        `json:"playtimeMin"`
 	LastPlayed  *time.Time `json:"lastPlayed,omitempty"`
 }
@@ -111,7 +110,7 @@ func listInstances(p paths.Paths) ([]Instance, error) {
 	}
 	out := make([]Instance, 0, len(list))
 	for _, in := range list {
-		out = append(out, Instance{ID: in.ID, Name: in.Name, Minecraft: in.Minecraft, Loader: in.Loader, Group: in.Group,
+		out = append(out, Instance{ID: in.ID, Name: in.Name, Minecraft: in.Minecraft, Loader: in.Loader,
 			PlaytimeMin: in.PlaytimeMin, LastPlayed: in.LastPlayed})
 	}
 	return out, nil

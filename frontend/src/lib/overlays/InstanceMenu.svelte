@@ -42,7 +42,7 @@
     <button class="mi" role="menuitem" onclick={() => act(() => (host ? (session.hostPanel = true) : session.open({ kind: 'host', instanceId: i.id })))}><Icon name="server" size={14} /><span>{host ? 'Show server' : 'Host'}</span><span class="small faint">{host?.state === 'running' ? `localhost:${host.port}` : ''}</span></button>
     <div class="divider" style="margin: 4px 0"></div>
     <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'rename', instanceId: i.id }))}><Icon name="file" size={14} /><span>Rename</span><span></span></button>
-    <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'icon', instanceId: i.id }))}><Icon name="camera" size={14} /><span>Change icon</span><span></span></button>
+    <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'look', instanceId: i.id }))}><Icon name="camera" size={14} /><span>Appearance</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => duplicate(i))}><Icon name="plus" size={14} /><span>Duplicate</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'shortcut', instanceId: i.id }))}><Icon name="link" size={14} /><span>Create shortcut…</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'export', instanceId: i.id }))}><Icon name="upload" size={14} /><span>Export…</span><span></span></button>

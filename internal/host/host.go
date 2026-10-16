@@ -110,21 +110,12 @@ func Check(o Options) error {
 		return ErrBadPort
 	case o.MaxPlayers < 1 || o.MaxPlayers > 999:
 		return ErrBadPlayers
-	case o.MemoryMB < minMemoryMB || o.MemoryMB > MaxMemoryMB():
+	case o.MemoryMB < minMemoryMB || o.MemoryMB > sysinfo.TotalMB():
 		return ErrBadMemory
 	case o.World != "" && !instance.ValidWorldFolder(o.World):
 		return ErrNoWorld
 	}
 	return nil
-}
-
-// MaxMemoryMB is the most memory a server may get: what this computer has.
-func MaxMemoryMB() int {
-	m, err := sysinfo.ReadMemory()
-	if err != nil || m.Total == 0 {
-		return 1 << 20
-	}
-	return int(m.Total >> 20) //nolint:gosec // megabytes of RAM fit an int
 }
 
 // CleanCommand checks a console command and drops a leading slash.
@@ -166,7 +157,7 @@ func (s *Service) Setup(ctx context.Context, id string) (Setup, error) {
 			o.World = ws[0].Folder
 		}
 	}
-	return Setup{Worlds: ws, Options: o, MaxMemoryMB: MaxMemoryMB()}, nil
+	return Setup{Worlds: ws, Options: o, MaxMemoryMB: sysinfo.TotalMB()}, nil
 }
 
 func hasWorld(ws []worlds.World, folder string) bool {

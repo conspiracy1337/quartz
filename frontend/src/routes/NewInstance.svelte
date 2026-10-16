@@ -1,7 +1,7 @@
 <script lang="ts">
   import { NEW_INSTANCE_SHARES } from '$lib/shares';
   import { api } from '$lib/api';
-  import { bytes, gb } from '$lib/format';
+  import { bytes, gb, gbField } from '$lib/format';
   import { query } from '$lib/query.svelte';
   import VersionPicker from '$lib/components/VersionPicker.svelte';
   import { revs } from '$lib/revs.svelte';
@@ -10,15 +10,12 @@
   import Icon from '$lib/ui/Icon.svelte';
   import Seg from '$lib/ui/Seg.svelte';
   import LoaderIcon from '$lib/ui/LoaderIcon.svelte';
-  import Select from '$lib/ui/Select.svelte';
   import Setting from '$lib/ui/Setting.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
   import ToggleRow from '$lib/ui/ToggleRow.svelte';
-  import InstanceMark from '$lib/ui/InstanceMark.svelte';
-  import PromptDialog from '$lib/ui/PromptDialog.svelte';
-  import IconDialog from '$lib/overlays/IconDialog.svelte';
+  import LookEditor from '$lib/components/LookEditor.svelte';
   import { prefs } from '$lib/prefs.svelte';
-  import type { Art, ClientJarPick } from '$lib/api/types';
+  import type { ClientJarPick, Look } from '$lib/api/types';
 
   // The loader segment, in the design's order. Fabric and Quilt name their newest stable
   // build; NeoForge and Forge keep the design's wording.
@@ -32,27 +29,22 @@
 
   // A custom client jar runs without a mod loader, on the version it was built from.
   let jar = $state<ClientJarPick | null>(null);
-  // The name follows the picked jar or version until the user types their own.
-  let typed = $state<string | null>(null);
+  let name = $state('');
   let version = $state('');
-  const name = $derived(typed ?? (jar ? jar.name.replace(/\.jar$/i, '').slice(0, 64) : version));
   let loader = $state(1); // Fabric, as the design starts
   let creating = $state(false);
   let more = $state(false);
-  let group = $state('none');
-  let naming = $state(false);
   let sandbox = $state(true);
   // Starts on only where games can be sandboxed: a sandboxed instance never
   // launches unsandboxed.
   void api.sandbox.status().then((st) => { if (!st.available) sandbox = false; });
   let shares = $state<Record<number, boolean>>({ 0: true, 2: true, 4: true, 5: true });
-  let art = $state<Art>({ background: '#6b8afd', initial: '' });
-  let icon = $state('');
-  let picking = $state(false);
+  let look = $state<Look>({ art: { background: '#6b8afd', initial: '' }, icon: '', banner: '' });
+  // Empty follows the global memory, shown as the placeholder.
+  let memory = $state('');
   const l = $derived(LOADERS[loader]!);
   const loaderOptions = $derived(LOADERS.map((o) => ({ ...o, disabled: !!jar && o.kind !== 'none' })));
   const options = query(() => (version ? api.versions.loaders(version) : Promise.resolve([])));
-  const groups = query(() => api.instances.groups());
   const opt = $derived(options.data?.find((o) => o.kind === l.kind));
   const build = $derived(opt?.stable[0] ?? opt?.beta[0]);
   const noBuild = $derived(l.kind !== 'none' && !!options.data && !build);
@@ -65,16 +57,7 @@
   const loaderVersion = $derived(l.kind === 'none' ? '' : (build?.id ?? ''));
   const estimate = query(() => (version && !noBuild ? api.versions.estimate(version, l.kind, loaderVersion) : Promise.resolve(0)));
   const download = $derived(estimate.data === undefined ? '' : estimate.data > 0 ? `Downloads about ${bytes(estimate.data)} the first time you play.` : 'Everything it needs is already downloaded.');
-  const initial = $derived(art.initial || name.trim().charAt(0).toUpperCase());
-  const groupOptions = $derived([{ value: 'none', label: 'None' }, ...(groups.data ?? []).map((g) => ({ value: g.name, label: g.name })), { value: '\u0000new', label: 'New group' }]);
-  const memory = $derived(prefs.value ? `Automatic, ${gb(prefs.value.java.memoryMaxMb)} GB` : 'Automatic');
-
-  function pickGroup(v: string) {
-    if (v === '\u0000new') {
-      group = 'none';
-      naming = true;
-    }
-  }
+  const meta = $derived(version ? `${version}${l.kind === 'none' || jar ? '' : `, ${l.label}`}` : '');
 
   async function pickJar() {
     try {
@@ -92,8 +75,8 @@
     try {
       const n = name.trim();
       const made = await api.instances.create({
-        name: n, art: { background: art.background, initial }, icon, minecraft: version,
-        loader: l.kind === 'none' ? '' : l.kind, loaderVersion, group: group === 'none' ? '' : group, sandbox, shares: NEW_INSTANCE_SHARES.filter((_, i) => shares[i]).map((s) => s.id),
+        name: n, art: look.art, icon: look.icon, banner: look.banner, minecraft: version,
+        loader: l.kind === 'none' ? '' : l.kind, loaderVersion, sandbox, memoryMB: memory.trim() ? gbField(memory) : 0, shares: NEW_INSTANCE_SHARES.filter((_, i) => shares[i]).map((s) => s.id),
         clientJar: jar?.sha1 ?? '',
       });
       revs.bump('instances');
@@ -110,10 +93,8 @@
 <div class="scroll">
   <div style="max-width: 760px; margin: 0 auto; padding: 28px 24px 32px; display: flex; flex-direction: column; gap: 18px">
     <div style="display: flex; align-items: center; gap: 8px"><h1 class="h1" style="margin-right: auto">New instance</h1><a href={href({ name: 'import' })} class="btn"><Icon name="upload" size={14} sw={1.8} />Import file</a><a href={href({ name: 'browse', type: 'modpack' })} class="btn">Modpack</a></div>
-    <div style="display: grid; grid-template-columns: 56px minmax(0,1fr); gap: 14px; align-items: center">
-      <button class="ico" style="width: 56px; height: 56px; border-radius: 12px; background: {art.background}; border: 0; font-size: 22px" aria-label="Change icon" onclick={() => (picking = true)}><InstanceMark art={{ background: art.background, initial }} {icon} /></button>
-      <label class="field"><span class="sr">Name</span><input class="name" value={name} oninput={(e) => (typed = e.currentTarget.value)} maxlength="64" /></label>
-    </div>
+    <label class="field"><span class="sr">Name</span><input class="name" bind:value={name} placeholder="Enter Instance Name" maxlength="64" /></label>
+    <div class="field"><span class="field-label">Appearance</span><LookEditor bind:look {name} {meta} /></div>
     <div class="field"><span class="field-label">Minecraft version</span><VersionPicker start={jar?.minecraft ?? ''} startBadge="From jar" onpick={(v) => (version = v)} /></div>
     <div class="field"><span class="field-label">Mod loader</span>
       {#snippet mark(v: number)}<LoaderIcon kind={LOADERS[v]?.kind ?? 'none'} size={14} />{/snippet}
@@ -130,13 +111,11 @@
     <button class="adv" class:open={more} onclick={() => (more = !more)} aria-expanded={more}><Icon name="chevron-right" size={12} sw={2.2} />More options</button>
     {#if more}
       <div class="card">
-        <Setting title="Group"><Select bind:value={group} options={groupOptions} label="Group" style="width: 160px" onchange={pickGroup} /></Setting>
-        <div class="divider"></div>
-        <Setting title="Memory"><span class="muted">{memory}</span></Setting>
+        <Setting title="Memory" desc="Empty uses the global setting."><label class="input" style="width: 96px"><span class="sr">Memory</span><input class="tnum" bind:value={memory} placeholder={prefs.value ? String(gb(prefs.value.java.memoryMaxMb)) : ''} inputmode="numeric" /><span class="suffix">GB</span></label></Setting>
         <div class="divider"></div>
         <Setting title="Sandbox" desc="Recommended for mods from unknown sources."><Toggle bind:on={sandbox} label="Sandbox" /></Setting>
         <div class="divider"></div>
-        <Setting title="Game jar" oneLine desc={jar ? `${jar.name} · ${bytes(jar.size)}${jar.minecraft ? `, built for ${jar.minecraft}` : ''}` : 'Vanilla. Pick a modified client jar to use instead.'}>
+        <Setting title="Game jar" oneLine desc={jar ? `${jar.name} · ${bytes(jar.size)}${jar.minecraft ? `, built for ${jar.minecraft}` : ''}` : 'Use a modified version jar. Mods will be unavailable.'}>
           {#if jar}<button class="btn btn-sm btn-ghost" onclick={() => (jar = null)}>Remove</button>{:else}<button class="btn btn-sm" onclick={pickJar}>Choose jar</button>{/if}
         </Setting>
       </div>
@@ -146,15 +125,8 @@
   </div>
 </div>
 
-{#if picking}
-  <IconDialog art={{ background: art.background, initial }} {icon} choose={api.instances.chooseIcon} save={async (a, pic) => { art = { background: a.background, initial: a.initial === name.trim().charAt(0).toUpperCase() ? '' : (a.initial ?? '') }; icon = pic; }} onclose={() => (picking = false)} />
-{/if}
-{#if naming}
-  <PromptDialog title="New group" label="Name" help="Instances can be moved between groups later in their settings." action="Create group" maxlength={32}
-    submit={async (v) => { const g = await api.instances.createGroup(v); revs.bump('instances'); group = g.name; }} onclose={() => (naming = false)} />
-{/if}
-
 <style>
+  .name::placeholder{color:var(--faint)}
   .name{all:unset;font-size:20px;line-height:28px;font-weight:600;letter-spacing:-0.02em;border-bottom:1px solid var(--line-2);padding-bottom:6px}
   .adv{display:flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--muted);padding:0;height:28px}
   .adv :global(svg){transition:transform 160ms var(--ease)}

@@ -14,4 +14,6 @@ export function Trash(arg1:string,arg2:Array<string>):Promise<string>;
 
 export function Undo(arg1:string,arg2:string):Promise<void>;
 
-export function UseAsCover(arg1:string,arg2:string):Promise<void>;
+export function UseAsBanner(arg1:string,arg2:string):Promise<void>;
+
+export function UseAsPicture(arg1:string,arg2:string):Promise<void>;

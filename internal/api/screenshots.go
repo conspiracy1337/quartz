@@ -14,6 +14,7 @@ type ScreenshotDeps struct {
 	Service   *screenshots.Service
 	Instances *instance.Store
 	Icons     *icons.Library
+	Banners   *icons.Library
 	Bus       *events.Bus
 }
 
@@ -63,17 +64,26 @@ func (a *Screenshots) OpenFolder(id string) error {
 	return procx.OpenFolder(a.d.Instances.Path(id, "screenshots"))
 }
 
-// UseAsCover makes a screenshot the instance's picture (cropped square).
-func (a *Screenshots) UseAsCover(id, name string) error {
+// UseAsPicture makes a screenshot the instance's picture (cropped square).
+func (a *Screenshots) UseAsPicture(id, name string) error {
+	return a.use(id, name, a.d.Icons, a.d.Instances.SetIcon)
+}
+
+// UseAsBanner makes a screenshot the instance's banner.
+func (a *Screenshots) UseAsBanner(id, name string) error {
+	return a.use(id, name, a.d.Banners, a.d.Instances.SetBanner)
+}
+
+func (a *Screenshots) use(id, name string, lib *icons.Library, set func(id, hash string) (instance.Instance, error)) error {
 	p, err := a.path(id, name)
 	if err != nil {
 		return err
 	}
-	hash, err := a.d.Icons.Import(p)
+	hash, err := lib.Import(p)
 	if err != nil {
 		return err
 	}
-	if _, err := a.d.Instances.SetIcon(id, hash); err != nil {
+	if _, err := set(id, hash); err != nil {
 		return err
 	}
 	a.d.Bus.Emit(events.InstancesChanged, nil)

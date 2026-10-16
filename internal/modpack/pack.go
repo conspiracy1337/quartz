@@ -12,6 +12,7 @@ import (
 	"path"
 	"strings"
 
+	"quartz/internal/core/archive"
 	"quartz/internal/modplatform"
 )
 
@@ -115,6 +116,11 @@ type Pack struct {
 	Copied bool
 	// Managed is the pack the other launcher says the instance came from.
 	Managed *Managed
+
+	// A pack previewed in place (remotezip.go) has no Archive yet: listing
+	// holds its layers' files, and download its archive on the way.
+	listing  map[string][]archive.Entry
+	download *prefetching
 }
 
 // Managed is the pack another launcher recorded an instance was installed

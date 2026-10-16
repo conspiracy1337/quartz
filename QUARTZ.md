@@ -220,32 +220,32 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 - Buttons: Import, New instance.
 - Search matches names and tags. Filter chips: All, Modded, Modpacks, Vanilla, Servers.
 - Sort by Last played, Name or Playtime. Names sort numerically ("Pack 2" before "Pack 10"), and an instance never played counts from when it was made.
-- **Cards:** cover, icon, name, version and loader, last played, hours.
+- **Cards:** cover (the banner, else a glow of the colour), icon, name, version and loader, last played, hours. [InstanceCard.svelte](frontend/src/lib/components/InstanceCard.svelte)
   - A hover Play button; if the instance is already running, it opens the menu.
   - Right-click opens the instance menu.
 
 **Instance menu** ([InstanceMenu.svelte](frontend/src/lib/overlays/InstanceMenu.svelte), [instanceActions.ts](frontend/src/lib/instanceActions.ts))
-- Actions: Play/Stop, Rename, Change icon, Open folder, Duplicate, Create shortcut…, Export…, Repair game files, Move game folder, Move to trash.
+- Actions: Play/Stop, Rename, Appearance, Open folder, Duplicate, Create shortcut…, Export…, Repair game files, Move game folder, Move to trash.
 - **Play as:** every account, for a single launch. The default account doesn't change.
 - Opens with right-click, Shift+F10 or the Menu key.
 
 **Create an instance** ([NewInstance.svelte](frontend/src/routes/NewInstance.svelte), [api/instances.go](internal/api/instances.go))
-- **Name and icon:** the name follows the picked version until you type your own (max 64). The icon opens the icon dialog.
+- **Name:** starts empty ("Enter Instance Name", max 64).
+- **Appearance:** colour, picture, banner and letter beside a live Library card (LookEditor, below).
 - **Minecraft version:** a two-step picker, family then release, with a Snapshots toggle, the Java version needed and the release date. [VersionPicker.svelte](frontend/src/lib/components/VersionPicker.svelte)
 - **Loader:** None, Fabric (default), Quilt, NeoForge or Forge, with the latest stable build shown.
 - **Share with other instances:** Keybinds, Game options, Servers, Worlds, Resource packs, Shaders, Screenshots, Hotbars. Keybinds, Servers, Resource packs and Shaders are on by default.
-- **More options:** group (or a new group), memory, and sandbox. Sandbox is on by default when the system supports it.
+- **More options:** memory in GB (empty follows the global setting, shown as the placeholder; a number turns the Java card's override on), sandbox, and a game jar. Sandbox is on by default when the system supports it.
 - **Footer:** an estimate of the first download, excluding files already shared. [api/versions.go](internal/api/versions.go)
 - Before creating, the launcher checks that the version and loader build exist upstream.
 - A name another instance already has gets " (2)", " (3)" … so menus never list two alike.
 
-**Editing and organising** ([instance/edit.go](internal/instance/edit.go), [groups.go](internal/instance/groups.go), [art.go](internal/instance/art.go))
+**Editing and organising** ([instance/edit.go](internal/instance/edit.go), [art.go](internal/instance/art.go))
 - **Rename:** changes the display name only; the folder stays.
-- **Change icon:** 10 colour tints, a 1–2 letter initial, or a picture.
-  - Pictures must be PNG or JPEG, at most 8 MB. They are re-encoded to a square PNG of at most 128px and stored by SHA-256.
-  - [IconDialog.svelte](frontend/src/lib/overlays/IconDialog.svelte), [icons.go](internal/icons/icons.go)
-- **Groups, tags, notes:**
-  - An instance's group is set at creation or in its settings, and the list of groups lives in `groups.json`. The Library doesn't group its cards.
+- **Appearance:** 10 colour tints, a 1–2 letter initial, a picture and a banner, each with Change and Remove. They are independent: a new colour keeps the picture and banner (and shows behind a transparent picture). One `SetLook` call saves them.
+  - Pictures must be PNG or JPEG, at most 8 MB. Pictures are re-encoded to a square PNG of at most 128px, banners keep their shape within 960×480; both are stored by SHA-256 (`icons/`, `banners/`).
+  - [LookEditor.svelte](frontend/src/lib/components/LookEditor.svelte), [InstanceEdit.svelte](frontend/src/lib/overlays/InstanceEdit.svelte), [icons.go](internal/icons/icons.go)
+- **Tags, notes:**
   - Up to 12 tags of 24 characters, deduplicated case-insensitively.
   - Notes up to 4000 characters.
 - **Playtime and last played** per instance, plus the total across all instances. Seconds below a minute carry over to the next session, so short sessions add up.
@@ -328,7 +328,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 - **Syncing:** a shared-keybinds toggle and a join/leave toggle for each enabled sync target.
 - **Sandbox:** On/Off and the preset, linking to the Sandbox page.
 - **Performance:** dedicated GPU (Linux and Windows), Feral GameMode and MangoHud (Linux).
-- **About:** group, tags, notes.
+- **About:** tags, notes.
 - **Advanced:** repair, move the game folder (or move it back to the default), move to trash.
 
 **Commands and variables** ([Commands.svelte](frontend/src/routes/instance/Commands.svelte), [launch/commands.go](internal/launch/commands.go))
@@ -533,6 +533,8 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
     - files CurseForge no longer has, left out
   - **Optional files** (Modrinth `env` optional, CurseForge and FTB optional): one toggle each, off by default as Prism does. The ones picked install turned on.
   - The new instance's name.
+- **From Browse or a project page (Install on a modpack):** only the pack card, centred, titled "Install modpack". Name, picture and summary come from the page that sent it (`session.packHint`), so they show at once; the counts fill in when Go has read the pack. The card adds the Appearance editor; the picture starts as the pack's icon.
+- **Reading a large pack in place** ([remotezip.go](internal/modpack/remotezip.go)): a Modrinth or CurseForge pack of 8 MB or more is previewed over HTTP Range requests (the zip directory and the index only, at most 48 MB), and its whole archive downloads in the background. Install waits for that download, which is checked against the platform's hash, and reads the pack again from it, so nothing installs from the unverified ranged bytes. A server that ignores Range gets the old whole download. An unused preview's download is stopped and deleted when it expires.
 
 **Formats** ([modpack/read.go](internal/modpack/read.go), [modpack/link.go](internal/modpack/link.go), [modpack/folder.go](internal/modpack/folder.go))
 
@@ -1005,7 +1007,7 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - Details: file, date, pixel size, file size, world.
   - Actions:
     - **Copy image** to the clipboard, without cgo: user32 on Windows, osascript on macOS, wl-copy or xclip on Linux. [clipimg/](internal/core/clipimg/)
-    - **Use as instance cover**
+    - **Use as picture** (cropped square) and **Use as banner**
     - **Show in folder** (on Linux it selects the file over D-Bus)
     - **Move to trash**
 

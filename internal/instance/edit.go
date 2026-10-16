@@ -19,30 +19,52 @@ func (s *Store) Rename(id, name string) (Instance, error) {
 	return s.Update(id, func(in *Instance) error { in.Name = n; return nil })
 }
 
-// SetArt sets the tile colour and letter and drops any picture.
-func (s *Store) SetArt(id string, art Art) (Instance, error) {
-	if !hexColor.MatchString(art.Background) {
-		return Instance{}, fmt.Errorf("%w: colour", ErrInvalidSettings)
+// Look is how an instance shows: its tile colour and letter, its picture
+// and its banner ("" for none). Colour, picture and banner are independent:
+// a new colour keeps the pictures, and shows behind a transparent one.
+type Look struct {
+	Art    Art    `json:"art"`
+	Icon   string `json:"icon"`
+	Banner string `json:"banner"`
+}
+
+// validLook checks a look's letter and picture names; a colour that isn't
+// one is repaired by normalize.
+func validLook(art Art, icon, banner string) bool {
+	r := []rune(strings.TrimSpace(art.Initial))
+	return len(r) <= 2 && !slices.ContainsFunc(r, unicode.IsControl) &&
+		(icon == "" || iconRe.MatchString(icon)) && (banner == "" || iconRe.MatchString(banner))
+}
+
+// SetLook sets an instance's colour, letter, picture and banner.
+func (s *Store) SetLook(id string, l Look) (Instance, error) {
+	if !hexColor.MatchString(l.Art.Background) || !validLook(l.Art, l.Icon, l.Banner) {
+		return Instance{}, fmt.Errorf("%w: look", ErrInvalidSettings)
 	}
-	if r := []rune(strings.TrimSpace(art.Initial)); len(r) > 2 || slices.ContainsFunc(r, unicode.IsControl) {
-		return Instance{}, fmt.Errorf("%w: letter", ErrInvalidSettings)
-	}
-	art.Initial = strings.TrimSpace(art.Initial)
+	l.Art.Initial = strings.TrimSpace(l.Art.Initial)
 	return s.Update(id, func(in *Instance) error {
-		if art.Initial == "" {
-			art.Initial = strings.ToUpper(string([]rune(in.Name)[:1]))
+		if l.Art.Initial == "" {
+			l.Art.Initial = strings.ToUpper(string([]rune(in.Name)[:1]))
 		}
-		in.Art, in.Icon = art, ""
+		in.Art, in.Icon, in.Banner = l.Art, l.Icon, l.Banner
 		return nil
 	})
 }
 
 // SetIcon uses a picture from the icon library ("" goes back to the tile).
 func (s *Store) SetIcon(id, hash string) (Instance, error) {
-	if hash != "" && !iconRe.MatchString(hash) {
+	if !validLook(Art{}, hash, "") {
 		return Instance{}, fmt.Errorf("%w: icon", ErrInvalidSettings)
 	}
 	return s.Update(id, func(in *Instance) error { in.Icon = hash; return nil })
+}
+
+// SetBanner uses a picture from the banner library ("" goes back to the colour).
+func (s *Store) SetBanner(id, hash string) (Instance, error) {
+	if !validLook(Art{}, "", hash) {
+		return Instance{}, fmt.Errorf("%w: banner", ErrInvalidSettings)
+	}
+	return s.Update(id, func(in *Instance) error { in.Banner = hash; return nil })
 }
 
 // SetNotes stores free-form notes.

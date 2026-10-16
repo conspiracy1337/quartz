@@ -261,10 +261,10 @@ export namespace api {
 	    name: string;
 	    art: instance.Art;
 	    icon?: string;
+	    banner?: string;
 	    minecraft: string;
 	    loader?: LoaderRef;
 	    kind: string;
-	    group?: string;
 	    tags: string[];
 	    hasServers: boolean;
 	    lastPlayed?: number;
@@ -283,10 +283,10 @@ export namespace api {
 	        this.name = source["name"];
 	        this.art = this.convertValues(source["art"], instance.Art);
 	        this.icon = source["icon"];
+	        this.banner = source["banner"];
 	        this.minecraft = source["minecraft"];
 	        this.loader = this.convertValues(source["loader"], LoaderRef);
 	        this.kind = source["kind"];
-	        this.group = source["group"];
 	        this.tags = source["tags"];
 	        this.hasServers = source["hasServers"];
 	        this.lastPlayed = source["lastPlayed"];
@@ -349,10 +349,10 @@ export namespace api {
 	    name: string;
 	    art: instance.Art;
 	    icon?: string;
+	    banner?: string;
 	    minecraft: string;
 	    loader?: LoaderRef;
 	    kind: string;
-	    group?: string;
 	    tags: string[];
 	    hasServers: boolean;
 	    lastPlayed?: number;
@@ -389,10 +389,10 @@ export namespace api {
 	        this.name = source["name"];
 	        this.art = this.convertValues(source["art"], instance.Art);
 	        this.icon = source["icon"];
+	        this.banner = source["banner"];
 	        this.minecraft = source["minecraft"];
 	        this.loader = this.convertValues(source["loader"], LoaderRef);
 	        this.kind = source["kind"];
-	        this.group = source["group"];
 	        this.tags = source["tags"];
 	        this.hasServers = source["hasServers"];
 	        this.lastPlayed = source["lastPlayed"];
@@ -1968,11 +1968,12 @@ export namespace instance {
 	    name: string;
 	    art: Art;
 	    icon: string;
+	    banner: string;
 	    minecraft: string;
 	    loader: string;
 	    loaderVersion: string;
-	    group: string;
 	    sandbox: boolean;
+	    memoryMB: number;
 	    shares: string[];
 	    clientJar: string;
 	
@@ -1985,11 +1986,12 @@ export namespace instance {
 	        this.name = source["name"];
 	        this.art = this.convertValues(source["art"], Art);
 	        this.icon = source["icon"];
+	        this.banner = source["banner"];
 	        this.minecraft = source["minecraft"];
 	        this.loader = source["loader"];
 	        this.loaderVersion = source["loaderVersion"];
-	        this.group = source["group"];
 	        this.sandbox = source["sandbox"];
+	        this.memoryMB = source["memoryMB"];
 	        this.shares = source["shares"];
 	        this.clientJar = source["clientJar"];
 	    }
@@ -2029,18 +2031,6 @@ export namespace instance {
 	        this.version = source["version"];
 	        this.summary = source["summary"];
 	        this.author = source["author"];
-	    }
-	}
-	export class Group {
-	    name: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Group(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
 	    }
 	}
 	export class Host {
@@ -2098,6 +2088,40 @@ export namespace instance {
 	        this.memoryMaxMb = source["memoryMaxMb"];
 	        this.jvmArgs = source["jvmArgs"];
 	    }
+	}
+	export class Look {
+	    art: Art;
+	    icon: string;
+	    banner: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Look(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.art = this.convertValues(source["art"], Art);
+	        this.icon = source["icon"];
+	        this.banner = source["banner"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class PerformanceSettings {
 	    dedicatedGpu: boolean;
@@ -2213,7 +2237,6 @@ export namespace instance {
 	    icon?: string;
 	    minecraft: string;
 	    loader?: string;
-	    group?: string;
 	    trashedAt: number;
 	    location?: string;
 	
@@ -2230,7 +2253,6 @@ export namespace instance {
 	        this.icon = source["icon"];
 	        this.minecraft = source["minecraft"];
 	        this.loader = source["loader"];
-	        this.group = source["group"];
 	        this.trashedAt = source["trashedAt"];
 	        this.location = source["location"];
 	    }
@@ -2544,6 +2566,42 @@ export namespace modpack {
 		}
 	}
 	
+	export class Look {
+	    art: instance.Art;
+	    icon: string;
+	    banner: string;
+	    packIcon: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Look(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.art = this.convertValues(source["art"], instance.Art);
+	        this.icon = source["icon"];
+	        this.banner = source["banner"];
+	        this.packIcon = source["packIcon"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class OptionalFile {
 	    path: string;
 	    name: string;

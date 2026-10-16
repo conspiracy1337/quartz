@@ -4,13 +4,13 @@ import {api} from '../models';
 import {instance} from '../models';
 import {follow} from '../models';
 
+export function ChooseBanner():Promise<string>;
+
 export function ChooseClientJar():Promise<api.ClientJarPick>;
 
 export function ChooseIcon():Promise<string>;
 
 export function Create(arg1:instance.CreateRequest):Promise<api.InstanceView>;
-
-export function CreateGroup(arg1:string):Promise<instance.Group>;
 
 export function CreateShortcut(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
@@ -19,8 +19,6 @@ export function Duplicate(arg1:string):Promise<string>;
 export function FollowOffers():Promise<Array<follow.Offer>>;
 
 export function Get(arg1:string):Promise<api.InstanceView>;
-
-export function Groups():Promise<Array<instance.Group>>;
 
 export function List():Promise<Array<api.InstanceSummary>>;
 
@@ -38,13 +36,9 @@ export function Rename(arg1:string,arg2:string):Promise<api.InstanceView>;
 
 export function Restore(arg1:string):Promise<api.InstanceView>;
 
-export function SetArt(arg1:string,arg2:instance.Art):Promise<api.InstanceView>;
-
 export function SetDiscord(arg1:string,arg2:boolean):Promise<api.InstanceView>;
 
-export function SetGroup(arg1:string,arg2:string):Promise<api.InstanceView>;
-
-export function SetIcon(arg1:string,arg2:string):Promise<api.InstanceView>;
+export function SetLook(arg1:string,arg2:instance.Look):Promise<api.InstanceView>;
 
 export function SetNotes(arg1:string,arg2:string):Promise<api.InstanceView>;
 

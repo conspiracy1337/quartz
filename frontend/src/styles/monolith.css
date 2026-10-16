@@ -144,7 +144,6 @@ button.tab.on{border-bottom-color:var(--text)}
 .picker{display:grid;grid-template-columns:240px minmax(0,1fr);gap:var(--gap);align-items:start}
 @media (max-width:1100px){.picker{grid-template-columns:200px minmax(0,1fr)}}
 .plabel{height:28px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--faint)}
-.plist{overflow-y:auto;overscroll-behavior:contain}
 .prow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;height:44px;padding:0 var(--inset);border:0;background:transparent;width:100%;text-align:left;color:var(--text);border-top:1px solid var(--line)}
 .prow:first-child{border-top:0}
 .prow:hover{background:color-mix(in srgb,var(--raise) 60%,transparent)}
@@ -183,6 +182,8 @@ button.chip:not(.on):hover{color:var(--text)}
 .card-head{height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border-bottom:1px solid var(--line)}
 .list{border:1px solid var(--line);border-radius:var(--radius-lg);background:var(--panel);overflow:hidden}
 .list > *+*{border-top:1px solid var(--line)}
+/* A picker list scrolls inside its fixed height; after .list, whose overflow:hidden it overrides. */
+.plist{overflow-y:auto;overscroll-behavior:contain}
 .row{display:grid;align-items:center;column-gap:14px;height:var(--row-lg);padding:0 12px}
 .row-sm{height:var(--row-sm)}
 .row-head{height:32px;font-size:12px;color:var(--faint);background:var(--bg)}

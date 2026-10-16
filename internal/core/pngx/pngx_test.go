@@ -108,3 +108,17 @@ func TestFitKeepsTheWholePicture(t *testing.T) {
 		t.Fatal("expected transparent padding above")
 	}
 }
+
+func TestWithinKeepsTheShape(t *testing.T) {
+	cases := []struct{ w, h, wantW, wantH int }{
+		{1920, 1080, 853, 480}, // height bound
+		{3000, 500, 960, 160},  // width bound
+		{400, 100, 400, 100},   // small pictures keep their size
+	}
+	for _, c := range cases {
+		got := Within(image.NewNRGBA(image.Rect(0, 0, c.w, c.h)), 960, 480).Bounds()
+		if got.Dx() != c.wantW || got.Dy() != c.wantH {
+			t.Errorf("%dx%d → %dx%d, want %dx%d", c.w, c.h, got.Dx(), got.Dy(), c.wantW, c.wantH)
+		}
+	}
+}

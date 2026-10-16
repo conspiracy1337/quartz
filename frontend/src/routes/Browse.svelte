@@ -149,7 +149,10 @@
     } catch (e) {
       return session.fail('Install', e);
     }
-    if (!t.content) return go({ name: 'import', ref: r.ref, source });
+    if (!t.content) {
+      session.packHint = { ref: r.ref, name: r.name, author: r.author, summary: r.summary, ...(r.icon ? { icon: r.icon } : {}) };
+      return go({ name: 'import', ref: r.ref, source });
+    }
     if (into) void installInto(into.id, r.ref, source, t.content);
   }
 </script>

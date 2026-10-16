@@ -7,6 +7,7 @@ import (
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"quartz/internal/icons"
 	"quartz/internal/instance"
 	"quartz/internal/loader"
 	"quartz/internal/modpack"
@@ -20,6 +21,8 @@ type ImportsDeps struct {
 	Drops   *Drops
 	Opens   *Opens
 	Picture func(url string) string // same-origin address of a platform picture
+	// Icons and Banners hold the pictures a pack's look may name.
+	Icons, Banners *icons.Library
 }
 
 // Imports reads modpacks from files and links for the Import screen.
@@ -162,15 +165,19 @@ func (im *Imports) InspectProject(ref, source, version string) (*ImportPreview, 
 	if r.ID(src) == "" || len(version) > 64 {
 		return nil, ErrBadSource
 	}
-	return im.preview(im.d.Reader.Project(im.ctx.Get(), src, r.ID(src), version))
+	return im.preview(im.d.Reader.Preview(im.ctx.Get(), src, r.ID(src), version))
 }
 
 // Install creates the instance from an inspected pack, with the optional
-// files in enable turned on, and returns its job.
-func (im *Imports) Install(token, name string, art instance.Art, enable []string) (string, error) {
+// files in enable turned on, and returns its job. The look's pictures must
+// already be stored (Instances.ChooseIcon, ChooseBanner).
+func (im *Imports) Install(token, name string, look modpack.Look, enable []string) (string, error) {
 	name = strings.TrimSpace(name)
 	if len(name) > 64 || len(enable) > 20_000 {
 		return "", instance.ErrBadName
 	}
-	return im.d.Packs.Install(im.ctx.Get(), token, name, art, enable)
+	if err := picturesStored(im.d.Icons, im.d.Banners, look.Icon, look.Banner); err != nil {
+		return "", err
+	}
+	return im.d.Packs.Install(im.ctx.Get(), token, name, look, enable)
 }
