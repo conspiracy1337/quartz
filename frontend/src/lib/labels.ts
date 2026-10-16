@@ -19,7 +19,7 @@ export const instanceMeta = (i: Pick<InstanceSummary, 'minecraft' | 'loader'>) =
 /** Settings tab names, for the tab strip and for "Settings, Downloads" hints. */
 export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   general: 'General', appearance: 'Appearance', java: 'Java', downloads: 'Downloads', storage: 'Storage',
-  syncing: 'Syncing', integrations: 'Integrations', updates: 'Updates', about: 'About',
+  integrations: 'Integrations', updates: 'Updates', about: 'About',
 };
 
 /** Browse's tabs: Go's project type, its label, and the instance tab it installs into. */

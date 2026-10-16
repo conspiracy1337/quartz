@@ -86,6 +86,21 @@
     <p class="muted" style="margin: 0; max-width: 80ch">Turn on what can be shared here, then pick which instances join in their own settings. Folders are linked into each instance; files keep the newest copy. The number shows how many instances use each one.</p>
     {#if groups.data}
       {@const g = groups.data}
+      <section class="sec" aria-label="Shared keybinds">
+        <div class="sec-h"><h2 class="h3">Shared keybinds <span class="count">{keys.data?.length ?? ''}</span></h2><button class="btn btn-sm" aria-haspopup="menu" aria-expanded={!!picker} onclick={openPicker}>Add key</button></div>
+        <div class="list">
+          {#each keys.data ?? [] as k (k.id)}
+            <div class="row krow">
+              <span class="trunc">{k.name}</span>
+              <button class="btn btn-sm" style="justify-content: space-between; font-family: var(--mono)" aria-label="Key for {k.name}" aria-pressed={capturing?.id === k.id} onclick={() => capture(k.id)}><span class="trunc">{capturing?.id === k.id ? 'Press a key…' : k.key}</span></button>
+              <button class="btn btn-icon btn-sm btn-ghost" aria-label="Stop sharing {k.name}" onclick={() => edit(k.name, () => api.sync.removeKey(k.id))}><Icon name="x" size={10} sw={2.2} /></button>
+            </div>
+          {:else}
+            {#if keys.data}<Empty text="No shared keybinds yet. Add the keys you want the same everywhere." />{/if}
+          {/each}
+        </div>
+        <p class="small faint" style="margin: 0">Only these keys are written into options.txt on launch. Keys a version doesn't have are skipped.</p>
+      </section>
       <div class="page-split">
         <div>
           {#each sections as sec (sec.key)}
@@ -119,21 +134,6 @@
                 <button class="btn" onclick={() => addCustom(true)}>Add folder</button>
               </div>
             </div>
-          </section>
-          <section class="sec" aria-label="Shared keybinds">
-            <div class="sec-h"><h2 class="h3">Shared keybinds <span class="count">{keys.data?.length ?? ''}</span></h2><button class="btn btn-sm" aria-haspopup="menu" aria-expanded={!!picker} onclick={openPicker}>Add key</button></div>
-            <div class="list">
-              {#each keys.data ?? [] as k (k.id)}
-                <div class="row krow">
-                  <span class="trunc">{k.name}</span>
-                  <button class="btn btn-sm" style="justify-content: space-between; font-family: var(--mono)" aria-label="Key for {k.name}" aria-pressed={capturing?.id === k.id} onclick={() => capture(k.id)}><span class="trunc">{capturing?.id === k.id ? 'Press a key…' : k.key}</span></button>
-                  <button class="btn btn-icon btn-sm btn-ghost" aria-label="Stop sharing {k.name}" onclick={() => edit(k.name, () => api.sync.removeKey(k.id))}><Icon name="x" size={10} sw={2.2} /></button>
-                </div>
-              {:else}
-                {#if keys.data}<Empty text="No shared keybinds yet. Add the keys you want the same everywhere." />{/if}
-              {/each}
-            </div>
-            <p class="small faint" style="margin: 0">Only these keys are written into options.txt on launch. Keys a version doesn't have are skipped.</p>
           </section>
         </div>
       </div>

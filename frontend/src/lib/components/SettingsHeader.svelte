@@ -10,10 +10,7 @@
   let { active, query }: Props = $props();
 
   const labels = SETTINGS_TAB_LABELS;
-  // Syncing is one page in the sidebar; its settings tab opens that page instead of a copy.
-  const items = (Object.keys(labels) as SettingsTab[]).map((k) => ({
-    key: k, label: labels[k], href: k === 'syncing' ? href({ name: 'syncing' }) : href({ name: 'settings', tab: k }),
-  }));
+  const items = (Object.keys(labels) as SettingsTab[]).map((k) => ({ key: k, label: labels[k], href: href({ name: 'settings', tab: k }) }));
   const leave = () => go({ name: 'settings', tab: 'general' });
 </script>
 

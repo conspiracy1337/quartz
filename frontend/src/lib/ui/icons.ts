@@ -56,6 +56,7 @@ export const icons = {
   list: s('<path d="M4 6h16M4 12h16M4 18h16"/>'),
   file: s('<path d="M6 3h9l4 4v14H6z"/>'),
   link: s('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
+  user: s('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/>'),
   trash: s('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'),
   camera: s('<path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7"/>'),
   'rotate-left': s('<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5"/>'),
