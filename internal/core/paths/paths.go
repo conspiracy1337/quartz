@@ -19,10 +19,13 @@ const (
 type Paths struct {
 	Root     string
 	Portable bool
-	// Chosen is how Root was picked; Default is the OS location, where the
-	// pointer to a folder chosen in setup lives.
+	// Chosen is how Root was picked; Default is the OS location.
 	Chosen  Chosen
 	Default string
+	// pointer is the file naming a folder chosen in setup. It lives in the
+	// OS config directory, so a moved data folder leaves nothing behind in
+	// the data directory.
+	pointer string
 }
 
 // Chosen is what picked the data root.
@@ -72,16 +75,19 @@ var ErrNoDataDir = errors.New("paths: no data directory available")
 
 // Resolve picks the data root. Priority: explicit flag, environment variable,
 // portable marker next to the executable, then the OS data directory.
-// A pointer at the OS location, written when a folder is chosen in setup,
-// comes before the OS location itself.
+// A pointer in the OS config directory, written when a folder is chosen in
+// setup, comes before the OS location itself.
 func Resolve(flagDir string, env Env) (Paths, error) {
-	def := ""
-	if base := osDataDir(env); base != "" {
+	def, ptr := "", ""
+	if base := dataBase.dir(env); base != "" {
 		def = filepath.Join(base, brand.DirName)
+	}
+	if base := configBase.dir(env); base != "" {
+		ptr = filepath.Join(base, brand.DirName, pointerFile)
 	}
 	pick := func(dir string, by Chosen) (Paths, error) {
 		p, err := absolute(dir, by == ByPortable)
-		p.Chosen, p.Default = by, def
+		p.Chosen, p.Default, p.pointer = by, def, ptr
 		return p, err
 	}
 	if flagDir != "" {
@@ -99,34 +105,43 @@ func Resolve(flagDir string, env Env) (Paths, error) {
 	if def == "" {
 		return Paths{}, ErrNoDataDir
 	}
-	if env.ReadFile != nil {
-		if ptr, ok := readPointer(env.ReadFile, def); ok {
-			return pick(ptr.Root, ByPointer)
+	if env.ReadFile != nil && ptr != "" {
+		if p, ok := readPointer(env.ReadFile, ptr, def); ok {
+			return pick(p.Root, ByPointer)
 		}
 	}
 	return pick(def, ByDefault)
 }
 
-// osDataDir follows each platform's convention for large per-user app data.
-// Windows uses LocalAppData because game files must not roam with the profile.
-func osDataDir(env Env) string {
-	switch env.GOOS {
-	case "windows":
-		return env.Getenv("LOCALAPPDATA")
-	case "darwin":
-		if env.HomeDir == "" {
-			return ""
-		}
-		return filepath.Join(env.HomeDir, "Library", "Application Support")
-	default:
-		if xdg := env.Getenv("XDG_DATA_HOME"); filepath.IsAbs(xdg) {
+// osDir is a per-user OS directory: the variable naming it on Windows, its
+// place in the home folder on macOS, and its XDG variable and default
+// elsewhere.
+type osDir struct{ windows, darwin, xdg, xdgDefault string }
+
+var (
+	// dataBase holds large per-user app data. Windows uses LocalAppData
+	// because game files must not roam with the profile.
+	dataBase = osDir{"LOCALAPPDATA", "Library/Application Support", "XDG_DATA_HOME", ".local/share"}
+	// configBase holds the pointer to a data folder chosen in setup.
+	configBase = osDir{"APPDATA", "Library/Preferences", "XDG_CONFIG_HOME", ".config"}
+)
+
+func (d osDir) dir(env Env) string {
+	if env.GOOS == "windows" {
+		return env.Getenv(d.windows)
+	}
+	if env.GOOS != "darwin" {
+		if xdg := env.Getenv(d.xdg); filepath.IsAbs(xdg) {
 			return xdg
 		}
-		if env.HomeDir == "" {
-			return ""
-		}
-		return filepath.Join(env.HomeDir, ".local", "share")
 	}
+	if env.HomeDir == "" {
+		return ""
+	}
+	if env.GOOS == "darwin" {
+		return filepath.Join(env.HomeDir, filepath.FromSlash(d.darwin))
+	}
+	return filepath.Join(env.HomeDir, filepath.FromSlash(d.xdgDefault))
 }
 
 func absolute(dir string, portable bool) (Paths, error) {
@@ -153,6 +168,9 @@ func (p Paths) Instances() string { return filepath.Join(p.Root, "instances") }
 func (p Paths) Store() string     { return filepath.Join(p.Root, "store") }
 func (p Paths) Cache() string     { return filepath.Join(p.Root, "cache") }
 func (p Paths) Themes() string    { return filepath.Join(p.Root, "themes") }
+
+// Webview holds the webview's own storage and cache.
+func (p Paths) Webview() string { return filepath.Join(p.Root, "webview") }
 
 // Update holds a downloaded launcher update and its marker files.
 func (p Paths) Update() string { return filepath.Join(p.Root, "update") }

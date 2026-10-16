@@ -13,8 +13,8 @@ import (
 	"quartz/internal/core/sysinfo"
 )
 
-// pointerFile, at the OS data location, names a data folder chosen in
-// first-run setup. MoveFrom is set until the next start has moved the data
+// pointerFile, in the launcher's OS config folder, names a data folder chosen
+// in setup. MoveFrom is set until the next start has moved the data
 // there (moving happens before anything is opened, never under a running
 // launcher).
 const pointerFile = "location.json"
@@ -24,8 +24,8 @@ type pointer struct {
 	MoveFrom string `json:"moveFrom,omitempty"`
 }
 
-func readPointer(read func(string) ([]byte, error), def string) (pointer, bool) {
-	b, err := read(filepath.Join(def, pointerFile))
+func readPointer(read func(string) ([]byte, error), path, def string) (pointer, bool) {
+	b, err := read(path)
 	if err != nil {
 		return pointer{}, false
 	}
@@ -63,7 +63,7 @@ func IsDataFolder(dir string) bool {
 }
 
 // Target is where choosing dir puts the data: dir itself when it is empty
-// or already a data folder, else a Quartz folder inside it.
+// or already a data folder, else a quartz folder inside it.
 func Target(dir string) string {
 	entries, err := os.ReadDir(dir)
 	if err == nil && len(entries) > 0 && !IsDataFolder(dir) {
@@ -75,7 +75,7 @@ func Target(dir string) string {
 // MoveTo makes root the data folder from the next start on. Unless root
 // already holds launcher data, the current data moves there on that start.
 func (p Paths) MoveTo(root string) error {
-	if p.Chosen != ByDefault && p.Chosen != ByPointer {
+	if p.Chosen != ByDefault && p.Chosen != ByPointer || p.pointer == "" {
 		return ErrFixedRoot
 	}
 	root = filepath.Clean(root)
@@ -96,7 +96,7 @@ func (p Paths) MoveTo(root string) error {
 		return fmt.Errorf("%w: it isn't writable", ErrBadRoot)
 	}
 	_ = os.Remove(probe)
-	if err := os.MkdirAll(p.Default, dirPerm); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p.pointer), dirPerm); err != nil {
 		return err
 	}
 	ptr := pointer{Root: root}
@@ -111,7 +111,7 @@ func (p Paths) MoveTo(root string) error {
 	if err != nil {
 		return err
 	}
-	return fsx.AtomicWrite(filepath.Join(p.Default, pointerFile), b, fsx.FilePerm)
+	return fsx.AtomicWrite(p.pointer, b, fsx.FilePerm)
 }
 
 // ApplyMove finishes a data folder change on startup, before anything is
@@ -119,7 +119,8 @@ func (p Paths) MoveTo(root string) error {
 // the new one or, across drives, copied into a staging folder first and
 // renamed into place once every copy succeeded. When something fails, the
 // renames are undone, the change is cancelled and the returned Paths is the
-// old folder, so this run works from complete data.
+// old folder, so this run works from complete data. Once moved, the emptied
+// old folder goes too.
 func ApplyMove(p Paths) (Paths, error) {
 	ptr, ok := pendingMove(p)
 	if !ok {
@@ -131,24 +132,27 @@ func ApplyMove(p Paths) (Paths, error) {
 		if old.Root == filepath.Clean(p.Default) {
 			old.Chosen = ByDefault
 		}
-		if cerr := writePointer(p.Default, pointer{Root: old.Root}); cerr != nil {
+		if cerr := p.writePointer(old.Root); cerr != nil {
 			return p, errors.Join(err, cerr)
 		}
 		return old, fmt.Errorf("the data folder stays at %s: %w", old.Root, err)
 	}
-	return p, writePointer(p.Default, pointer{Root: ptr.Root})
+	_ = os.Remove(ptr.MoveFrom) // only when empty
+	return p, p.writePointer(ptr.Root)
 }
 
-// writePointer records root as the data folder; the OS location needs no pointer.
-func writePointer(def string, ptr pointer) error {
-	path := filepath.Join(def, pointerFile)
-	if filepath.Clean(ptr.Root) == filepath.Clean(def) {
+// writePointer records root as the data folder. The OS location needs no
+// pointer, and then the config folder that held it goes when it's empty.
+func (p Paths) writePointer(root string) error {
+	path := p.pointer
+	if filepath.Clean(root) == filepath.Clean(p.Default) {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		_ = os.Remove(filepath.Dir(path))
 		return nil
 	}
-	b, err := json.Marshal(ptr)
+	b, err := json.Marshal(pointer{Root: root})
 	if err != nil {
 		return err
 	}
@@ -157,10 +161,10 @@ func writePointer(def string, ptr pointer) error {
 
 // pendingMove is the pointer when it asks for data to move into p.Root.
 func pendingMove(p Paths) (pointer, bool) {
-	if p.Default == "" {
+	if p.pointer == "" {
 		return pointer{}, false
 	}
-	b, err := fsx.ReadCapped(filepath.Join(p.Default, pointerFile), 64<<10)
+	b, err := fsx.ReadCapped(p.pointer, 64<<10)
 	if err != nil {
 		return pointer{}, false
 	}
@@ -194,7 +198,7 @@ func move(from, to string) error {
 	}
 	var names []string
 	for _, e := range entries {
-		if n := e.Name(); n != pointerFile && n != stagingDir {
+		if n := e.Name(); n != stagingDir {
 			names = append(names, n)
 		}
 	}

@@ -51,6 +51,25 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+// The pointer to a chosen folder lives in the config directory, never in
+// the data directory a moved folder leaves.
+func TestResolvePointer(t *testing.T) {
+	for goos, want := range map[string]string{
+		"linux":   "/home/u/.config/" + brand.DirName + "/" + pointerFile,
+		"darwin":  "/home/u/Library/Preferences/" + brand.DirName + "/" + pointerFile,
+		"windows": filepath.Join(`C:\Roaming`, brand.DirName, pointerFile),
+	} {
+		env := testEnv(goos, map[string]string{"APPDATA": `C:\Roaming`, "LOCALAPPDATA": `C:\Local`})
+		if got, err := Resolve("", env); err != nil || got.pointer != filepath.FromSlash(want) {
+			t.Errorf("%s: %q %v, want %q", goos, got.pointer, err, want)
+		}
+	}
+	xdg := testEnv("linux", map[string]string{"XDG_CONFIG_HOME": "/cfg"})
+	if got, _ := Resolve("", xdg); got.pointer != "/cfg/"+brand.DirName+"/"+pointerFile {
+		t.Errorf("xdg: %q", got.pointer)
+	}
+}
+
 func TestResolveNoDir(t *testing.T) {
 	env := testEnv("windows", nil)
 	if _, err := Resolve("", env); !errors.Is(err, ErrNoDataDir) {
