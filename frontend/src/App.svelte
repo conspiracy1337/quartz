@@ -135,7 +135,7 @@
   <!-- The server's panel shows on its instance's pages; the header's address chip hides it. -->
   {#if session.hosting && session.hostPanel && route.name === 'instance' && route.id === session.hosting.instanceId}<HostPanel host={session.hosting} />{/if}
   {#if session.toast}{#key session.toastSeq}<Toast {...session.toast} />{/key}{/if}
-  {#if session.launchAs}{#key session.launchAs}<InstanceMenu {...session.launchAs} />{/key}{/if}
+  {#if session.instanceMenu}{#key session.instanceMenu}<InstanceMenu {...session.instanceMenu} />{/key}{/if}
 
   <!-- Keyed by the overlay object: a dialog keeps reading its own props after a handler closes it. -->
   {#each session.overlay ? [session.overlay] : [] as overlay (overlay)}

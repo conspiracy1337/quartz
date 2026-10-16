@@ -65,8 +65,8 @@ class Session {
   /** Whether its panel shows (the header's address chip toggles it). */
   hostPanel = $state(true);
   toast = $state<Toast | null>(null);
-  /** The right-click "Play as" menu of an instance, at a window position. */
-  launchAs = $state<{ instanceId: string; x: number; y: number } | null>(null);
+  /** An instance's menu (right-click, or the header's ⋮), at a window position. */
+  instanceMenu = $state<{ instanceId: string; x: number; y: number } | null>(null);
   /** The instance Browse and project pages install into, once picked (else the most recent). */
   browseTarget = $state<string | null>(null);
   /** A pack version the Import screen sends to an instance's update page, picked there instead of the offered one. */
@@ -129,7 +129,7 @@ class Session {
   }
 
   /** Opens an instance's menu (its actions and "Play as") for a right-click, or for Shift+F10 / the Menu key (no pointer position). */
-  openLaunchAs(instanceId: string, e: MouseEvent) {
+  openInstanceMenu(instanceId: string, e: MouseEvent) {
     e.preventDefault();
     let { clientX: x, clientY: y } = e;
     if (!x && !y && e.currentTarget instanceof Element) {
@@ -137,7 +137,7 @@ class Session {
       x = r.left + 12;
       y = r.bottom;
     }
-    this.launchAs = { instanceId, x, y };
+    this.instanceMenu = { instanceId, x, y };
   }
 
   cancelLaunch() {
