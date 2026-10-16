@@ -17,8 +17,9 @@ const (
 	Slug = "quartz"
 	// Scheme is the launcher's own URL scheme (quartz://…).
 	Scheme = Slug
-	// DirName is the data folder name inside the OS data directory.
-	DirName = "Quartz"
+	// DirName is the launcher's folder inside the OS data and config
+	// directories, and inside a chosen folder that holds other things.
+	DirName = Slug
 	// EnvDir overrides the data folder location.
 	EnvDir = "QUARTZ_DIR"
 	// PortableMarker, placed next to the executable, switches on portable mode.

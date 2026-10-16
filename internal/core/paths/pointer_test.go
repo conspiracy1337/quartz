@@ -21,8 +21,11 @@ func realEnv(t *testing.T) (Env, string) {
 	home := t.TempDir()
 	env := SystemEnv("linux")
 	env.Getenv = func(k string) string {
-		if k == "XDG_DATA_HOME" {
+		switch k {
+		case "XDG_DATA_HOME":
 			return filepath.Join(home, "share")
+		case "XDG_CONFIG_HOME":
+			return filepath.Join(home, "config")
 		}
 		return ""
 	}
@@ -42,7 +45,7 @@ func TestMoveToAndApply(t *testing.T) {
 	_ = os.WriteFile(p.Settings(), []byte("{}"), 0o600)
 	_ = os.WriteFile(filepath.Join(p.Logs(), "a.log"), []byte("log"), 0o600)
 
-	// A folder with other things in it gets a Quartz folder inside.
+	// A folder with other things in it gets a quartz folder inside.
 	games := filepath.Join(home, "Games")
 	_ = os.MkdirAll(filepath.Join(games, "other"), 0o700)
 	target := Target(games)
@@ -51,6 +54,10 @@ func TestMoveToAndApply(t *testing.T) {
 	}
 	if err := p.MoveTo(target); err != nil {
 		t.Fatal(err)
+	}
+	config := filepath.Join(home, "config", brand.DirName)
+	if _, err := os.Stat(filepath.Join(config, pointerFile)); err != nil {
+		t.Fatal("no pointer in the config folder:", err)
 	}
 	// The next start resolves to the new folder and moves the data first.
 	next, _ := Resolve("", env)
@@ -63,8 +70,8 @@ func TestMoveToAndApply(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(target, "logs", "a.log")); err != nil || string(b) != "log" {
 		t.Fatal("logs not moved")
 	}
-	if _, err := os.Stat(p.Settings()); !os.IsNotExist(err) {
-		t.Fatal("the old folder still has settings")
+	if _, err := os.Stat(p.Root); !os.IsNotExist(err) {
+		t.Fatal("the old folder stayed behind")
 	}
 	// Applying again does nothing.
 	if _, err := ApplyMove(next); err != nil {
@@ -84,6 +91,9 @@ func TestMoveToAndApply(t *testing.T) {
 	}
 	if again, _ := Resolve("", env); again.Chosen != ByDefault {
 		t.Fatal("the pointer must be gone")
+	}
+	if _, err := os.Stat(config); !os.IsNotExist(err) {
+		t.Fatal("the empty config folder stayed behind")
 	}
 }
 
@@ -157,12 +167,12 @@ func TestProblem(t *testing.T) {
 	tempDir = func() string { return "/tmp" }
 	t.Cleanup(func() { tempDir = old })
 	for root, want := range map[string]string{
-		"/home/a/.local/share/Quartz": "",
-		"/home/a!b/Quartz":            ProblemBang,
-		"/tmp/Quartz":                 ProblemTemp,
-		"/tmpfoo/Quartz":              "",
+		"/home/a/.local/share/quartz": "",
+		"/home/a!b/quartz":            ProblemBang,
+		"/tmp/quartz":                 ProblemTemp,
+		"/tmpfoo/quartz":              "",
 		`C:\Users\a\AppData\Local\Temp\Rar$EXa1.2\data`: ProblemTemp,
-		"/x/TempState/Quartz":                           ProblemTemp,
+		"/x/TempState/quartz":                           ProblemTemp,
 	} {
 		if got := Problem(root); got != want {
 			t.Errorf("%s: %q, want %q", root, got, want)

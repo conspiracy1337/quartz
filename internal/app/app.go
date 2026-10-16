@@ -23,6 +23,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"quartz/internal/accounts"
@@ -81,6 +82,7 @@ import (
 	"quartz/internal/syncing"
 	"quartz/internal/theme"
 	"quartz/internal/update"
+	"quartz/internal/webview"
 	"quartz/internal/worlds"
 )
 
@@ -168,6 +170,9 @@ func Run(o Options) error {
 	}
 	defer func() { _ = a.logFile.Close() }()
 	a.log.Info("starting", "version", brand.Version, "data", a.paths.Root, "portable", a.paths.Portable)
+	if err := webview.Isolate(a.paths.Webview(), brand.AppID); err != nil {
+		a.log.Warn("the webview keeps its files outside the data folder", "err", err)
+	}
 
 	a.args, a.flagDir = o.Args, o.DataDir
 	appFacade := api.NewApp(a.ctx, a.paths, api.AppDeps{Opens: a.opens, Discord: a.presence.Ready(),
@@ -194,6 +199,8 @@ func Run(o Options) error {
 		// The program name is the Wayland app_id, which picks the desktop
 		// entry (and so the icon); Icon covers X11 windows without one.
 		Linux: &linux.Options{ProgramName: brand.AppID, Icon: desktop.Icon},
+		// WebView2 keeps its files in the data folder (webview.Isolate on Linux).
+		Windows: &windows.Options{WebviewUserDataPath: a.paths.Webview()},
 		// macOS hands links and opened files to the app bundle, not argv.
 		Mac: &mac.Options{
 			OnUrlOpen:  func(u string) { a.act(intent.Args{Open: u}) },
