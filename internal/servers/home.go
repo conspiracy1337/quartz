@@ -1,9 +1,9 @@
 package servers
 
 import (
-	"cmp"
 	"context"
 	"slices"
+	"sort"
 	"sync"
 	"time"
 
@@ -90,14 +90,12 @@ func (s *Service) Home(ctx context.Context, force bool) ([]Merged, error) {
 	}
 	wg.Wait()
 	// Online servers first, then the ones used most recently.
-	slices.SortStableFunc(out, func(a, b Merged) int {
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
 		if a.Online != b.Online {
-			if a.Online {
-				return -1
-			}
-			return 1
+			return a.Online
 		}
-		return cmp.Compare(lastUse(byKey[b.ID].used), lastUse(byKey[a.ID].used))
+		return lastUse(byKey[b.ID].used) < lastUse(byKey[a.ID].used)
 	})
 	return out, nil
 }

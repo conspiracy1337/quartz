@@ -3320,7 +3320,6 @@ export namespace settings {
 	    }
 	}
 	export class Settings {
-	    version: number;
 	    general: General;
 	    downloads: Downloads;
 	    accounts: Accounts;
@@ -3336,7 +3335,6 @@ export namespace settings {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.version = source["version"];
 	        this.general = this.convertValues(source["general"], General);
 	        this.downloads = this.convertValues(source["downloads"], Downloads);
 	        this.accounts = this.convertValues(source["accounts"], Accounts);

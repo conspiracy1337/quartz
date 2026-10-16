@@ -37,9 +37,24 @@ type Options[T any] struct {
 // them as read-only. Update hands its function a deep copy, so writers can
 // mutate freely without racing readers.
 type Store[T any] struct {
-	o     Options[T]
-	mu    sync.Mutex
-	cur   T
+	file
+	def       func() T
+	normalize func(T) T
+	cur       T
+}
+
+// file is the part of a Store that doesn't depend on the document's type:
+// reading, the debounced save and writing. Keeping it out of Store[T] keeps
+// each document type from compiling its own copy.
+type file struct {
+	path    string
+	maxSize int64
+	delay   time.Duration
+	compact bool
+	log     *slog.Logger
+
+	mu    sync.Mutex // guards the document (doc points at it) and timer
+	doc   any
 	timer *time.Timer
 	wmu   sync.Mutex // serialises file writes so an older snapshot never lands last
 }
@@ -50,40 +65,40 @@ type Store[T any] struct {
 // the rest is kept, and a copy of the file is kept aside.
 func Open[T any](o Options[T]) (*Store[T], error) {
 	s := newStore(o)
-	o = s.o
-	data, err := fsx.ReadCapped(o.Path, o.MaxSize)
+	data, err := s.read()
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		s.cur = s.normalize(o.Default())
+		s.cur = s.norm(s.def())
 		return s, nil
 	case err != nil:
 		return nil, err
 	}
 	cur, typeErr, err := s.decode(data)
-	switch {
-	case err != nil:
-		o.Log.Warn("state file unreadable, starting fresh", "path", o.Path, "err", err)
-		_ = os.Rename(o.Path, o.Path+".corrupt")
-		cur = s.normalize(o.Default())
-	case typeErr != nil:
-		o.Log.Warn("state file has a field of the wrong type, keeping the rest", "path", o.Path, "err", typeErr)
-		_ = fsx.AtomicWrite(o.Path+".corrupt", data, fsx.FilePerm)
+	s.decoded(data, typeErr, err)
+	if err != nil {
+		cur = s.norm(s.def())
 	}
 	s.cur = cur
 	return s, nil
 }
 
 func newStore[T any](o Options[T]) *Store[T] {
-	if o.MaxSize == 0 {
-		o.MaxSize = defaultMaxSize
+	s := &Store[T]{file: newFile(o.Path, o.MaxSize, o.Delay, o.Compact, o.Log), def: o.Default, normalize: o.Normalize}
+	s.doc = &s.cur
+	return s
+}
+
+func newFile(path string, maxSize int64, delay time.Duration, compact bool, log *slog.Logger) file {
+	if maxSize == 0 {
+		maxSize = defaultMaxSize
 	}
-	if o.Delay == 0 {
-		o.Delay = defaultDelay
+	if delay == 0 {
+		delay = defaultDelay
 	}
-	if o.Log == nil {
-		o.Log = slog.New(slog.DiscardHandler)
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
 	}
-	return &Store[T]{o: o}
+	return file{path: path, maxSize: maxSize, delay: delay, compact: compact, log: log}
 }
 
 // Read decodes the document without keeping a store and without touching the
@@ -91,9 +106,9 @@ func newStore[T any](o Options[T]) *Store[T] {
 // missing file yields Default(); a corrupt one is an error.
 func Read[T any](o Options[T]) (T, error) {
 	s := newStore(o)
-	data, err := fsx.ReadCapped(o.Path, s.o.MaxSize)
+	data, err := s.read()
 	if errors.Is(err, fs.ErrNotExist) {
-		return s.normalize(o.Default()), nil
+		return s.norm(s.def()), nil
 	}
 	if err != nil {
 		var zero T
@@ -108,20 +123,17 @@ func Read[T any](o Options[T]) (T, error) {
 // is reported as typeErr; encoding/json still fills every other field. Only
 // broken JSON is an error.
 func (s *Store[T]) decode(data []byte) (v T, typeErr, err error) {
-	v = s.o.Default()
-	if err := json.Unmarshal(data, &v); err != nil {
-		if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
-			var zero T
-			return zero, nil, err
-		}
-		typeErr = err
+	v = s.def()
+	if typeErr, err = unmarshal(data, &v); err != nil {
+		var zero T
+		return zero, nil, err
 	}
-	return s.normalize(v), typeErr, nil
+	return s.norm(v), typeErr, nil
 }
 
-func (s *Store[T]) normalize(v T) T {
-	if s.o.Normalize != nil {
-		return s.o.Normalize(v)
+func (s *Store[T]) norm(v T) T {
+	if s.normalize != nil {
+		return s.normalize(v)
 	}
 	return v
 }
@@ -135,7 +147,7 @@ func (s *Store[T]) Get() T {
 
 // Set normalises and stores next, schedules a save, and returns what was stored.
 func (s *Store[T]) Set(next T) T {
-	next = s.normalize(next)
+	next = s.norm(next)
 	s.mu.Lock()
 	s.cur = next
 	s.schedule()
@@ -148,14 +160,14 @@ func (s *Store[T]) Set(next T) T {
 func (s *Store[T]) Update(fn func(*T) error) (T, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cp, err := clone(s.cur)
-	if err != nil {
+	var cp T
+	if err := clone(s.doc, &cp); err != nil {
 		return s.cur, err
 	}
 	if err := fn(&cp); err != nil {
 		return s.cur, err
 	}
-	s.cur = s.normalize(cp)
+	s.cur = s.norm(cp)
 	s.schedule()
 	return s.cur, nil
 }
@@ -179,58 +191,84 @@ func (s *Store[T]) View(fn func(T)) {
 	fn(s.cur)
 }
 
-// schedule (re)arms the debounced save; s.mu must be held.
-func (s *Store[T]) schedule() {
-	if s.timer == nil {
-		s.timer = time.AfterFunc(s.o.Delay, s.saveNow)
+func (f *file) read() ([]byte, error) { return fsx.ReadCapped(f.path, f.maxSize) }
+
+// decoded reports how Open's decode went: broken JSON moves the file aside,
+// a field of the wrong type keeps a copy of it.
+func (f *file) decoded(data []byte, typeErr, err error) {
+	switch {
+	case err != nil:
+		f.log.Warn("state file unreadable, starting fresh", "path", f.path, "err", err)
+		_ = os.Rename(f.path, f.path+".corrupt")
+	case typeErr != nil:
+		f.log.Warn("state file has a field of the wrong type, keeping the rest", "path", f.path, "err", typeErr)
+		_ = fsx.AtomicWrite(f.path+".corrupt", data, fsx.FilePerm)
+	}
+}
+
+// schedule (re)arms the debounced save; f.mu must be held.
+func (f *file) schedule() {
+	if f.timer == nil {
+		f.timer = time.AfterFunc(f.delay, f.saveNow)
 	} else {
-		s.timer.Reset(s.o.Delay)
+		f.timer.Reset(f.delay)
 	}
 }
 
 // Flush writes any pending change immediately. Call it on shutdown.
-func (s *Store[T]) Flush() error {
-	s.mu.Lock()
-	pending := s.timer != nil && s.timer.Stop()
-	s.mu.Unlock()
+func (f *file) Flush() error {
+	f.mu.Lock()
+	pending := f.timer != nil && f.timer.Stop()
+	f.mu.Unlock()
 	if !pending {
 		return nil
 	}
-	return s.write()
+	return f.write()
 }
 
-func (s *Store[T]) saveNow() {
-	if err := s.write(); err != nil {
-		s.o.Log.Error("saving state file failed", "path", s.o.Path, "err", err)
+func (f *file) saveNow() {
+	if err := f.write(); err != nil {
+		f.log.Error("saving state file failed", "path", f.path, "err", err)
 	}
 }
 
-func (s *Store[T]) write() error {
-	s.wmu.Lock()
-	defer s.wmu.Unlock()
-	s.mu.Lock()
+func (f *file) write() error {
+	f.wmu.Lock()
+	defer f.wmu.Unlock()
+	f.mu.Lock()
 	var (
 		data []byte
 		err  error
 	)
-	if s.o.Compact {
-		data, err = json.Marshal(s.cur)
+	if f.compact {
+		data, err = json.Marshal(f.doc)
 	} else {
-		data, err = json.MarshalIndent(s.cur, "", "  ")
+		data, err = json.MarshalIndent(f.doc, "", "  ")
 	}
-	s.mu.Unlock()
+	f.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	return fsx.AtomicWrite(s.o.Path, data, fsx.FilePerm)
+	return fsx.AtomicWrite(f.path, data, fsx.FilePerm)
 }
 
-func clone[T any](v T) (T, error) {
-	var out T
-	data, err := json.Marshal(v)
-	if err != nil {
-		return out, err
+// unmarshal decodes data onto v, telling a field of the wrong type (typeErr)
+// apart from broken JSON (err).
+func unmarshal(data []byte, v any) (typeErr, err error) {
+	if err := json.Unmarshal(data, v); err != nil {
+		if _, ok := errors.AsType[*json.UnmarshalTypeError](err); !ok {
+			return nil, err
+		}
+		return err, nil
 	}
-	err = json.Unmarshal(data, &out)
-	return out, err
+	return nil, nil
+}
+
+// clone deep-copies *from into *to through JSON.
+func clone(from, to any) error {
+	data, err := json.Marshal(from)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, to)
 }

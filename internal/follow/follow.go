@@ -6,7 +6,7 @@ package follow
 import (
 	"context"
 	"slices"
-	"strings"
+	"sort"
 	"sync"
 
 	"quartz/internal/content"
@@ -77,7 +77,7 @@ func (c *Checker) Check(ctx context.Context) {
 			next = append(next, Offer{InstanceID: in.ID, Name: in.Name, Minecraft: latest})
 		}
 	}
-	slices.SortFunc(next, func(a, b Offer) int { return strings.Compare(a.Name, b.Name) })
+	sort.Slice(next, func(i, j int) bool { return next[i].Name < next[j].Name })
 	c.mu.Lock()
 	changed := !slices.Equal(c.offers, next)
 	c.offers = next

@@ -63,7 +63,6 @@ type entry struct {
 }
 
 type index struct {
-	Version int               `json:"version"`
 	Entries map[string]*entry `json:"entries"`
 }
 
@@ -84,7 +83,7 @@ func Open(dir string, doer Doer, log *slog.Logger) (*Cache, error) {
 	}
 	idx, err := jsonfile.Open(jsonfile.Options[index]{
 		Path:    filepath.Join(dir, "index.json"),
-		Default: func() index { return index{Version: 1, Entries: map[string]*entry{}} },
+		Default: func() index { return index{Entries: map[string]*entry{}} },
 		Normalize: func(i index) index {
 			if i.Entries == nil {
 				i.Entries = map[string]*entry{}

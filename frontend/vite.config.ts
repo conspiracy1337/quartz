@@ -45,6 +45,9 @@ export default defineConfig({
     // One small bundle loads faster from the embedded asset server than many chunks.
     cssCodeSplit: false,
     assetsInlineLimit: 0,
+    // The preview's fixtures (lib/api/mock) only build values, so a production build,
+    // which never takes a preview fallback, can drop them whole.
+    rollupOptions: { treeshake: { moduleSideEffects: (id) => !id.includes('/src/lib/api/mock/') } },
   },
   server: { strictPort: true, port: 5173, fs: { allow: ['.', DEFAULTS, ASSETS] } },
   test: { environment: 'node', include: ['src/**/*.test.ts'] },

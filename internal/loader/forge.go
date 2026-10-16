@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -195,5 +195,5 @@ func neoForgePrefix(mc string) ([]int, bool) {
 
 // sortNewest orders builds newest first by their displayed version.
 func sortNewest(vs []Version) {
-	slices.SortStableFunc(vs, func(a, b Version) int { return version.Compare(b.Name, a.Name) })
+	sort.SliceStable(vs, func(i, j int) bool { return version.Compare(vs[j].Name, vs[i].Name) < 0 })
 }

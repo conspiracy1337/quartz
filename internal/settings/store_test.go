@@ -14,7 +14,7 @@ func TestSetupDoneOnlyOnceSaved(t *testing.T) {
 		t.Fatal("a new data folder starts with setup", err)
 	}
 	done := filepath.Join(dir, "done.json")
-	if err := os.WriteFile(done, []byte(`{"version":1,"general":{"setupDone":true}}`), 0o600); err != nil {
+	if err := os.WriteFile(done, []byte(`{"general":{"setupDone":true}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	st, err := Open(done, events.NewBus(), nil)

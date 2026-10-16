@@ -11,9 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
-
 	"quartz/internal/core/archive"
+	"quartz/internal/core/tomlx"
 	"quartz/internal/core/version"
 )
 
@@ -334,8 +333,8 @@ func (d quiltDep) versions() string {
 // ---- Forge and NeoForge (mods.toml) ----
 
 func parseForgeTOML(data []byte, r Source) (Info, string, error) {
-	var doc map[string]any
-	if err := toml.Unmarshal(data, &doc); err != nil {
+	doc, err := tomlx.Decode(data)
+	if err != nil {
 		info, iconFile := salvageTOML(data)
 		if info.ID == "" {
 			return Info{}, "", err

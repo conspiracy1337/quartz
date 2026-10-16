@@ -15,7 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -103,7 +103,7 @@ func Detect(env Env) []Found {
 			if err != nil || len(list) == 0 {
 				continue
 			}
-			slices.SortFunc(list, func(a, b Source) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+			sort.Slice(list, func(i, j int) bool { return strings.ToLower(list[i].Name) < strings.ToLower(list[j].Name) })
 			out = append(out, Found{ID: l.id, Name: l.name, Root: root, Instances: list})
 			break
 		}

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -498,7 +499,7 @@ func ReadAll(dir string) ([]Instance, error) {
 		}
 		out = append(out, in)
 	}
-	slices.SortFunc(out, func(a, b Instance) int { return lastActive(b).Compare(lastActive(a)) })
+	sort.Slice(out, func(i, j int) bool { return lastActive(out[j]).Before(lastActive(out[i])) })
 	return out, nil
 }
 
@@ -548,7 +549,7 @@ func (s *Store) List() []Instance {
 		out = append(out, f.Get())
 	}
 	s.mu.Unlock()
-	slices.SortFunc(out, func(a, b Instance) int { return lastActive(b).Compare(lastActive(a)) })
+	sort.Slice(out, func(i, j int) bool { return lastActive(out[j]).Before(lastActive(out[i])) })
 	return out
 }
 

@@ -13,9 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
-
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/tomlx"
 )
 
 // Ext is the metadata file extension.
@@ -76,8 +75,8 @@ func Read(path string) (Meta, error) {
 	if err != nil {
 		return Meta{}, err
 	}
-	var doc map[string]any
-	if err := toml.Unmarshal(data, &doc); err != nil {
+	doc, err := tomlx.Decode(data)
+	if err != nil {
 		return Meta{}, err
 	}
 	m := Meta{raw: doc, Slug: strings.TrimSuffix(filepath.Base(path), Ext)}
@@ -207,7 +206,7 @@ func Write(dir string, m Meta) error {
 		delete(up, "curseforge")
 	}
 	doc["update"] = up
-	data, err := toml.Marshal(doc)
+	data, err := tomlx.Encode(doc)
 	if err != nil {
 		return err
 	}

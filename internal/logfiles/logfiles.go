@@ -7,7 +7,6 @@ package logfiles
 
 import (
 	"bytes"
-	"cmp"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -18,7 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"slices"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -132,11 +131,12 @@ func (s *Service) Files(id string) []File {
 		}
 		return 2
 	}
-	slices.SortStableFunc(out, func(a, b File) int {
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
 		if ra, rb := rank(a), rank(b); ra != rb {
-			return ra - rb
+			return ra < rb
 		}
-		return cmp.Compare(b.Modified, a.Modified)
+		return b.Modified < a.Modified
 	})
 	return out
 }
