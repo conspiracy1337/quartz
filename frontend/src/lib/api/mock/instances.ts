@@ -46,6 +46,7 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   sync: { join: ['options', 'servers', 'hotbar', 'resourcepacks', 'xaero'], keys: true },
   discordStatus: true,
   gpu: 'NVIDIA GeForce RTX 3070 Laptop GPU',
+  tools: { gameMode: true, mangoHud: false },
   settings: {
     java: { override: true, javaPath: '', memoryMinMb: 2048, memoryMaxMb: 6144, jvmArgs: '-XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+UnlockExperimentalVMOptions' },
     window: { width: 1920, height: 1080, fullscreen: false },

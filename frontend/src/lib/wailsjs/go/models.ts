@@ -373,6 +373,7 @@ export namespace api {
 	    discordStatus: boolean;
 	    settings: instance.Settings;
 	    gpu: string;
+	    tools: sysinfo.Tools;
 	    pack?: PackView;
 	    switch?: content.SwitchResult;
 	
@@ -412,6 +413,7 @@ export namespace api {
 	        this.discordStatus = source["discordStatus"];
 	        this.settings = this.convertValues(source["settings"], instance.Settings);
 	        this.gpu = source["gpu"];
+	        this.tools = this.convertValues(source["tools"], sysinfo.Tools);
 	        this.pack = this.convertValues(source["pack"], PackView);
 	        this.switch = this.convertValues(source["switch"], content.SwitchResult);
 	    }
@@ -3281,6 +3283,25 @@ export namespace syncing {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.key = source["key"];
+	    }
+	}
+
+}
+
+export namespace sysinfo {
+	
+	export class Tools {
+	    gameMode: boolean;
+	    mangoHud: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tools(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gameMode = source["gameMode"];
+	        this.mangoHud = source["mangoHud"];
 	    }
 	}
 
