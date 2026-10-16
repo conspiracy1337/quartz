@@ -34,6 +34,9 @@ type Folder struct {
 	Rel    string // inside the game folder, slash-separated ("saves")
 	Shared string // the one real copy
 	Mode   Mode
+	// live: every run uses the real folder, even while another run does
+	// (see Request.LiveSaves).
+	live bool
 }
 
 // Mode is how a run sees a shared folder.
@@ -52,6 +55,15 @@ type Request struct {
 	Game    string // the instance's game folder
 	Scratch string // this run's own folder (created, removed on Close)
 	Folders []Folder
+	// LiveSaves gives a run that shares the game folder (or the shared
+	// saves) with another one the real saves folder, not a private view of
+	// it, so worlds made or changed in one copy are there in the other at
+	// once. Only for games that lock a world they have open (Minecraft
+	// 1.16 and later): the second game then refuses that world instead of
+	// both writing it. Bubblewrap binds it; without bubblewrap only a
+	// Windows junction can share a synced saves folder, and the rest stays
+	// a private view merged back on exit.
+	LiveSaves bool
 }
 
 // Config wires an Assembler.
@@ -264,15 +276,15 @@ func (a *Assembler) assemble(v *View, r Request, only map[string]bool) error {
 			return err
 		}
 	}
-	gameWorlds := "saves"
-	if slices.Contains(skip, "saves") {
-		gameWorlds = "-"
+	r.Folders = slices.Clone(r.Folders) // the caller's request stays as it was
+	for i := range r.Folders {
+		r.Folders[i].live = r.LiveSaves && r.Folders[i].Rel == "saves"
 	}
 	private := !only[r.Game]
 	overlays := private
 	for _, f := range r.Folders {
 		private = private || (f.Mode == Shared && !only[f.Shared])
-		overlays = overlays || f.Mode == Private || (f.Mode == Shared && !only[f.Shared])
+		overlays = overlays || f.Mode == Private || (f.Mode == Shared && !only[f.Shared] && !f.live)
 	}
 	sup := bwrap.Detect()
 	backend := a.c.Backend
@@ -284,6 +296,18 @@ func (a *Assembler) assemble(v *View, r Request, only map[string]bool) error {
 	}
 	if backend == "bwrap" && len(r.Folders) == 0 && !private {
 		backend = "clone" // nothing to assemble: run in place, no namespace
+	}
+	// A private view of the game folder still gets the real saves, bound in.
+	if backend == "bwrap" && r.LiveSaves && !only[r.Game] && !slices.Contains(skip, "saves") {
+		r.Folders = append(r.Folders, Folder{Rel: "saves", Shared: filepath.Join(r.Game, "saves"), live: true})
+		skip = append(skip, "saves")
+		if err := os.MkdirAll(filepath.Join(r.Game, "saves"), 0o700); err != nil {
+			return err
+		}
+	}
+	gameWorlds := "saves"
+	if slices.Contains(skip, "saves") {
+		gameWorlds = "-"
 	}
 	if backend == "bwrap" {
 		return a.assembleBwrap(v, r, only, skip, gameWorlds, sup.Bin)
@@ -326,7 +350,7 @@ func (a *Assembler) assembleBwrap(v *View, r Request, only map[string]bool, skip
 		case f.Mode == Empty:
 			args.Tmpfs(at)
 			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at})
-		case only[f.Shared]:
+		case only[f.Shared] || f.live:
 			args.Bind(f.Shared, at)
 			v.st.Mounts = append(v.st.Mounts, mount{Kind: bind, Path: at, Target: f.Shared, Worlds: worlds})
 		default:
@@ -376,7 +400,7 @@ func (a *Assembler) assembleClone(v *View, r Request, only map[string]bool, skip
 			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at, Target: f.Shared, InPlace: inPlace})
 			continue
 		}
-		if only[f.Shared] && runtime.GOOS == "windows" {
+		if (only[f.Shared] || f.live) && runtime.GOOS == "windows" {
 			if err := linkx.Junction(at, f.Shared); err != nil {
 				return err
 			}

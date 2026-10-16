@@ -332,3 +332,45 @@ func TestTouched(t *testing.T) {
 		t.Fatal("a direct run has no copy")
 	}
 }
+
+// With LiveSaves a second copy writes worlds straight into the real saves,
+// whether they live in the game folder or in a shared copy, while the rest
+// of the game folder stays its private view until it exits.
+func TestBwrapLiveSaves(t *testing.T) {
+	bwrapOrSkip(t)
+	for _, shared := range []bool{false, true} {
+		f := newFixture(t, "bwrap")
+		saves := filepath.Join(f.game, "saves")
+		if shared {
+			saves = f.shared
+		}
+		live := func(run string) *View {
+			r := f.req(run, shared)
+			r.LiveSaves = true
+			v, err := f.a.Assemble(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return v
+		}
+		first := live("1")
+		if !shared && first.Backend() != direct {
+			t.Fatalf("a first copy runs in place, got %s", first.Backend())
+		}
+		second := live("2")
+		f.run(t, second, `mkdir -p saves/Made && echo -n "made by second" > saves/Made/level.dat && echo -n "fov:0.8" > options.txt`)
+		if body(t, filepath.Join(saves, "Made", "level.dat")) != "made by second" {
+			t.Fatalf("shared=%v: the world didn't reach the real saves while running", shared)
+		}
+		if body(t, filepath.Join(f.game, "options.txt")) != "fov:0.5" {
+			t.Fatalf("shared=%v: the rest must stay private while running", shared)
+		}
+		if kept := closeView(t, second); len(kept) != 0 {
+			t.Fatalf("shared=%v: live worlds keep no copies: %+v", shared, kept)
+		}
+		if body(t, filepath.Join(f.game, "options.txt")) != "fov:0.8" || body(t, filepath.Join(saves, "Made", "level.dat")) != "made by second" {
+			t.Fatalf("shared=%v: not merged back", shared)
+		}
+		closeView(t, first)
+	}
+}
