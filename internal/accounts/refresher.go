@@ -68,6 +68,7 @@ func (m *Manager) loop() {
 			if _, err := m.Refresh(ctx, id); err != nil && !errors.Is(err, ErrSignIn) {
 				m.cfg.Log.Info("background refresh failed; will retry", "err", err)
 				m.ref.tried[id] = m.now()
+				m.changed() // the token may have run out meanwhile
 			} else {
 				delete(m.ref.tried, id)
 			}

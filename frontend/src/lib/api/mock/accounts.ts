@@ -6,9 +6,9 @@ const minutesAgo = (m: number) => Date.now() - m * 60_000;
 const def = (key: string) => ({ key, slim: key.startsWith('slim-') });
 
 export const accounts: Account[] = [
-  { id: 'a1', name: 'Kestrel_Vane', kind: 'microsoft', status: 'ok', detail: '', isDefault: true, defaultSkin: def('wide-steve'), skinHash: 'wide-kai', slim: false, refreshedAt: minutesAgo(12) },
-  { id: 'a2', name: 'NightOwl_42', kind: 'microsoft', status: 'ok', detail: '', isDefault: false, defaultSkin: def('slim-alex'), skinHash: 'slim-noor', slim: true, refreshedAt: minutesAgo(300) },
-  { id: 'a3', name: 'BuilderBea', kind: 'microsoft', status: 'expired', detail: 'Automatic refresh failed: the password was changed', isDefault: false, defaultSkin: def('wide-efe'), skinHash: 'slim-makena', slim: true, refreshedAt: minutesAgo(4000) },
+  { id: 'a1', name: 'Kestrel_Vane', kind: 'microsoft', status: 'valid', detail: '', isDefault: true, defaultSkin: def('wide-steve'), skinHash: 'wide-kai', slim: false, refreshedAt: minutesAgo(12) },
+  { id: 'a2', name: 'NightOwl_42', kind: 'microsoft', status: 'expired', detail: '', isDefault: false, defaultSkin: def('slim-alex'), skinHash: 'slim-noor', slim: true, refreshedAt: minutesAgo(1500) },
+  { id: 'a3', name: 'BuilderBea', kind: 'microsoft', status: 'signin', detail: 'The password was changed', isDefault: false, defaultSkin: def('wide-efe'), skinHash: 'slim-makena', slim: true, refreshedAt: minutesAgo(4000) },
   { id: 'a4', name: 'TestDummy', kind: 'offline', status: 'offline', detail: 'Offline account, for local testing', isDefault: false, defaultSkin: def('slim-zuri'), skinHash: '', slim: false, refreshedAt: 0 },
 ];
 

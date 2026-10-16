@@ -210,7 +210,7 @@ func (m *Manager) token(ctx context.Context, a Account) (string, error) {
 	if err == nil {
 		return m.secret(mcKey(fresh.ID))
 	}
-	if cerr == nil && !errors.Is(err, ErrSignIn) && m.now().Before(a.ExpiresAt) {
+	if cerr == nil && !errors.Is(err, ErrSignIn) && !a.Expired(m.now()) {
 		return cached, nil
 	}
 	return "", err

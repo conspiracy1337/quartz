@@ -31,7 +31,7 @@ type AccountView struct {
 	ID          string        `json:"id"`
 	Name        string        `json:"name"`
 	Kind        string        `json:"kind"`   // offline | microsoft
-	Status      string        `json:"status"` // ok | expired | offline
+	Status      string        `json:"status"` // valid | expired | signin | offline
 	Detail      string        `json:"detail"` // set for offline accounts and problems
 	IsDefault   bool          `json:"isDefault"`
 	DefaultSkin skins.Default `json:"defaultSkin"`
@@ -81,16 +81,20 @@ func checkAccount(id string) error {
 	return nil
 }
 
-func view(a accounts.Account, def string) AccountView {
+// view shows an account as it stands at now: a Microsoft token is valid,
+// expired (the refresher renews it) or needs a new sign-in.
+func view(a accounts.Account, def string, now time.Time) AccountView {
 	v := AccountView{
 		ID: a.ID, Name: a.Name, Kind: string(a.Kind), IsDefault: a.ID == def, DefaultSkin: a.DefaultSkin(),
-		SkinHash: a.SkinHash, Slim: a.Slim, Status: "ok",
+		SkinHash: a.SkinHash, Slim: a.Slim, Status: "valid",
 	}
 	switch {
 	case a.Kind == accounts.Offline:
 		v.Status, v.Detail = "offline", "Offline account, for local testing"
 	case a.Reauth:
-		v.Status, v.Detail = "expired", "Automatic refresh failed: "+strings.TrimSuffix(a.Problem, ".")
+		v.Status, v.Detail = "signin", a.Problem
+	case a.Expired(now):
+		v.Status = "expired"
 	}
 	if !a.RefreshedAt.IsZero() {
 		v.RefreshedAt = a.RefreshedAt.UnixMilli()
@@ -101,9 +105,9 @@ func view(a accounts.Account, def string) AccountView {
 // List returns every account.
 func (a *Accounts) List() []AccountView {
 	list, def := a.m.Store().List()
-	out := make([]AccountView, len(list))
+	out, now := make([]AccountView, len(list)), time.Now()
 	for i, acc := range list {
-		out[i] = view(acc, def)
+		out[i] = view(acc, def, now)
 	}
 	return asList(out)
 }
@@ -118,7 +122,7 @@ func (a *Accounts) AddOffline(name string) (AccountView, error) {
 		return AccountView{}, err
 	}
 	_, def := a.m.Store().List()
-	return view(acc, def), nil
+	return view(acc, def, time.Now()), nil
 }
 
 // SignInBrowser opens Microsoft sign-in in the system browser. Progress and
@@ -201,7 +205,7 @@ func (a *Accounts) viewOf(acc accounts.Account, err error) (AccountView, error) 
 		return AccountView{}, err
 	}
 	_, def := a.m.Store().List()
-	return view(acc, def), nil
+	return view(acc, def, time.Now()), nil
 }
 
 // ---- skin library ----

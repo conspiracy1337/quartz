@@ -34,5 +34,5 @@ export const accountsApi = {
 /** Home's "needs to sign in again" alerts, one per account whose refresh failed. */
 export const signInAlerts = (list: Account[]): Alert[] =>
   list
-    .filter((a) => a.status === 'expired')
+    .filter((a) => a.status === 'signin')
     .map((a) => ({ tone: 'warn', subject: a.name, text: 'needs to sign in again', action: 'Sign in', target: { kind: 'sign-in', accountId: a.id } }));
