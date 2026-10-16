@@ -35,7 +35,7 @@ func TestPingPublicServer(t *testing.T) {
 	t.Fatal("no public server answered")
 }
 
-// TestNewsFeed reads the official launcher's feed and picks a Java article.
+// TestNewsFeed reads the official launcher's feeds and picks a Java article or patch note.
 func TestNewsFeed(t *testing.T) {
 	h := newHarness(t)
 	insts, err := instance.Open(filepath.Join(t.TempDir(), "instances"), nil)

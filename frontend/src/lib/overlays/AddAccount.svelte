@@ -17,7 +17,7 @@
   let { mode: initial, accountId }: Props = $props();
   // The dialog opens on the requested method; later changes are the user's own.
   // svelte-ignore state_referenced_locally
-  let mode = $state<AddAccountMode>(initial ?? 'code');
+  let mode = $state<AddAccountMode>(initial ?? 'browser');
   let name = $state('');
   let saving = $state(false);
   let st = $state(idle());
