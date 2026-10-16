@@ -99,7 +99,7 @@ func wrappers(eff instance.Effective, vars map[string]string, sandboxed bool) ([
 		for _, t := range []struct {
 			on  bool
 			bin string
-		}{{eff.Performance.GameMode && !sandboxed, "gamemoderun"}, {eff.Performance.MangoHud, "mangohud"}} {
+		}{{eff.Performance.GameMode && !sandboxed, sysinfo.GameModeBin}, {eff.Performance.MangoHud, sysinfo.MangoHudBin}} {
 			if t.on {
 				if p, err := exec.LookPath(t.bin); err == nil {
 					out = append(out, p)

@@ -121,7 +121,8 @@ type InstanceView struct {
 	Sync              instance.Sync     `json:"sync"`
 	DiscordStatus     bool              `json:"discordStatus"` // the instance's own switch
 	Settings          instance.Settings `json:"settings"`
-	GPU               string            `json:"gpu"` // the dedicated GPU's name, Linux only
+	GPU               string            `json:"gpu"`   // the dedicated GPU's name, Linux only
+	Tools             sysinfo.Tools     `json:"tools"` // GameMode and MangoHud, when installed
 	// Pack is the modpack the instance was installed from.
 	Pack *PackView `json:"pack,omitempty"`
 	// Switch reports a version change's mod job (SetVersion only).
@@ -198,7 +199,7 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 		Folder: s.d.Store.GameDir(in.ID), Moved: in.Location != "", Notes: in.Notes,
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),
-		DiscordStatus: !in.HideDiscord, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),
+		DiscordStatus: !in.HideDiscord, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(), Tools: sysinfo.FindTools(),
 		Sync: in.Sync, Pack: packView(in),
 	}
 }

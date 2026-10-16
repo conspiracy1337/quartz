@@ -72,6 +72,8 @@ export interface Instance extends InstanceSummary {
   settings: InstanceSettings;
   /** The dedicated GPU's name (Linux), "" when there is none. */
   gpu: string;
+  /** The Linux game helpers that are installed. */
+  tools: { gameMode: boolean; mangoHud: boolean };
   /** Only from setVersion: the job moving the mods to the new version. */
   switch?: SwitchResult;
 }

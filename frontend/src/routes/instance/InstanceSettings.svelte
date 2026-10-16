@@ -167,9 +167,10 @@
         <Setting title="Use the dedicated GPU" desc={linux ? i.gpu || 'No other GPU to switch to.' : 'Asks Windows to run the game on its high-performance GPU.'}><Toggle on={st.performance.dedicatedGpu} label="Use the dedicated GPU" onchange={(v) => change(() => (st.performance.dedicatedGpu = v))} /></Setting>
         {#if linux}
         <div class="divider"></div>
-        <Setting title="Feral GameMode" desc="Asks the system for CPU and GPU performance while playing."><Toggle on={st.performance.gameMode} label="Feral GameMode" onchange={(v) => change(() => (st.performance.gameMode = v))} /></Setting>
+        <!-- Each needs its program installed; without it the switch is off and can't be turned on. -->
+        <Setting title="Feral GameMode" desc={i.tools.gameMode ? 'Asks the system for CPU and GPU performance while playing.' : 'Install GameMode to use this.'}><Toggle on={i.tools.gameMode && st.performance.gameMode} disabled={!i.tools.gameMode} label="Feral GameMode" onchange={(v) => change(() => (st.performance.gameMode = v))} /></Setting>
         <div class="divider"></div>
-        <Setting title="MangoHud overlay" desc="Shows FPS, frame times and temperatures."><Toggle on={st.performance.mangoHud} label="MangoHud overlay" onchange={(v) => change(() => (st.performance.mangoHud = v))} /></Setting>
+        <Setting title="MangoHud overlay" desc={i.tools.mangoHud ? 'Shows FPS, frame times and temperatures.' : 'Install MangoHud to use this.'}><Toggle on={i.tools.mangoHud && st.performance.mangoHud} disabled={!i.tools.mangoHud} label="MangoHud overlay" onchange={(v) => change(() => (st.performance.mangoHud = v))} /></Setting>
         {/if}
       </div>
     </section>
