@@ -432,8 +432,8 @@ func (a *app) buildTasks() error {
 	a.host = host.New(host.Deps{
 		Instances: a.instances, Installer: a.installer, Java: a.java, Tasks: eng, Content: a.content, Store: a.store,
 		Worlds: a.worlds, Accounts: a.accounts.Store(), Settings: a.settings, Bus: a.bus, Redactor: a.redactor, Log: a.log,
-		InUse:   func(id string) bool { return a.syncing.Busy(id, "saves") },
-		Sandbox: a.sandbox, StoreRead: storeRead,
+		WorldOpen: func(dir string) bool { return a.launcher.WorldOpen(dir) },
+		Sandbox:   a.sandbox, StoreRead: storeRead,
 	})
 	a.buildBrowse(dl)
 	return nil

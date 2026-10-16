@@ -209,6 +209,26 @@ func (l *Launcher) Busy(id string) bool {
 	return launching || len(l.running[id]) > 0
 }
 
+// WorldOpen reports whether a game has the world folder at dir open (from
+// any launcher), or a running copy opened its own copy of it, which merges
+// back over the real one on exit. Saves may be shared, so every instance's
+// runs are asked.
+func (l *Launcher) WorldOpen(dir string) bool {
+	if fsx.Locked(filepath.Join(dir, "session.lock")) {
+		return true
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, runs := range l.running {
+		for _, r := range runs {
+			if r.sp.view != nil && r.sp.view.Touched(dir) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ErrBadTarget is returned for a world or server Play can't open into.
 var ErrBadTarget = errors.New("launch: not a world or server to open")
 
@@ -231,7 +251,7 @@ func (l *Launcher) Play(id, accountID string, into instance.Into) error {
 	if into.Kind == "world" && l.cfg.Hosted != nil && l.cfg.Hosted(id, into.Target) {
 		return ErrHosted
 	}
-	if into.Kind == "world" && fsx.Locked(filepath.Join(l.cfg.Instances.Path(id, "saves"), into.Target, "session.lock")) {
+	if into.Kind == "world" && l.WorldOpen(filepath.Join(l.cfg.Instances.Path(id, "saves"), into.Target)) {
 		return ErrWorldOpen
 	}
 	inst, err := l.cfg.Instances.Get(id)

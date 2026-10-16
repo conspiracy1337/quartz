@@ -283,3 +283,52 @@ func TestThrowawayFolders(t *testing.T) {
 		})
 	}
 }
+
+// Touched finds a world a run opened in its own copy (it would merge back
+// over the real one), and leaves worlds it sees for real to session.lock.
+func TestTouched(t *testing.T) {
+	f := newFixture(t, "clone")
+	first := f.assemble(t, "1", true) // the game folder direct, shared saves cloned in place
+	shared := filepath.Join(f.shared, "Shared")
+	if first.Touched(shared) {
+		t.Fatal("untouched world")
+	}
+	put(t, filepath.Join(f.game, "saves", "Shared", "session.lock"), "☃")
+	if !first.Touched(shared) || first.Touched(f.shared) {
+		t.Fatal("a world opened in the clone")
+	}
+
+	home := filepath.Join(f.game, "saves", "Home")
+	second := f.assemble(t, "2", false) // a clone of the game folder; saves inside it
+	if second.Touched(home) || first.Touched(home) {
+		t.Fatal("untouched world in the game folder")
+	}
+	put(t, filepath.Join(second.GameDir(), "saves", "Home", "session.lock"), "☃")
+	if !second.Touched(home) {
+		t.Fatal("a world opened in the game folder's clone")
+	}
+	closeView(t, second)
+
+	third := f.assemble(t, "3", true) // the game clone skips saves: the shared mount holds them
+	put(t, filepath.Join(third.GameDir(), "saves", "Home", "session.lock"), "☃")
+	if third.Touched(home) {
+		t.Fatal("a skipped folder belongs to another mount")
+	}
+	closeView(t, third)
+	closeView(t, first)
+
+	up := t.TempDir()
+	ov := &View{a: f.a, st: state{Start: time.Now(), Mounts: []mount{{Kind: overlay, Path: f.game, Target: f.game, Upper: up}}}}
+	put(t, filepath.Join(f.game, "saves", "Home", "session.lock"), "☃")
+	if ov.Touched(home) {
+		t.Fatal("an overlay sees the real lock through its lower folder")
+	}
+	put(t, filepath.Join(up, "saves", "Home", "session.lock"), "☃")
+	if !ov.Touched(home) {
+		t.Fatal("a world opened in an overlay")
+	}
+	direct := &View{a: f.a, st: state{Start: time.Now().Add(-time.Hour), Mounts: []mount{{Kind: direct, Path: f.game, Target: f.game}}}}
+	if direct.Touched(home) {
+		t.Fatal("a direct run has no copy")
+	}
+}
