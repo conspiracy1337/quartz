@@ -8,7 +8,7 @@ import (
 	"html"
 	"io"
 	"net/url"
-	"slices"
+	"sort"
 	"strings"
 
 	"quartz/internal/content"
@@ -86,7 +86,8 @@ func (s *Service) modList(ctx context.Context, id string) (listed, error) {
 	if len(out.list.Mods) == 0 && len(out.unlisted) == 0 {
 		return listed{}, ErrNoMods
 	}
-	slices.SortFunc(out.list.Mods, func(a, b ListMod) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	m := out.list.Mods
+	sort.Slice(m, func(i, j int) bool { return strings.ToLower(m[i].Name) < strings.ToLower(m[j].Name) })
 	return out, nil
 }
 

@@ -54,13 +54,13 @@ var modCategories = []category{
 	{"World generation", []string{"worldgen"}, []string{"world-gen", "world-biomes", "world-dimensions", "world-structures", "world-ores-resources"}},
 }
 
-// categories holds each type's groups. The Modrinth tags are /v2/tag/category's,
-// the CurseForge slugs /v1/categories' for the type's class; slugs a class
-// doesn't have are ignored, so mods and data packs can share one list.
-var categories = map[modplatform.ProjectType][]group{
-	modplatform.TypeMod:      {{"Categories", modCategories}},
-	modplatform.TypeDataPack: {{"Categories", modCategories}},
-	modplatform.TypeModpack: {{"Categories", []category{
+// Each type's groups. The Modrinth tags are /v2/tag/category's, the
+// CurseForge slugs /v1/categories' for the type's class; slugs a class
+// doesn't have are ignored, so mods and data packs share one list. Plain
+// slices (not a map) so they are laid out at build time, with no init code.
+var (
+	modGroups     = []group{{"Categories", modCategories}}
+	modpackGroups = []group{{"Categories", []category{
 		{"Adventure", []string{"adventure"}, []string{"adventure-and-rpg"}},
 		{"Challenging", []string{"challenging"}, []string{"expert", "hardcore"}},
 		{"Combat", []string{"combat"}, []string{"combat-pvp"}},
@@ -71,8 +71,8 @@ var categories = map[modplatform.ProjectType][]group{
 		{"Optimization", []string{"optimization"}, nil},
 		{"Quests", []string{"quests"}, []string{"quests"}},
 		{"Technology", []string{"technology"}, []string{"tech"}},
-	}}},
-	modplatform.TypeResourcePack: {
+	}}}
+	resourcePackGroups = []group{
 		{"Categories", []category{
 			{"Combat", []string{"combat"}, nil},
 			{"Cursed", []string{"cursed"}, nil},
@@ -108,8 +108,8 @@ var categories = map[modplatform.ProjectType][]group{
 			{"256x", []string{"256x"}, []string{"two-fifty-six-x"}},
 			{"512x or higher", []string{"512x+"}, []string{"five-twelve-x-and-beyond"}},
 		}},
-	},
-	modplatform.TypeShader: {
+	}
+	shaderGroups = []group{
 		{"Categories", []category{
 			{"Cartoon", []string{"cartoon"}, nil},
 			{"Cursed", []string{"cursed"}, nil},
@@ -135,8 +135,8 @@ var categories = map[modplatform.ProjectType][]group{
 			{"High", []string{"high"}, nil},
 			{"Screenshot", []string{"screenshot"}, nil},
 		}},
-	},
-	modplatform.TypeWorld: {{"Categories", []category{ // CurseForge only
+	}
+	worldGroups = []group{{"Categories", []category{ // CurseForge only
 		{"Adventure", nil, []string{"adventure"}},
 		{"Creation", nil, []string{"creation"}},
 		{"Game map", nil, []string{"game-map"}},
@@ -144,13 +144,30 @@ var categories = map[modplatform.ProjectType][]group{
 		{"Parkour", nil, []string{"parkour"}},
 		{"Puzzle", nil, []string{"puzzle"}},
 		{"Survival", nil, []string{"survival"}},
-	}}},
+	}}}
+)
+
+// groupsOf is a project type's category groups.
+func groupsOf(t modplatform.ProjectType) []group {
+	switch t {
+	case modplatform.TypeMod, modplatform.TypeDataPack:
+		return modGroups
+	case modplatform.TypeModpack:
+		return modpackGroups
+	case modplatform.TypeResourcePack:
+		return resourcePackGroups
+	case modplatform.TypeShader:
+		return shaderGroups
+	case modplatform.TypeWorld:
+		return worldGroups
+	}
+	return nil
 }
 
 // Categories lists Browse's category groups for a project type.
 func Categories(t modplatform.ProjectType) []CategoryGroup {
-	out := make([]CategoryGroup, 0, len(categories[t]))
-	for _, g := range categories[t] {
+	out := make([]CategoryGroup, 0, len(groupsOf(t)))
+	for _, g := range groupsOf(t) {
 		names := make([]string, len(g.Items))
 		for i, c := range g.Items {
 			names[i] = c.Name
@@ -162,7 +179,7 @@ func Categories(t modplatform.ProjectType) []CategoryGroup {
 
 // find returns a type's category by name, or nil.
 func find(t modplatform.ProjectType, name string) *category {
-	for _, g := range categories[t] {
+	for _, g := range groupsOf(t) {
 		for i := range g.Items {
 			if g.Items[i].Name == name {
 				return &g.Items[i]
