@@ -2,7 +2,7 @@
 // the list keys live in listkeys.ts, on the lists themselves.
 import { api } from './api';
 import { prefs } from './prefs.svelte';
-import { INSTANCE_TABS, go, router, type Route } from './router.svelte';
+import { INSTANCE_TABS, back, go, router, type Route } from './router.svelte';
 import { session } from './session.svelte';
 import { chordOf, chords, type ShortcutId } from './shortcuts';
 
@@ -33,6 +33,7 @@ function run(id: ShortcutId): boolean {
       if (!inst) return false;
       void api.instances.openFolder(inst.id);
       return true;
+    case 'back': return back();
     case 'nextTab': {
       if (!inst) return false;
       const i = INSTANCE_TABS.indexOf(inst.tab);
@@ -51,10 +52,11 @@ export function installShortcuts(): () => void {
     const mod = chord.startsWith('Ctrl+') || chord.startsWith('Alt+');
     const map = chords(prefs.value?.general.keys);
     const hit = (Object.keys(map) as ShortcutId[]).find((id) => map[id] === chord);
-    // Chords with Ctrl or Alt work even while typing; bare keys don't.
-    // With a dialog or the palette open, only the palette's own shortcuts apply.
+    // Chords with Ctrl or Alt work even while typing; bare keys don't, and neither does
+    // Back (Alt+Left jumps a word in text). With a dialog or the palette open, only the
+    // palette's own shortcuts apply.
     const allowed = hit && (!session.overlay || hit === 'palette' || hit === 'switcher');
-    if (allowed && (mod || !typing(e.target)) && run(hit)) {
+    if (allowed && ((mod && hit !== 'back') || !typing(e.target)) && run(hit)) {
       e.preventDefault();
       return;
     }
@@ -68,6 +70,16 @@ export function installShortcuts(): () => void {
     } else return;
     e.preventDefault();
   };
+  // The mouse's back side button; preventDefault stops the webview's own back step.
+  const onMouse = (e: MouseEvent) => {
+    if (e.button !== 3) return;
+    e.preventDefault();
+    back();
+  };
   window.addEventListener('keydown', onKey);
-  return () => window.removeEventListener('keydown', onKey);
+  window.addEventListener('mouseup', onMouse);
+  return () => {
+    window.removeEventListener('keydown', onKey);
+    window.removeEventListener('mouseup', onMouse);
+  };
 }

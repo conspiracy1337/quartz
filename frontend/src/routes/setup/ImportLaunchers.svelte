@@ -41,7 +41,7 @@
     try {
       if (importing && picked.length) await api.launchers.import(picked.map((l) => l.id), mode === 'in-place');
       await prefs.update((s) => (s.general.setupDone = true));
-      go({ name: 'home' });
+      go({ name: 'home' }, { root: true });
     } catch (e) {
       session.fail('Import', e);
     } finally {

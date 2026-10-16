@@ -2,7 +2,7 @@
 // them, and Settings, General edits the chords marked editable. A chord is written
 // "Ctrl+K": modifiers first (Ctrl, Alt, Shift; Cmd counts as Ctrl), then the key.
 
-export type ShortcutId = 'palette' | 'switcher' | 'settings' | 'help' | 'play' | 'stop' | 'folder' | 'nextTab';
+export type ShortcutId = 'palette' | 'switcher' | 'settings' | 'help' | 'play' | 'stop' | 'folder' | 'nextTab' | 'back';
 
 export interface Shortcut { id: ShortcutId; label: string; chord: string; editable: boolean }
 export interface ShortcutGroup { name: string; items: { label: string; keys: string[]; id?: ShortcutId }[] }
@@ -16,6 +16,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { id: 'stop', label: 'Stop game', chord: 'Ctrl+.', editable: true },
   { id: 'folder', label: 'Open folder', chord: 'Ctrl+O', editable: true },
   { id: 'nextTab', label: 'Next tab', chord: 'Ctrl+Tab', editable: true },
+  { id: 'back', label: 'Back', chord: 'Alt+Left', editable: false },
 ];
 
 /** The chords in effect: the defaults with the player's changes. */
@@ -65,7 +66,7 @@ export function sheet(current: Record<ShortcutId, string>): ShortcutGroup[] {
   const pick = (...ids: ShortcutId[]) => ids.map((id) => ({ id, label: SHORTCUTS.find((s) => s.id === id)!.label, keys: keysOf(current[id]) }));
   return [
     { name: 'Anywhere', items: pick('palette', 'switcher', 'settings', 'help') },
-    { name: 'Go to', items: [{ label: 'Home', keys: ['G', 'H'] }, { label: 'Library', keys: ['G', 'L'] }, { label: 'Browse', keys: ['G', 'B'] }, { label: 'Downloads', keys: ['G', 'D'] }] },
+    { name: 'Go to', items: [...pick('back'), { label: 'Home', keys: ['G', 'H'] }, { label: 'Library', keys: ['G', 'L'] }, { label: 'Browse', keys: ['G', 'B'] }, { label: 'Downloads', keys: ['G', 'D'] }] },
     { name: 'Instance', items: pick('play', 'stop', 'folder', 'nextTab') },
     { name: 'Lists', items: [{ label: 'Move', keys: ['J', 'K'] }, { label: 'Toggle selected', keys: ['Space'] }, { label: 'Search', keys: ['/'] }, { label: 'Select all', keys: ['Ctrl', 'A'] }] },
   ];

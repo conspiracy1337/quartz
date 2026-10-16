@@ -26,7 +26,7 @@ export async function trash(i: Named) {
   try {
     const entry = await api.instances.trash(i.id);
     revs.bump('instances');
-    go({ name: 'library' });
+    go({ name: 'library' }, { replace: true });
     session.notify({
       tone: 'trash', subject: i.name, text: 'to the trash',
       undo: async () => {
