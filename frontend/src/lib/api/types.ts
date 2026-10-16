@@ -67,7 +67,6 @@ export interface Instance extends InstanceSummary {
   notes: string;
   keepLoaderUpdated: boolean;
   followLatest: boolean;
-  syncTargets: number;
   sync: InstanceSync;
   discordStatus: boolean;
   settings: InstanceSettings;

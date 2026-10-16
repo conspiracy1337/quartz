@@ -118,7 +118,6 @@ type InstanceView struct {
 	Notes             string            `json:"notes"`
 	KeepLoaderUpdated bool              `json:"keepLoaderUpdated"`
 	FollowLatest      bool              `json:"followLatest"`
-	SyncTargets       int               `json:"syncTargets"` // shared targets it joins that are on
 	Sync              instance.Sync     `json:"sync"`
 	DiscordStatus     bool              `json:"discordStatus"` // the instance's own switch
 	Settings          instance.Settings `json:"settings"`
@@ -200,7 +199,7 @@ func (s *Instances) view(in instance.Instance) InstanceView {
 		KeepLoaderUpdated: in.KeepLoaderUpdated, FollowLatest: in.FollowLatest,
 		Counts:        s.counts(in.ID),
 		DiscordStatus: !in.HideDiscord, Settings: in.Settings, GPU: sysinfo.DedicatedGPU(),
-		SyncTargets: s.syncTargets(in.ID), Sync: in.Sync, Pack: packView(in),
+		Sync: in.Sync, Pack: packView(in),
 	}
 }
 
@@ -210,13 +209,6 @@ func packView(in instance.Instance) *PackView {
 	}
 	o := modpack.Origin{Source: in.Pack.Source, Project: in.Pack.Project}
 	return &PackView{Name: in.Pack.Name, Version: in.Pack.VersionName, Updatable: o.Updatable() && !in.InPlace}
-}
-
-func (s *Instances) syncTargets(id string) int {
-	if s.d.Syncing == nil {
-		return 0
-	}
-	return len(s.d.Syncing.Joined(id))
 }
 
 // counts is how many items each content tab has.

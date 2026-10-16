@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import Icon from './Icon.svelte';
 
-  /** One .setting row: title and optional description on the left, a control on the right. */
+  /** One .setting row: title and optional description on the left, a control on the right.
+      With href the row opens a sub-page, and a chevron after the control says so. */
   interface Props {
     title: string;
     desc?: string;
@@ -20,7 +22,7 @@
 {/snippet}
 
 {#if href}
-  <a {href} class="setting {cls}" style="text-decoration: none; {style ?? ''}">{@render text()}{@render children?.()}</a>
+  <a {href} class="setting {cls}" style="text-decoration: none; {style ?? ''}">{@render text()}<span class="set-go">{@render children?.()}<Icon name="chevron-right" size={12} sw={2} /></span></a>
 {:else}
   <div class="setting {cls}" {style}>{@render text()}{@render children?.()}</div>
 {/if}

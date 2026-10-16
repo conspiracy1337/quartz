@@ -369,7 +369,6 @@ export namespace api {
 	    notes: string;
 	    keepLoaderUpdated: boolean;
 	    followLatest: boolean;
-	    syncTargets: number;
 	    sync: instance.Sync;
 	    discordStatus: boolean;
 	    settings: instance.Settings;
@@ -409,7 +408,6 @@ export namespace api {
 	        this.notes = source["notes"];
 	        this.keepLoaderUpdated = source["keepLoaderUpdated"];
 	        this.followLatest = source["followLatest"];
-	        this.syncTargets = source["syncTargets"];
 	        this.sync = this.convertValues(source["sync"], instance.Sync);
 	        this.discordStatus = source["discordStatus"];
 	        this.settings = this.convertValues(source["settings"], instance.Settings);

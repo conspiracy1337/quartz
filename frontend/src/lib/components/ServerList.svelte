@@ -55,7 +55,7 @@
     <span style="display: flex; gap: 6px; align-items: center">
       <button class="chip" class:on={!onlineOnly} onclick={() => filter(false)}>All</button>
       <button class="chip" class:on={onlineOnly} onclick={() => filter(true)}>Online</button>
-      <button class="btn btn-icon btn-sm btn-ghost" aria-label="Refresh" onclick={refresh}><Icon name="refresh" size={14} sw={1.8} /></button>
+      <button class="btn-bare" aria-label="Refresh" title="Refresh" onclick={refresh}><Icon name="refresh" size={14} sw={1.8} /></button>
     </span>
   </div>
   <div class="sl-body">

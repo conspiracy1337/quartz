@@ -43,7 +43,6 @@ export const instances: Instance[] = seeds.map(([id, name, initial, tint, minecr
   notes: '',
   keepLoaderUpdated: true,
   followLatest: false,
-  syncTargets: 4,
   sync: { join: ['options', 'servers', 'hotbar', 'resourcepacks', 'xaero'], keys: true },
   discordStatus: true,
   gpu: 'NVIDIA GeForce RTX 3070 Laptop GPU',

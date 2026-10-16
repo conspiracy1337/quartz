@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '../api';
   import type { ContentKind, InstallDep, Src } from '../api/types';
-  import { bytes, errorText, plural } from '../format';
+  import { bytes, errorText, gb, plural } from '../format';
   import { LOADER_NAMES, PROJECT_TYPES } from '../labels';
   import { artOf, suggestMemoryGb } from '../look';
   import { prefs } from '../prefs.svelte';
@@ -44,7 +44,7 @@
   const loader = $derived(inst.data?.loader ? `, ${LOADER_NAMES[inst.data.loader.kind]}` : '');
   // Composed: shown only when the mods after this install would want more memory than the instance has.
   const suggest = $derived(p && content === 'mods' && prefs.value?.java.suggestMemory !== false ? suggestMemoryGb(p.mods + count, info.data?.memoryMb ?? 0) : 0);
-  const setGb = $derived(Math.round((inst.data?.memoryMB.max ?? 0) / 1024));
+  const setGb = $derived(gb(inst.data?.memoryMB.max ?? 0));
   const short = $derived(suggest > 0 && setGb > 0 && suggest > setGb);
 
   async function install() {

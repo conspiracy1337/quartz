@@ -108,6 +108,12 @@ export function bytes(n: number, decimalsBelow = 10): string {
   return `${v} ${UNITS[i]}`;
 }
 
+/** Memory is stored in MB and picked in whole GB. */
+export const gb = (mb: number) => Math.round(mb / 1024);
+export const mb = (gb: number) => gb * 1024;
+/** A typed whole number of GB, in MB. */
+export const gbField = (v: string) => mb(Math.max(0, Math.round(Number(v)) || 0));
+
 export const count = (n: number) => n.toLocaleString('en-US');
 
 /** "58.7M", "312K". */

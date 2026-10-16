@@ -2,7 +2,6 @@
   import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
   import { bytes, fullDate } from '$lib/format';
-  import { switchVersion } from '$lib/instanceActions';
   import { LOADER_NAMES, LOADER_PRODUCTS } from '$lib/labels';
   import { query } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
@@ -62,7 +61,7 @@
     {/if}
     <div class="divider"></div>
     {#if i.loader}
-      <div class="comp">{#if i.loader.kind === 'fabric'}<span class="cbox" style="background: #dbc18e; color: #0a0a0b" aria-hidden="true"><Icon name="fabric" size={20} sw={1.8} /></span>{:else}<span class="cbox lk" aria-hidden="true">{LOADER_NAMES[i.loader.kind].charAt(0)}</span>{/if}<span><span class="h3" style="display: block">{LOADER_PRODUCTS[i.loader.kind]} {i.loader.version}</span><span class="small faint" style="display: block">{loaderLine}</span></span><span style="display: flex; gap: 6px"><button class="btn btn-sm btn-ghost" onclick={() => switchVersion(i, i.minecraft, '', '', 'Vanilla')}>Remove</button><a href={to('loader')} class="btn btn-sm">Change</a></span></div>
+      <div class="comp">{#if i.loader.kind === 'fabric'}<span class="cbox" style="background: #dbc18e; color: #0a0a0b" aria-hidden="true"><Icon name="fabric" size={20} sw={1.8} /></span>{:else}<span class="cbox lk" aria-hidden="true">{LOADER_NAMES[i.loader.kind].charAt(0)}</span>{/if}<span><span class="h3" style="display: block">{LOADER_PRODUCTS[i.loader.kind]} {i.loader.version}</span><span class="small faint" style="display: block">{loaderLine}</span></span><a href={to('loader')} class="btn btn-sm">Change</a></div>
     {:else}
       <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="plus" size={20} sw={1.8} /></span><span><span class="h3" style="display: block">No mod loader</span><span class="small faint" style="display: block">{i.clientJar ? 'Custom jars run without a mod loader.' : 'Vanilla. Add a loader to use mods.'}</span></span>{#if i.clientJar}<button class="btn btn-sm" disabled>Add</button>{:else}<a href={to('loader')} class="btn btn-sm">Add</a>{/if}</div>
     {/if}

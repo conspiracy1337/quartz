@@ -38,4 +38,4 @@
 <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'export', instanceId: i.id }))}><Icon name="upload" size={14} /><span>Export…</span><span></span></button>
 <button class="mi" role="menuitem" onclick={() => act(() => repair(i))}><Icon name="refresh" size={14} /><span>Repair game files</span><span></span></button>
 <button class="mi" role="menuitem" onclick={() => act(() => move(i))}><Icon name="folder" size={14} /><span>Move game folder</span><span></span></button>
-<button class="mi" role="menuitem" onclick={() => act(() => trash(i))}><Icon name="trash" size={14} /><span>Move to trash</span><span></span></button>
+<button class="mi" role="menuitem" onclick={() => act(() => trash(i))}><Icon name="trash" size={14} /><span>Delete</span><span></span></button>

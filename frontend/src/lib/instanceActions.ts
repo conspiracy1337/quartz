@@ -40,7 +40,7 @@ export async function trash(i: Named) {
       },
     });
   } catch (e) {
-    session.fail('Move to trash', e);
+    session.fail('Delete', e);
   }
 }
 
