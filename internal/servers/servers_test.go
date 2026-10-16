@@ -132,12 +132,33 @@ func TestEditCycle(t *testing.T) {
 	}
 }
 
-func TestNeedsAndVersionLabel(t *testing.T) {
+func TestFitAndVersionLabel(t *testing.T) {
 	e := newEnv(t)
 	_ = e.svc.Add(e.b.ID, Entry{Name: "SMP", Address: "smp.kestrel.gg"})
 	list, _ := e.svc.List(context.Background(), e.b.ID, false)
-	if list[0].Needs != "1.21.4" {
-		t.Fatalf("needs %q", list[0].Needs)
+	if list[0].Fit == FitOK || list[0].FitVersion != "1.21.4" {
+		t.Fatalf("fit %q %q", list[0].Fit, list[0].FitVersion)
+	}
+	for _, c := range []struct {
+		mc, label string
+		match     int
+		fit, show string
+	}{
+		{"1.21.4", "Paper 1.21.4", 1, FitOK, "1.21.4"},
+		{"1.21.4", "Velocity 1.8.x-1.21.x", 1, FitOK, "1.21.4"}, // a proxy answers with the client's protocol
+		{"1.21.4", "Paper 1.21.1", -1, FitMinor, "1.21.1"},
+		{"1.21.5", "1.20.1 / 1.21.4", -1, FitMinor, "1.21.4"},
+		{"1.20.1", "Paper 1.21.4", -1, FitMajor, "1.21.4"},
+		{"26.1.2", "Paper 26.1", -1, FitMinor, "26.1"},
+		{"1.12.2", "1.8 to 1.12.2", 0, FitOK, "1.12.2"}, // no protocol before 1.14: the range decides
+		{"1.12.2", "1.8 to 1.12", 0, FitOK, "1.12.2"},
+		{"1.12.2", "1.8.9", 0, FitMajor, "1.8.9"},
+		{"1.21.4", "BungeeCord", -1, "", ""},
+		{"25w14a", "Paper 1.21.4", -1, FitMajor, "1.21.4"},
+	} {
+		if f, v := fit(c.mc, c.label, c.match); f != c.fit || v != c.show {
+			t.Errorf("fit(%q, %q, %d) = %q %q, want %q %q", c.mc, c.label, c.match, f, v, c.fit, c.show)
+		}
 	}
 	for in, want := range map[string]string{"Paper 1.21.4": "1.21.4", "Requires MC 1.8 / 1.21": "1.8 to 1.21", "BungeeCord": "BungeeCord", "1.20.1": "1.20.1"} {
 		if got := VersionLabel(in); got != want {

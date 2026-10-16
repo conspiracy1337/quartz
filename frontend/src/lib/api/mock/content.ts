@@ -51,9 +51,10 @@ export const content: Record<ContentKind, ContentItem[]> = {
     R('Nether Hub', '5 months ago, 410 MB', 'Survival', sky('#5a1f1f', '#b8432f', '#3a1414'), '', { action: 'Play', group: 'Survival' }),
   ],
   servers: [
-    R('Friends SMP', 'smp.kestrel.gg, 6 of 20 online', '21 ms', g('#3ecf8e', '#1d6a4a'), '', { action: 'Join', online: true }),
-    R('Hypixel', 'mc.hypixel.net, 41,208 online', '38 ms', g('#f2d45c', '#b8862f'), '', { action: 'Join', online: true }),
-    R('Modded Test', 'Needs Fabric 1.20.1', '182 ms', g('#b48cf2', '#5a3f8f'), '', { action: 'Join', online: true }),
-    R('Old Creative Server', 'Can not connect', 'Offline', g('#3a3a40', '#1a1a1e'), '', { status: { kind: 'offline' }, online: false }),
+    R('Friends SMP', 'smp.kestrel.gg', '', g('#3ecf8e', '#1d6a4a'), '', { action: 'Join', online: true, server: { online: true, version: '1.21.4', fit: 'ok', players: { online: 6, max: 20 }, pingMs: 21 } }),
+    R('Hypixel', 'mc.hypixel.net', '', g('#f2d45c', '#b8862f'), '', { action: 'Join', online: true, server: { online: true, version: '1.21.4', fit: 'ok', players: { online: 41208 }, pingMs: 38 } }),
+    R('Cobblemon Academy', 'play.cobbleacademy.gg', '', g('#f2a25c', '#8f4a1c'), '', { action: 'Join', online: true, server: { online: true, version: '1.21.1', fit: 'minor', players: { online: 312, max: 500 }, pingMs: 64 } }),
+    R('Modded Test', 'test.kestrel.gg', '', g('#b48cf2', '#5a3f8f'), '', { action: 'Join', online: true, server: { online: true, version: '1.20.1', fit: 'major', players: { online: 0, max: 10 }, pingMs: 182 } }),
+    R('Old Creative Server', 'creative.kestrel.gg', '', g('#3a3a40', '#1a1a1e'), '', { online: false, server: { online: false, version: '', fit: '' } }),
   ],
 };

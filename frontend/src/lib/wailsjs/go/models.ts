@@ -1362,8 +1362,6 @@ export namespace content {
 	    ref?: string;
 	    clientOnly?: boolean;
 	    file: string;
-	    size: number;
-	    added: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Row(source);
@@ -1386,8 +1384,6 @@ export namespace content {
 	        this.ref = source["ref"];
 	        this.clientOnly = source["clientOnly"];
 	        this.file = source["file"];
-	        this.size = source["size"];
-	        this.added = source["added"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2742,7 +2738,8 @@ export namespace servers {
 	    max?: number;
 	    pingMs?: number;
 	    icon?: string;
-	    needs?: string;
+	    fit?: string;
+	    fitVersion?: string;
 	    instances: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -2760,7 +2757,8 @@ export namespace servers {
 	        this.max = source["max"];
 	        this.pingMs = source["pingMs"];
 	        this.icon = source["icon"];
-	        this.needs = source["needs"];
+	        this.fit = source["fit"];
+	        this.fitVersion = source["fitVersion"];
 	        this.instances = source["instances"];
 	    }
 	}
@@ -2775,7 +2773,8 @@ export namespace servers {
 	    max?: number;
 	    pingMs?: number;
 	    icon?: string;
-	    needs?: string;
+	    fit?: string;
+	    fitVersion?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Server(source);
@@ -2793,7 +2792,8 @@ export namespace servers {
 	        this.max = source["max"];
 	        this.pingMs = source["pingMs"];
 	        this.icon = source["icon"];
-	        this.needs = source["needs"];
+	        this.fit = source["fit"];
+	        this.fitVersion = source["fitVersion"];
 	    }
 	}
 	export class Status {
@@ -2803,7 +2803,8 @@ export namespace servers {
 	    max?: number;
 	    pingMs?: number;
 	    icon?: string;
-	    needs?: string;
+	    fit?: string;
+	    fitVersion?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Status(source);
@@ -2817,7 +2818,8 @@ export namespace servers {
 	        this.max = source["max"];
 	        this.pingMs = source["pingMs"];
 	        this.icon = source["icon"];
-	        this.needs = source["needs"];
+	        this.fit = source["fit"];
+	        this.fitVersion = source["fitVersion"];
 	    }
 	}
 

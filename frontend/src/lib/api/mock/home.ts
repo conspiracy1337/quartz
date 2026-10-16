@@ -19,12 +19,12 @@ export const week: DayPlay[] = [85, 15, 150, 40, 160, 190, 60].map((minutes, i) 
 
 const lg = (a: string, b: string) => ({ background: `linear-gradient(135deg,${a},${b})` });
 export const servers: MergedServer[] = [
-  { id: 's1', name: 'Friends SMP', address: 'smp.kestrel.gg', version: '1.21.4', online: true, players: { online: 6, max: 20 }, pingMs: 21, art: lg('#3ecf8e', '#1d6a4a'), instances: ['fo', 'van'] },
-  { id: 's2', name: 'Hypixel', address: 'mc.hypixel.net', version: '1.8 to 1.21', online: true, players: { online: 41208 }, pingMs: 38, art: lg('#f2d45c', '#b8862f'), instances: ['van', 'fo', 'sky'] },
-  { id: 's3', name: 'Cobblemon Academy', address: 'play.cobbleacademy.gg', version: '1.21.1', online: true, players: { online: 312, max: 500 }, pingMs: 64, art: lg('#f2a25c', '#8f4a1c'), instances: ['cob'] },
-  { id: 's4', name: 'Skyblock Network', address: 'sb.islandsmc.net', version: '1.21.1', online: true, players: { online: 2940 }, pingMs: 96, art: lg('#5bc0be', '#1f5c5b'), instances: ['sky'] },
-  { id: 's5', name: 'Modded Test', address: 'test.kestrel.gg', version: '1.20.1', online: true, players: { online: 0, max: 10 }, pingMs: 182, art: lg('#b48cf2', '#5a3f8f'), instances: ['prom'] },
-  { id: 's6', name: 'Old Creative Server', address: 'creative.kestrel.gg', version: 'Offline', online: false, art: lg('#3a3a40', '#1a1a1e'), instances: ['fo'] },
+  { id: 's1', name: 'Friends SMP', address: 'smp.kestrel.gg', version: '1.21.4', fit: 'ok', online: true, players: { online: 6, max: 20 }, pingMs: 21, art: lg('#3ecf8e', '#1d6a4a'), instances: ['fo', 'van'] },
+  { id: 's2', name: 'Hypixel', address: 'mc.hypixel.net', version: '1.21.4', fit: 'ok', online: true, players: { online: 41208 }, pingMs: 38, art: lg('#f2d45c', '#b8862f'), instances: ['van', 'fo', 'sky'] },
+  { id: 's3', name: 'Cobblemon Academy', address: 'play.cobbleacademy.gg', version: '1.21.1', fit: 'ok', online: true, players: { online: 312, max: 500 }, pingMs: 64, art: lg('#f2a25c', '#8f4a1c'), instances: ['cob'] },
+  { id: 's4', name: 'Skyblock Network', address: 'sb.islandsmc.net', version: '1.21.1', fit: 'minor', online: true, players: { online: 2940 }, pingMs: 96, art: lg('#5bc0be', '#1f5c5b'), instances: ['sky'] },
+  { id: 's5', name: 'Modded Test', address: 'test.kestrel.gg', version: '1.20.1', fit: 'major', online: true, players: { online: 0, max: 10 }, pingMs: 182, art: lg('#b48cf2', '#5a3f8f'), instances: ['prom'] },
+  { id: 's6', name: 'Old Creative Server', address: 'creative.kestrel.gg', version: '', fit: '', online: false, art: lg('#3a3a40', '#1a1a1e'), instances: ['fo'] },
 ];
 
 const shot = (id: string, instanceId: string, world: string, title: string, at: number, bg: string): Screenshot => ({

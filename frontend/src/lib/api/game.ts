@@ -14,7 +14,7 @@ import type { servers } from '../wailsjs/go/models';
 import { content as fixtures } from './mock/content';
 import * as home from './mock/home';
 import * as logs from './mock/logs';
-import type { Art, ContentItem, CrashInfo, DayPlay, DiskSpace, LogFile, MergedServer, NewsItem, Screenshot, ServerEntry } from './types';
+import type { Art, ContentItem, CrashInfo, DayPlay, DiskSpace, LogFile, MergedServer, NewsItem, Screenshot, ServerEntry, ServerStats } from './types';
 
 type GoWorld = Awaited<ReturnType<typeof WorldsGo.List>>[number];
 type GoServer = Awaited<ReturnType<typeof ServersGo.List>>[number];
@@ -36,25 +36,22 @@ export const worldItem = (w: GoWorld): ContentItem => ({
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** "smp.kestrel.gg, 6 of 20 online", "Needs 1.20.1" or "Can not connect" (the design's wording). */
-function serverSub(s: GoServer): string {
-  if (!s.online) return 'Can not connect';
-  if (s.needs) return `Needs ${s.needs}`;
-  return `${s.address}, ${s.max ? `${count(s.players)} of ${count(s.max)}` : count(s.players)} online`;
-}
+/** What both server lists show of a ping: the version to show and how it fits, players and ping. */
+const serverStats = (s: Pick<GoServer, 'online' | 'version' | 'fit' | 'fitVersion' | 'players' | 'max' | 'pingMs'>): ServerStats => ({
+  online: s.online, version: s.fitVersion || s.version || '', fit: (s.fit ?? '') as ServerStats['fit'],
+  ...(s.online ? { players: { online: s.players, ...(s.max ? { max: s.max } : {}) }, ...(s.pingMs ? { pingMs: s.pingMs } : {}) } : {}),
+});
 
 export const serverItem = (s: GoServer): ContentItem => ({
-  id: String(s.index), name: s.name, sub: serverSub(s), meta: s.online ? `${s.pingMs ?? 0} ms` : 'Offline', art: serverArt(s.name, s.online, s.icon),
-  enabled: true, online: s.online, ...(s.online ? { action: 'Join' as const } : { status: { kind: 'offline' as const } }),
+  id: String(s.index), name: s.name, sub: s.address, meta: '', art: serverArt(s.name, s.online, s.icon),
+  enabled: true, online: s.online, server: serverStats(s), ...(s.online ? { action: 'Join' as const } : {}),
 });
 
 /** What the server dialog edits, kept beside the rows by their id. */
 const entries = new Map<string, ServerEntry>();
 
 const toMerged = (m: GoMerged): MergedServer => ({
-  id: m.id, name: m.name, address: m.address, version: m.online ? (m.version ?? '') : 'Offline', online: m.online,
-  ...(m.online ? { players: { online: m.players, ...(m.max ? { max: m.max } : {}) }, ...(m.pingMs ? { pingMs: m.pingMs } : {}) } : {}),
-  art: serverArt(m.name, m.online, m.icon), instances: m.instances,
+  id: m.id, name: m.name, address: m.address, ...serverStats(m), art: serverArt(m.name, m.online, m.icon), instances: m.instances,
 });
 
 export const toShot = (s: GoShot): Screenshot => ({

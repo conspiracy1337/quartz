@@ -116,6 +116,9 @@ export const gbField = (v: string) => mb(Math.max(0, Math.round(Number(v)) || 0)
 
 export const count = (n: number) => n.toLocaleString('en-US');
 
+/** "6 / 20" players, or just "41,208" when the server names no limit. */
+export const players = (p: { online: number; max?: number } | undefined) => (!p ? '' : p.max ? `${count(p.online)} / ${count(p.max)}` : count(p.online));
+
 /** "58.7M", "312K". */
 export function compact(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;

@@ -74,14 +74,14 @@ func (s *Service) Home(ctx context.Context, force bool) ([]Merged, error) {
 		slices.SortStableFunc(x.m.Instances, func(a, b string) int { return x.used[b].Compare(x.used[a]) })
 		first := x.m.Instances[0]
 		x.m.Name = x.names[first]
-		proto := 0
+		// Fit is judged for the instance Join uses: the one last used on it.
+		minecraft := ""
 		if in, err := s.d.Instances.Get(first); err == nil {
-			proto = s.d.Protocol(in.Minecraft)
+			minecraft = in.Minecraft
 		}
 		wg.Go(func() {
 			m := x.m
-			m.Status = s.status(ctx, m.Address, proto, force)
-			m.Needs = "" // Home names no instance, so a version mismatch says nothing
+			m.Status = s.status(ctx, m.Address, minecraft, force)
 			sv := Server{Status: m.Status, saved: x.saved}
 			s.fallbackIcon(&sv)
 			m.Icon = sv.Icon

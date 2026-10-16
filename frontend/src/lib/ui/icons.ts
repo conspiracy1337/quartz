@@ -48,6 +48,7 @@ export const icons = {
   warn: s('<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>'),
   info: s('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
   issue: s('<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>'),
+  update: s('<circle cx="12" cy="12" r="9"/><path d="m8 12 4-4 4 4M12 8v8"/>'),
   refresh: s('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
   external: s('<path d="M14 4h6v6M20 4l-9 9M18 14v5H5V6h5"/>'),
   list: s('<path d="M4 6h16M4 12h16M4 18h16"/>'),

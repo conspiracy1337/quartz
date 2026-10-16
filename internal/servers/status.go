@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"quartz/internal/core/slp"
+	"quartz/internal/core/version"
 )
 
 // Status is what a ping found out.
@@ -16,17 +17,27 @@ type Status struct {
 	Max     int    `json:"max,omitempty"`
 	PingMs  int    `json:"pingMs,omitempty"`
 	Icon    string `json:"icon,omitempty"` // the favicon on the image route
-	// Needs names the version the server wants when it can't take this
-	// instance's ("Needs 1.20.1"); empty when they match or it's unknown.
-	Needs string `json:"needs,omitempty"`
+	// Fit is how the server suits the instance's Minecraft version (see fit),
+	// and FitVersion the version to show beside it.
+	Fit        string `json:"fit,omitempty"`
+	FitVersion string `json:"fitVersion,omitempty"`
 }
 
-// status pings address speaking protocol (0 asks the server which it wants).
-func (s *Service) status(ctx context.Context, address string, protocol int, force bool) Status {
+// How a server suits a Minecraft version.
+const (
+	FitOK    = "ok"    // it takes this version
+	FitMinor = "minor" // it takes another version of the same major one ("1.21.1" for "1.21.4")
+	FitMajor = "major" // it takes only another major version
+)
+
+// status pings address for an instance on minecraft, speaking its protocol
+// (or asking the server which it wants when the protocol is unknown).
+func (s *Service) status(ctx context.Context, address, minecraft string, force bool) Status {
 	a, err := slp.Parse(address)
 	if err != nil {
 		return Status{}
 	}
+	protocol := s.d.Protocol(minecraft)
 	proto := protocol
 	if proto == 0 {
 		proto = -1
@@ -45,10 +56,49 @@ func (s *Service) status(ctx context.Context, address string, protocol int, forc
 	if s.d.Favicons != nil && len(r.Status.Favicon) > 0 {
 		st.Icon = s.d.Favicons.Put(r.Status.Favicon)
 	}
-	if protocol > 0 && r.Status.Protocol > 0 && r.Status.Protocol != protocol {
-		st.Needs = st.Version
+	match := 0
+	if protocol > 0 && r.Status.Protocol > 0 {
+		match = -1
+		if r.Status.Protocol == protocol {
+			match = 1
+		}
 	}
+	st.Fit, st.FitVersion = fit(minecraft, r.Status.Version, match)
 	return st
+}
+
+// fit says how a server whose version name is label suits minecraft, and
+// which version to show: minecraft itself when the server takes it, else the
+// newest version the server takes. match is 1 when the ping's protocols
+// agree, -1 when they differ and 0 when either is unknown; then the
+// server's version range decides ("1.8 to 1.21" takes every 1.21.x). A
+// server whose name holds no version gets no fit.
+func fit(minecraft, label string, match int) (string, string) {
+	found := versionRe.FindAllString(label, -1)
+	if match == 1 {
+		return FitOK, minecraft
+	}
+	if len(found) == 0 {
+		return "", ""
+	}
+	lo, hi := found[0], found[len(found)-1]
+	if match == 0 && version.Compare(lo, minecraft) <= 0 && (version.Compare(minecraft, hi) <= 0 || hi == major(hi) && major(minecraft) == hi) {
+		return FitOK, minecraft
+	}
+	if major(hi) == major(minecraft) {
+		return FitMinor, hi
+	}
+	return FitMajor, hi
+}
+
+// major is a version without its patch number: "1.21" of "1.21.4" and of
+// "1.21", "26.1" of "26.1.2". A snapshot ("25w14a") is its own.
+func major(v string) string {
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) < 2 {
+		return v
+	}
+	return parts[0] + "." + parts[1]
 }
 
 var versionRe = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?`)

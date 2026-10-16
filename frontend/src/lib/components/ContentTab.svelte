@@ -1,6 +1,8 @@
 <script lang="ts" module>
+  export type SortKey = 'state' | 'name' | 'status' | 'version' | 'source' | 'mode' | 'players' | 'ping';
+  type Sort = { key: SortKey; dir: 1 | -1 } | null;
   // The sort each tab was left on, kept while the launcher runs.
-  const sorts: Partial<Record<string, string>> = {};
+  const sorts: Partial<Record<string, Sort>> = {};
 </script>
 
 <script lang="ts">
@@ -9,7 +11,7 @@
   import { managed } from '../api/content';
   import type { AddResult, ContentItem, ContentKind, ContentStatus, Source } from '../api/types';
   import { hasBridge, onEvent } from '../bridge';
-  import { plural, searchIn, sentenceList } from '../format';
+  import { players, plural, searchIn, sentenceList } from '../format';
   import { query } from '../query.svelte';
   import { revs } from '../revs.svelte';
   import { projectKindOf } from '../labels';
@@ -20,6 +22,9 @@
   import Icon from '../ui/Icon.svelte';
   import Menu, { below } from '../ui/Menu.svelte';
   import SearchField from '../ui/SearchField.svelte';
+  import ServerPing from '../ui/ServerPing.svelte';
+  import ServerVersion from '../ui/ServerVersion.svelte';
+  import SortTitle from '../ui/SortTitle.svelte';
   import SplitButton from '../ui/SplitButton.svelte';
   import Toggle from '../ui/Toggle.svelte';
   import Empty from '../ui/Empty.svelte';
@@ -30,24 +35,24 @@
   let { instanceId, kind, chip: startChip }: Props = $props();
 
   type Chip = { label: string; test: (c: ContentItem) => boolean };
-  interface Config { noun: string; secondary: string; primary: string; toggles: boolean; exclusive?: boolean; hint?: string; projects: boolean; chips: (items: ContentItem[]) => Chip[] }
+  interface Config { noun: string; primary: string; toggles: boolean; exclusive?: boolean; hint?: string; projects: boolean; chips: (items: ContentItem[]) => Chip[] }
   const all: Chip = { label: 'All', test: () => true };
   const CONFIG: Record<ContentKind, Config> = {
-    mods: { noun: 'mods', secondary: 'Check updates', primary: 'Add mods', toggles: true, projects: true,
+    mods: { noun: 'mods', primary: 'Add mods', toggles: true, projects: true,
       // "Client only" (mods a local server leaves out) appears only when there are some.
       chips: (items) => [all, { label: 'Updates', test: (c) => c.status?.kind === 'update' }, { label: 'Disabled', test: (c) => !c.enabled },
         ...(items.some((c) => c.clientOnly) ? [{ label: 'Client only', test: (c: ContentItem) => !!c.clientOnly }] : [])] },
-    resourcepacks: { noun: 'resource packs', secondary: 'Check updates', primary: 'Add resource packs', toggles: true, projects: true,
+    resourcepacks: { noun: 'resource packs', primary: 'Add resource packs', toggles: true, projects: true,
       hint: 'Enabled packs higher in the list override the ones below. Drag a row to reorder.',
       chips: () => [all, { label: 'Enabled', test: (c) => c.enabled }, { label: 'Disabled', test: (c) => !c.enabled }] },
-    shaders: { noun: 'shader packs', secondary: 'Check updates', primary: 'Add shaders', toggles: true, exclusive: true, projects: true,
+    shaders: { noun: 'shader packs', primary: 'Add shaders', toggles: true, exclusive: true, projects: true,
       hint: 'Only one shader pack runs at a time. Uses Iris 1.8.1.', chips: () => [all] },
-    datapacks: { noun: 'data packs', secondary: 'Check updates', primary: 'Add data packs', toggles: true, projects: true,
+    datapacks: { noun: 'data packs', primary: 'Add data packs', toggles: true, projects: true,
       chips: (items) => [{ label: 'All worlds', test: () => true }, ...[...new Set(items.map((c) => c.group).filter((g) => g !== undefined))].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
-    worlds: { noun: 'worlds', secondary: 'Open folder', primary: 'Import world', toggles: false, projects: false,
+    worlds: { noun: 'worlds', primary: 'Import world', toggles: false, projects: false,
       // Survival and Creative always (as designed), then any other mode a world here has.
       chips: (items) => [all, ...[...new Set(['Survival', 'Creative', ...items.map((c) => c.group).filter((g): g is string => !!g)])].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
-    servers: { noun: 'servers', secondary: 'Refresh', primary: 'Add server', toggles: false, projects: false,
+    servers: { noun: 'servers', primary: 'Add server', toggles: false, projects: false,
       chips: () => [all, { label: 'Online', test: (c) => c.online === true }] },
   };
   // Where a row came from: the platform's logo, or a file icon.
@@ -91,30 +96,46 @@
       started = true;
     }
   });
-  // Search finds names and file names; the sort (Pandora's, Prism's) is kept per tab.
+  // The table: three layouts, each with its column titles (ContentTable.dc.html). `cls` is the
+  // cell's alignment class, shared by the title and the rows.
+  type Col = { key?: SortKey; label: string; cls?: string };
+  const layout = $derived(isManaged ? 'managed' : kind);
+  const COLUMNS = $derived<Col[]>(
+    isManaged ? [{ key: 'state', label: 'State' }, { label: '' }, { key: 'name', label: 'Name' }, { key: 'status', label: 'Status', cls: 'c-stat' }, { key: 'version', label: 'Version' }, { key: 'source', label: 'Platform', cls: 'cc opt' }]
+    : kind === 'worlds' ? [{ label: '' }, { key: 'name', label: 'Name' }, { label: '' }, { key: 'mode', label: 'Mode' }]
+    : [{ label: '' }, { key: 'name', label: 'Name' }, { key: 'version', label: 'Version', cls: 'end' }, { key: 'players', label: 'Players', cls: 'end' }, { key: 'ping', label: 'Ping', cls: 'end' }, { label: '' }],
+  );
+  // A column title sorts by it, again the other way, a third time back to the tab's own order:
+  // by name, or as Go lists them (resource packs' load order, worlds by last played, servers as saved).
+  const DEFAULT_SORT: Partial<Record<ContentKind, Sort>> = { mods: { key: 'name', dir: 1 }, shaders: { key: 'name', dir: 1 }, datapacks: { key: 'name', dir: 1 } };
   let sortBy = $state({ ...sorts });
-  const sort = $derived(sortBy[kind] ?? '');
-  function setSort(v: string) {
-    sortBy[kind] = sorts[kind] = v;
-    sortMenu = null;
+  const sort = $derived(sortBy[kind] === undefined ? (DEFAULT_SORT[kind] ?? null) : sortBy[kind]);
+  function sortOn(key: SortKey) {
+    const next: Sort = sort?.key !== key ? { key, dir: 1 } : sort.dir === 1 ? { key, dir: -1 } : (DEFAULT_SORT[kind] ?? null);
+    sortBy[kind] = sorts[kind] = next;
   }
-  let sortMenu = $state<{ x: number; y: number } | null>(null);
-  const SORTS = $derived([
-    { value: '', label: kind === 'resourcepacks' ? 'Load order' : 'Name' },
-    { value: 'added', label: 'Recently added' }, { value: 'size', label: 'Size' }, { value: 'enabled', label: 'Enabled first' },
-  ]);
-  const sortLabel = $derived(SORTS.find((o) => o.value === sort)?.label ?? '');
-  const ORDER: Record<string, (a: ContentItem, b: ContentItem) => number> = {
-    added: (a, b) => (b.added ?? 0) - (a.added ?? 0),
-    size: (a, b) => (b.size ?? 0) - (a.size ?? 0),
-    enabled: (a, b) => Number(isOn(b)) - Number(isOn(a)),
+  const names = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  // Text sorts with empty cells last; numbers sort the useful end first (most players, lowest ping).
+  const text = (a: string, b: string) => (a && b ? names.compare(a, b) : Number(!a) - Number(!b));
+  const NONE = 1e9;
+  const COMPARE: Record<SortKey, (a: ContentItem, b: ContentItem) => number> = {
+    state: (a, b) => Number(isOn(b)) - Number(isOn(a)),
+    name: (a, b) => names.compare(a.name, b.name),
+    status: (a, b) => text(badge(a)?.text ?? '', badge(b)?.text ?? ''),
+    version: (a, b) => (kind === 'servers' ? text(a.server?.online ? a.server.version : '', b.server?.online ? b.server.version : '') : text(a.meta, b.meta)),
+    source: (a, b) => text(a.source ? SOURCES[a.source][1] : '', b.source ? SOURCES[b.source][1] : ''),
+    mode: (a, b) => text(a.meta, b.meta),
+    players: (a, b) => (b.server?.players?.online ?? -1) - (a.server?.players?.online ?? -1),
+    ping: (a, b) => (a.server?.pingMs ?? NONE) - (b.server?.pingMs ?? NONE),
   };
+  // Search finds names and file names.
   const matches = (c: ContentItem, q: string) => c.name.toLowerCase().includes(q) || !!c.file?.toLowerCase().includes(q);
   const shown = $derived.by(() => {
     const q = search.trim().toLowerCase();
     const out = rows.filter((c) => (chips[chip] ?? all).test(c) && matches(c, q));
-    const by = ORDER[sort];
-    return by ? out.sort(by) : out;
+    if (!sort) return out;
+    const { key, dir } = sort;
+    return out.sort((a, b) => COMPARE[key](a, b) * dir);
   });
   const isOn = (c: ContentItem) => (cfg.exclusive ? active === c.id : c.enabled);
 
@@ -143,20 +164,32 @@
     return `${sentenceList(names.length > 3 ? [...names.slice(0, 2), `${names.length - 2} more`] : names)} ${names.length === 1 ? 'needs' : 'need'} ${ids.length === 1 ? 'it' : 'them'}`;
   }
 
-  // Selecting rows (the update review's checkbox, over the row's icon) for bulk
-  // actions: Shift-click picks a range, Ctrl+A everything shown, Esc clears.
+  // Selecting rows for bulk actions, by the box before each row's ⋮ (the title row's box
+  // picks every shown row): Ctrl-click a row ticks it, Shift-click picks the range from the
+  // last one, Esc clears.
   const selectable = $derived(isManaged);
   let picked = $state<Record<string, boolean>>({});
   let anchor: string | null = null;
-  let shiftHeld = false;
   const selected = $derived(rows.filter((c) => picked[c.id]));
+  const allPicked = $derived(shown.length > 0 && shown.every((c) => picked[c.id]));
+  function pickAll(on: boolean) {
+    for (const c of shown) picked[c.id] = on;
+  }
   $effect(() => {
     void kind;
     void instanceId;
     picked = {};
   });
-  function pick(c: ContentItem, on: boolean) {
-    anchor = pickRows(picked, shown.map((x) => x.id), c.id, on, anchor, shiftHeld);
+  function pick(c: ContentItem, on: boolean, range = false) {
+    anchor = pickRows(picked, shown.map((x) => x.id), c.id, on, anchor, range);
+  }
+  /** A click on a row with Ctrl (or Cmd) or Shift selects instead of doing what it hit. */
+  function rowClick(e: MouseEvent, c: ContentItem) {
+    swallow(e);
+    if (!selectable || !(e.ctrlKey || e.metaKey || e.shiftKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    pick(c, e.shiftKey || !picked[c.id], e.shiftKey);
   }
   $effect(() => {
     if (!selected.length) return;
@@ -195,25 +228,22 @@
     review();
   }
 
-  // "Check updates" checks, then opens the review; with updates already found it
+  // Check for updates checks, then opens the review; with updates already found it
   // opens the review straight away.
   const pending = $derived(rows.filter((c) => c.status?.kind === 'update').length);
   const review = () => go({ name: 'instance', id: instanceId, tab: kind, sub: 'updates' });
-  async function secondary() {
-    if (kind === 'worlds') return api.worlds.openFolder(instanceId).catch((e: unknown) => session.fail('Open folder', e));
-    if (kind === 'servers') {
-      checking = true;
-      try {
-        await api.servers.list(instanceId, true);
-        revs.bump('servers');
-      } catch (e) {
-        session.fail('Refresh', e);
-      } finally {
-        checking = false;
-      }
-      return;
+  async function refreshServers() {
+    checking = true;
+    try {
+      await api.servers.list(instanceId, true);
+      revs.bump('servers');
+    } catch (e) {
+      session.fail('Refresh', e);
+    } finally {
+      checking = false;
     }
-    if (!isManaged) return;
+  }
+  async function checkUpdates() {
     if (pending > 0) return review();
     checking = true;
     try {
@@ -298,7 +328,7 @@
 
   // Resource packs: drag an enabled row to reorder (the hint says so). The row
   // follows the pointer and the rows it passes make room; no new elements.
-  const reorderable = $derived(kind === 'resourcepacks' && chip === 0 && search.trim() === '' && sort === '');
+  const reorderable = $derived(kind === 'resourcepacks' && chip === 0 && search.trim() === '' && !sort);
   let drag = $state<{ id: string; y0: number; dy: number; h: number; from: number; to: number } | null>(null);
   function dragStart(e: PointerEvent, c: ContentItem) {
     if (!reorderable || !c.enabled || e.button !== 0 || (e.target as HTMLElement).closest('button')) return;
@@ -406,7 +436,6 @@
       case 'unknown': return { text: 'Unknown', cls: 'badge-warn' };
       case 'outdated': return { text: s.label, cls: 'badge-warn' };
       case 'world': return { text: s.world, cls: '' };
-      case 'offline': return { text: 'Offline', cls: 'badge-danger' };
       case 'problem': return { text: s.label, cls: s.tone === 'info' ? 'badge-info' : `badge-${s.tone}` };
     }
     return null;
@@ -423,8 +452,6 @@
       {/each}
     </div>
     <div style="flex: 1 1 0"></div>
-    {#if isManaged}<button class="btn btn-icon" aria-label="Sort {cfg.noun}: {sortLabel}" title="Sort: {sortLabel}" aria-haspopup="menu" aria-expanded={!!sortMenu} onclick={(e) => (sortMenu = below(e))}><Icon name="up-down" size={14} /></button>{/if}
-    <button class="btn" onclick={secondary}>{cfg.secondary}</button>
     {#if cfg.projects}
       <SplitButton accent href={href({ name: 'browse', type: projectKindOf(kind), instance: instanceId })} menuLabel="More ways to add {cfg.noun}" expanded={!!addMenu} onmenu={openAddMenu}><Icon name="plus" size={14} sw={2} />{cfg.primary}</SplitButton>
     {:else}
@@ -432,39 +459,67 @@
     {/if}
   </div>
   {#if hint}<p class="small faint" style="margin: 0">{hint}</p>{/if}
-  <div class="list" class:selecting={selected.length > 0} use:listKeys>
+  <div class="list" use:listKeys>
+    <!-- Column titles sort; the last cells hold select-all and the tab's check (updates, servers). -->
+    <div class="row row-head crow {layout}">
+      {#each COLUMNS as col, k (k)}
+        <span class={col.cls}>{#if col.key}{@const key = col.key}<SortTitle label={col.label} dir={sort?.key === key ? sort.dir : 0} onclick={() => sortOn(key)} />{:else}{col.label}{/if}</span>
+      {/each}
+      {#if selectable}<span class="cc"><Check on={allPicked} label="Select every shown {cfg.noun.replace(/s$/, '')}" onchange={pickAll} /></span>{/if}
+      <span class="cc">
+        {#if isManaged}
+          <button class="btn-bare" aria-label={pending ? `Review ${plural(pending, 'update')}` : 'Check for updates'} title={pending ? `Review ${plural(pending, 'update')}` : 'Check for updates'} disabled={checking} onclick={checkUpdates}><Icon name="update" size={16} class={checking ? 'spin' : ''} /></button>
+        {:else if kind === 'servers'}
+          <button class="btn-bare" aria-label="Refresh" title="Refresh" disabled={checking} onclick={refreshServers}><Icon name="refresh" size={14} sw={1.8} class={checking ? 'spin' : ''} /></button>
+        {/if}
+      </span>
+    </div>
     {#if items.data && !checking}
       {#each shown as c (c.id)}
         {@const on = isOn(c)}
         {@const b = badge(c)}
-        <div class="row crow" class:off={cfg.toggles && !on} class:drag={drag?.id === c.id} style={drag ? `transform: translateY(${shift(c)}px)` : undefined}
-          role={reorderable && c.enabled ? 'listitem' : undefined} onpointerdown={(e) => dragStart(e, c)} onpointermove={dragMove} onpointerup={dragEnd} onpointercancel={dragEnd} onclickcapture={swallow} ondragstart={(e) => reorderable && e.preventDefault()}>
-          <span>{#if cfg.toggles}<Toggle {on} label="Enable {c.name}" onchange={() => flip(c)} />{/if}</span>
-          <span class="pickcell">
+        <div class="row crow {layout}" class:sel={!!picked[c.id]} class:off={cfg.toggles && !on} class:drag={drag?.id === c.id} style={drag ? `transform: translateY(${shift(c)}px)` : undefined}
+          role={reorderable && c.enabled ? 'listitem' : undefined} onpointerdown={(e) => dragStart(e, c)} onpointermove={dragMove} onpointerup={dragEnd} onpointercancel={dragEnd}
+          onclickcapture={(e) => rowClick(e, c)} onmousedown={(e) => selectable && (e.shiftKey || e.ctrlKey || e.metaKey) && e.preventDefault()} ondragstart={(e) => reorderable && e.preventDefault()}>
+          {#if layout === 'managed'}
+            <span>{#if cfg.toggles}<Toggle {on} label="Enable {c.name}" onchange={() => flip(c)} />{/if}</span>
             <span class="media dim" style="background: {c.art.background}">{c.art.initial ?? ''}</span>
-            {#if selectable}<span class="pick" onclickcapture={(e) => (shiftHeld = e.shiftKey)}><Check on={!!picked[c.id]} label="Select {c.name}" onchange={(v) => pick(c, v)} /></span>{/if}
-          </span>
-          <a href={cfg.projects && c.ref ? href({ name: 'project', id: c.ref }) : undefined} class="dim" style="min-width: 0; text-decoration: none"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></a>
-          <span class="c-stat">
-            {#if b}<span class="badge {b.cls}">{b.text}</span>{/if}
-            {#if c.action}<button class="btn btn-sm" onclick={() => rowAction(c)}>{c.action}</button>{/if}
-          </span>
-          <span class="mono muted trunc">{c.meta}</span>
-          <span class="opt">{#if c.source}<span class="src" title={SOURCES[c.source][1]}><Icon name={SOURCES[c.source][0]} size={16} /></span>{/if}</span>
+            <a href={c.ref ? href({ name: 'project', id: c.ref }) : undefined} class="dim" style="min-width: 0; text-decoration: none"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></a>
+            <span class="c-stat">{#if b}<span class="badge trunc {b.cls}">{b.text}</span>{/if}</span>
+            <span class="mono muted trunc" title={c.meta}>{c.meta}</span>
+            <span class="cc opt dim">{#if c.source}<span class="src" title={SOURCES[c.source][1]}><Icon name={SOURCES[c.source][0]} size={16} /></span>{/if}</span>
+            <span class="cc"><Check on={!!picked[c.id]} label="Select {c.name}" onchange={(v) => pick(c, v)} /></span>
+          {:else if layout === 'worlds'}
+            <span class="media" style="background: {c.art.background}"></span>
+            <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></span>
+            <span class="c-stat">{#if b}<span class="badge trunc {b.cls}">{b.text}</span>{/if}{#if c.action}<button class="btn btn-sm" onclick={() => rowAction(c)}>{c.action}</button>{/if}</span>
+            <span class="muted trunc">{c.meta}</span>
+          {:else}
+            <span class="media" style="background: {c.art.background}"></span>
+            <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint mono" style="display: block">{c.sub}</span></span>
+            <span class="end">{#if c.server}<ServerVersion server={c.server} />{/if}</span>
+            <span class="end mono muted tnum trunc">{players(c.server?.players)}</span>
+            <span class="end"><ServerPing ms={c.server?.pingMs} /></span>
+            <span class="end">{#if c.action}<button class="btn btn-sm" onclick={() => rowAction(c)}>{c.action}</button>{/if}</span>
+          {/if}
           <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {c.name}" aria-haspopup="menu" disabled={!hasMenu} onclick={(e) => openMenu(e, c)}><Icon name="more" size={14} /></button>
         </div>
       {:else}
         <Empty text={items.data.length ? 'Nothing matches this filter.' : EMPTY[kind]} />
       {/each}
     {:else}
-      {#each SKELETON as [a, b], k (k)}
-        <div class="row crow" aria-hidden="true">
-          <div class="sk" style="width: 30px; height: 18px; border-radius: 9px"></div>
+      {#each SKELETON as [a, w], k (k)}
+        <div class="row crow {layout}" aria-hidden="true">
+          {#if layout === 'managed'}<div class="sk" style="width: 30px; height: 18px; border-radius: 9px"></div>{/if}
           <div class="sk" style="width: 32px; height: 32px; border-radius: 6px"></div>
-          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {a}"></div><div class="sk" style="height: 10px; width: {b}"></div></div>
-          <div></div>
-          <div class="sk" style="height: 10px; width: 64px"></div>
-          <div class="sk opt" style="width: 20px; height: 20px"></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {a}"></div><div class="sk" style="height: 10px; width: {w}"></div></div>
+          {#if layout === 'managed'}
+            <div></div><div class="sk" style="height: 10px; width: 56px"></div><div class="cc opt"><div class="sk" style="width: 16px; height: 16px"></div></div><div class="cc"><div class="sk" style="width: 16px; height: 16px"></div></div>
+          {:else if layout === 'worlds'}
+            <div></div><div class="sk" style="height: 10px; width: 64px"></div>
+          {:else}
+            <div class="end"><div class="sk" style="height: 20px; width: 52px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 56px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 64px"></div></div><div></div>
+          {/if}
           <div></div>
         </div>
       {/each}
@@ -484,14 +539,6 @@
     </div>
   {/if}
 </div>
-
-{#if sortMenu}
-  <Menu x={sortMenu.x} y={sortMenu.y} label="Sort {cfg.noun}" title="Sort by" onclose={() => (sortMenu = null)}>
-    {#each SORTS as o (o.value)}
-      <button class="mi" role="menuitem" aria-current={o.value === sort} onclick={() => setSort(o.value)}>{#if o.value === sort}<Icon name="check" size={14} />{:else}<span></span>{/if}<span>{o.label}</span><span></span></button>
-    {/each}
-  </Menu>
-{/if}
 
 {#if addMenu}
   <Menu x={addMenu.x} y={addMenu.y} label="More ways to add {cfg.noun}" onclose={() => (addMenu = null)}>
@@ -554,16 +601,23 @@
   .ct-tools > :global(*){flex:none}
   /* The .tabs idiom; the padding keeps focus rings inside the scroll box. */
   .ct-chips{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px;margin:-3px}
-  /* Right side, in order: status (Update, Locked) or action, version text, source, more. */
-  .crow{grid-template-columns:30px 32px minmax(0,1fr) 112px 104px 28px 28px}
-  @media (max-width:1100px){.crow{grid-template-columns:30px 32px minmax(0,1fr) 112px 96px 28px}.crow .opt{display:none}}
-  .c-stat{display:flex;justify-content:flex-end;gap:6px;min-width:0}
+  /* Columns (ContentTable.dc.html). Mods and packs: state, icon, name, status, version, platform,
+     select, more. Worlds: icon, name, Play, mode, more. Servers: icon, name, then version, players
+     and ping in equal columns with a wider gap, Join, more. */
+  .crow.managed{grid-template-columns:30px 32px minmax(0,1fr) 136px 72px 48px 28px 28px}
+  .crow.worlds{grid-template-columns:32px minmax(0,1fr) 112px 104px 28px}
+  .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,120px) 64px 28px;column-gap:24px}
+  @media (max-width:1100px){
+    .crow.managed{grid-template-columns:30px 32px minmax(0,1fr) 136px 72px 28px 28px}
+    .crow .opt{display:none}
+    .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,96px) 64px 28px;column-gap:16px}
+  }
+  /* Status is right-aligned with room before the version. */
+  .c-stat{display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0;margin-right:16px}
+  .end{display:flex;justify-content:flex-end;align-items:center;min-width:0}
+  .cc{display:flex;justify-content:center;align-items:center}
   .src{width:20px;height:20px;display:grid;place-items:center;color:var(--faint)}
   .media{width:32px;height:32px;border-radius:6px;display:grid;place-items:center;font-weight:600;font-size:13px;color:#0a0a0b}
-  /* The selection checkbox sits over the icon: shown on hover or focus, and on every row once something is selected. */
-  .pickcell{position:relative;width:32px;height:32px}
-  .pick{position:absolute;inset:0;display:grid;place-items:center;border-radius:6px;background:var(--raise);opacity:0}
-  .crow:hover .pick,.pick:focus-within,.selecting .pick{opacity:1}
   .bulk{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:8px;align-items:center;padding:12px 0;background:var(--bg)}
   /* Dragging a resource pack: the held row rides above the others, which slide to make room. */
   .crow[role="listitem"]{cursor:grab}

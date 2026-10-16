@@ -180,6 +180,11 @@ button.chip:not(.on):hover{color:var(--text)}
 .row{display:grid;align-items:center;column-gap:14px;height:var(--row-lg);padding:0 12px}
 .row-sm{height:var(--row-sm)}
 .row-head{height:32px;font-size:12px;color:var(--faint);background:var(--bg)}
+/* A sortable column title (SortTitle): the arrow shows on hover and on the column it sorts by. */
+.th{display:inline-flex;align-items:center;gap:4px;height:32px;max-width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;white-space:nowrap}
+.th:hover,.th.on{color:var(--text)}
+.th .th-ar{flex:none;opacity:0;transition:opacity 120ms ease}
+.th:hover .th-ar,.th.on .th-ar{opacity:1}
 .row:hover:not(.row-head){background:color-mix(in srgb,var(--raise) 60%,transparent)}
 .row.sel{background:var(--raise)}
 .row.off .dim{opacity:.45}
