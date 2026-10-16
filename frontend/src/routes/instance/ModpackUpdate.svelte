@@ -95,7 +95,7 @@
         <section class="card" aria-label="Before updating">
           <div class="setting" style="min-height: 48px"><span class="setting-title">Back up worlds first</span><Toggle bind:on={backup} label="Back up worlds first" /></div>
         </section>
-        <button class="btn btn-accent btn-block" disabled={busy || session.running[i.id]} onclick={update}>{older ? 'Go back to' : 'Update to'} {d.to}</button>
+        <button class="btn btn-accent btn-block" disabled={busy || session.busy(i.id)} onclick={update}>{older ? 'Go back to' : 'Update to'} {d.to}</button>
       </aside>
     </div>
   {:else}

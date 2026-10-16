@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '../api';
+  import { gb, mb } from '../format';
   import type { HostWorld } from '../api/host';
   import { query } from '../query.svelte';
   import { go } from '../router.svelte';
@@ -32,7 +33,7 @@
     ({ world, lan, offline } = s.options);
     port = String(s.options.port);
     players = String(s.options.maxPlayers);
-    memory = String(s.options.memoryMB);
+    memory = String(gb(s.options.memoryMB));
   });
 
   /** "31 of 48 also run on servers. 17 client-only mods are left out." */
@@ -47,7 +48,7 @@
 
   const num = (s: string) => (/^\d+$/.test(s.trim()) ? Number(s.trim()) : NaN);
   function start() {
-    const o = { world, port: num(port), maxPlayers: num(players), memoryMB: num(memory), lan, offline };
+    const o = { world, port: num(port), maxPlayers: num(players), memoryMB: mb(num(memory)), lan, offline };
     if ([o.port, o.maxPlayers, o.memoryMB].some(Number.isNaN)) {
       session.notify({ tone: 'error', subject: "Couldn't start the server", text: 'Port, max players and memory are whole numbers.' });
       return;
@@ -78,7 +79,7 @@
   <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
     <label class="field"><span class="field-label">Port</span><span class="input"><input class="mono" bind:value={port} inputmode="numeric" /></span></label>
     <label class="field"><span class="field-label">Max players</span><span class="input"><input class="tnum" bind:value={players} inputmode="numeric" /></span></label>
-    <label class="field"><span class="field-label">Memory</span><span class="input"><input class="tnum" bind:value={memory} inputmode="numeric" /><span class="suffix">MB</span></span></label>
+    <label class="field"><span class="field-label">Memory</span><span class="input"><input class="tnum" bind:value={memory} inputmode="numeric" /><span class="suffix">GB</span></span></label>
   </div>
   <div class="card">
     <div class="setting" style="min-height: 48px"><span><span class="setting-title" style="display: block">Mods</span><span class="setting-desc" style="display: block">{#if mods.data}{modsText}{:else}<span class="sk" style="display: inline-block; height: 10px; width: 70%" aria-hidden="true"></span>{/if}</span></span><button class="btn btn-sm btn-ghost" onclick={review}>Review</button></div>

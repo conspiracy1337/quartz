@@ -19,7 +19,7 @@
   const accounts = query(() => api.accounts.list());
   const instances = query(() => api.instances.list());
   const inst = $derived(instances.data?.find((i) => i.id === instanceId));
-  const running = $derived(!!session.running[instanceId]);
+  const running = $derived(session.busy(instanceId));
   const host = $derived(session.hosting?.instanceId === instanceId ? session.hosting : null);
   const close = () => (session.instanceMenu = null);
   // Act first: closing the menu unmounts this component and its props with it.

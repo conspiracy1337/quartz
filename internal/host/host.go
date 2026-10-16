@@ -51,7 +51,7 @@ var (
 	ErrWorldOpen  = errors.New("host: that world is open in a game; close it first")
 	ErrBadPort    = errors.New("host: the port is a number from 1024 to 65535")
 	ErrBadPlayers = errors.New("host: max players is a number from 1 to 999")
-	ErrBadMemory  = errors.New("host: memory is at least 512 MB and at most what this computer has")
+	ErrBadMemory  = errors.New("host: memory is at least 1 GB and at most what this computer has")
 	ErrBadCommand = errors.New("host: a command is one line of up to 256 characters")
 )
 
@@ -59,7 +59,7 @@ var (
 const (
 	DefaultPort    = 25565
 	defaultPlayers = 10
-	minMemoryMB    = 512
+	minMemoryMB    = 1024
 	maxCommand     = 256
 )
 

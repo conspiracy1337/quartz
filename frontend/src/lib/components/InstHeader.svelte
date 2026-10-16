@@ -13,7 +13,7 @@
   interface Props { instance: Instance; tab: InstanceTab }
   let { instance: i, tab }: Props = $props();
 
-  const running = $derived(!!session.running[i.id]);
+  const running = $derived(session.busy(i.id));
   // ⋮ opens the same menu as a right-click on the instance.
   const menuOpen = $derived(session.instanceMenu?.instanceId === i.id);
   const host = $derived(session.hosting?.instanceId === i.id ? session.hosting : null);
