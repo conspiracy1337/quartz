@@ -689,12 +689,18 @@ func (a *app) watchDownloads() {
 	})
 }
 
-// watchAccounts wakes the background refresher when its settings change.
+// watchAccounts wakes the background refresher when its settings change, and
+// when a game exits (it skips accounts a running game signed in with).
 func (a *app) watchAccounts() {
 	cur := a.settings.Get().Accounts
 	a.bus.Subscribe(events.SettingsChanged, func(p any) {
 		if next := p.(settings.Settings).Accounts; next != cur {
 			cur = next
+			a.accounts.Wake()
+		}
+	})
+	a.bus.Subscribe(events.GameState, func(p any) {
+		if st, ok := p.(launch.State); ok && st.State == "exited" {
 			a.accounts.Wake()
 		}
 	})

@@ -27,7 +27,7 @@
   const CHANNELS = ['Release', 'Beta', 'Alpha'] as const;
   const SOURCES = ['modrinth', 'curseforge', 'norisk'] as const;
   /** A version's channel as one boxed letter: green R, orange B, red A. */
-  const CHANNEL_BADGE = { Release: 'badge-accent', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
+  const CHANNEL_BADGE = { Release: 'badge-ok', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
   const isModLoader = (l: string): l is Loader => l in LOADER_NAMES;
 
   const instances = query(() => api.instances.list());

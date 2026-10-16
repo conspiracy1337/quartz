@@ -162,6 +162,7 @@ button.tab.on{border-bottom-color:var(--text)}
 button.chip:not(.on):hover{color:var(--text)}
 .badge{height:20px;padding:0 7px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:11px;white-space:nowrap;background:var(--raise);color:var(--muted)}
 .badge-accent{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.badge-ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
 .badge-warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent)}
 .badge-danger{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
 .badge-info{color:var(--info);background:color-mix(in srgb,var(--info) 12%,transparent)}
