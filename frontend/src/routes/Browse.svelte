@@ -8,7 +8,7 @@
   import { LOADER_NAMES, PROJECT_TYPES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { query } from '$lib/query.svelte';
-  import { go, href } from '$lib/router.svelte';
+  import { go, href, isPackSource } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
   import { lastTouched } from '$lib/instances';
   import { session } from '$lib/session.svelte';
@@ -134,7 +134,7 @@
 
   // Results merge both sources: downloads are added up, and the date is the most recent update on either side.
   const merged = (p: ProjectHit) => {
-    const srcs = [p.modrinth, p.curseforge].filter((x) => x !== undefined);
+    const srcs = [p.modrinth, p.curseforge, p.norisk].filter((x) => x !== undefined);
     return { downloads: srcs.reduce((n, x) => n + x.downloads, 0), updated: Math.max(...srcs.map((x) => x.updated)) };
   };
 
@@ -147,17 +147,17 @@
   async function install(r: ProjectHit) {
     const t = projectType(type);
     const into = t.content ? target : undefined;
-    let source: Src = r.modrinth ? 'modrinth' : 'curseforge';
+    let source: Src = r.modrinth ? 'modrinth' : r.curseforge ? 'curseforge' : 'norisk';
     try {
       if (r.modrinth && r.curseforge) source = await api.browse.prefer(r.ref, into?.id ?? '');
     } catch (e) {
       return session.fail('Install', e);
     }
-    if (!t.content) {
+    if (!t.content && isPackSource(source)) {
       session.packHint = { ref: r.ref, name: r.name, author: r.author, summary: r.summary, ...(r.icon ? { icon: r.icon } : {}) };
       return go({ name: 'import', ref: r.ref, source });
     }
-    if (into) void installInto(into.id, r.ref, source, t.content);
+    if (into && t.content) void installInto(into.id, r.ref, source, t.content);
   }
 </script>
 
@@ -181,7 +181,7 @@
             <div class="row res">
               <Tile art={r.art ?? artOf(r.name, r.icon)} size="lg" />
               <a href={href({ name: 'project', id: r.ref })} style="min-width: 0; text-decoration: none"><span style="display: flex; gap: 8px; align-items: baseline; min-width: 0"><span class="trunc" style="font-weight: 600">{r.name}</span><span class="small faint trunc" style="flex: 0 1 auto">by {r.author}</span></span><span class="muted clamp2" style="display: -webkit-box; margin-top: 2px; height: 40px">{r.summary}</span></a>
-              <span class="opt" style="flex-direction: column; gap: 2px"><span class="tnum muted small">{compact(m.downloads)} downloads</span><span class="small faint">Updated {ago(m.updated)}</span></span>
+              <span class="opt" style="flex-direction: column; gap: 2px"><span class="tnum muted small">{r.norisk ? `From ${SRC_NAMES.norisk}` : `${compact(m.downloads)} downloads`}</span><span class="small faint">Updated {ago(m.updated)}</span></span>
               <span style="display: flex; justify-content: flex-end">{#if isInstalled(r)}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={showTarget && !target} onclick={() => install(r)}>Install</button>{/if}</span>
             </div>
           {:else}

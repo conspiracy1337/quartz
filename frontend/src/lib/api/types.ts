@@ -102,7 +102,7 @@ export interface PendingUpdate { name: string; art: Art; from: string; to: strin
 
 // ---- content tabs ----
 export type ContentKind = 'mods' | 'resourcepacks' | 'shaders' | 'datapacks' | 'worlds' | 'servers';
-export type Source = 'modrinth' | 'curseforge' | 'file';
+export type Source = 'modrinth' | 'curseforge' | 'norisk' | 'file';
 export type ContentStatus =
   | { kind: 'update'; version: string }
   | { kind: 'locked' }
@@ -297,7 +297,8 @@ export interface SignInEvent {
 export type ProjectType = 'Mods' | 'Modpacks' | 'Resource packs' | 'Shaders' | 'Data packs' | 'Worlds';
 /** Go's project types, in Browse's tab order. */
 export type ProjectKind = 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datapack' | 'world';
-export type Src = 'modrinth' | 'curseforge';
+/** A platform: Modrinth, CurseForge, or the built-in NoRisk source of NoRiskClient's own mods. */
+export type Src = 'modrinth' | 'curseforge' | 'norisk';
 /** One heading of Browse's category filters and its names. */
 export interface CategoryGroup { title: string; names: string[] }
 export interface SourceStats { downloads: number; updated: number }
@@ -313,6 +314,7 @@ export interface ProjectHit {
   art?: PreviewOnly<Art>;
   modrinth?: SourceStats;
   curseforge?: SourceStats;
+  norisk?: SourceStats;
   /** The target instance already has it. */
   installed?: boolean;
 }
@@ -355,7 +357,7 @@ export interface ProjectSide {
 export interface InstalledVersion { item: string; source: Src; versionId: string; version: string; published: number }
 export interface ProjectPage {
   ref: string; type: ProjectKind; name: string;
-  modrinth?: ProjectSide; curseforge?: ProjectSide;
+  modrinth?: ProjectSide; curseforge?: ProjectSide; norisk?: ProjectSide;
   /** The platform shown and installed from by default: Modrinth unless CurseForge has a newer release. */
   preferred: Src;
   /** Why: on one platform only, the same latest release on both, or a newer one; '' when unknown. */

@@ -35,4 +35,4 @@ export const projectType = (k: ProjectKind) => PROJECT_TYPES.find((t) => t.kind 
 /** The project type a content tab installs. */
 export const projectKindOf = (c: ContentKind): ProjectKind => PROJECT_TYPES.find((t) => t.content === c)?.kind ?? 'mod';
 
-export const SRC_NAMES: Record<Src, string> = { modrinth: 'Modrinth', curseforge: 'CurseForge' };
+export const SRC_NAMES: Record<Src, string> = { modrinth: 'Modrinth', curseforge: 'CurseForge', norisk: 'NoRisk' };

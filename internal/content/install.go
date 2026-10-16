@@ -368,7 +368,8 @@ func (s *Service) presence(v *view) presence {
 	p := presence{byID: map[string]presenceItem{}, bySlug: map[string]presenceItem{}}
 	for item, e := range v.idx.Entries {
 		k := v.known[e.SHA1]
-		for _, id := range []*Ident{k.Modrinth, k.CurseForge} {
+		for _, src := range modplatform.Sources {
+			id := k.By(src)
 			if id == nil {
 				continue
 			}

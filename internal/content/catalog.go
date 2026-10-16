@@ -44,6 +44,7 @@ type Known struct {
 	Bad        bool       `json:"bad,omitempty"` // not a valid item of its kind
 	Modrinth   *Ident     `json:"modrinth,omitempty"`
 	CurseForge *Ident     `json:"curseforge,omitempty"`
+	NoRisk     *Ident     `json:"norisk,omitempty"`
 	IdentAt    int64      `json:"identAt,omitempty"` // when platforms were last asked
 	// Rev is the metadata parser revision Info was read with (see metaRev).
 	Rev int `json:"rev,omitempty"`
@@ -56,21 +57,48 @@ const metaRev = 1
 // Ref names the blob's project on every platform that knows it.
 func (k Known) Ref() modplatform.Ref {
 	var r modplatform.Ref
-	if k.Modrinth != nil {
-		r.Modrinth = k.Modrinth.ProjectID
-	}
-	if k.CurseForge != nil {
-		r.CurseForge = k.CurseForge.ProjectID
+	for _, src := range modplatform.Sources {
+		if id := k.By(src); id != nil {
+			r = r.With(src, id.ProjectID)
+		}
 	}
 	return r
 }
 
-// Ident returns the preferred identification: Modrinth, else CurseForge.
+// Ident returns the preferred identification: the first platform in
+// modplatform.Sources that knows the blob (Modrinth, CurseForge, NoRisk).
 func (k Known) Ident() *Ident {
-	if k.Modrinth != nil {
-		return k.Modrinth
+	for _, src := range modplatform.Sources {
+		if id := k.By(src); id != nil {
+			return id
+		}
 	}
-	return k.CurseForge
+	return nil
+}
+
+// By is the blob's identification on src, or nil.
+func (k Known) By(src modplatform.Source) *Ident {
+	switch src {
+	case modplatform.Modrinth:
+		return k.Modrinth
+	case modplatform.CurseForge:
+		return k.CurseForge
+	case modplatform.NoRisk:
+		return k.NoRisk
+	}
+	return nil
+}
+
+// Set records the blob's identification on src.
+func (k *Known) Set(src modplatform.Source, id *Ident) {
+	switch src {
+	case modplatform.Modrinth:
+		k.Modrinth = id
+	case modplatform.CurseForge:
+		k.CurseForge = id
+	case modplatform.NoRisk:
+		k.NoRisk = id
+	}
 }
 
 type catalogDoc struct {

@@ -257,18 +257,16 @@ type Installed struct {
 	Item string `json:"item"`
 	Kind Kind   `json:"kind"`
 	Name string `json:"name"`
-	// Modrinth and CurseForge are the item's version on each platform that
-	// knows it.
+	// Modrinth, CurseForge and NoRisk are the item's version on each
+	// platform that knows it.
 	Modrinth   *Ident `json:"modrinth,omitempty"`
 	CurseForge *Ident `json:"curseforge,omitempty"`
+	NoRisk     *Ident `json:"norisk,omitempty"`
 }
 
 // Ident is the item's identification on src.
 func (i Installed) Ident(src modplatform.Source) *Ident {
-	if src == modplatform.CurseForge {
-		return i.CurseForge
-	}
-	return i.Modrinth
+	return Known{Modrinth: i.Modrinth, CurseForge: i.CurseForge, NoRisk: i.NoRisk}.By(src)
 }
 
 // Installed lists an instance's identified items, from its index (no scan).
@@ -280,10 +278,10 @@ func (s *Service) Installed(id string) []Installed {
 	var out []Installed
 	for item, e := range v.idx.Entries {
 		k := v.known[e.SHA1]
-		if k.Modrinth == nil && k.CurseForge == nil {
+		if k.Ident() == nil {
 			continue
 		}
-		out = append(out, Installed{Item: item, Kind: e.Kind, Name: displayName(e, k), Modrinth: k.Modrinth, CurseForge: k.CurseForge})
+		out = append(out, Installed{Item: item, Kind: e.Kind, Name: displayName(e, k), Modrinth: k.Modrinth, CurseForge: k.CurseForge, NoRisk: k.NoRisk})
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Item < out[b].Item })
 	return out

@@ -54,7 +54,7 @@ var (
 
 func checkSource(src string) (modplatform.Source, error) {
 	switch modplatform.Source(src) {
-	case modplatform.Modrinth, modplatform.CurseForge:
+	case modplatform.Modrinth, modplatform.CurseForge, modplatform.NoRisk:
 		return modplatform.Source(src), nil
 	}
 	return "", ErrBadSource

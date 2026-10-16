@@ -17,7 +17,10 @@ export type SetupStep = 1 | 2 | 3;
 /** Browse's tabs (Go's project types). */
 export const PROJECT_KINDS = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'] as const;
 type Kind = (typeof PROJECT_KINDS)[number];
+/** The platforms modpacks come from (NoRisk serves mods only). */
 const SOURCES = ['modrinth', 'curseforge'] as const;
+export type PackSource = (typeof SOURCES)[number];
+export const isPackSource = (s: string): s is PackSource => isOneOf(SOURCES, s);
 
 export type Route =
   | { name: 'home' }
