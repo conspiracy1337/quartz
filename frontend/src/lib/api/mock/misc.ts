@@ -1,4 +1,4 @@
-import type { ImportPreview, InstallPlan, JavaRuntime, KeyChoice, Keybind, ManualView, ModUpdate, ModpackDiffRow, OtherLauncher, PackVersion, SyncEntry, SyncGroups } from '../types';
+import type { ExportEntry, ExportPlan, ExportPreview, ImportPreview, InstallPlan, JavaRuntime, KeyChoice, Keybind, ManualView, ModUpdate, ModpackDiffRow, OtherLauncher, PackVersion, SyncEntry, SyncGroups } from '../types';
 import { date, daysAgo } from './time';
 
 const S = (id: string, name: string, path: string, users: number, enabled: boolean, available = true): SyncEntry => ({ id, name, path, users, enabled, available });
@@ -148,3 +148,26 @@ export const manualView: ManualView = {
     { id: '2', name: 'Controlling', fileName: 'Controlling-forge-1.16.5-7.0.0.jar', size: 88_000, state: 'waiting', twin: false, page: 'https://www.curseforge.com/minecraft/mc-mods/controlling', art: { background: '#9aa3ad', initial: 'C' } },
   ],
 };
+
+/** The preview's export contents: the design board's sample instance. */
+const MODS: ExportEntry[] = [
+  { name: 'Sodium', detail: '0.6.5', bytes: 1_100_000, source: 'modrinth' },
+  { name: 'Lithium', detail: '0.14.3', bytes: 712_000, source: 'modrinth' },
+  { name: 'Iris Shaders', detail: '1.8.1', bytes: 2_400_000, source: 'modrinth' },
+  { name: 'Mod Menu', detail: '13.0.0', bytes: 540_000, source: 'modrinth' },
+  { name: "Xaero's Minimap", detail: '25.0.2', bytes: 1_900_000, source: 'curseforge' },
+  { name: 'Just Enough Items', detail: '19.21.0', bytes: 1_300_000, source: 'curseforge' },
+];
+const OWN: ExportEntry[] = [{ name: 'my-tweaks.jar', bytes: 48_000 }, { name: 'OptiLeaves-local.jar', bytes: 96_000 }];
+const OFF: ExportEntry[] = [{ name: 'Zoomify', detail: '2.14.2', bytes: 204_000 }];
+const EXTRA: ExportEntry[] = [{ name: 'config/', detail: '48 files', bytes: 312_000 }, { name: 'options.txt', bytes: 6_000 }, { name: 'servers.dat', bytes: 1_000 }];
+export function exportPreview(plan: ExportPlan): ExportPreview {
+  const sum = (l: ExportEntry[]) => l.reduce((n, e) => n + e.bytes, 0);
+  const none = { linked: [], bundled: [], listed: [], unlisted: [], off: OFF };
+  if (plan.format === 'list') return { ...none, listed: MODS, unlisted: OWN, bytes: plan.list === 'json' ? 2_900 : 1_100 };
+  const extra = [...(plan.include.config ? [EXTRA[0]!] : []), ...(plan.include.options ? [EXTRA[1]!] : []), ...(plan.include.servers ? [EXTRA[2]!] : [])];
+  const own = plan.format === 'mrpack' ? 'modrinth' : 'curseforge';
+  const linked = plan.format === 'zip' ? [] : MODS.filter((m) => m.source === own);
+  const bundled = [...MODS.filter((m) => !linked.includes(m)).map(({ source: _, ...m }) => m), ...OWN, ...extra];
+  return { ...none, linked, bundled, bytes: sum(bundled) };
+}
