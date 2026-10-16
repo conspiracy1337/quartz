@@ -241,7 +241,8 @@ func TestLaunchOffline(t *testing.T) {
 // TestTwoCopies starts two real game windows of one instance with the same
 // offline account, sharing worlds: the first sees the shared folder in
 // place, the second a private view that merges back when it stops. It needs
-// a display and QUARTZ_IT_LAUNCH=1.
+// a display and QUARTZ_IT_LAUNCH=1; QUARTZ_IT_SANDBOX=standard|strict
+// runs both copies in the sandbox.
 func TestTwoCopies(t *testing.T) {
 	if os.Getenv("QUARTZ_IT_LAUNCH") != "1" || (os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "") {
 		t.Skip("set QUARTZ_IT_LAUNCH=1 with a display to open two game windows")
@@ -261,11 +262,18 @@ func TestTwoCopies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inst, err := insts.Create(instance.CreateRequest{Name: "Two copies", Minecraft: "1.21.4"})
+	preset := os.Getenv("QUARTZ_IT_SANDBOX")
+	inst, err := insts.Create(instance.CreateRequest{Name: "Two copies", Minecraft: "1.21.4", Sandbox: preset != ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	shared := syncing.New(syncing.Config{Root: filepath.Join(h.root, "shared"), Trash: filepath.Join(h.root, "trash"), Settings: st, Instances: insts, Bus: bus, Log: h.log})
+	if preset != "" {
+		if inst, err = insts.EditSandbox(inst.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset), runtime.GOOS); return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shared := syncing.New(syncing.Config{Root: filepath.Join(h.root, "shared"), Trash: filepath.Join(h.root, "trash"), Settings: st, Instances: insts, Bus: bus, Log: h.log,
+		ClientJar: func(mc string) string { return filepath.Join(h.root, "store", "versions", mc, mc+".jar") }})
 	if err := shared.JoinAll(h.ctx(), inst.ID, []string{"saves", "options"}); err != nil {
 		t.Fatal(err)
 	}
@@ -275,6 +283,14 @@ func TestTwoCopies(t *testing.T) {
 		Instances: insts, Accounts: mgr, Installer: h.installer(), Loaders: h.loaders(), Java: h.java, Tasks: h.tasks,
 		Settings: st, Bus: bus, Redactor: red, BinDir: filepath.Join(h.root, "store", "bin"), Log: h.log,
 		Syncing: shared, Views: runview.New(runview.Config{Log: h.log}),
+		Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log}), StoreRead: h.storeRead(),
+	})
+	bus.Subscribe(events.GameLog, func(p any) {
+		for _, ln := range p.(launch.LogBatch).Lines {
+			if ln.Level == "ERROR" || ln.Level == "WARN" {
+				t.Logf("game %s: %s", ln.Level, ln.Message)
+			}
+		}
 	})
 	states := make(chan launch.State, 8)
 	failed := make(chan launch.Failure, 2)

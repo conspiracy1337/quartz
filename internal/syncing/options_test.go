@@ -101,6 +101,29 @@ func TestOptionsMergeAcrossVersions(t *testing.T) {
 	}
 }
 
+// A new instance joining shared options gets them in a file that also names
+// the game's data version, which Minecraft needs to read it.
+func TestNewOptionsFileGetsDataVersion(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.client = jar(t, filepath.Join(e.dir, "client.jar"), map[string]string{"version.json": `{"world_version":4189,"protocol_version":769}`})
+	put(t, e.game(e.b, "options.txt"), "version:1343\nfov:0.5\n")
+	e.enable(OptionsID)
+	if err := e.svc.Join(ctx, e.b, OptionsID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Join(ctx, e.a, OptionsID); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Remove(e.game(e.a, "options.txt"))
+	if _, err := e.svc.Prepare(e.a); err != nil {
+		t.Fatal(err)
+	}
+	if got := get(t, e.game(e.a, "options.txt"), "version"); got != "4189" || get(t, e.game(e.a, "options.txt"), "fov") != "0.5" {
+		t.Fatalf("version %q in:\n%s", got, body(t, e.game(e.a, "options.txt")))
+	}
+}
+
 func TestSharedKeybinds(t *testing.T) {
 	e := newEnv(t)
 	put(t, e.game(e.b, "options.txt"), "key_key.sprint:29\nkey_key.attack:-100\n")

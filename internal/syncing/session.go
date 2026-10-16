@@ -3,8 +3,10 @@ package syncing
 import (
 	"context"
 	"path/filepath"
+	"strconv"
 	"time"
 
+	"quartz/internal/content/meta"
 	"quartz/internal/core/keycodes"
 	"quartz/internal/core/optfile"
 	"quartz/internal/settings"
@@ -77,6 +79,13 @@ func (s *Service) Prepare(id string) (*Session, error) {
 		changed = true
 	}
 	if changed {
+		// A new file needs the game's data version: without one Minecraft takes
+		// it for an ancient file, can't read its keybinds and resets every option.
+		if !f.Exist && !f.Has("version") {
+			if v := s.dataVersion(in.Minecraft); v > 0 {
+				f.Set("version", strconv.Itoa(v))
+			}
+		}
 		if err := f.Write(se.optionsPath()); err != nil {
 			return nil, err
 		}
@@ -217,4 +226,14 @@ func (s *Service) RunFolders(id string) []RunFolder {
 		out = append(out, RunFolder{Rel: t.Path, Shared: s.SharedPath(t)})
 	}
 	return out
+}
+
+// dataVersion is the data version a Minecraft version writes options.txt
+// with, from its client jar (0 when unknown: jars before 1.14 don't say).
+func (s *Service) dataVersion(mc string) int {
+	if s.c.ClientJar == nil {
+		return 0
+	}
+	cf, _ := meta.ClientPack(s.c.ClientJar(mc))
+	return cf.WorldVersion
 }

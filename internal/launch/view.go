@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"time"
 
 	"quartz/internal/core/linkx"
 	"quartz/internal/java"
@@ -28,7 +29,7 @@ func (l *Launcher) assemble(sp *spec) error {
 	if l.cfg.Views == nil {
 		return nil
 	}
-	req := runview.Request{Game: sp.gameDir, Scratch: l.scratch(sp)}
+	req := runview.Request{Game: sp.gameDir, Scratch: l.scratch(sp), LiveSaves: locksWorlds(sp)}
 	mode := runview.Shared
 	if sp.sandboxed {
 		switch sp.inst.Sandbox.Level(rules.Synced, runtime.GOOS) {
@@ -51,6 +52,17 @@ func (l *Launcher) assemble(sp *spec) error {
 	sp.gameDir = v.GameDir()
 	l.cfg.Log.Info("run view", "instance", sp.inst.ID, "run", sp.runID, "backend", v.Backend(), "folders", len(req.Folders))
 	return nil
+}
+
+// worldLockSince is Minecraft 1.16's release. From then on the game holds a
+// file lock on session.lock while a world is open and refuses a world
+// another game has locked, so copies of an instance can share their saves
+// live (runview.Request.LiveSaves) instead of each keeping a private view.
+var worldLockSince = time.Date(2020, 6, 23, 0, 0, 0, 0, time.UTC)
+
+// locksWorlds reports whether the run's Minecraft locks the worlds it opens.
+func locksWorlds(sp *spec) bool {
+	return sp.res != nil && sp.res.Version != nil && !sp.res.Version.ReleaseTime.Before(worldLockSince)
 }
 
 // natives is the folder the game loads and unpacks native libraries in.
