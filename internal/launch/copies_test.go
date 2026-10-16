@@ -74,6 +74,9 @@ func TestTwoCopiesRunAndMergeBack(t *testing.T) {
 	if !l.Running(inst.ID) || len(l.running[inst.ID]) != 2 || !l.AccountInUse("acc") {
 		t.Fatal("two copies should run")
 	}
+	if c := l.Copies(inst.ID); len(c) != 2 || c[0].RunID != "20260101-000000.001" || c[1].RunID != "20260101-000000.002" || c[1].AccountID != "acc" {
+		t.Fatalf("the live console lists each copy, oldest first: %+v", c)
+	}
 	if left, _ := filepath.Glob(filepath.Join(insts.RunsDir(inst.ID), "*"+pendingExt)); len(left) != 2 {
 		t.Fatalf("each running copy is recorded for a later launcher: %v", left)
 	}

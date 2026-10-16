@@ -1,18 +1,20 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
+  import { tick } from 'svelte';
   import { api } from '$lib/api';
-  import type { LogLevel, LogLine } from '$lib/api/types';
+  import type { LiveCopy, LogLevel, LogLine } from '$lib/api/types';
   import { onEvent } from '$lib/bridge';
-  import LogsNav from '$lib/components/LogsNav.svelte';
+  import LogsFrame from '$lib/components/LogsFrame.svelte';
   import SearchField from '$lib/ui/SearchField.svelte';
+  import Icon from '$lib/ui/Icon.svelte';
   import { copyText } from '$lib/clipboard';
+  import { since } from '$lib/format';
+  import { query } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
-  import { follows } from '$lib/console';
 
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
 
-  // The console keeps the newest lines of the current run; Go streams new ones in batches.
+  // The console keeps the newest lines of one source; Go streams new ones in batches.
   const MAX_LINES = 20_000;
   const WRAPPED_LINES = 2_000;
   const ROW = 20;
@@ -25,33 +27,40 @@
   let height = $state(600);
   let follow = true;
 
-  // With several copies running (or the instance hosted as a server), the console
-  // follows the newest run: the one that started last, or the first one it hears from.
+  // Sources (LogsD.dc.html): each running copy and, while this instance hosts, its server.
+  // The console shows the one picked, else the newest copy, else the server, else the last run.
+  const accounts = query(() => api.accounts.list());
+  let copies = $state.raw<LiveCopy[]>([]);
+  let picked = $state('');
+  const hosted = $derived(session.hosting?.instanceId === instanceId ? session.hosting : null);
+  const source = $derived(
+    (picked === 'server' && hosted) || copies.some((c) => c.runId === picked) ? picked : (copies.at(-1)?.runId ?? (hosted ? 'server' : '')),
+  );
+  const accountName = (id: string) => accounts.data?.find((a) => a.id === id)?.name ?? 'Unknown account';
   $effect(() => {
     const id = instanceId;
+    const load = () => void api.logs.copies(id).then((c) => (copies = c ?? []));
+    load();
+    return onEvent<{ instanceId: string }>('game:state', (s) => s.instanceId === id && load());
+  });
+
+  $effect(() => {
+    const id = instanceId;
+    const src = source;
+    const server = src === 'server';
     let alive = true;
-    let run = '';
-    const hosted = untrack(() => session.hosting?.instanceId === id);
-    void (hosted ? api.host.live(id) : api.logs.live(id)).then((l) => {
+    all = [];
+    follow = true;
+    void (server ? api.host.live(id) : api.logs.live(id, src)).then((l) => {
       if (alive) void append(l ?? [], true);
     });
-    const onLines = (b: { instanceId: string; runId: string; lines: LogLine[] }) => {
-      if (b.instanceId !== id || !follows(run, b.runId)) return;
-      run = b.runId;
-      void append(b.lines, false);
-    };
-    const onStart = (s: { instanceId: string; runId: string; state: string }, started: string) => {
-      if (s.instanceId === id && s.state === started) {
-        all = [];
-        run = s.runId;
-      }
-    };
     const offs = [
-      onEvent('game:log', onLines),
-      onEvent('host:log', onLines),
-      onEvent<{ instanceId: string; runId: string; state: string }>('game:state', (s) => onStart(s, 'running')),
-      onEvent<{ instanceId: string; runId: string; state: string }>('host:state', (s) => {
-        if (s.runId !== run) onStart(s, 'starting');
+      onEvent<{ instanceId: string; runId: string; lines: LogLine[] }>(server ? 'host:log' : 'game:log', (b) => {
+        if (b.instanceId === id && (server || b.runId === src)) void append(b.lines, false);
+      }),
+      // A restarted server starts a fresh console.
+      onEvent<{ instanceId: string; state: string }>('host:state', (s) => {
+        if (server && s.instanceId === id && s.state === 'starting') all = [];
       }),
     ];
     return () => {
@@ -96,31 +105,46 @@
   }
 </script>
 
-<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 28px 12px">
-  <LogsNav {instanceId} active="live" />
-  <div style="display: flex; gap: 6px">
-    {#each LEVEL_CHIPS as c (c.level)}
-      {@const n = count(c.level)}
-      <button class="chip" class:on={levels[c.level]} style={levels[c.level] && c.color ? `background: ${c.color}; border-color: ${c.color}` : undefined} onclick={() => (levels[c.level] = !levels[c.level])}>{label(c.level)}{c.color && n ? ` ${n}` : ''}</button>
+<LogsFrame {instanceId} active="live">
+  {#snippet tools()}
+    <SearchField bind:value={search} label="Search log" placeholder="Search log" style="flex: 0 1 240px; min-width: 140px" />
+    <div style="display: flex; gap: 6px">
+      {#each LEVEL_CHIPS as c (c.level)}
+        {@const n = count(c.level)}
+        <button class="chip" class:on={levels[c.level]} style={levels[c.level] && c.color ? `background: ${c.color}; border-color: ${c.color}` : undefined} onclick={() => (levels[c.level] = !levels[c.level])}>{label(c.level)}{c.color && n ? ` ${n}` : ''}</button>
+      {/each}
+    </div>
+    <div style="flex: 1 1 0"></div>
+    <button class="btn btn-sm" onclick={copy}>Copy</button>
+    <button class="btn btn-sm" aria-pressed={wrap} onclick={() => (wrap = !wrap)}>Wrap</button>
+    <button class="btn btn-sm" disabled={source === 'server'} title={source === 'server' ? 'Server logs stay on this computer' : undefined} onclick={() => session.upload(() => api.logs.uploadRun(instanceId, source))}>Upload to mclo.gs</button>
+  {/snippet}
+  {#snippet rail()}
+    <div class="side-label">Running</div>
+    {#each copies as c, k (c.runId)}
+      <button class="rail-row" class:on={source === c.runId} aria-pressed={source === c.runId} onclick={() => (picked = c.runId)}>
+        <Icon name="cube" size={14} /><span style="min-width: 0"><span class="trunc" style="display: block">Copy {k + 1}</span><span class="small faint trunc" style="display: block">{accountName(c.accountId)}, {since(c.started)}</span></span><span class="small faint">Game</span>
+      </button>
     {/each}
+    {#if hosted}
+      <button class="rail-row" class:on={source === 'server'} aria-pressed={source === 'server'} onclick={() => (picked = 'server')}>
+        <Icon name="server" size={14} /><span style="min-width: 0"><span class="trunc" style="display: block">Server</span><span class="small faint trunc" style="display: block">{hosted.state === 'running' ? `localhost:${hosted.port}` : 'Starting'}</span></span><span class="small faint">Server</span>
+      </button>
+    {/if}
+    {#if !copies.length && !hosted}<span class="small faint" style="padding: 6px 10px">Nothing is running. The last run's log shows here.</span>{/if}
+  {/snippet}
+  <div class="con" class:nowrap={!wrap} role="log" aria-label="Game output" bind:this={con} onscroll={scrolled}>
+    {#if !wrap}<div style="height: {first * ROW}px" aria-hidden="true"></div>{/if}
+    {#each visible as l, i (first + i)}
+      {@const [pre, mark, post] = parts(l.message)}
+      <div class="ln {l.level}"><span class="t">{l.time}</span><span class="lv-{l.level}">{l.level}</span><span>{#if l.thread}<span class="faint">[{l.thread}]</span>{' '}{/if}{pre}{#if mark}<mark>{mark}</mark>{/if}{post}{#if l.redacted}<span class="red">redacted</span>{/if}</span></div>
+    {/each}
+    {#if !wrap}<div style="height: {(shown.length - last) * ROW}px" aria-hidden="true"></div>{/if}
   </div>
-  <SearchField bind:value={search} label="Search log" style="flex: 1 1 160px; max-width: 240px" />
-  <div style="flex: 1 1 0"></div>
-  <button class="btn btn-sm" aria-pressed={wrap} onclick={() => (wrap = !wrap)}>Wrap</button>
-  <button class="btn btn-sm" onclick={copy}>Copy</button>
-  <button class="btn btn-sm" onclick={() => session.upload(() => api.logs.uploadRun(instanceId, ''))}>Upload to mclo.gs</button>
-</div>
-<div class="con" class:nowrap={!wrap} role="log" aria-label="Game output" bind:this={con} onscroll={scrolled}>
-  {#if !wrap}<div style="height: {first * ROW}px" aria-hidden="true"></div>{/if}
-  {#each visible as l, i (first + i)}
-    {@const [pre, mark, post] = parts(l.message)}
-    <div class="ln {l.level}"><span class="t">{l.time}</span><span class="lv-{l.level}">{l.level}</span><span>{#if l.thread}<span class="faint">[{l.thread}]</span>{' '}{/if}{pre}{#if mark}<mark>{mark}</mark>{/if}{post}{#if l.redacted}<span class="red">redacted</span>{/if}</span></div>
-  {/each}
-  {#if !wrap}<div style="height: {(shown.length - last) * ROW}px" aria-hidden="true"></div>{/if}
-</div>
+</LogsFrame>
 
 <style>
-  .con{flex:1 1 auto;min-height:0;overflow:auto;margin:0 28px 20px;border:1px solid var(--line);border-radius:10px;background:#08080a;font-family:var(--mono);font-size:12px;line-height:20px;padding:8px 0}
+  .con{flex:1 1 auto;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#08080a;font-family:var(--mono);font-size:12px;line-height:20px;padding:8px 0}
   .ln{display:grid;grid-template-columns:72px 44px minmax(0,1fr);gap:12px;padding:0 14px;white-space:pre-wrap}
   .nowrap .ln{white-space:pre;height:20px;overflow:hidden}
   .ln:hover{background:#111114}

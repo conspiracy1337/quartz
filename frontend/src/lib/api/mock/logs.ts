@@ -1,8 +1,14 @@
-import type { CrashInfo, LogFile, LogLine, Run } from '../types';
+import type { CrashInfo, LiveCopy, LogFile, LogLine, Run } from '../types';
 import { daysAgo } from './time';
 
 const L = (time: string, level: LogLine['level'], thread: string, message: string, redacted = false): LogLine =>
   ({ time, level, thread, message, ...(redacted ? { redacted } : {}) });
+
+/** Two copies of the instance running, the second as another account. */
+export const copies: LiveCopy[] = [
+  { runId: '20261016-140211.000', accountId: 'a1', started: Date.now() - 42 * 60_000 },
+  { runId: '20261016-143802.000', accountId: 'a2', started: Date.now() - 6 * 60_000 },
+];
 
 export const liveLog: LogLine[] = [
   L('21:14:02', 'INFO', 'main', 'Loading Minecraft 1.21.4 with Fabric Loader 0.16.10'),

@@ -213,6 +213,8 @@ export interface PlayInto { kind: 'world' | 'server'; target: string }
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
 export interface LogLine { time: string; level: LogLevel; thread: string; message: string; redacted?: boolean }
 export interface LogFile { name: string; bytes: number; crash: boolean }
+/** One running copy of an instance, a source of the live console. `started` is unix ms. */
+export interface LiveCopy { runId: string; accountId: string; started: number }
 /** The crash dialog: the likely cause (when a rule matched), the fixes it offers and the trace. */
 export interface CrashInfo {
   instanceId: string;
