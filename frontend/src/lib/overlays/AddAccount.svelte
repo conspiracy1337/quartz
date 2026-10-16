@@ -103,8 +103,8 @@
   {:else if mode === 'browser'}
     <div style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start">
       <p class="muted" style="margin: 0">Sign in with Microsoft in your browser. You will come back here automatically.</p>
-      <button class="btn btn-accent" onclick={start}>Open Microsoft sign-in</button>
-      {#if waiting}<span class="small faint">{st.step ? `${st.step}…` : 'Waiting for the browser…'}</span>{/if}
+      <button class="btn btn-accent" style="align-self: center" onclick={start}>Open Microsoft sign-in</button>
+      {#if waiting}<span class="small faint" style="align-self: center">{st.step ? `${st.step}…` : 'Waiting for the browser…'}</span>{/if}
     </div>
   {:else if mode === 'code'}
     <div style="display: grid; grid-template-columns: 147px minmax(0,1fr); gap: 18px; align-items: center">

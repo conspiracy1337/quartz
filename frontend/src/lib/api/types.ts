@@ -244,7 +244,7 @@ export interface Account {
   id: string;
   name: string;
   kind: 'microsoft' | 'offline';
-  status: 'ok' | 'expired' | 'offline';
+  status: 'valid' | 'expired' | 'signin' | 'offline';
   detail: string;
   isDefault: boolean;
   /** The default skin it wears while skinHash is "": key names defaultURL(key). */

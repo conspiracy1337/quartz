@@ -51,6 +51,9 @@ type Account struct {
 	Problem     string    `json:"problem,omitempty"` // why, in words
 }
 
+// Expired reports whether the Minecraft token has run out at now.
+func (a Account) Expired(now time.Time) bool { return !now.Before(a.ExpiresAt) }
+
 // Cape is a cape a Microsoft account owns.
 type Cape struct {
 	ID      string `json:"id"`
