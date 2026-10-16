@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/image/draw"
-
 	"quartz/internal/core/disklru"
 	"quartz/internal/core/flightx"
 	"quartz/internal/core/fsx"
@@ -143,8 +141,7 @@ func (r *Registry) makeThumb(_ context.Context, f file, dest string) (string, er
 		return f.path, nil
 	}
 	h := max(1, b.Dy()*ThumbWidth/b.Dx())
-	dst := image.NewRGBA(image.Rect(0, 0, ThumbWidth, h))
-	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), img, b, draw.Src, nil)
+	dst := pngx.Scale(img, ThumbWidth, h)
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 82}); err != nil {
 		return "", err
