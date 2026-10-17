@@ -10,9 +10,8 @@
    */
   interface Props {
     size?: 'sm' | 'md' | 'lg';
-    /** The main part is the accent button; the ▾ follows unless menuAccent says otherwise. */
+    /** Both halves are the accent button, so the pair always reads as one control. */
     accent?: boolean;
-    menuAccent?: boolean;
     href?: string | undefined;
     disabled?: boolean;
     menuLabel: string;
@@ -22,7 +21,7 @@
     style?: string | undefined;
     children: Snippet;
   }
-  let { size = 'md', accent = false, menuAccent = accent, href, disabled = false, menuLabel, expanded, onclick, onmenu, style, children }: Props = $props();
+  let { size = 'md', accent = false, href, disabled = false, menuLabel, expanded, onclick, onmenu, style, children }: Props = $props();
 </script>
 
 <span class="split split-{size}" {style}>
@@ -31,7 +30,7 @@
   {:else}
     <button class="btn" class:btn-accent={accent} class:btn-sm={size === 'sm'} class:btn-lg={size === 'lg'} {disabled} {onclick}>{@render children()}</button>
   {/if}
-  <button class="btn" class:btn-accent={menuAccent} class:btn-sm={size === 'sm'} class:btn-lg={size === 'lg'} class:btn-icon={size === 'lg'}
+  <button class="btn" class:btn-accent={accent} class:btn-sm={size === 'sm'} class:btn-lg={size === 'lg'} class:btn-icon={size === 'lg'}
     aria-label={menuLabel} aria-haspopup="menu" aria-expanded={expanded} onclick={onmenu}>
     <Icon name="chevron-down" size={size === 'lg' ? 12 : 10} sw={size === 'lg' ? 2.2 : 2.4} />
   </button>

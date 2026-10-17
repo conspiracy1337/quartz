@@ -67,7 +67,7 @@
           <span class="c-ver"><ServerVersion server={s} /></span>
           <span class="c-play small tnum trunc" style="color: {s.online ? 'var(--text)' : 'var(--faint)'}">{s.online ? players(s.players) : 'No reply'}</span>
           <ServerPing ms={s.pingMs} />
-          <SplitButton size="sm" accent={s.online} menuAccent={false} style="justify-self: end" onclick={() => join(s, s.instances[0])}
+          <SplitButton size="sm" accent={s.online} style="justify-self: end" onclick={() => join(s, s.instances[0])}
             onmenu={() => (open = open === s.id ? null : s.id)} expanded={open === s.id} menuLabel="Join {s.name} with another instance">Join</SplitButton>
         </div>
       {:else}
