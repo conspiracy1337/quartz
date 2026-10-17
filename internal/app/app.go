@@ -447,6 +447,8 @@ func (a *app) buildTasks() error {
 		WorldOpen: func(dir string) bool { return a.launcher.WorldOpen(dir) },
 		Sandbox:   a.sandbox, StoreRead: storeRead, Icons: a.icons,
 	})
+	// After the launcher: its first check asks which games run.
+	a.watchFocus()
 	a.buildBrowse(dl)
 	return nil
 }
@@ -636,7 +638,6 @@ func (a *app) buildContent() error {
 	}
 	a.shortcuts = shortcuts.New(a.paths.Shortcuts(), a.instances, a.icons, exe, a.paths.FixedDir(), a.log)
 	a.watchDiscord()
-	a.watchFocus()
 	a.buildUpdater()
 	a.drops = api.NewDrops(a.bus)
 	a.opens = api.NewOpens(a.bus)

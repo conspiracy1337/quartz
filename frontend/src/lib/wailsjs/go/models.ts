@@ -2982,6 +2982,20 @@ export namespace servers {
 	        this.instances = source["instances"];
 	    }
 	}
+	export class Ref {
+	    index: number;
+	    address: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Ref(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.address = source["address"];
+	    }
+	}
 	export class Server {
 	    index: number;
 	    name: string;

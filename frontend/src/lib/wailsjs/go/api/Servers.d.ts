@@ -12,6 +12,6 @@ export function List(arg1:string,arg2:boolean):Promise<Array<servers.Server>>;
 
 export function Move(arg1:string,arg2:number,arg3:string,arg4:number):Promise<void>;
 
-export function Remove(arg1:string,arg2:number,arg3:string):Promise<string>;
+export function Remove(arg1:string,arg2:Array<servers.Ref>):Promise<string>;
 
 export function Undo(arg1:string,arg2:string):Promise<void>;

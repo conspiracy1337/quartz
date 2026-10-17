@@ -343,17 +343,28 @@ func Retitle(dir, suffix string) error {
 	})
 }
 
-// Delete moves a world aside and returns the token Undo takes.
-func (s *Service) Delete(id, folder string) (string, error) {
-	if _, err := s.editable(id, folder); err != nil {
-		return "", err
+// Delete moves worlds aside and returns the token Undo takes to bring them all back.
+func (s *Service) Delete(id string, folders []string) (string, error) {
+	moves := make([]holdbin.Move, 0, len(folders))
+	seen := map[string]bool{}
+	for _, f := range folders {
+		if _, err := s.editable(id, f); err != nil {
+			return "", err
+		}
+		if !seen[f] {
+			seen[f] = true
+			moves = append(moves, holdbin.Move{Rel: path.Join("saves", f)})
+		}
+	}
+	if len(moves) == 0 {
+		return "", ErrNoWorld
 	}
 	root, err := os.OpenRoot(s.d.Instances.Base(id, "saves"))
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = root.Close() }()
-	token, _, err := holdbin.Hold(root, []holdbin.Move{{Rel: path.Join("saves", folder)}}, s.d.Now())
+	token, _, err := holdbin.Hold(root, moves, s.d.Now())
 	if err != nil {
 		return "", err
 	}
@@ -361,7 +372,7 @@ func (s *Service) Delete(id, folder string) (string, error) {
 	return token, nil
 }
 
-// Undo brings back a deleted world.
+// Undo brings back deleted worlds.
 func (s *Service) Undo(id, token string) error {
 	root, err := os.OpenRoot(s.d.Instances.Base(id, "saves"))
 	if err != nil {

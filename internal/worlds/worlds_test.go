@@ -127,11 +127,16 @@ func TestRenameKeepsFolder(t *testing.T) {
 func TestDeleteAndUndo(t *testing.T) {
 	e := newEnv(t)
 	e.world(t, "w", "W", 0, false)
-	token, err := e.svc.Delete(e.id, "w")
-	if err != nil || e.svc.Count(e.id) != 0 {
+	e.world(t, "v", "V", 0, false)
+	e.world(t, "u", "U", 0, false)
+	if _, err := e.svc.Delete(e.id, []string{"w", "gone"}); err == nil || e.svc.Count(e.id) != 3 {
+		t.Fatalf("a missing world still deleted the others: %v", err)
+	}
+	token, err := e.svc.Delete(e.id, []string{"w", "v", "w"})
+	if err != nil || e.svc.Count(e.id) != 1 {
 		t.Fatalf("delete: %v", err)
 	}
-	if err := e.svc.Undo(e.id, token); err != nil || e.svc.Count(e.id) != 1 {
+	if err := e.svc.Undo(e.id, token); err != nil || e.svc.Count(e.id) != 3 {
 		t.Fatalf("undo: %v", err)
 	}
 }

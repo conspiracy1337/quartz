@@ -106,7 +106,7 @@ func TestEditCycle(t *testing.T) {
 	if err := e.svc.Edit(id, 0, "smp.kestrel.gg", Entry{Name: "x", Address: "y.z"}); !errors.Is(err, ErrChanged) {
 		t.Fatal("stale edit accepted")
 	}
-	token, err := e.svc.Remove(id, 1, "mc.hypixel.net")
+	token, err := e.svc.Remove(id, []Ref{{Index: 1, Address: "mc.hypixel.net"}})
 	if err != nil || e.svc.Count(id) != 1 {
 		t.Fatalf("remove %v", err)
 	}
@@ -129,6 +129,35 @@ func TestEditCycle(t *testing.T) {
 		if err := e.svc.Add(id, bad); err == nil {
 			t.Errorf("%+v accepted", bad)
 		}
+	}
+}
+
+// Several servers go in one edit, and one Undo puts each back in its old place.
+func TestRemoveManyAndUndo(t *testing.T) {
+	e := newEnv(t)
+	id := e.a.ID
+	for _, a := range []string{"a.gg", "b.gg", "c.gg", "d.gg"} {
+		if err := e.svc.Add(id, Entry{Name: a, Address: a}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addresses := func() string {
+		l, _ := e.svc.entries(id)
+		var out []string
+		for _, s := range l {
+			out = append(out, s.Address)
+		}
+		return strings.Join(out, " ")
+	}
+	if _, err := e.svc.Remove(id, []Ref{{Index: 0, Address: "a.gg"}, {Index: 2, Address: "x.gg"}}); !errors.Is(err, ErrChanged) || addresses() != "a.gg b.gg c.gg d.gg" {
+		t.Fatalf("a stale ref removed something: %v %q", err, addresses())
+	}
+	token, err := e.svc.Remove(id, []Ref{{Index: 3, Address: "d.gg"}, {Index: 0, Address: "a.gg"}, {Index: 2, Address: "c.gg"}, {Index: 0, Address: "a.gg"}})
+	if err != nil || addresses() != "b.gg" {
+		t.Fatalf("remove %v %q", err, addresses())
+	}
+	if err := e.svc.Undo(id, token); err != nil || addresses() != "a.gg b.gg c.gg d.gg" {
+		t.Fatalf("undo %v %q", err, addresses())
 	}
 }
 

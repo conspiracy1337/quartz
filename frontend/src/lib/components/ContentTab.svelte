@@ -60,6 +60,8 @@
   const SKELETON: [string, string][] = [['42%', '22%'], ['30%', '24%'], ['48%', '18%'], ['36%', '20%'], ['56%', '30%'], ['40%', '16%'], ['44%', '26%'], ['32%', '20%']];
 
   const cfg = $derived(CONFIG[kind]);
+  // Worlds are deleted (as their menu says), everything else is removed.
+  const removeLabel = $derived(kind === 'worlds' ? 'Delete' : 'Remove');
   const isManaged = $derived(managed(kind));
   // Worlds and servers have their own row menus and actions (WorldsMenu, ServersMenu).
   const hasMenu = $derived(isManaged || kind === 'worlds' || kind === 'servers');
@@ -172,7 +174,6 @@
   // Selecting rows for bulk actions, by the box before each row's ⋮ (the title row's box
   // picks every shown row): Ctrl-click a row ticks it, Shift-click picks the range from the
   // last one, Esc clears.
-  const selectable = $derived(isManaged);
   let picked = $state<Record<string, boolean>>({});
   let anchor: string | null = null;
   const selected = $derived(rows.filter((c) => picked[c.id]));
@@ -191,7 +192,7 @@
   /** A click on a row with Ctrl (or Cmd) or Shift selects instead of doing what it hit. */
   function rowClick(e: MouseEvent, c: ContentItem) {
     swallow(e);
-    if (!selectable || !(e.ctrlKey || e.metaKey || e.shiftKey)) return;
+    if (!(e.ctrlKey || e.metaKey || e.shiftKey)) return;
     e.preventDefault();
     e.stopPropagation();
     pick(c, e.shiftKey || !picked[c.id], e.shiftKey);
@@ -217,6 +218,15 @@
     }
   }
   async function bulkRemove() {
+    if (!isManaged) {
+      try {
+        await (kind === 'worlds' ? removeWorlds(selected) : removeServers(selected));
+        picked = {};
+      } catch (e) {
+        session.fail(removeLabel, e);
+      }
+      return;
+    }
     const ids = selected.map((c) => c.id);
     try {
       const need = await needs(ids);
@@ -284,20 +294,27 @@
     session.play(instanceId, '', address ? { kind: 'server', target: address } : undefined);
   }
 
-  async function removeWorld(c: ContentItem) {
-    const token = await api.worlds.remove(instanceId, c.id);
+  /** "Northwatch was deleted" for one row, "3 worlds deleted" for several. */
+  const gone = (list: ContentItem[], verb: string) =>
+    list.length === 1 ? { subject: list[0]!.name, text: `was ${verb}` } : { subject: plural(list.length, cfg.noun.replace(/s$/, '')), text: verb };
+  // Worlds and servers go in one call, so one Undo brings them all back.
+  async function removeWorlds(list: ContentItem[]) {
+    const token = await api.worlds.remove(instanceId, list.map((c) => c.id));
     revs.bump('worlds');
-    session.notify({ subject: c.name, text: 'was deleted', undo: () => void api.worlds.undo(instanceId, token).then(() => revs.bump('worlds')).catch((e: unknown) => session.fail('Undo', e)) });
+    session.notify({ ...gone(list, 'deleted'), undo: () => void api.worlds.undo(instanceId, token).then(() => revs.bump('worlds')).catch((e: unknown) => session.fail('Undo', e)) });
   }
   async function exportWorld(c: ContentItem) {
     if (await api.worlds.export(instanceId, c.id)) session.notify({ subject: c.name, text: 'was exported' });
   }
-  async function removeServer(c: ContentItem) {
-    const e = api.servers.entry(instanceId, c.id);
-    if (!e) return;
-    const token = await api.servers.remove(instanceId, e.index, e.address);
+  async function removeServers(list: ContentItem[]) {
+    const refs = list.flatMap((c) => {
+      const e = api.servers.entry(instanceId, c.id);
+      return e ? [{ index: e.index, address: e.address }] : [];
+    });
+    if (!refs.length) return;
+    const token = await api.servers.remove(instanceId, refs);
     revs.bump('servers');
-    session.notify({ subject: c.name, text: 'was removed', undo: () => void api.servers.undo(instanceId, token).then(() => revs.bump('servers')).catch((err: unknown) => session.fail('Undo', err)) });
+    session.notify({ ...gone(list, 'removed'), undo: () => void api.servers.undo(instanceId, token).then(() => revs.bump('servers')).catch((err: unknown) => session.fail('Undo', err)) });
   }
   async function moveServer(c: ContentItem, by: number) {
     const e = api.servers.entry(instanceId, c.id);
@@ -473,7 +490,7 @@
       {#each COLUMNS as col, k (k)}
         <span class={col.cls}>{#if col.key}{@const key = col.key}<SortTitle label={col.label} dir={sort?.key === key ? sort.dir : 0} onclick={() => sortOn(key)} />{:else}{col.label}{/if}</span>
       {/each}
-      {#if selectable}<span class="cc"><Check on={allPicked} label="Select every shown {cfg.noun.replace(/s$/, '')}" onchange={pickAll} /></span>{/if}
+      <span class="cc"><Check on={allPicked} label="Select every shown {cfg.noun.replace(/s$/, '')}" onchange={pickAll} /></span>
       <span class="cc">
         {#if isManaged}
           <button class="btn-bare" aria-label={pending ? `Review ${plural(pending, 'update')}` : 'Check for updates'} title={pending ? `Review ${plural(pending, 'update')}` : 'Check for updates'} disabled={checking} onclick={checkUpdates}><Icon name="update" size={16} class={checking ? 'spin' : ''} /></button>
@@ -488,7 +505,7 @@
         {@const b = badge(c)}
         <div class="row crow {layout}" class:sel={!!picked[c.id]} class:off={cfg.toggles && !on} class:drag={drag?.id === c.id} style={drag ? `transform: translateY(${shift(c)}px)` : undefined}
           role={reorderable && c.enabled ? 'listitem' : undefined} onpointerdown={(e) => dragStart(e, c)} onpointermove={dragMove} onpointerup={dragEnd} onpointercancel={dragEnd}
-          onclickcapture={(e) => rowClick(e, c)} onmousedown={(e) => selectable && (e.shiftKey || e.ctrlKey || e.metaKey) && e.preventDefault()} ondragstart={(e) => reorderable && e.preventDefault()}>
+          onclickcapture={(e) => rowClick(e, c)} onmousedown={(e) => (e.shiftKey || e.ctrlKey || e.metaKey) && e.preventDefault()} ondragstart={(e) => reorderable && e.preventDefault()}>
           {#if layout === 'managed'}
             <span>{#if cfg.toggles}<Toggle {on} label="Enable {c.name}" onchange={() => flip(c)} />{/if}</span>
             <span class="media dim" style="background: {c.art.background}">{c.art.initial ?? ''}</span>
@@ -502,12 +519,14 @@
             <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></span>
             <span class="c-stat">{#if b}<span class="badge trunc {b.cls}">{b.text}</span>{/if}</span>
             <span class="muted trunc">{c.meta}</span>
+            <span class="cc"><Check on={!!picked[c.id]} label="Select {c.name}" onchange={(v) => pick(c, v)} /></span>
           {:else}
             <span class="media" style="background: {c.art.background}"></span>
             <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint mono" style="display: block">{c.sub}</span></span>
             <span class="end">{#if c.server}<ServerVersion server={c.server} />{/if}</span>
             <span class="end mono muted tnum trunc">{players(c.server?.players)}</span>
             <span class="end"><ServerPing ms={c.server?.pingMs} /></span>
+            <span class="cc"><Check on={!!picked[c.id]} label="Select {c.name}" onchange={(v) => pick(c, v)} /></span>
           {/if}
           <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {c.name}" aria-haspopup="menu" disabled={!hasMenu} onclick={(e) => openMenu(e, c)}><Icon name="more" size={14} /></button>
         </div>
@@ -523,9 +542,9 @@
           {#if layout === 'managed'}
             <div></div><div class="sk" style="height: 10px; width: 56px"></div><div class="cc opt"><div class="sk" style="width: 16px; height: 16px"></div></div><div class="cc"><div class="sk" style="width: 16px; height: 16px"></div></div>
           {:else if layout === 'worlds'}
-            <div></div><div class="sk" style="height: 10px; width: 64px"></div>
+            <div></div><div class="sk" style="height: 10px; width: 64px"></div><div class="cc"><div class="sk" style="width: 16px; height: 16px"></div></div>
           {:else}
-            <div class="end"><div class="sk" style="height: 20px; width: 52px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 56px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 64px"></div></div>
+            <div class="end"><div class="sk" style="height: 20px; width: 52px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 56px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 64px"></div></div><div class="cc"><div class="sk" style="width: 16px; height: 16px"></div></div>
           {/if}
           <div></div>
         </div>
@@ -537,7 +556,7 @@
     <div class="bulk">
       <span class="small faint tnum" style="margin-right: auto">{selected.length} selected</span>
       <button class="btn" onclick={() => (picked = {})}>Cancel</button>
-      <button class="btn" onclick={bulkRemove}>Remove</button>
+      <button class="btn" onclick={bulkRemove}>{removeLabel}</button>
       {#if cfg.toggles}
         <button class="btn" onclick={() => bulkSet(false)}>Turn off</button>
         {#if !cfg.exclusive}<button class="btn" onclick={() => bulkSet(true)}>Turn on</button>{/if}
@@ -571,7 +590,7 @@
       <button class="mi" role="menuitem" onclick={() => act(() => exportWorld(c), 'Export')}><Icon name="download" size={14} /><span>Export as .zip</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(async () => session.open({ kind: 'copy-world', instanceId, folder: c.id, name: c.name, sub: `${c.sub.split(', ').at(-1)}, ${c.meta}` }), 'Copy')}><Icon name="library" size={14} /><span>Copy to instance…</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => api.worlds.showInFolder(instanceId, c.id), 'Show in folder')}><Icon name="folder" size={14} /><span>Show in folder</span><span></span></button>
-      <button class="mi" role="menuitem" onclick={() => act(() => removeWorld(c), 'Delete')}><Icon name="trash" size={14} /><span>Delete</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(() => removeWorlds([c]), 'Delete')}><Icon name="trash" size={14} /><span>Delete</span><span></span></button>
     {:else if kind === 'servers'}
       <!-- ServersMenu.dc.html -->
       {@const entry = api.servers.entry(instanceId, c.id)}
@@ -582,7 +601,7 @@
       <button class="mi" role="menuitem" onclick={() => act(() => moveServer(c, -1), 'Move up')}><Icon name="chevron-up" size={14} /><span>Move up</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => moveServer(c, 1), 'Move down')}><Icon name="chevron-down" size={14} /><span>Move down</span><span></span></button>
       <div class="divider" style="margin: 4px 0"></div>
-      <button class="mi" role="menuitem" onclick={() => act(() => removeServer(c), 'Remove')}><Icon name="trash" size={14} /><span>Remove</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(() => removeServers([c]), 'Remove')}><Icon name="trash" size={14} /><span>Remove</span><span></span></button>
     {:else}
     {#if kind === 'resourcepacks' && c.enabled}
       <button class="mi" role="menuitem" onclick={() => act(() => move(c, -1), 'Move up')}><Icon name="chevron-up" size={14} /><span>Move up</span><span></span></button>
@@ -614,15 +633,15 @@
   /* The .tabs idiom; the padding keeps focus rings inside the scroll box. */
   .ct-chips{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px;margin:-3px}
   /* Columns (ContentTable.dc.html). Mods and packs: state, icon, name, status, version, platform,
-     select, more. Worlds: icon, name, status, mode, more. Servers: icon, name, then version,
-     players and ping in equal columns with a wider gap, more. Play and Join live in the ⋮ menu. */
+     select, more. Worlds: icon, name, status, mode, select, more. Servers: icon, name, then version,
+     players and ping in equal columns with a wider gap, select, more. Play and Join live in the ⋮ menu. */
   .crow.managed{grid-template-columns:30px 32px minmax(0,1fr) 136px 72px 48px 28px 28px}
-  .crow.worlds{grid-template-columns:32px minmax(0,1fr) 112px 104px 28px}
-  .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,120px) 28px;column-gap:24px}
+  .crow.worlds{grid-template-columns:32px minmax(0,1fr) 112px 104px 28px 28px}
+  .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,120px) 28px 28px;column-gap:24px}
   @media (max-width:1100px){
     .crow.managed{grid-template-columns:30px 32px minmax(0,1fr) 136px 72px 28px 28px}
     .crow .opt{display:none}
-    .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,96px) 28px;column-gap:16px}
+    .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,96px) 28px 28px;column-gap:16px}
   }
   /* Status is right-aligned with room before the version. */
   .c-stat{display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0;margin-right:16px}

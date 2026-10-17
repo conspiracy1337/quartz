@@ -133,15 +133,20 @@ func (a *Worlds) Rename(id, folder, name string) error {
 	return a.w.Rename(id, folder, name)
 }
 
-// Delete moves a world aside; the token undoes it for 15 minutes.
-func (a *Worlds) Delete(id, folder string) (string, error) {
-	if err := checkWorld(id, folder); err != nil {
-		return "", err
+// Delete moves worlds aside; the token undoes it for 15 minutes.
+func (a *Worlds) Delete(id string, folders []string) (string, error) {
+	if len(folders) == 0 || len(folders) > 1000 {
+		return "", worlds.ErrNoWorld
 	}
-	return a.w.Delete(id, folder)
+	for _, f := range folders {
+		if err := checkWorld(id, f); err != nil {
+			return "", err
+		}
+	}
+	return a.w.Delete(id, folders)
 }
 
-// Undo brings back a deleted world.
+// Undo brings back deleted worlds.
 func (a *Worlds) Undo(id, token string) error {
 	if err := checkUndo(id, token); err != nil {
 		return err

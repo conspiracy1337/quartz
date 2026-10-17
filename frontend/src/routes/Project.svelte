@@ -151,7 +151,7 @@
           {#each CHANNELS as c (c)}<button class="chip" class:on={channels[c]} onclick={() => (channels[c] = !channels[c])}>{c}</button>{/each}
         </div>
         <div class="list">
-          <div class="row row-head pv"><span title="Channel">C</span><span>Version</span><span class="opt">Minecraft</span><span class="opt">Loader</span><span class="opt">Published</span><span class="opt">Downloads</span><span class="opt">Size</span><span></span></div>
+          <div class="row row-head pv"><span>Channel</span><span>Version</span><span class="opt">Minecraft</span><span class="opt">Loader</span><span class="opt">Published</span><span class="opt">Downloads</span><span class="opt">Size</span><span></span></div>
           {#each shown as v, i (v.id)}
             <div>
               <div class="row pv">
@@ -234,8 +234,8 @@
   .md :global(code){font-family:var(--mono);font-size:12px;background:var(--raise);padding:1px 5px;border-radius:4px;color:var(--text)}
   .lk{display:flex;align-items:center;gap:10px;height:32px;color:var(--muted);text-decoration:none}
   .lk:hover{color:var(--text)}
-  .pv{grid-template-columns:20px minmax(0,1fr) 112px 112px 104px 80px 72px 96px;height:52px}
-  @media (max-width:1100px){.pv{grid-template-columns:20px minmax(0,1fr) 96px}.pv .opt{display:none}}
+  .pv{grid-template-columns:56px minmax(0,1fr) 112px 112px 104px 80px 72px 96px;height:52px}
+  @media (max-width:1100px){.pv{grid-template-columns:56px minmax(0,1fr) 96px}.pv .opt{display:none}}
   .pv-ch{width:20px;padding:0;justify-content:center}
   .pv-ld{display:flex;align-items:center;gap:6px;min-width:0}
   .pv-id{all:unset;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}

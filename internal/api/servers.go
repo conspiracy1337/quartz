@@ -69,15 +69,20 @@ func (a *Servers) Move(id string, index int, address string, by int) error {
 	return a.s.Move(id, index, address, by)
 }
 
-// Remove takes a server out; the token undoes it for 15 minutes.
-func (a *Servers) Remove(id string, index int, address string) (string, error) {
-	if err := checkServer(id, index, address); err != nil {
-		return "", err
+// Remove takes servers out; the token undoes it for 15 minutes.
+func (a *Servers) Remove(id string, refs []servers.Ref) (string, error) {
+	if len(refs) == 0 || len(refs) > 1000 {
+		return "", errBadIndex
 	}
-	return a.s.Remove(id, index, address)
+	for _, r := range refs {
+		if err := checkServer(id, r.Index, r.Address); err != nil {
+			return "", err
+		}
+	}
+	return a.s.Remove(id, refs)
 }
 
-// Undo puts a removed server back.
+// Undo puts removed servers back.
 func (a *Servers) Undo(id, token string) error {
 	if err := checkInstanceID(id); err != nil {
 		return err

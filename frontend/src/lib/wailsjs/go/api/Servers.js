@@ -22,8 +22,8 @@ export function Move(arg1, arg2, arg3, arg4) {
   return window['go']['api']['Servers']['Move'](arg1, arg2, arg3, arg4);
 }
 
-export function Remove(arg1, arg2, arg3) {
-  return window['go']['api']['Servers']['Remove'](arg1, arg2, arg3);
+export function Remove(arg1, arg2) {
+  return window['go']['api']['Servers']['Remove'](arg1, arg2);
 }
 
 export function Undo(arg1, arg2) {

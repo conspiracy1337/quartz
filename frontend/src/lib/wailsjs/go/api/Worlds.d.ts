@@ -4,7 +4,7 @@ import {worlds} from '../models';
 
 export function CopyTo(arg1:string,arg2:string,arg3:string):Promise<string>;
 
-export function Delete(arg1:string,arg2:string):Promise<string>;
+export function Delete(arg1:string,arg2:Array<string>):Promise<string>;
 
 export function Export(arg1:string,arg2:string):Promise<boolean>;
 
