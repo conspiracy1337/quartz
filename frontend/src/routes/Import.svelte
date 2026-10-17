@@ -170,7 +170,7 @@
       </section>
     </div>
   {:else}
-  <div class="page nc">
+  <div class="one">
     <section aria-label="Source" style="display: flex; flex-direction: column; gap: 14px">
       <div class="drop">
         <Icon name="upload" size={22} />
@@ -208,8 +208,6 @@
 </div>
 
 <style>
-  .one{max-width:760px;margin:0 auto;padding:28px 24px 32px}
+  .one{max-width:760px;margin:0 auto;padding:28px 24px 32px;display:flex;flex-direction:column;gap:20px}
   .drop{height:150px;border:1px dashed var(--line-2);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);background:var(--panel)}
-  .nc{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
-  @media (max-width:1100px){.nc{grid-template-columns:minmax(0,1fr)}}
 </style>
