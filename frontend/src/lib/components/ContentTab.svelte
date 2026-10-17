@@ -12,7 +12,7 @@
   import type { AddResult, ContentItem, ContentKind, ContentStatus, Source } from '../api/types';
   import { onEvent } from '../bridge';
   import { players, plural, searchIn, sentenceList } from '../format';
-  import { query } from '../query.svelte';
+  import { query, rememberCount, skeletonRows } from '../query.svelte';
   import { revs } from '../revs.svelte';
   import { projectKindOf } from '../labels';
   import { go, href } from '../router.svelte';
@@ -31,8 +31,9 @@
 
   /** The one list used by Mods, Resource packs, Shaders, Data packs, Worlds and Servers. */
   /** chip names the filter chip to start on (Host's Review opens "Client only"). */
-  interface Props { instanceId: string; kind: ContentKind; chip?: string | undefined }
-  let { instanceId, kind, chip: startChip }: Props = $props();
+  /** count is how many the instance has (its tab's count), so the skeleton has the loaded height. */
+  interface Props { instanceId: string; kind: ContentKind; count?: number | undefined; chip?: string | undefined }
+  let { instanceId, kind, count, chip: startChip }: Props = $props();
 
   type Chip = { label: string; test: (c: ContentItem) => boolean };
   /** browse: Add opens Browse (projects always do; worlds come from CurseForge without being tracked). */
@@ -67,7 +68,11 @@
     mods: 'No mods yet.', resourcepacks: 'No resource packs yet.', shaders: 'No shader packs yet.',
     datapacks: 'No data packs yet.', worlds: 'No worlds yet. They show up here after you play.', servers: 'No servers yet.',
   };
-  const items = query(() => api.content.list(instanceId, kind));
+  // Keyed, so going back to a tab shows its rows at once; the tab is remounted per kind and instance.
+  // svelte-ignore state_referenced_locally
+  const key = `content.${instanceId}.${kind}`;
+  const items = query(() => api.content.list(instanceId, kind), key);
+  const skeleton = $derived(Array.from({ length: count === undefined ? skeletonRows(key, SKELETON.length) : Math.max(1, count) }, (_, k) => SKELETON[k % SKELETON.length]!));
   let rows = $state<ContentItem[]>([]);
   $effect(() => {
     rows = items.data ?? [];
@@ -221,13 +226,17 @@
   function bulkUpdate() {
     session.updatePick = new Set(updatable.map((c) => c.id));
     picked = {};
-    review();
+    review(pending);
   }
 
   // Check for updates checks, then opens the review; with updates already found it
   // opens the review straight away.
   const pending = $derived(rows.filter((c) => c.status?.kind === 'update').length);
-  const review = () => go({ name: 'instance', id: instanceId, tab: kind, sub: 'updates' });
+  // The review's skeleton has as many rows as there are updates.
+  const review = (n: number) => {
+    rememberCount(`review.${instanceId}.${kind}`, n);
+    go({ name: 'instance', id: instanceId, tab: kind, sub: 'updates' });
+  };
   async function refreshServers() {
     checking = true;
     try {
@@ -240,11 +249,11 @@
     }
   }
   async function checkUpdates() {
-    if (pending > 0) return review();
+    if (pending > 0) return review(pending);
     checking = true;
     try {
       const r = await api.content.review(instanceId, kind, true);
-      if (r.updates.length > 0) review();
+      if (r.updates.length > 0) review(r.updates.length);
       else session.notify({ subject: 'Everything is up to date', text: r.locked.length ? `(${r.locked.length} locked)` : '' });
     } catch (e) {
       session.fail('Check updates', e);
@@ -502,7 +511,7 @@
         <Empty text={items.data.length ? 'Nothing matches this filter.' : EMPTY[kind]} />
       {/each}
     {:else}
-      {#each SKELETON as [a, w], k (k)}
+      {#each skeleton as [a, w], k (k)}
         <div class="row crow {layout}" aria-hidden="true">
           {#if layout === 'managed'}<div class="sk" style="width: 30px; height: 18px; border-radius: 9px"></div>{/if}
           <div class="sk" style="width: 32px; height: 32px; border-radius: 6px"></div>

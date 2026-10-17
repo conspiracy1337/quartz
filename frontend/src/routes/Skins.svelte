@@ -6,7 +6,7 @@
   import SkinFigure from '$lib/components/SkinFigure.svelte';
   import { searchIn } from '$lib/format';
   import { STEVE, accountLook, capeLook, capeTile, skinLook } from '$lib/look';
-  import { query } from '$lib/query.svelte';
+  import { query, rememberCount, skeletonRows } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { session } from '$lib/session.svelte';
   import SearchField from '$lib/ui/SearchField.svelte';
@@ -18,10 +18,11 @@
   import SplitButton from '$lib/ui/SplitButton.svelte';
 
   /** The wardrobe dresses the default account. */
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const me = $derived(accounts.data?.find((a) => a.isDefault));
-  const skins = query(() => api.accounts.skins());
-  const capes = query(() => (me ? api.accounts.capes(me.id) : Promise.resolve({ capes: [], worn: '' })));
+  const skins = query(() => api.accounts.skins(), 'skins');
+  // Until the accounts are in, the capes wait too, so the grid never shows "No cape" alone first.
+  const capes = query(() => (me ? api.accounts.capes(me.id) : accounts.data ? Promise.resolve({ capes: [], worn: '' }) : new Promise<never>(() => {})));
   let search = $state('');
   let skinSel = $state<string | null>(null);
   let capeSel = $state<string | null>(null);
@@ -38,6 +39,8 @@
   const list = $derived(all.filter((s) => s.name.toLowerCase().includes(search.trim().toLowerCase())));
   const cur = $derived(all.find((s) => s.hash === (skinSel ?? me?.skinHash)) ?? all[0]);
   const capeList = $derived(capes.data?.capes ?? []);
+  // How many cape tiles there were (No cape counts), so the skeleton has the loaded height next time.
+  $effect(() => void (capes.data && rememberCount('capes', capeList.length + 1)));
   const capeId = $derived(capeSel ?? capes.data?.worn ?? '');
   const cape = $derived(capeList.find((c) => c.id === capeId));
   // With an empty library the model shows what the account wears: its default skin.
@@ -106,7 +109,7 @@
             </button>
           {/each}
           {#if skins.data && !list.length}<Empty text={all.length ? 'No skins match your search.' : 'No skins yet. Upload one, or copy one from a player or a link.'} style="grid-column: 1 / -1" />{/if}
-          {#if !skins.data}{#each { length: 8 } as _, k (k)}<div class="sk" style="height: 180px; border-radius: var(--radius-lg)" aria-hidden="true"></div>{/each}{/if}
+          {#if !skins.data}{#each { length: skeletonRows('skins', 8) } as _, k (k)}<div class="sk" style="height: 180px; border-radius: var(--radius-lg)" aria-hidden="true"></div>{/each}{/if}
         </div>
       </section>
       <section aria-label="Capes" style="display: flex; flex-direction: column; gap: 10px">
@@ -118,7 +121,7 @@
               <button class="cp" class:on={capeId === c.id} onclick={() => (capeSel = c.id)} role="radio" aria-checked={capeId === c.id}><span class="cp-art" style="background: {capeTile(c, 30, 46)}" aria-hidden="true"></span><span class="trunc small">{c.name}</span>{#if capes.data.worn === c.id}<span class="worn" title="In use"><Icon name="check" size={10} sw={3} /></span>{/if}</button>
             {/each}
           {:else}
-            {#each { length: 3 } as _, k (k)}<div class="sk" style="height: 96px; border-radius: var(--radius-lg)" aria-hidden="true"></div>{/each}
+            {#each { length: skeletonRows('capes', 3) } as _, k (k)}<div class="sk" style="height: 96px; border-radius: var(--radius-lg)" aria-hidden="true"></div>{/each}
           {/if}
         </div>
       </section>

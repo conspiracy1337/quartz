@@ -9,7 +9,9 @@
   interface Props { instanceId: string; shotId: string }
   let { instanceId, shotId }: Props = $props();
 
-  const shots = query(() => api.screenshots.list(instanceId));
+  // The grid's key, so a screenshot opened from it shows at once.
+  // svelte-ignore state_referenced_locally
+  const shots = query(() => api.screenshots.list(instanceId), `screenshots.${instanceId}`);
   let i = $state(0);
   $effect(() => {
     i = Math.max(0, shots.data?.findIndex((s) => s.id === shotId) ?? 0);

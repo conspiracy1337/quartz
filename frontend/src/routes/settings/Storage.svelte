@@ -12,7 +12,7 @@
   import Tile from '$lib/ui/Tile.svelte';
   import SettingsTab from './SettingsTab.svelte';
 
-  const info = query(() => api.app.info());
+  const info = query(() => api.app.info(), 'app.info');
 
   /** Deleting for good asks once more in a menu under the button. */
   let ask = $state<{ x: number; y: number; text: string; action: string; run: () => void } | null>(null);

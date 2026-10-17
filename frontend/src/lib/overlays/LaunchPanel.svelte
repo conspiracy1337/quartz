@@ -13,7 +13,7 @@
   interface Props { instanceId: string; accountId?: string; stage: number; details?: string[] | undefined; pct?: number | undefined }
   let { instanceId, accountId = '', stage, details, pct: realPct }: Props = $props();
   const inst = query(() => api.instances.get(instanceId));
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const me = $derived(accounts.data?.find((a) => (accountId ? a.id === accountId : a.isDefault))?.name ?? '');
   // Before Go's first progress event the app shows bare step names; only the preview fills in samples.
   const sample = $derived(!details && !hasBridge());

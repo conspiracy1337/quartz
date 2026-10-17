@@ -27,6 +27,7 @@
   import { api } from '$lib/api';
   import { startRoute } from '$lib/boot';
   import { go, router, type Route } from '$lib/router.svelte';
+  import { lastCount } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
   import Accounts from './routes/Accounts.svelte';
   import Browse from './routes/Browse.svelte';
@@ -130,7 +131,9 @@
   {:else}
     <div class="app-side"><Sidebar active={sideKey(route)} instanceId={route.name === 'instance' ? route.id : undefined} downloads={tasks.active.length} /></div>
     <main class="main">
-      {#if session.updateReady && route.name !== 'home'}<UpdateBanner />{/if}
+      {#if route.name !== 'home'}
+        {#if session.updateReady}<UpdateBanner />{:else if !session.updateKnown && lastCount('update.banner')}<UpdateBanner holding />{/if}
+      {/if}
       <!-- Always the height left, so the bar below holds still while a page loads. -->
       <div class="main-page">{@render page(route)}</div>
       <!-- The Downloads page and the download panel show the same queue, so the bar would only repeat it. -->

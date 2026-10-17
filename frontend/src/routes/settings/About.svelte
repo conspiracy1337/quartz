@@ -4,7 +4,7 @@
   import { query } from '$lib/query.svelte';
   import SettingsTab from './SettingsTab.svelte';
 
-  const info = query(() => api.app.info());
+  const info = query(() => api.app.info(), 'app.info');
   const playtime = query(() => Promise.all([api.instances.totalPlaytime(), api.instances.list()]));
 </script>
 

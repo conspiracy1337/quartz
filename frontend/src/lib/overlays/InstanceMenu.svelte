@@ -16,7 +16,7 @@
   interface Props { instanceId: string; x: number; y: number }
   let { instanceId, x, y }: Props = $props();
 
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const instances = query(() => api.instances.list(), 'instances.list');
   const inst = $derived(instances.data?.find((i) => i.id === instanceId));
   const running = $derived(session.busy(instanceId));

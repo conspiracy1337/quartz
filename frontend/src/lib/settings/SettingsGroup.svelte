@@ -9,7 +9,7 @@
   /** A heading over a card of setting rows. A textarea setting renders as a full-width block. */
   interface Props { title?: string; defs: SettingDef[]; mark?: string }
   let { title, defs: all, mark }: Props = $props();
-  const info = query(() => api.app.info());
+  const info = query(() => api.app.info(), 'app.info');
   const defs = $derived(all.filter((d) => visible(d, prefs.value)));
 </script>
 

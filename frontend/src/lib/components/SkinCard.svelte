@@ -12,8 +12,8 @@
   const DAYS = [['M', 'Monday'], ['T', 'Tuesday'], ['W', 'Wednesday'], ['T', 'Thursday'], ['F', 'Friday'], ['S', 'Saturday'], ['S', 'Sunday']] as const;
 
   const week = query(() => api.home.week());
-  const skins = query(() => api.accounts.skins());
-  const accounts = query(() => api.accounts.list());
+  const skins = query(() => api.accounts.skins(), 'skins');
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const me = $derived(accounts.data?.find((a) => a.isDefault));
   const capes = query(() => (me ? api.accounts.capes(me.id) : Promise.resolve({ capes: [], worn: '' })));
   // With no account yet, the default skin stands in (as on the Skins page).

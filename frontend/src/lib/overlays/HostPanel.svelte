@@ -16,7 +16,7 @@
   const RESULT: Record<string, string> = { crash: 'Crashed', failed: "Didn't start", cancelled: 'Cancelled' };
   const aside = $derived(running ? `${host.players} of ${host.max} players` : host.state === 'starting' ? (host.stage ?? '') : (RESULT[host.result ?? ''] ?? 'Stopped'));
   // The command box suggests opping yourself (the design's example, with your name).
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const me = $derived(accounts.data?.find((a) => a.isDefault)?.name ?? '');
 
   // The console keeps its newest lines; the Logs tab has them all.

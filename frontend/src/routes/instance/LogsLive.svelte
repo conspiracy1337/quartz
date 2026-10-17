@@ -29,7 +29,7 @@
 
   // Sources (LogsD.dc.html): each running copy and, while this instance hosts, its server.
   // The console shows the one picked, else the newest copy, else the server, else the last run.
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   let copies = $state.raw<LiveCopy[]>([]);
   let picked = $state('');
   const hosted = $derived(session.hosting?.instanceId === instanceId ? session.hosting : null);

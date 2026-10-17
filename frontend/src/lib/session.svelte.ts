@@ -8,6 +8,7 @@ import type { UpdateState } from './api/system';
 import type { ContentKind, PlayInto, ServerEntry, Src } from './api/types';
 import { copyText } from './clipboard';
 import { errorText } from './format';
+import { rememberCount } from './query.svelte';
 import type { TargetPick } from './instances';
 import { hasBridge, onEvent } from './bridge';
 import { revs } from './revs.svelte';
@@ -93,6 +94,8 @@ class Session {
   runFile = $state<{ instanceId: string; runId: string; kind: 'log' | 'cmd'; title: string } | null>(null);
   /** The launcher updater's state (Go's update:state). */
   update = $state<UpdateState | null>(null);
+  /** The update state has answered (or failed to); until then App holds the banner's place if it showed last run. */
+  updateKnown = $state(false);
   /** "Later" hides the banner until the next start; the update installs when the launcher quits. */
   updateLater = $state(false);
   get updateReady() {
@@ -178,10 +181,17 @@ class Session {
     delete this.running[instanceId];
   }
 
+  /** A ready update stays ready on the next start, so the banner's place is kept for it then. */
+  #setUpdate(u: UpdateState) {
+    this.update = u;
+    rememberCount('update.banner', u.status === 'ready' ? 1 : 0);
+  }
+
   /** Reads which games are running (after the window reloads). */
   async load() {
-    const [s, hosts, update] = await Promise.all([api.launch.status(), api.host.status(), api.updates.state()]);
-    this.update = update;
+    // The update state is applied on its own, so the banner's held place is filled the moment it answers.
+    const update = api.updates.state().then((u) => this.#setUpdate(u)).finally(() => (this.updateKnown = true));
+    const [s, hosts] = await Promise.all([api.launch.status(), api.host.status(), update]);
     this.running = Object.fromEntries((s.running ?? []).map((id) => [id, true]));
     this.hosting = hosts[0] ?? null;
   }
@@ -209,7 +219,7 @@ class Session {
         if (g.result === 'crash' || g.result === 'failed') this.open({ kind: 'crash', instanceId: g.instanceId, runId: g.runId });
       }),
       onEvent<HostState>('host:state', (h) => this.hostChanged(h)),
-      onEvent<UpdateState>('update:state', (u) => (this.update = u)),
+      onEvent<UpdateState>('update:state', (u) => this.#setUpdate(u)),
     ];
     return () => offs.forEach((off) => off());
   }
