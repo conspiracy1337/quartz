@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"quartz/internal/modplatform"
 )
@@ -28,7 +29,7 @@ func (p plain) JSON(ctx context.Context, method, u string, _ http.Header, _, out
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-const miniConfig = `{"displayName":"NRC Mini","description":"The social side of NoRiskClient in one mod.",
+const miniConfig = `{"displayName":"NRC Mini",
  "mods":[{"id":"nrc-mini","source":{"type":"maven","repositoryRef":"noriskproduction","groupId":"gg.norisk","artifactId":"nrc-mini"},
   "compatibility":{
    "1.8.9":{"forge":{"identifier":"26.4.1-working+forge.1.8.9"}},
@@ -38,11 +39,17 @@ const miniConfig = `{"displayName":"NRC Mini","description":"The social side of 
   }},
   {"id":"other","source":{"type":"maven","groupId":"gg.norisk","artifactId":"something-else"},"compatibility":{"1.21.4":{"fabric":{"identifier":"1"}}}}]}`
 
+// frontPage is the part of norisk.gg's front page that holds the count.
+const frontPage = `<span class="HeroStats_count__7pNhE">41,967</span>players in the last 24 hours.</span>` +
+	`<script>self.__next_f.push([1,"2c:[\"$\",\"$L3f\",null,{\"locale\":\"en\",\"players\":41967,\"modules\":80}]"])</script>`
+
 func setup(t *testing.T) (*Client, *atomic.Int32) {
 	t.Helper()
 	var heads atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.URL.Path == "/site/":
+			_, _ = io.WriteString(w, frontPage)
 		case r.URL.Path == "/packs/nrc-mini.json":
 			_, _ = io.WriteString(w, miniConfig)
 		case strings.HasSuffix(r.URL.Path, ".jar.sha1"):
@@ -57,7 +64,7 @@ func setup(t *testing.T) (*Client, *atomic.Int32) {
 	}))
 	t.Cleanup(srv.Close)
 	c := New(plain{srv.Client()})
-	c.ConfigBase, c.MavenBase = srv.URL+"/packs/", srv.URL+"/maven/"
+	c.ConfigBase, c.MavenBase, c.SiteBase = srv.URL+"/packs/", srv.URL+"/maven/", srv.URL+"/site/"
 	return c, &heads
 }
 
@@ -125,7 +132,7 @@ func TestSearch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want == "" && len(page.Hits) != 0 || want != "" && (len(page.Hits) != 1 || page.Hits[0].ID != want || page.Hits[0].Updated.IsZero()) {
+		if want == "" && len(page.Hits) != 0 || want != "" && (len(page.Hits) != 1 || page.Hits[0].ID != want || page.Hits[0].Updated.IsZero() || page.Hits[0].Daily != 41967) {
 			t.Errorf("%q: %+v", text, page.Hits)
 		}
 	}
@@ -145,13 +152,59 @@ func TestProjectPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Title != "NoRiskClient Mod Mini" || d.Author != "NoRisk" || !strings.Contains(d.Body, "The social side of NoRiskClient") || len(d.Gallery) == 0 || d.Versions != 4 {
+	if d.Title != "NoRiskClient Mod Mini" || d.Author != "NoRisk" || !strings.Contains(d.Body, "The social side of NoRiskClient") || d.Versions != 4 || d.Daily != 41967 {
 		t.Fatalf("detail %+v", d)
 	}
-	for _, img := range append([]string{d.Icon}, d.Gallery[0].URL) {
-		if !strings.HasPrefix(img, Site+"/") {
-			t.Errorf("picture %s is not on norisk.gg", img)
+	// Mini's page shows what Mini has: the cosmetics, never the module menu.
+	// The page draws the gallery's first picture, so the body holds none.
+	if len(d.Gallery) != 1 || d.Gallery[0] != cosmetics || strings.Contains(d.Body, "](") {
+		t.Fatalf("mini's pictures: %+v", d.Gallery)
+	}
+	for _, m := range mods {
+		if !strings.HasSuffix(m.body, "\n") || strings.Contains(m.body, "Good to know") || len(m.gallery) == 0 {
+			t.Errorf("%s: body or gallery", m.id)
 		}
+		for _, img := range append([]modplatform.Image{{URL: icon}}, m.gallery...) {
+			if !strings.HasPrefix(img.URL, Site+"/images/") && img.URL != icon {
+				t.Errorf("%s: picture %s is not on norisk.gg", m.id, img.URL)
+			}
+		}
+	}
+}
+
+func TestDailyPlayers(t *testing.T) {
+	var reads atomic.Int32
+	page := frontPage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reads.Add(1)
+		_, _ = io.WriteString(w, page)
+	}))
+	t.Cleanup(srv.Close)
+	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	c := New(plain{srv.Client()})
+	c.SiteBase, c.Now = srv.URL+"/", func() time.Time { return now }
+	ctx := context.Background()
+	if n := c.dailyPlayers(ctx); n != 41967 {
+		t.Fatalf("players %d", n)
+	}
+	page = `"players":"lots"`
+	now = now.Add(59 * time.Minute)
+	if n := c.dailyPlayers(ctx); n != 41967 || reads.Load() != 1 {
+		t.Fatalf("within the hour: %d after %d reads", n, reads.Load())
+	}
+	// An unreadable page is 0, and asked again only after playersRetry.
+	now = now.Add(2 * time.Minute)
+	if n := c.dailyPlayers(ctx); n != 0 || reads.Load() != 2 {
+		t.Fatalf("unreadable: %d after %d reads", n, reads.Load())
+	}
+	page = `{"players":1234567890123}`
+	now = now.Add(time.Minute)
+	if n := c.dailyPlayers(ctx); n != 0 || reads.Load() != 2 {
+		t.Fatalf("retried too soon: %d after %d reads", n, reads.Load())
+	}
+	now = now.Add(playersRetry)
+	if n := c.dailyPlayers(ctx); n != 0 || reads.Load() != 3 {
+		t.Fatalf("a 13-digit count: %d after %d reads", n, reads.Load())
 	}
 }
 

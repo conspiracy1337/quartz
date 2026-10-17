@@ -32,4 +32,7 @@ func TestLive(t *testing.T) {
 		}
 		t.Logf("%s %s: %s (%d bytes)", m.title, v.Number, v.File.Name, v.File.Size)
 	}
+	if n := c.dailyPlayers(ctx); n < 1000 {
+		t.Fatalf("norisk.gg says %d players in the last 24 hours", n)
+	}
 }

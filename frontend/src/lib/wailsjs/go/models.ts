@@ -789,6 +789,7 @@ export namespace browse {
 	    summary: string;
 	    icon?: string;
 	    downloads: number;
+	    daily?: number;
 	    updated: number;
 	    url: string;
 	    versions: number;
@@ -809,6 +810,7 @@ export namespace browse {
 	        this.summary = source["summary"];
 	        this.icon = source["icon"];
 	        this.downloads = source["downloads"];
+	        this.daily = source["daily"];
 	        this.updated = source["updated"];
 	        this.url = source["url"];
 	        this.versions = source["versions"];
@@ -922,6 +924,7 @@ export namespace browse {
 	}
 	export class Stats {
 	    downloads: number;
+	    daily?: number;
 	    updated: number;
 	
 	    static createFrom(source: any = {}) {
@@ -931,6 +934,7 @@ export namespace browse {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.downloads = source["downloads"];
+	        this.daily = source["daily"];
 	        this.updated = source["updated"];
 	    }
 	}

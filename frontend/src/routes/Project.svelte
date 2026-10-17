@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { Loader, ProjectVersion, Src } from '$lib/api/types';
-  import { bytes, compact, errorText, shortMonthDay, shortDate } from '$lib/format';
+  import { bytes, compact, dailyUsers, errorText, shortMonthDay, shortDate } from '$lib/format';
   import { ANY_LOADER_NAMES, LOADER_NAMES, SRC_NAMES, isModLoader, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { lastCount, query, rememberCount } from '$lib/query.svelte';
@@ -97,7 +97,7 @@
         <div style="min-width: 0; display: flex; flex-direction: column; gap: 6px">
           <h1 class="h1 trunc">{side.name}</h1>
           <div class="muted trunc">{side.summary}</div>
-          <div style="display: flex; gap: 6px; flex-wrap: wrap">{#each side.badges as b (b)}<span class="badge">{b}</span>{/each}<span class="small faint tnum" style="margin-left: 6px">by {side.author}{side.downloads ? `, ${compact(side.downloads)} downloads` : ''} on {SRC_NAMES[p[src] ? src : other]}</span></div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap">{#each side.badges as b (b)}<span class="badge">{b}</span>{/each}<span class="small faint tnum" style="margin-left: 6px">by {side.author}{side.daily ? `, ${dailyUsers(side.daily)}` : side.downloads ? `, ${compact(side.downloads)} downloads` : ''} on {SRC_NAMES[p[src] ? src : other]}</span></div>
         </div>
         <div class="seg" role="group" aria-label="Source" style="margin-right: 4px">
           {#each SOURCES.filter((s) => s !== 'norisk' || p.norisk) as s (s)}<button class:on={src === s} onclick={() => p[s] && (chosen = s)} aria-pressed={src === s} aria-disabled={!p[s]} title={p[s] ? undefined : `Unavailable on ${SRC_NAMES[s]}`}><Icon name={s} size={14} />{SRC_NAMES[s]}</button>{/each}
