@@ -92,17 +92,17 @@
 <div class="scroll">
   <div style="max-width: 760px; margin: 0 auto; padding: 28px 24px 32px; display: flex; flex-direction: column; gap: 18px">
     <div style="display: flex; align-items: center; gap: 8px"><h1 class="h1" style="margin-right: auto">New instance</h1><a href={href({ name: 'import' })} class="btn"><Icon name="upload" size={14} sw={1.8} />Import file</a><a href={href({ name: 'browse', type: 'modpack' })} class="btn">Modpack</a></div>
+    <div class="field"><span class="field-label">Appearance</span>
+      <LookEditor bind:look {name} {meta} loader={jar ? '' : l.kind}>
+        <label class="field"><span class="sr">Instance name</span><span class="input"><input bind:value={name} placeholder="Enter Instance Name" maxlength="64" /></span></label>
+      </LookEditor>
+    </div>
     <div class="field"><span class="field-label">Mod loader</span>
       {#snippet mark(v: number)}<LoaderIcon kind={LOADERS[v]?.kind ?? 'none'} size={14} />{/snippet}
       <Seg options={loaderOptions} bind:value={loader} label="Mod loader" icon={mark} fill center />
       <span class="small faint">{jar ? 'Custom jars run without a mod loader.' : `${line} You can change it later under Version and loader.`}</span>
     </div>
     <div class="field"><span class="field-label">Minecraft version</span><VersionPicker start={jar?.minecraft ?? ''} startBadge="From jar" onpick={(v) => (version = v)} /></div>
-    <div class="field"><span class="field-label">Appearance</span>
-      <LookEditor bind:look {name} {meta} loader={jar ? '' : l.kind}>
-        <label class="field"><span class="field-label">Instance name</span><span class="input"><input bind:value={name} placeholder="Enter Instance Name" maxlength="64" /></span></label>
-      </LookEditor>
-    </div>
     <section class="field" aria-label="Share with other instances">
       <span class="field-label">Share with other instances</span>
       <div class="card tgl-grid">
