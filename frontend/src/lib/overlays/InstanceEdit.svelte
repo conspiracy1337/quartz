@@ -44,7 +44,7 @@
       submit={async (v) => { await api.instances.rename(i.id, v); revs.bump('instances'); }} onclose={close} />
   {:else if look}
     <Dialog title="Appearance" width={640} onclose={close}>
-      <LookEditor bind:look name={i.name} meta={instanceMeta(i)} left={agoShort(i.lastPlayed)} right={hours(i.playtimeMin)} />
+      <LookEditor bind:look name={i.name} meta={instanceMeta(i)} loader={i.loader?.kind ?? ''} left={agoShort(i.lastPlayed)} right={hours(i.playtimeMin)} />
       {#snippet foot()}
         <button class="btn" onclick={close}>Cancel</button>
         <button class="btn btn-accent" disabled={busy} onclick={() => look && save(look)}>Save</button>

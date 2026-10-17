@@ -42,7 +42,7 @@
       {#each others as i (i.id)}
         <button class="wr" class:on={target === i.id} role="radio" aria-checked={target === i.id} onclick={() => (target = i.id)}>
           <span class="radio" class:on={target === i.id} aria-hidden="true"></span>
-          <Tile art={i.art} icon={i.icon} style="width: 32px; height: 32px; border-radius: 6px" />
+          <Tile art={i.art} icon={i.icon} loader={i.loader?.kind ?? ''} style="width: 32px; height: 32px; border-radius: 6px" />
           <span class="trunc">{i.name}</span>
           <span class="small faint">{i.minecraft}</span>
         </button>

@@ -50,9 +50,13 @@ func TestEdits(t *testing.T) {
 	}
 	pic, banner := strings.Repeat("a", 64), strings.Repeat("b", 64)
 	got, _ = s.SetLook(in.ID, Look{Art: Art{Background: "#e2a03f"}, Icon: pic, Banner: banner})
-	got, _ = s.SetLook(got.ID, Look{Art: Art{Background: "#3ecf8e"}, Icon: got.Icon, Banner: got.Banner})
+	got, _ = s.SetLook(got.ID, Look{Art: Art{Background: "#3ecf8e", Initial: " H "}, Icon: got.Icon, Banner: got.Banner})
 	if got.Icon != pic || got.Banner != banner || got.Art.Background != "#3ecf8e" || got.Art.Initial != "H" {
-		t.Fatalf("a new colour keeps the picture, the banner and a letter: %+v", got)
+		t.Fatalf("a new colour keeps the picture, the banner and the letter: %+v", got)
+	}
+	// No letter stays none: the tile shows the loader's mark instead of a made-up one.
+	if got, _ = s.SetLook(got.ID, Look{Art: Art{Background: "#3ecf8e"}, Icon: got.Icon, Banner: got.Banner}); got.Art.Initial != "" {
+		t.Fatalf("an empty letter was filled in: %+v", got)
 	}
 	if got, _ = s.SetBanner(in.ID, ""); got.Banner != "" || got.Icon != pic {
 		t.Fatalf("removing the banner keeps the picture: %+v", got)

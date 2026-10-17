@@ -11,11 +11,11 @@
       the small button pairs. Colour, picture and banner change independently: a new colour
       never drops a picture. Used by New instance, a modpack's install card and the
       Appearance dialog. `look.icon` may also be a served picture (a modpack's icon). */
-  interface Props { look: Look; name: string; meta: string; left?: string; right?: string }
-  let { look = $bindable(), name, meta, left = 'Not played yet', right = '0 h' }: Props = $props();
+  /** `loader` ("" for vanilla) is whose mark the tile shows without a picture or letter. */
+  interface Props { look: Look; name: string; meta: string; loader: string; left?: string; right?: string }
+  let { look = $bindable(), name, meta, loader, left = 'Not played yet', right = '0 h' }: Props = $props();
 
   let error = $state('');
-  const initial = $derived(look.art.initial || (/[\p{L}\p{N}]/u.exec(name)?.[0] ?? '?').toUpperCase());
 
   async function pick(kind: 'icon' | 'banner') {
     error = '';
@@ -35,13 +35,13 @@
 {/snippet}
 
 <div class="look">
-  <InstanceCard art={{ background: look.art.background, initial }} icon={look.icon} banner={look.banner} name={name.trim() || 'Instance name'} {meta} {left} {right} />
+  <InstanceCard art={look.art} icon={look.icon} {loader} banner={look.banner} name={name.trim() || 'Instance name'} {meta} {left} {right} />
   <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0">
     <div class="field"><span class="field-label">Colour</span><Swatches colors={TINTS} value={look.art.background} label="Tile colour" onpick={(c) => (look = { ...look, art: { ...look.art, background: c } })} /></div>
     <div class="look-row">
       {@render picture('Picture', 'icon')}
       {@render picture('Banner', 'banner')}
-      <label class="field"><span class="field-label">Letter</span><span class="input"><input value={look.art.initial ?? ''} placeholder={initial} maxlength="2" oninput={(e) => (look = { ...look, art: { ...look.art, initial: e.currentTarget.value.trim() } })} /></span></label>
+      <label class="field"><span class="field-label">Letter</span><span class="input"><input value={look.art.initial ?? ''} placeholder="None" maxlength="2" oninput={(e) => (look = { ...look, art: { ...look.art, initial: e.currentTarget.value.trim() } })} /></span></label>
     </div>
     <span class="field-help" style:color={error ? 'var(--warn)' : undefined}>{error || 'A PNG or JPEG. The picture is cropped to a square; the banner fills the top of the card.'}</span>
   </div>

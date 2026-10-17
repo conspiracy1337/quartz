@@ -216,7 +216,7 @@
       {@const t = target}
       <div class="fg"><span class="field-label">Adding to</span>
         <Select value={t.id} options={(instances.data ?? []).map((i) => ({ value: i.id, label: i.name }))} label="Instance to add to" style="width: 100%" onchange={(v) => session.addTo(v)}>
-          {#snippet lead()}<Tile art={t.art} icon={t.icon} size="sm" />{/snippet}
+          {#snippet lead()}<Tile art={t.art} icon={t.icon} loader={t.loader?.kind ?? ''} size="sm" />{/snippet}
         </Select>
       </div>
     {/if}

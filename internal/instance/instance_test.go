@@ -24,7 +24,7 @@ func TestCreateListUpdateReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(a.ID, "survival-1-21-4-") || a.Name != "Survival 1.21.4" || a.Art.Initial != "S" || a.Settings.Java != (JavaSettings{}) {
+	if !strings.HasPrefix(a.ID, "survival-1-21-4-") || a.Name != "Survival 1.21.4" || a.Art.Initial != "" || a.Settings.Java != (JavaSettings{}) {
 		t.Fatalf("created %+v", a)
 	}
 	if _, err := os.Stat(s.GameDir(a.ID)); err != nil {

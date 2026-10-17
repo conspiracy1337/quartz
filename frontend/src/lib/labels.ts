@@ -3,6 +3,8 @@ import type { ContentKind, InstanceSummary, Loader, LoaderRef, ProjectKind, Proj
 import type { SettingsTab } from './router.svelte';
 
 export const LOADER_NAMES: Record<Loader, string> = { fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
+/** A mod loader the launcher installs (not a shader loader, not vanilla). */
+export const isModLoader = (l: string): l is Loader => l in LOADER_NAMES;
 
 /** The loader's own product name, as its release notes say it: "Fabric Loader", "NeoForge". */
 export const LOADER_PRODUCTS: Record<Loader, string> = { fabric: 'Fabric Loader', quilt: 'Quilt Loader', forge: 'Forge', neoforge: 'NeoForge' };

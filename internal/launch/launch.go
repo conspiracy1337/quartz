@@ -634,7 +634,7 @@ func (p *pipeline) install(ctx context.Context, res *install.Resolved, plan *jav
 	l := p.l
 	spec, err := l.cfg.Installer.Plan(install.Request{
 		Resolved: res, Java: plan, ProcessorJava: procJava,
-		Meta: tasks.Meta{Title: p.inst.Name, Subtitle: subtitle(p.inst), Art: tasks.Art{Background: p.inst.Art.Background, Initial: p.inst.Art.Initial}, Kind: "install"},
+		Meta: tasks.Meta{Title: p.inst.Name, Subtitle: subtitle(p.inst), Art: p.inst.TaskArt(), Kind: "install"},
 	})
 	if err != nil || spec == nil {
 		return err
@@ -753,7 +753,7 @@ func (l *Launcher) Repair(ctx context.Context, id string) (string, error) {
 	if err := l.cfg.Instances.CheckGameDir(id); err != nil {
 		return "", err
 	}
-	meta := tasks.Meta{Title: inst.Name, Subtitle: "Repairing game files", Art: tasks.Art{Background: inst.Art.Background, Initial: inst.Art.Initial}, Kind: "repair"}
+	meta := tasks.Meta{Title: inst.Name, Subtitle: "Repairing game files", Art: inst.TaskArt(), Kind: "repair"}
 	spec, err := l.Prepare(ctx, l.target(inst), l.cfg.Instances.GameDir(id), meta, true)
 	if err != nil || spec == nil {
 		return "", err

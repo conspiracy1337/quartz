@@ -404,7 +404,9 @@ export type JobState = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'ca
 /** Drives the dot colour of a step row. */
 export type StepState = 'queued' | 'run' | 'done' | 'warn' | 'failed';
 export interface JobStep { name: string; unit: 'bytes' | 'count'; done: number; total: number; state: StepState }
-export interface JobMeta { title: string; subtitle: string; art: Art; kind: string }
+/** A job's tile; one for an instance also has its picture and loader ("none" for vanilla). */
+export interface JobArt extends Art { icon?: string; loader?: string }
+export interface JobMeta { title: string; subtitle: string; art: JobArt; kind: string }
 export interface Job {
   id: string;
   meta: JobMeta;

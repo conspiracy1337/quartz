@@ -9,7 +9,7 @@
 </script>
 
 {#each tasks.summary.items as it (it.id)}
-  <div class="tr" class:compact><Tile art={it.art} size="sm" style="width: 24px; height: 24px" /><span class="trunc">{it.name}</span><Bar pct={it.pct ?? 0} /><span class="small faint" class:mono={it.pct !== null} style="text-align: right">{it.pct === null ? 'Queued' : `${it.pct}%`}</span></div>
+  <div class="tr" class:compact><Tile art={it.art} icon={it.art.icon} loader={it.art.loader} size="sm" style="width: 24px; height: 24px" /><span class="trunc">{it.name}</span><Bar pct={it.pct ?? 0} /><span class="small faint" class:mono={it.pct !== null} style="text-align: right">{it.pct === null ? 'Queued' : `${it.pct}%`}</span></div>
 {/each}
 
 <style>

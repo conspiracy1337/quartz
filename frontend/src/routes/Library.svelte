@@ -58,7 +58,7 @@
     <div class="lgrid">
       {#if list.data}
         {#each rows as r (r.id)}
-          <InstanceCard art={r.art} icon={r.icon} banner={r.banner} name={r.name} meta={instanceMeta(r)} left={agoShort(r.lastPlayed)} right={hours(r.playtimeMin)} oncontextmenu={(e) => session.openInstanceMenu(r.id, e)}>
+          <InstanceCard art={r.art} icon={r.icon} loader={r.loader?.kind ?? ''} banner={r.banner} name={r.name} meta={instanceMeta(r)} left={agoShort(r.lastPlayed)} right={hours(r.playtimeMin)} oncontextmenu={(e) => session.openInstanceMenu(r.id, e)}>
             <a class="icard-hit" href={href({ name: 'instance', id: r.id, tab: 'overview' })} aria-label="Open {r.name}"></a>
             {#if session.busy(r.id)}
               <button class="btn btn-stop btn-icon play live" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Stop {r.name}" onclick={() => session.stop(r.id)}><Icon name="stop" size={12} /></button>

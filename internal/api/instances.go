@@ -673,7 +673,7 @@ func (s *Instances) move(id, parent string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	spec := tasks.NewJob(tasks.Meta{Title: "Moving " + in.Name, Subtitle: plan.To, Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "move"}).
+	spec := tasks.NewJob(tasks.Meta{Title: "Moving " + in.Name, Subtitle: plan.To, Art: in.TaskArt(), Kind: "move"}).
 		Step("Game folder", tasks.Count, tasks.Func("move the game folder", func(ctx context.Context) error {
 			if err := s.guard(id); err != nil {
 				return err
@@ -701,7 +701,7 @@ func (s *Instances) Duplicate(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	spec := tasks.NewJob(tasks.Meta{Title: "Duplicating " + in.Name, Subtitle: "A copy with its worlds and content", Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "move"}).
+	spec := tasks.NewJob(tasks.Meta{Title: "Duplicating " + in.Name, Subtitle: "A copy with its worlds and content", Art: in.TaskArt(), Kind: "move"}).
 		Step("Copying", tasks.Count, tasks.Func("copy the instance", func(ctx context.Context) error {
 			if err := s.guard(id); err != nil {
 				return err

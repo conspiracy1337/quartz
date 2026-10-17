@@ -41,7 +41,7 @@ func (s *Service) Install(id, title string, f modplatform.File) (string, error) 
 		return "", err
 	}
 	dest := filepath.Join(s.d.Downloads, random()+".zip")
-	spec := tasks.NewJob(tasks.Meta{Title: title, Subtitle: in.Name, Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "install"}).
+	spec := tasks.NewJob(tasks.Meta{Title: title, Subtitle: in.Name, Art: in.TaskArt(), Kind: "install"}).
 		Step("Download", tasks.Bytes, tasks.Download(download.Item{URLs: []string{f.URL}, Dest: dest, Size: f.Size, Sum: hashx.Of(hashx.SHA1, f.SHA1)})).
 		After("Adding the world", tasks.Count, tasks.Func("add "+title, func(context.Context) error {
 			defer func() { _ = os.Remove(dest) }()

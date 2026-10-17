@@ -60,7 +60,7 @@
     {/if}
     {#each recent.data ?? [] as i (i.id)}
       <a href={href({ name: 'instance', id: i.id, tab: 'overview' })} class="side-inst" class:on={active === 'instance' && instanceId === i.id} oncontextmenu={(e) => session.openInstanceMenu(i.id, e)}>
-        <Tile art={i.art} icon={i.icon} size="sm" />
+        <Tile art={i.art} icon={i.icon} loader={i.loader?.kind ?? ''} size="sm" />
         <span class="trunc">{i.name}</span>
         {#if session.running[i.id]}<span class="dot live" aria-label="Running"></span>{:else}<span></span>{/if}
       </a>

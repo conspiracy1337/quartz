@@ -92,7 +92,7 @@
       {#each menuFor.instances as id, j (id)}
         {@const i = inst(id)}
         {#if i}
-          <button class="mi" role="menuitem" onclick={() => join(menuFor, id)}><Tile art={i.art} icon={i.icon} size="sm" /><span class="trunc">{i.name}</span><span class="small faint">{j === 0 ? 'Last used' : i.minecraft}</span></button>
+          <button class="mi" role="menuitem" onclick={() => join(menuFor, id)}><Tile art={i.art} icon={i.icon} loader={i.loader?.kind ?? ''} size="sm" /><span class="trunc">{i.name}</span><span class="small faint">{j === 0 ? 'Last used' : i.minecraft}</span></button>
         {/if}
       {/each}
     </div>
