@@ -103,7 +103,7 @@ func (s *Service) view(id string) (view, error) {
 	if v.idx.Pending.Packs != nil {
 		v.packs = v.idx.Pending.Packs
 	}
-	mod := s.shaderMod(v).id
+	mod := s.shaderMod(v)
 	props, _ := optfile.Read(s.abs(v.in.ID, shaderConfig(mod)), "=")
 	v.shader = activeShader(props, mod)
 	if v.idx.Pending.Shader != nil {
@@ -312,12 +312,10 @@ func projectURL(k Kind, id *Ident) string {
 	return ""
 }
 
-type shaderMod struct{ id, name, version string }
-
-// shaderMod finds the enabled shader mod: Iris or Oculus, else OptiFine (its
-// jar, or OptiFabric that loads it), as XMCL also supports. "" when none.
-func (s *Service) shaderMod(v view) shaderMod {
-	var optifine shaderMod
+// shaderMod finds the enabled shader mod's id: iris or oculus, else optifine
+// (its jar, or OptiFabric that loads it), as XMCL also supports. "" when none.
+func (s *Service) shaderMod(v view) string {
+	var optifine string
 	for _, e := range entriesOf(v.idx, Mods) {
 		if strings.HasSuffix(e.Rel, Disabled) {
 			continue
@@ -325,10 +323,10 @@ func (s *Service) shaderMod(v view) shaderMod {
 		info := v.known[e.SHA1].Info
 		switch {
 		case info != nil && (info.ID == "iris" || info.ID == "oculus"):
-			return shaderMod{id: info.ID, name: map[string]string{"iris": "Iris", "oculus": "Oculus"}[info.ID], version: info.Version}
+			return info.ID
 		case info != nil && (info.ID == "optifabric" || info.Name == "OptiFine"),
 			strings.HasPrefix(strings.ToLower(path.Base(e.Rel)), "optifine"):
-			optifine = shaderMod{id: "optifine", name: "OptiFine"}
+			optifine = "optifine"
 		}
 	}
 	return optifine

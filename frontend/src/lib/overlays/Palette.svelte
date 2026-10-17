@@ -74,7 +74,7 @@
     ...registry.map((d) => ({ key: d.id, group: 'Settings', label: d.title, icon: 'settings-simple' as const, hint: `Settings, ${SETTINGS_TAB_LABELS[d.tab]}`, extra: `${descText(d)} ${d.group}`, run: nav({ name: 'settings', tab: d.tab }) })),
   ]);
 
-  const instances = query(() => api.instances.list());
+  const instances = query(() => api.instances.list(), 'instances.list');
   let q = $state('');
   let sel = $state(0);
   let input: HTMLInputElement;

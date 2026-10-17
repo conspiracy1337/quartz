@@ -28,7 +28,7 @@
     force = true;
     reload++;
   }
-  const instances = query(() => api.instances.list());
+  const instances = query(() => api.instances.list(), 'instances.list');
   let onlineOnly = $state(false);
   let open = $state<string | null>(null);
 

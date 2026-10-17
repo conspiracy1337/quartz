@@ -10,7 +10,7 @@
 
   const INTERVAL = 5000;
   const shots = query(() => api.home.recentShots());
-  const instances = query(() => api.instances.list());
+  const instances = query(() => api.instances.list(), 'instances.list');
   let i = $state(0);
   let paused = $state(false);
 

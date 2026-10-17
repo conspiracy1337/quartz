@@ -2,7 +2,7 @@
   import { api } from '$lib/api';
   import type { TrashEntry } from '$lib/api/types';
   import { ago, bytes, plural } from '$lib/format';
-  import { query } from '$lib/query.svelte';
+  import { query, skeletonRows } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { go } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
@@ -57,7 +57,8 @@
       session.fail('Delete old logs', err);
     }
   }
-  const trash = query(() => api.instances.trashList());
+  // Keyed: the skeleton has as many rows as the trash had last time (an empty trash is one row).
+  const trash = query(() => api.instances.trashList(), 'trash');
   const KEEP_DAYS = 30;
   const daysLeft = (e: TrashEntry) => Math.max(0, KEEP_DAYS - Math.floor((Date.now() - e.trashedAt) / 86_400_000));
 
@@ -104,7 +105,7 @@
         {#if trash.data}
           <div class="row empty tr-empty"><span>The trash is empty. Instances you move here can be restored for 30 days.</span></div>
         {:else}
-          {#each { length: 2 } as _, k (k)}<div class="row tr" aria-hidden="true"><div class="sk" style="width: 32px; height: 32px; border-radius: 7px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk opt" style="height: 10px; width: 70px"></div><div></div></div>{/each}
+          {#each { length: skeletonRows('trash', 1) } as _, k (k)}<div class="row tr" aria-hidden="true"><div class="sk" style="width: 32px; height: 32px; border-radius: 7px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk opt" style="height: 10px; width: 70px"></div><div></div></div>{/each}
         {/if}
       {/each}
     </div>

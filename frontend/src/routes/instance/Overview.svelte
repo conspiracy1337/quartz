@@ -89,7 +89,7 @@
       <div class="ov-body">
         <Setting title="Sandbox" desc={i.sandboxed ? "Mods only reach this instance's folder." : 'Off. Mods can reach your files.'} oneLine href={href({ name: 'instance', id: i.id, tab: 'settings', sub: 'sandbox' })}><span class="badge badge-info">{i.sandboxed ? 'On' : 'Off'}</span></Setting>
         <div class="divider"></div>
-        <Setting title="Syncing" desc={syncCount === undefined ? '' : syncCount ? `Syncing ${plural(syncCount, 'target')}` : 'Nothing shared.'} oneLine href={href({ name: 'syncing' })}><span class="badge badge-info">{syncCount ? 'On' : 'Off'}</span></Setting>
+        <Setting title="Syncing" desc={syncCount ? `Syncing ${plural(syncCount, 'target')}` : 'Nothing shared.'} loading={syncCount === undefined} oneLine href={href({ name: 'syncing' })}>{#if syncCount === undefined}<span class="sk" style="width: 28px; height: 20px" aria-hidden="true"></span>{:else}<span class="badge badge-info">{syncCount ? 'On' : 'Off'}</span>{/if}</Setting>
         <div class="divider"></div>
         <Setting title="Discord status" desc="Show this instance while you play." oneLine><Toggle on={i.discordStatus} label="Discord status" onchange={setDiscord} /></Setting>
       </div>

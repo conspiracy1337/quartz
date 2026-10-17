@@ -1,4 +1,5 @@
 <script lang="ts">
+  import minecraftNet from '$assets/minecraft-net.png';
   import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
   import { bytes, fullDate } from '$lib/format';
@@ -18,7 +19,8 @@
   let { instance: i }: Props = $props();
   const to = (sub: string) => href({ name: 'instance', id: i.id, tab: 'settings', sub });
 
-  const families = query(() => api.versions.minecraft());
+  // Keyed, so a second visit shows it at once (Browse shares the version list).
+  const families = query(() => api.versions.minecraft(), 'versions.minecraft');
   const loaders = query(() => (i.loader ? api.versions.loaders(i.minecraft) : Promise.resolve([])));
 
   const family = $derived(families.data?.find((f) => f.releases.some((r) => r.id === i.minecraft) || f.snapshots.some((r) => r.id === i.minecraft)));
@@ -52,19 +54,24 @@
   }
 </script>
 
+<!-- A component's second line; a skeleton holds its place until the versions are in. -->
+{#snippet line(text: string, ready: boolean)}
+  <span class="small faint" style="display: block">{#if ready}{text}{:else}<span class="sk" style="display: inline-block; vertical-align: middle; height: 10px; width: 220px" aria-hidden="true"></span>{/if}</span>
+{/snippet}
+
 <section class="sec" aria-label="Version">
   <div class="sec-h"><h2 class="h3">Version</h2></div>
   <div class="card">
-    <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="grass-block" size={24} /></span><span><span class="h3" style="display: block">Minecraft {i.minecraft}</span><span class="small faint" style="display: block">{mcLine}</span></span>{#if i.clientJar}<button class="btn btn-sm" disabled title="Remove the custom jar to change the version">Change</button>{:else}<a href={to('minecraft')} class="btn btn-sm">Change</a>{/if}</div>
+    <div class="comp"><span class="cbox" aria-hidden="true"><img src={minecraftNet} width="24" height="24" class="px" alt="" draggable="false" /></span><span><span class="h3" style="display: block">Minecraft {i.minecraft}</span>{@render line(mcLine, !!families.data)}</span>{#if i.clientJar}<button class="btn btn-sm" disabled title="Remove the custom jar to change the version">Change</button>{:else}<a href={to('minecraft')} class="btn btn-sm">Change</a>{/if}</div>
     {#if i.clientJar}
       <div class="divider"></div>
       <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="file" size={20} sw={1.8} /></span><span style="min-width: 0"><span class="h3 trunc" style="display: block">{i.clientJar.name}</span><span class="small faint" style="display: block">Custom jar, {bytes(i.clientJar.size)}. Runs in place of the vanilla game jar.</span></span><button class="btn btn-sm btn-ghost" onclick={() => edit(() => api.instances.removeClientJar(i.id), 'Custom jar')}>Remove</button></div>
     {/if}
     <div class="divider"></div>
     {#if i.loader}
-      <div class="comp"><span class="cbox" aria-hidden="true"><LoaderIcon kind={i.loader.kind} size={22} /></span><span><span class="h3" style="display: block">{LOADER_PRODUCTS[i.loader.kind]} {i.loader.version}</span><span class="small faint" style="display: block">{loaderLine}</span></span><a href={to('loader')} class="btn btn-sm">Change</a></div>
+      <div class="comp"><span class="cbox" aria-hidden="true"><LoaderIcon kind={i.loader.kind} size={22} /></span><span><span class="h3" style="display: block">{LOADER_PRODUCTS[i.loader.kind]} {i.loader.version}</span>{@render line(loaderLine, !!loaders.data)}</span><a href={to('loader')} class="btn btn-sm">Change</a></div>
     {:else}
-      <div class="comp"><span class="cbox" aria-hidden="true"><Icon name="plus" size={20} sw={1.8} /></span><span><span class="h3" style="display: block">No mod loader</span><span class="small faint" style="display: block">{i.clientJar ? 'Custom jars run without a mod loader.' : 'Vanilla. Add a loader to use mods.'}</span></span>{#if i.clientJar}<button class="btn btn-sm" disabled>Add</button>{:else}<a href={to('loader')} class="btn btn-sm">Add</a>{/if}</div>
+      <div class="comp"><span class="cbox" aria-hidden="true"><LoaderIcon kind="none" size={22} /></span><span><span class="h3" style="display: block">No mod loader</span><span class="small faint" style="display: block">{i.clientJar ? 'Custom jars run without a mod loader.' : 'Vanilla. Add a loader to use mods.'}</span></span>{#if i.clientJar}<button class="btn btn-sm" disabled>Add</button>{:else}<a href={to('loader')} class="btn btn-sm">Add</a>{/if}</div>
     {/if}
     <div class="divider"></div>
     <Setting title="Keep the loader up to date" desc="Installs new stable {i.loader ? LOADER_PRODUCTS[i.loader.kind] : 'loader'} versions when you launch."><Toggle on={i.keepLoaderUpdated} label="Keep the loader up to date" onchange={(v) => edit(() => api.instances.setVersionOptions(i.id, v, i.followLatest), 'Version settings')} /></Setting>

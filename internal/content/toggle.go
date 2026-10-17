@@ -285,7 +285,7 @@ func (s *Service) writeShader(id, name string) error {
 	if err != nil {
 		return err
 	}
-	mod := s.shaderMod(v).id
+	mod := s.shaderMod(v)
 	p := s.abs(v.in.ID, shaderConfig(mod))
 	if s.running(id) {
 		base := v.shader
@@ -336,7 +336,7 @@ func (s *Service) GameExited(id string) {
 		}
 	}
 	if pend.Shader != nil {
-		mod := s.shaderMod(v).id
+		mod := s.shaderMod(v)
 		props, _ := optfile.Read(s.abs(id, shaderConfig(mod)), "=")
 		if activeShader(props, mod) != pend.ShaderBase {
 			s.d.Log.Info("content: shader changed in game; keeping the game's choice")

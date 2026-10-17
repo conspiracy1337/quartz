@@ -23,14 +23,12 @@
   }
 </script>
 
-<div class="scroll">
-  <div class="page" style="gap: 14px; padding-top: 16px">
-    <div style="display: flex; align-items: center; gap: 8px"><a href={back} class="btn btn-sm btn-ghost"><Icon name="chevron-left" size={12} sw={2} />Back</a><h2 class="h2" style="margin-right: auto">Change Minecraft version</h2></div>
-    <VersionPicker current={i.minecraft} onpick={(v) => (sel = v)} />
-  </div>
+<div class="page page-fill" style="gap: 14px; padding-top: 16px">
+  <div style="display: flex; align-items: center; gap: 8px"><a href={back} class="btn btn-sm btn-ghost"><Icon name="chevron-left" size={12} sw={2} />Back</a><h2 class="h2" style="margin-right: auto">Change Minecraft version</h2></div>
+  <VersionPicker current={i.minecraft} fill onpick={(v) => (sel = v)} />
 </div>
 <div class="pfoot">
-  <span class="mono muted">{i.minecraft}</span><Icon name="arrow-right" size={12} sw={2} /><span class="mono">{sel}</span>
+  <span class="mono muted">{i.minecraft}</span><Icon name="arrow-right" size={12} sw={2} /><span class="mono pfoot-to">{sel}</span>
   <span class="small faint" style="margin-left: 8px">{compat}</span>
   <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={!sel || sel === i.minecraft || busy} onclick={switchTo}>Switch to {sel}</button></span>
 </div>

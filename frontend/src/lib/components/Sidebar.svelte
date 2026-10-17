@@ -20,7 +20,7 @@
   let { active, instanceId, downloads = 0 }: Props = $props();
 
   const recent = query(() => api.instances.recent());
-  const all = query(() => api.instances.list());
+  const all = query(() => api.instances.list(), 'instances.list');
   const accounts = query(() => api.accounts.list());
   const me = $derived(accounts.data?.find((a) => a.isDefault));
 

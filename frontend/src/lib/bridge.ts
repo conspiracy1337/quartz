@@ -26,8 +26,10 @@ export function onEvent<T>(topic: string, cb: (payload: T) => void): () => void 
   return EventsOn(topic, (payload: T) => cb(payload));
 }
 
-// Open the app with ?slow to see every skeleton state in the preview.
-const latency = typeof location !== 'undefined' && new URLSearchParams(location.search).has('slow') ? 1200 : 0;
+// Open the app with ?slow to see every skeleton state in the preview, or ?slow=<ms> to
+// answer as fast as Go does (a few ms), which shows what flashes between screens.
+const slow = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('slow') : null;
+const latency = slow === null ? 0 : Number(slow) || 1200;
 
 /** Resolves preview data with a private copy (screens can never mutate fixtures), delayed under ?slow. */
 export function preview<T>(value: T): Promise<T> {

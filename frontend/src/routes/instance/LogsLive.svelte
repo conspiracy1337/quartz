@@ -109,9 +109,10 @@
   {#snippet tools()}
     <SearchField bind:value={search} label="Search log" placeholder="Search log" style="flex: 0 1 240px; min-width: 140px" />
     <div style="display: flex; gap: 6px">
+      <!-- Counted chips always show their count (as every chip does), so they keep their width as lines arrive. -->
       {#each LEVEL_CHIPS as c (c.level)}
         {@const n = count(c.level)}
-        <button class="chip" class:on={levels[c.level]} style={levels[c.level] && c.color ? `background: ${c.color}; border-color: ${c.color}` : undefined} onclick={() => (levels[c.level] = !levels[c.level])}>{label(c.level)}{c.color && n ? ` ${n}` : ''}</button>
+        <button class="chip" class:on={levels[c.level]} style={levels[c.level] && c.color ? `background: ${c.color}; border-color: ${c.color}` : undefined} onclick={() => (levels[c.level] = !levels[c.level])}>{label(c.level)}{#if c.color}<span class="count">{n}</span>{/if}</button>
       {/each}
     </div>
     <div style="flex: 1 1 0"></div>

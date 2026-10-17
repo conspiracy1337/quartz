@@ -6,8 +6,6 @@ export function Copy(arg1:string,arg2:string):Promise<void>;
 
 export function List(arg1:string):Promise<Array<screenshots.Shot>>;
 
-export function OpenFolder(arg1:string):Promise<void>;
-
 export function ShowInFolder(arg1:string,arg2:string):Promise<void>;
 
 export function Trash(arg1:string,arg2:Array<string>):Promise<string>;

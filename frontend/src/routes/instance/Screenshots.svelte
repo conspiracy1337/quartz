@@ -12,7 +12,9 @@
   let { instanceId }: Props = $props();
 
   const WEEK = 7 * 86_400_000;
-  const shots = query(() => api.screenshots.list(instanceId));
+  // Keyed, so a second visit shows them at once; the instance page is remounted per instance.
+  // svelte-ignore state_referenced_locally
+  const shots = query(() => api.screenshots.list(instanceId), `screenshots.${instanceId}`);
   let search = $state('');
   let filter = $state<string>('all');
 
@@ -56,7 +58,6 @@
       session.fail('Move to trash', e);
     }
   }
-  const openFolder = () => api.screenshots.openFolder(instanceId).catch((e: unknown) => session.fail('Open folder', e));
 </script>
 
 <div class="scroll">
@@ -72,7 +73,6 @@
         <button class="btn btn-danger" disabled={!picked.length} onclick={trashPicked}>Move {picked.length || ''} to trash</button>
       {:else}
         <button class="btn" onclick={() => (selecting = true)}>Select</button>
-        <button class="btn" onclick={openFolder}>Open folder</button>
       {/if}
     </div>
     <div class="sg">

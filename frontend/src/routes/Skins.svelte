@@ -129,7 +129,7 @@
       {#if skins.data && accounts.data}<PlayerModel {...shown} {...capeLook(cape)} fill scale={tall.current ? 11 : short.current ? 6 : 8} />{/if}
     </div>
     <div class="wd-info">
-      <div style="min-width: 0"><div class="h2 trunc">{cur?.name ?? ''}</div><div class="small faint">{cape ? `${cape.name} cape` : 'No cape'}, {shown.slim ? 'slim' : 'classic'} arms</div></div>
+      <div style="min-width: 0"><div class="h2 trunc">{#if skins.data}{cur?.name ?? '\u00a0'}{:else}<span class="sk" style="display: inline-block; vertical-align: middle; height: 16px; width: 140px" aria-hidden="true"></span>{/if}</div><div class="small faint">{cape ? `${cape.name} cape` : 'No cape'}, {shown.slim ? 'slim' : 'classic'} arms</div></div>
       <Seg options={ARMS} value={shown.slim ? 'slim' : 'classic'} label="Arm type" fill center onchange={setArms} />
       <button class="btn btn-accent btn-lg btn-block" disabled={!me || !cur || busy || (!newSkin && !newCape)} onclick={wear}>{apply}</button>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px">

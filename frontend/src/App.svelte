@@ -131,7 +131,8 @@
     <div class="app-side"><Sidebar active={sideKey(route)} instanceId={route.name === 'instance' ? route.id : undefined} downloads={tasks.active.length} /></div>
     <main class="main">
       {#if session.updateReady && route.name !== 'home'}<UpdateBanner />{/if}
-      {@render page(route)}
+      <!-- Always the height left, so the bar below holds still while a page loads. -->
+      <div class="main-page">{@render page(route)}</div>
       <!-- The Downloads page and the download panel show the same queue, so the bar would only repeat it. -->
       {#if route.name !== 'downloads' && !downloadPanel}<StatusBar />{/if}
     </main>

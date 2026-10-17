@@ -26,10 +26,6 @@ export function List(arg1) {
   return window['go']['api']['Worlds']['List'](arg1);
 }
 
-export function OpenFolder(arg1) {
-  return window['go']['api']['Worlds']['OpenFolder'](arg1);
-}
-
 export function Rename(arg1, arg2, arg3) {
   return window['go']['api']['Worlds']['Rename'](arg1, arg2, arg3);
 }

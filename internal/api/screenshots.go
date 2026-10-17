@@ -56,14 +56,6 @@ func (a *Screenshots) ShowInFolder(id, name string) error {
 	return procx.Reveal(p)
 }
 
-// OpenFolder opens the screenshots folder.
-func (a *Screenshots) OpenFolder(id string) error {
-	if err := checkInstanceID(id); err != nil {
-		return err
-	}
-	return procx.OpenFolder(a.d.Instances.Path(id, "screenshots"))
-}
-
 // UseAsPicture makes a screenshot the instance's picture (cropped square).
 func (a *Screenshots) UseAsPicture(id, name string) error {
 	return a.use(id, name, a.d.Icons, a.d.Instances.SetIcon)

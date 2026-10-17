@@ -14,6 +14,7 @@ a{color:inherit}
 .app{display:flex;height:100vh;min-height:600px;overflow:hidden;background:var(--bg)}
 .app-side{flex:0 0 auto;height:100%}
 .main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.main-page{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .scroll{flex:1 1 auto;min-height:0;overflow:auto}
 .page{padding:20px 28px 28px;display:flex;flex-direction:column;gap:20px}
 /* Pages fill the width and start on the header's left edge, so a maximised window has no dead strip on the right. */
@@ -30,7 +31,7 @@ a{color:inherit}
 .page-split > *{display:flex;flex-direction:column;gap:var(--gutter);min-width:0}
 @media (min-width:1600px){.page-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:var(--gutter);align-items:start}}
 .topbar{height:52px;flex:0 0 52px;display:flex;align-items:center;gap:10px;padding:0 20px 0 28px;border-bottom:1px solid var(--line)}
-@media (max-width:760px){.app{height:auto;flex-direction:column;overflow:visible}.main{overflow:visible}}
+@media (max-width:760px){.app{height:auto;flex-direction:column;overflow:visible}.main,.main-page{overflow:visible}}
 
 /* sidebar */
 .side{width:232px;height:100vh;min-height:600px;position:sticky;top:0;display:flex;flex-direction:column;gap:18px;padding:14px 10px;background:var(--side);border-right:1px solid var(--line)}

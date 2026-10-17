@@ -47,6 +47,15 @@ export function query<T>(load: () => Promise<T>, key?: string): Query<T> {
   return s;
 }
 
+/** Loads `key` ahead of its screen (unless it is in already), so the screen shows it at once. */
+export function warm<T>(key: string, load: () => Promise<T>) {
+  if (last.has(key)) return;
+  load().then(
+    (d) => void (last.has(key) || last.set(key, d)),
+    () => {}, // the screen asks again when it opens
+  );
+}
+
 /** How many rows (a list's length, or 1 for any other answer) `key` had last time, if known. */
 export function lastCount(key: string): number | undefined {
   const d = last.get(key);

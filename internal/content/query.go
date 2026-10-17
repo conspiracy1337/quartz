@@ -86,22 +86,16 @@ func (s *Service) Missing() []InstanceMissing {
 
 // TabInfo is what a content tab says besides its rows.
 type TabInfo struct {
-	// ShaderMod is "Iris 1.8.1" or "Oculus 1.7.0", or "" without either.
-	ShaderMod string `json:"shaderMod"`
 	// Worlds lists the worlds data packs can go into.
 	Worlds []string `json:"worlds"`
 }
 
 // Info describes an instance's content tabs.
 func (s *Service) Info(id string) TabInfo {
-	v, err := s.view(id)
-	if err != nil {
+	if _, err := s.view(id); err != nil {
 		return TabInfo{}
 	}
 	var t TabInfo
-	if m := s.shaderMod(v); m.id != "" {
-		t.ShaderMod = strings.TrimSpace(m.name + " " + m.version)
-	}
 	if root, err := os.OpenRoot(s.base(id, DataPacks)); err == nil {
 		for _, f := range worlds(root) {
 			t.Worlds = append(t.Worlds, f.Group)
