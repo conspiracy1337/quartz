@@ -61,15 +61,18 @@ type SearchQuery struct {
 
 // Hit is one search result.
 type Hit struct {
-	Source    Source    `json:"source"`
-	ID        string    `json:"id"`
-	Slug      string    `json:"slug"`
-	Title     string    `json:"title"`
-	Author    string    `json:"author"`
-	Summary   string    `json:"summary"`
-	Icon      string    `json:"icon"` // image URL on the platform CDN, or ""
-	Downloads int64     `json:"downloads"`
-	Updated   time.Time `json:"updated"`
+	Source    Source `json:"source"`
+	ID        string `json:"id"`
+	Slug      string `json:"slug"`
+	Title     string `json:"title"`
+	Author    string `json:"author"`
+	Summary   string `json:"summary"`
+	Icon      string `json:"icon"` // image URL on the platform CDN, or ""
+	Downloads int64  `json:"downloads"`
+	// Daily is how many played in the last 24 hours, from a platform that
+	// says that in place of downloads (NoRisk).
+	Daily   int64     `json:"daily,omitempty"`
+	Updated time.Time `json:"updated"`
 }
 
 // SearchPage is one page of hits and how many there are in all.
@@ -121,6 +124,7 @@ type Detail struct {
 	Client    string // required | optional | unsupported | "" (unknown)
 	Server    string
 	Downloads int64
+	Daily     int64 // as on Hit
 	Updated   time.Time
 	Gallery   []Image
 	Links     Links

@@ -300,7 +300,8 @@ export type ProjectKind = 'mod' | 'modpack' | 'resourcepack' | 'shader' | 'datap
 export type Src = 'modrinth' | 'curseforge' | 'norisk';
 /** One heading of Browse's category filters and its names. */
 export interface CategoryGroup { title: string; names: string[] }
-export interface SourceStats { downloads: number; updated: number }
+/** `daily` is players in the last 24 hours, from a source that says that in place of downloads (NoRisk). */
+export interface SourceStats { downloads: number; daily?: number; updated: number }
 /** One merged search result; `id` stays the same when a twin from the other platform merges in. */
 export interface ProjectHit {
   id: string;
@@ -349,7 +350,7 @@ export interface ProjectLink { icon: string; label: string; url: string }
 /** A project as one platform shows it. */
 export interface ProjectSide {
   name: string; author: string; summary: string; icon?: string; art?: PreviewOnly<Art>;
-  downloads: number; updated: number; url: string; versions: number;
+  downloads: number; daily?: number; updated: number; url: string; versions: number;
   badges: string[]; body: DocBlock[]; gallery: GalleryItem[]; links: ProjectLink[];
   blocked?: boolean;
 }

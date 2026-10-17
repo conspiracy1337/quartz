@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,38 +33,76 @@ const (
 	ConfigBase = "https://raw.githubusercontent.com/NoRiskClient/nrc-configs/HEAD/packs/"
 	// MavenBase is NoRisk's Maven repository, at the gg.norisk group.
 	MavenBase = "https://maven.norisk.gg/repository/norisk-production/gg/norisk/"
-	// Site is NoRisk's website; its pictures show on the project pages.
+	// Site is NoRisk's website: its pictures show on the project pages, and
+	// its front page says how many played in the last 24 hours.
 	Site   = "https://norisk.gg"
 	author = "NoRisk"
 	// configLife is how long a pack config is used before it is read again
 	// (NoRisk publishes builds several times a day).
 	configLife = time.Hour
+	// playersRetry is how long an unreadable player count waits before the
+	// site is asked again.
+	playersRetry = 5 * time.Minute
 )
 
-// mod is one of the built-in projects.
+// mod is one of the built-in projects. Its page is written here: the pack
+// configs' descriptions are short and their text is mis-encoded. The page
+// shows the gallery's first picture above the body.
 type mod struct {
 	id       string // the project id: the mod id in the jar
 	artifact string // the Maven artifact and the pack config's name
 	title    string
 	summary  string
-	features []string
+	body     string // Markdown, before the shared footer
+	gallery  []modplatform.Image
 	aliases  []string // what a search may type for it
 }
+
+// Pictures on NoRisk's website (remoteimg allows norisk.gg).
+var (
+	icon      = Site + "/icon-192.png"
+	menu      = modplatform.Image{URL: Site + "/images/hero-mod-menu.png", Title: "The NoRiskClient menu"}
+	cosmetics = modplatform.Image{URL: Site + "/images/features/cosmetics-poster.webp", Title: "The cosmetics shop"}
+)
 
 var mods = []mod{
 	{
 		id: "nrcstandalone", artifact: "nrc-standalone", title: "NoRiskClient Mod",
-		summary:  "The full NoRiskClient as one mod: every module, HUD and feature, with no extra launcher.",
-		features: []string{"Every NoRiskClient module and HUD", "Cosmetics, capes and emotes", "Friends and hosted worlds", "Fabric, Forge and NeoForge"},
-		aliases:  []string{"NoRiskClient Mod", "NRC Mod", "NoRisk Mod", "NoRiskClient Standalone Mod"},
+		summary: "The whole NoRiskClient in one mod: modules, HUD, cosmetics and friends, without NoRisk's launcher.",
+		body: "The full NoRiskClient packed into one mod. Add it to a Fabric, Forge or NeoForge instance and you get everything the client offers, with no separate launcher.\n\n" +
+			"## What's inside\n\n" +
+			"- 80+ modules: zoom, freelook, fullbright, keystrokes, coordinates, FPS, motion blur, waypoints and more\n" +
+			"- HUD editor: 20+ HUD modules, placed and styled the way you like\n" +
+			"- Cosmetics: 300+ cosmetics, emotes and free custom capes, seen by everyone on NoRiskClient\n" +
+			"- Friends and chats: see who's online, join them in one click, message them in game\n" +
+			"- Hosted Worlds: open your singleplayer world to friends without a server\n" +
+			"- McReal and minigames: one screenshot a day with friends, plus Tetris and Pong\n",
+		gallery: []modplatform.Image{menu,
+			{URL: Site + "/images/features/hud-editor-poster.webp", Title: "HUD modules in game"},
+			cosmetics,
+			{URL: Site + "/images/features/mcreal-poster.webp", Title: "McReal, a daily screenshot with friends"},
+			{URL: Site + "/images/features/minigames-poster.webp", Title: "Minigames like Tetris, in game"}},
+		aliases: []string{"NoRiskClient Mod", "NRC Mod", "NoRisk Mod", "NoRiskClient Standalone Mod"},
 	},
 	{
 		id: "nrcmini", artifact: "nrc-mini", title: "NoRiskClient Mod Mini",
-		summary:  "NoRiskClient's cosmetics and emotes as one small mod, without its HUD and quality-of-life modules.",
-		features: []string{"Cosmetics, capes and emotes", "Friends and hosted worlds", "No HUD or quality-of-life modules", "Fabric, Forge and NeoForge"},
-		aliases:  []string{"NoRiskClient Mod Mini", "NRC Mini", "NoRisk Mini"},
+		summary: "NoRiskClient's social side in one small mod: cosmetics, emotes, friends and hosted worlds. No modules, no HUD.",
+		body: "The social side of NoRiskClient as one lightweight mod: look the part and play with friends, without changing anything else about your game.\n\n" +
+			"## What's inside\n\n" +
+			"- Cosmetics and capes: 300+ cosmetics and free custom capes, seen by everyone on NoRiskClient\n" +
+			"- Emotes: emotes other NoRiskClient players see\n" +
+			"- Friends: see who's online and join them in one click\n" +
+			"- Hosted Worlds: open your singleplayer world to friends without a server\n\n" +
+			"## What it leaves out\n\n" +
+			"No modules, no HUD, no quality-of-life tweaks: the game plays exactly as before. Want those? Get NoRiskClient Mod instead.\n",
+		gallery: []modplatform.Image{cosmetics},
+		aliases: []string{"NoRiskClient Mod Mini", "NRC Mini", "NoRisk Mini"},
 	},
 }
+
+// footer ends both pages: who makes the mod and what it talks to.
+const footer = "\n## Good to know\n\nMade by NoRisk. Builds download straight from NoRisk's repository at maven.norisk.gg, " +
+	"and the mod signs in to NoRisk's servers when the game starts. More at norisk.gg.\n"
 
 func byID(id string) *mod {
 	for i := range mods {
@@ -73,15 +112,6 @@ func byID(id string) *mod {
 	}
 	return nil
 }
-
-// Pictures on NoRisk's website (remoteimg allows norisk.gg).
-var (
-	icon    = Site + "/icon-192.png"
-	gallery = []modplatform.Image{
-		{URL: Site + "/images/hero-mod-menu.png", Title: "The NoRiskClient mod menu"},
-		{URL: Site + "/images/hero-artwork.jpg", Title: "NoRiskClient"},
-	}
-)
 
 // Doer is the HTTP client (netx.Client): JSON for configs, Do for the
 // Maven files' checksums and sizes.
@@ -93,15 +123,21 @@ type Doer interface {
 // Client is safe for concurrent use.
 type Client struct {
 	http Doer
-	// ConfigBase and MavenBase are the package's constants; tests point
-	// them at a local server.
-	ConfigBase, MavenBase string
-	Now                   func() time.Time
+	// ConfigBase, MavenBase and SiteBase are the package's constants (the
+	// last with a slash); tests point them at a local server.
+	ConfigBase, MavenBase, SiteBase string
+	Now                             func() time.Time
 
 	flight flightx.Group[*pack]
 	mu     sync.Mutex
 	packs  map[string]cachedPack
 	files  map[string]fileInfo // by jar URL; a build never changes
+
+	// playersMu is held while the site is read, so callers at once share
+	// one read; players is the last count (0: unreadable) and playersAt when.
+	playersMu sync.Mutex
+	players   int64
+	playersAt time.Time
 }
 
 type cachedPack struct {
@@ -118,7 +154,7 @@ type fileInfo struct {
 
 // New returns a client.
 func New(d Doer) *Client {
-	return &Client{http: d, ConfigBase: ConfigBase, MavenBase: MavenBase, Now: time.Now, packs: map[string]cachedPack{}, files: map[string]fileInfo{}}
+	return &Client{http: d, ConfigBase: ConfigBase, MavenBase: MavenBase, SiteBase: Site + "/", Now: time.Now, packs: map[string]cachedPack{}, files: map[string]fileInfo{}}
 }
 
 func (c *Client) Source() modplatform.Source { return modplatform.NoRisk }
@@ -129,7 +165,6 @@ func (c *Client) Ready() bool                { return true }
 // config is the part of a pack config the launcher reads.
 type config struct {
 	DisplayName string `json:"displayName"`
-	Description string `json:"description"`
 	Mods        []struct {
 		Source struct {
 			Type       string `json:"type"`
@@ -143,11 +178,9 @@ type config struct {
 	} `json:"mods"`
 }
 
-// pack is a mod's config read: its description and every build, newest
-// Minecraft version first.
+// pack is a mod's config read: every build, newest Minecraft version first.
 type pack struct {
-	description string
-	builds      []build
+	builds []build
 }
 
 type build struct {
@@ -189,10 +222,7 @@ var errConfig = errors.New("norisk: the pack config names no builds of this mod"
 // parse keeps only builds of m's own Maven artifact with safe names, so a
 // changed config can never point a download anywhere else.
 func parse(cfg config, m *mod) (*pack, error) {
-	p := &pack{description: strings.TrimSpace(cfg.Description)}
-	if len(p.description) > 600 {
-		p.description = ""
-	}
+	p := &pack{}
 	for _, md := range cfg.Mods {
 		s := md.Source
 		if s.Type != "maven" || s.GroupID != "gg.norisk" || s.ArtifactID != m.artifact {
@@ -495,7 +525,7 @@ func (c *Client) Search(ctx context.Context, q modplatform.SearchQuery) (modplat
 		if newest == nil {
 			continue
 		}
-		h := modplatform.Hit{Source: modplatform.NoRisk, ID: m.id, Slug: m.id, Title: m.title, Author: author, Summary: m.summary, Icon: icon}
+		h := modplatform.Hit{Source: modplatform.NoRisk, ID: m.id, Slug: m.id, Title: m.title, Author: author, Summary: m.summary, Icon: icon, Daily: c.dailyPlayers(ctx)}
 		if fi, err := c.info(ctx, c.jarURL(m, newest.identifier), false); err == nil {
 			h.Updated = fi.date
 		}
@@ -505,7 +535,7 @@ func (c *Client) Search(ctx context.Context, q modplatform.SearchQuery) (modplat
 	return page, nil
 }
 
-// Project is a mod's page: the config's description with NoRisk's pictures.
+// Project is a mod's page, written here, with NoRisk's pictures.
 func (c *Client) Project(ctx context.Context, id string) (modplatform.Detail, error) {
 	m := byID(id)
 	if m == nil {
@@ -516,8 +546,8 @@ func (c *Client) Project(ctx context.Context, id string) (modplatform.Detail, er
 		return modplatform.Detail{}, err
 	}
 	d := modplatform.Detail{Project: c.project(m), Type: modplatform.TypeMod, Summary: m.summary, Icon: icon, License: "All rights reserved",
-		Client: "required", Server: "unsupported", Gallery: gallery, Distributable: true, Versions: len(p.builds),
-		Links: modplatform.Links{Page: Site, Website: Site}}
+		Client: "required", Server: "unsupported", Gallery: m.gallery, Distributable: true, Versions: len(p.builds),
+		Daily: c.dailyPlayers(ctx), Body: m.body + footer, Links: modplatform.Links{Page: Site, Website: Site}}
 	for _, b := range p.builds {
 		if !slices.Contains(d.Loaders, b.loader) {
 			d.Loaders = append(d.Loaders, b.loader)
@@ -529,29 +559,59 @@ func (c *Client) Project(ctx context.Context, id string) (modplatform.Detail, er
 	if fi, err := c.info(ctx, c.jarURL(m, p.builds[0].identifier), false); err == nil {
 		d.Updated = fi.date
 	}
-	d.Body = body(m, p)
 	return d, nil
 }
 
-// body is the page's description in Markdown: NoRisk's own words from the
-// config, what the mod brings, and where it comes from.
-func body(m *mod, p *pack) string {
-	var b strings.Builder
-	b.WriteString("![" + m.title + "](" + gallery[1].URL + ")\n\n")
-	b.WriteString(orElse(p.description, m.summary) + "\n\n## What it brings\n\n")
-	for _, f := range m.features {
-		b.WriteString("- " + f + "\n")
+// ---- players ----
+
+// playersRe finds the count in the front page's server-rendered data, where
+// it shows as "players":41967 (quotes escaped inside a script string).
+var playersRe = regexp.MustCompile(`\\?"players\\?":([0-9]{1,9})[,}]`)
+
+// dailyPlayers is how many played NoRiskClient in the last 24 hours, as
+// norisk.gg's front page says, or 0 when it can't be read. It is read at
+// most once per configLife (playersRetry after a failure).
+func (c *Client) dailyPlayers(ctx context.Context) int64 {
+	c.playersMu.Lock()
+	defer c.playersMu.Unlock()
+	life := configLife
+	if c.players == 0 {
+		life = playersRetry
 	}
-	b.WriteString("\n## Where it comes from\n\nBuilt and published by NoRisk. Every build downloads straight from NoRisk's own repository at maven.norisk.gg, " +
-		"and the mod signs in to NoRisk's servers when the game starts. More at norisk.gg.\n")
-	return b.String()
+	if !c.playersAt.IsZero() && c.Now().Sub(c.playersAt) < life {
+		return c.players
+	}
+	n := c.readPlayers(ctx)
+	if ctx.Err() != nil {
+		return n // a cancelled read says nothing about the site
+	}
+	c.players, c.playersAt = n, c.Now()
+	return n
 }
 
-func orElse(a, b string) string {
-	if a != "" {
-		return a
+func (c *Client) readPlayers(ctx context.Context) int64 {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.SiteBase, nil)
+	if err != nil {
+		return 0
 	}
-	return b
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return 0
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return 0
+	}
+	m := playersRe.FindSubmatch(b)
+	if m == nil {
+		return 0
+	}
+	n, _ := strconv.ParseInt(string(m[1]), 10, 64)
+	return n
 }
 
 func (c *Client) Slug(_ context.Context, t modplatform.ProjectType, slug string) (string, error) {

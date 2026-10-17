@@ -43,7 +43,8 @@ type Query struct {
 // Stats is one platform's numbers for a row.
 type Stats struct {
 	Downloads int64 `json:"downloads"`
-	Updated   int64 `json:"updated"` // unix ms
+	Daily     int64 `json:"daily,omitempty"` // players in the last 24 hours (NoRisk)
+	Updated   int64 `json:"updated"`         // unix ms
 }
 
 // Row is one project in the results.
@@ -324,7 +325,7 @@ func (s *Service) merge(ss *session, h modplatform.Hit) {
 	if _, dup := ss.byID[id]; dup {
 		return
 	}
-	stats := &Stats{Downloads: h.Downloads, Updated: h.Updated.UnixMilli()}
+	stats := &Stats{Downloads: h.Downloads, Daily: h.Daily, Updated: h.Updated.UnixMilli()}
 	key := matchKey(h.Title, h.Author)
 	if r, ok := ss.byKey[key]; ok && key != "" && r.ref.ID(h.Source) == "" {
 		ss.byID[id] = r

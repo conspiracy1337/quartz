@@ -20,8 +20,9 @@ type Side struct {
 	Summary   string       `json:"summary"`
 	Icon      string       `json:"icon,omitempty"`
 	Downloads int64        `json:"downloads"`
-	Updated   int64        `json:"updated"` // unix ms
-	URL       string       `json:"url"`     // the project on the platform's website
+	Daily     int64        `json:"daily,omitempty"` // players in the last 24 hours (NoRisk)
+	Updated   int64        `json:"updated"`         // unix ms
+	URL       string       `json:"url"`             // the project on the platform's website
 	Versions  int          `json:"versions"`
 	Badges    []string     `json:"badges"`
 	Body      []docs.Block `json:"body"`
@@ -183,7 +184,7 @@ var loaderNames = map[string]string{
 func (s *Service) side(d modplatform.Detail) Side {
 	pic := s.d.Pictures.Src
 	out := Side{Name: d.Title, Author: d.Author, Summary: d.Summary, Icon: pic(d.Icon), Downloads: d.Downloads,
-		Updated: d.Updated.UnixMilli(), URL: d.Links.Page, Versions: d.Versions, Blocked: !d.Distributable,
+		Daily: d.Daily, Updated: d.Updated.UnixMilli(), URL: d.Links.Page, Versions: d.Versions, Blocked: !d.Distributable,
 		Badges: []string{}, Gallery: []Picture{}, Links: []Link{}}
 	switch {
 	case d.Client != "" && d.Client != "unsupported" && d.Server == "unsupported":
