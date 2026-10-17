@@ -257,8 +257,6 @@
   .bw{display:grid;grid-template-columns:minmax(0,1fr) 220px;flex:1 1 auto;min-height:0;position:relative}
   .bw .filters{display:flex}
   .results{display:flex;flex-direction:column;min-height:0}
-  /* Always down to the bottom gutter: results replacing the skeleton never move its edge. */
-  .results .list-fill{flex:1 1 0}
   .fbtn{display:none !important}
   /* Narrow windows: the sidebar hides behind the Filters button and opens over the results, on the menu surface. */
   @media (max-width:1100px){.bw{grid-template-columns:minmax(0,1fr)}.bw .filters{display:none}.fbtn{display:inline-flex !important}
