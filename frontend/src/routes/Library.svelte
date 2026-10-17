@@ -41,18 +41,19 @@
 
 <div class="scroll">
   <div class="page">
-    <div style="display: flex; align-items: center; gap: 8px; height: 32px">
-      <h1 class="h1" style="margin-right: auto">Library</h1>
-      <!-- As wide as the Sort select below, so both right-aligned controls line up. -->
-      <a href={href({ name: 'new-instance' })} class="btn btn-accent" style="width: 150px"><Icon name="plus" size={14} sw={2} />New instance</a>
+    <div style="display: flex; align-items: center; height: 32px">
+      <h1 class="h1">Library</h1>
     </div>
     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
       <SearchField bind:value={search} label="Search instances" placeholder={searchIn('instances', list.data?.length)} style="flex: 0 1 260px" />
       <div style="display: flex; gap: 6px; flex-wrap: wrap">
         {#each FILTERS as f (f.key)}<button class="chip" class:on={filter === f.key} onclick={() => (filter = f.key)}>{f.label}</button>{/each}
       </div>
-      <div style="flex: 1 1 0"></div>
-      <Select bind:value={sort} options={SORTS} label="Sort instances" style="width: 150px" />
+      <!-- Sort and New instance wrap as one group, so they always end the row together. -->
+      <div style="display: flex; gap: 8px; margin-left: auto">
+        <Select bind:value={sort} options={SORTS} label="Sort instances" style="width: 150px" />
+        <a href={href({ name: 'new-instance' })} class="btn btn-accent"><Icon name="plus" size={14} sw={2} />New instance</a>
+      </div>
     </div>
     <div class="lgrid">
       {#if list.data}
