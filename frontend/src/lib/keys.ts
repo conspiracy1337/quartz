@@ -31,7 +31,8 @@ function run(id: ShortcutId): boolean {
       return true;
     case 'folder':
       if (!inst) return false;
-      void api.instances.openFolder(inst.id);
+      // As the folder button after the tabs: the shown tab's own folder.
+      api.instances.openTabFolder(inst.id, inst.tab).catch((e: unknown) => session.fail('Open folder', e));
       return true;
     case 'back': return back();
     case 'nextTab': {

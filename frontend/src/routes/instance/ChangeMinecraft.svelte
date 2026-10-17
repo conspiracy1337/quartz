@@ -28,7 +28,7 @@
   <VersionPicker current={i.minecraft} fill onpick={(v) => (sel = v)} />
 </div>
 <div class="pfoot">
-  <span class="mono muted">{i.minecraft}</span><Icon name="arrow-right" size={12} sw={2} /><span class="mono pfoot-to">{sel}</span>
+  <span class="mono muted">{i.minecraft}</span><Icon name="arrow-right" size={12} sw={2} /><span class="mono pfoot-to">{#if sel}{sel}{:else}<span class="sk sk-text" style="width: 56px" aria-hidden="true"></span>{/if}</span>
   <span class="small faint" style="margin-left: 8px">{compat}</span>
   <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={!sel || sel === i.minecraft || busy} onclick={switchTo}>Switch to {sel}</button></span>
 </div>

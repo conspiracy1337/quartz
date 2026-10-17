@@ -5,7 +5,7 @@
   import { bytes, fullDate } from '$lib/format';
   import { LOADER_PRODUCTS } from '$lib/labels';
   import LoaderIcon from '$lib/ui/LoaderIcon.svelte';
-  import { query } from '$lib/query.svelte';
+  import { lastCount, query, rememberCount } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
@@ -36,6 +36,10 @@
   });
   const newer = $derived(newest ?? sameFamily);
   const compat = query(() => (newer ? api.instances.compatibility(i.id, newer.id) : Promise.resolve(null)));
+  // Whether the newer-release card showed last time, so it holds its place while the versions load.
+  // svelte-ignore state_referenced_locally
+  const newerKey = `newer.${i.id}`;
+  $effect(() => void (families.data && rememberCount(newerKey, newer && !i.clientJar ? 1 : 0)));
 
   const opt = $derived(loaders.data?.find((o) => o.kind === i.loader?.kind));
   const loaderLine = $derived.by(() => {
@@ -56,7 +60,7 @@
 
 <!-- A component's second line; a skeleton holds its place until the versions are in. -->
 {#snippet line(text: string, ready: boolean)}
-  <span class="small faint" style="display: block">{#if ready}{text}{:else}<span class="sk" style="display: inline-block; vertical-align: middle; height: 10px; width: 220px" aria-hidden="true"></span>{/if}</span>
+  <span class="small faint" style="display: block">{#if ready}{text}{:else}<span class="sk sk-text" style="width: 220px" aria-hidden="true"></span>{/if}</span>
 {/snippet}
 
 <section class="sec" aria-label="Version">
@@ -82,6 +86,11 @@
     <div class="card card-pad" style="display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: center">
       <span><span class="h3" style="display: block">Minecraft {newer.id} is available</span><span class="small faint" style="display: block">{compat.data ? `${compat.data.matching} of ${compat.data.total} mods already support it. We will check the rest before switching.` : 'Mods are checked before switching.'}</span></span>
       <a href={to('minecraft')} class="btn btn-accent">Check and switch</a>
+    </div>
+  {:else if !families.data && !i.clientJar && lastCount(newerKey)}
+    <div class="card card-pad" style="display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: center" aria-hidden="true">
+      <span><span class="h3" style="display: block"><span class="sk sk-text" style="height: 12px; width: 220px"></span></span><span class="small faint" style="display: block"><span class="sk sk-text" style="width: 360px"></span></span></span>
+      <span class="sk" style="height: 32px; width: 150px; border-radius: var(--radius)"></span>
     </div>
   {/if}
 </section>

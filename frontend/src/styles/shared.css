@@ -28,6 +28,9 @@
 /* The cover is translucent, which lifts it into its own layer; the icon sits above it explicitly. */
 .icard-cover{min-height:0}
 
+/* A skeleton inside a line of text: it keeps the line's height until the words come in. */
+.sk-text{display:inline-block;vertical-align:middle;height:10px}
+
 /* Minecraft's own pixel art (the grass block, the minecraft.net mark) stays crisp at any size. */
 .px{image-rendering:pixelated;flex:none;display:block}
 

@@ -2,7 +2,7 @@
   import { api } from '../api';
   import type { MergedServer } from '../api/types';
   import { players } from '../format';
-  import { query, skeletonRows } from '../query.svelte';
+  import { lastCount, query, skeletonRows } from '../query.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
   import ServerPing from '../ui/ServerPing.svelte';
@@ -51,7 +51,7 @@
 
 <section class="card sl" aria-label="Servers" style="font-family: var(--font); color: var(--text)">
   <div class="card-head" style="flex: 0 0 44px">
-    <h2 class="h3">Servers <span class="count">{servers.data?.length ?? ''}</span></h2>
+    <h2 class="h3">Servers <span class="count">{servers.data?.length ?? lastCount('home.servers') ?? ''}</span></h2>
     <span style="display: flex; gap: 6px; align-items: center">
       <button class="chip" class:on={!onlineOnly} onclick={() => filter(false)}>All</button>
       <button class="chip" class:on={onlineOnly} onclick={() => filter(true)}>Online</button>

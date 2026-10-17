@@ -757,6 +757,10 @@ func (s *Instances) OpenTabFolder(id, tab string) error {
 	if err != nil {
 		return err
 	}
+	// A moved game folder that's gone (an unplugged drive) isn't recreated empty.
+	if err := s.d.Store.CheckGameDir(id); err != nil {
+		return err
+	}
 	if rel != "" {
 		dir = s.d.Store.Path(id, rel)
 		if err := os.MkdirAll(dir, 0o700); err != nil {

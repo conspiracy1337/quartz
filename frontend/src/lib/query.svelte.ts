@@ -81,3 +81,27 @@ export function skeletonRows(key: string, fallback: number): number {
   const n = lastCount(key);
   return n === undefined ? fallback : Math.max(1, n);
 }
+
+/** A row of filter chips as it looked: each chip's label and count (and its key, where the screen has one). */
+export type ChipRow = { label: string; count: number; key?: string }[];
+const CHIPS = 'quartz.chips.';
+
+/** The chip row `key` showed last time, kept across runs, so it stands in place before its data is in. */
+export function lastChips(key: string): ChipRow | undefined {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(CHIPS + key) ?? 'null');
+    const ok = Array.isArray(v) && v.every((c: Partial<ChipRow[number]> | null) =>
+      typeof c?.label === 'string' && typeof c.count === 'number' && (c.key === undefined || typeof c.key === 'string'));
+    return ok ? (v as ChipRow) : undefined;
+  } catch {
+    return undefined; // storage blocked or garbled: the chips wait for their data
+  }
+}
+
+export function rememberChips(key: string, row: ChipRow) {
+  try {
+    localStorage.setItem(CHIPS + key, JSON.stringify(row));
+  } catch {
+    // storage blocked: the next run's chips wait for their data
+  }
+}

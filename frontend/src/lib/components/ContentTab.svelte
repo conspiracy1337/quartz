@@ -12,7 +12,7 @@
   import type { AddResult, ContentItem, ContentKind, ContentStatus, Source } from '../api/types';
   import { onEvent } from '../bridge';
   import { players, plural, searchIn, sentenceList } from '../format';
-  import { query, rememberCount, skeletonRows } from '../query.svelte';
+  import { lastChips, query, rememberChips, rememberCount, skeletonRows, type ChipRow } from '../query.svelte';
   import { revs } from '../revs.svelte';
   import { projectKindOf } from '../labels';
   import { go, href } from '../router.svelte';
@@ -87,6 +87,10 @@
   });
 
   const chips = $derived(cfg.chips(rows));
+  // The chips as shown: until the rows are in, the row this tab had last time, so chips
+  // that depend on the rows (Client only, a data pack's worlds) and counts hold their place.
+  const chipRow = $derived<ChipRow>(items.data ? chips.map((ch) => ({ label: ch.label, count: rows.filter(ch.test).length })) : (lastChips(key) ?? chips.map((ch) => ({ label: ch.label, count: 0 }))));
+  $effect(() => void (items.data && rememberChips(key, chipRow)));
   // The chip to start on is picked once the rows that make it appear are in.
   let started = false;
   $effect(() => {
@@ -452,8 +456,8 @@
   <div class="ct-tools">
     <SearchField bind:value={search} label="Search" placeholder={searchIn(cfg.noun, items.data?.length)} style="flex: 0 1000 280px; min-width: 160px" />
     <div class="ct-chips">
-      {#each chips as ch, i (ch.label)}
-        <button class="chip" class:on={chip === i} onclick={() => (chip = i)} aria-pressed={chip === i}>{ch.label}<span class="count">{rows.filter(ch.test).length}</span></button>
+      {#each chipRow as ch, i (ch.label)}
+        <button class="chip" class:on={chip === i} onclick={() => (chip = i)} aria-pressed={chip === i}>{ch.label}<span class="count">{ch.count}</span></button>
       {/each}
     </div>
     <div style="flex: 1 1 0"></div>
