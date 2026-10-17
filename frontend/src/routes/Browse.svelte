@@ -8,7 +8,7 @@
   import { LOADER_NAMES, PROJECT_TYPES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { query, rememberCount, skeletonRows, warm } from '$lib/query.svelte';
-  import { PROJECT_KINDS, go, href, isPackSource } from '$lib/router.svelte';
+  import { PROJECT_KINDS, go, href, isPackSource, keep, kept } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
   import { browseTarget } from '$lib/instances';
   import { session } from '$lib/session.svelte';
@@ -27,11 +27,14 @@
   const SORTS = [{ value: 'relevance', label: 'Relevance' }, { value: 'downloads', label: 'Downloads' }, { value: 'updated', label: 'Recently updated' }] as const;
   const SKELETON: [string, string][] = [['30%', '60%'], ['24%', '50%'], ['36%', '70%'], ['28%', '40%'], ['32%', '64%'], ['40%', '56%'], ['26%', '48%']];
 
+  // The search lives in this page's history entry, so Back returns to it as it was left.
+  interface Kept { type: ProjectKind; search: string; sort: BrowseSort; cats: Record<string, boolean>; useVersion: boolean; useLoader: boolean; side: '' | 'client' | 'server'; game: string }
+  const saved = kept<Kept>('browse');
   // svelte-ignore state_referenced_locally
-  let type = $state<ProjectKind>(startType ?? 'mod');
-  let search = $state('');
-  let text = $state('');
-  let sort = $state<BrowseSort>('relevance');
+  let type = $state<ProjectKind>(saved?.type ?? startType ?? 'mod');
+  let search = $state(saved?.search ?? '');
+  let text = $state(saved?.search ?? '');
+  let sort = $state<BrowseSort>(saved?.sort ?? 'relevance');
   // Below 1100px the filter sidebar opens over the results; Escape or a click outside closes it.
   let filtersOpen = $state(false);
   let filtersEl = $state<HTMLElement>();
@@ -40,13 +43,14 @@
     if (e instanceof KeyboardEvent ? e.key === 'Escape' : !filtersEl?.contains(e.target as Node) && !(e.target as Element).closest?.('.fbtn')) filtersOpen = false;
   }
   // The design's board shows its first category ticked; the preview keeps that demo state.
-  let cats = $state<Record<string, boolean>>(hasBridge() ? {} : { Optimization: true });
-  let useVersion = $state(true);
-  let useLoader = $state(true);
+  let cats = $state<Record<string, boolean>>(saved?.cats ?? (hasBridge() ? {} : { Optimization: true }));
+  let useVersion = $state(saved?.useVersion ?? true);
+  let useLoader = $state(saved?.useLoader ?? true);
   /** Runs on: only client or only server projects ("" for any). */
-  let side = $state<'' | 'client' | 'server'>('');
+  let side = $state<'' | 'client' | 'server'>(saved?.side ?? '');
   /** Modpacks become new instances, so their version is picked by hand ("" for any). */
-  let game = $state('');
+  let game = $state(saved?.game ?? '');
+  $effect(() => keep('browse', { type, search, sort, cats: $state.snapshot(cats), useVersion, useLoader, side, game } satisfies Kept));
   const releases = query(() => api.versions.minecraft(), 'versions.minecraft');
   const GAMES = $derived([{ value: '', label: 'Any version' }, ...(releases.data ?? []).flatMap((f) => f.releases.map((v) => ({ value: v.id, label: v.id })))]);
   const hide = session.browseHide;

@@ -74,7 +74,8 @@ export const worldsApi = {
   export: bridged(WorldsGo.Export, (_id: string, _folder: string) => false),
   copyTo: bridged(WorldsGo.CopyTo, (_id: string, _folder: string, _target: string) => ''),
   rename: bridged(WorldsGo.Rename, (_id: string, _folder: string, _name: string) => undefined),
-  remove: bridged(WorldsGo.Delete, (_id: string, _folder: string) => '0123456789abcdef'),
+  /** Moves worlds aside; resolves with the token Undo takes to bring them all back. */
+  remove: bridged(WorldsGo.Delete, (_id: string, _folders: string[]) => '0123456789abcdef'),
   undo: bridged(WorldsGo.Undo, (_id: string, _token: string) => undefined),
   seed: bridged(WorldsGo.Seed, (_id: string, _folder: string) => '-4172144997902289642'),
   showInFolder: bridged(WorldsGo.ShowInFolder, (_id: string, _folder: string) => undefined),
@@ -93,7 +94,8 @@ export const serversApi = {
   add: bridged(ServersGo.Add, (_id: string, _e: Omit<ServerEntry, 'index'>) => undefined),
   edit: bridged(ServersGo.Edit, (_id: string, _index: number, _address: string, _e: Omit<ServerEntry, 'index'>) => undefined),
   move: bridged(ServersGo.Move, (_id: string, _index: number, _address: string, _by: number) => undefined),
-  remove: bridged(ServersGo.Remove, (_id: string, _index: number, _address: string) => 'preview'),
+  /** Takes servers out (each by its place and address); resolves with the token Undo takes. */
+  remove: bridged(ServersGo.Remove, (_id: string, _refs: servers.Ref[]) => 'preview'),
   undo: bridged(ServersGo.Undo, (_id: string, _token: string) => undefined),
 };
 

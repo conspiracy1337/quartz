@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,11 +90,23 @@ type Service struct {
 	joined  map[string]map[string]time.Time
 }
 
+// Ref names a server of the list: its place in servers.dat and the address it
+// must still have there, so a list changed meanwhile is never edited blind.
+type Ref struct {
+	Index   int    `json:"index"`
+	Address string `json:"address"`
+}
+
+// removedEntry is one Remove's servers, by their old place (ascending), for Undo.
 type removedEntry struct {
-	id    string
+	id   string
+	gone []removedTag
+	at   time.Time
+}
+
+type removedTag struct {
 	index int
 	tag   nbt.Tag
-	at    time.Time
 }
 
 // New returns a Service.
@@ -359,36 +372,49 @@ func (s *Service) Move(id string, index int, address string, by int) error {
 	})
 }
 
-// Remove takes a server out and returns the token Undo takes.
-func (s *Service) Remove(id string, index int, address string) (string, error) {
-	var gone nbt.Tag
+// Remove takes servers out and returns the token Undo takes to put them all back.
+func (s *Service) Remove(id string, refs []Ref) (string, error) {
+	var gone []removedTag
 	err := s.edit(id, func(list *nbt.ListTag) error {
-		t, err := at(list, index, address)
-		if err != nil {
-			return err
+		seen := map[int]bool{}
+		for _, r := range refs {
+			t, err := at(list, r.Index, r.Address)
+			if err != nil {
+				return err
+			}
+			if !seen[r.Index] {
+				seen[r.Index] = true
+				gone = append(gone, removedTag{index: r.Index, tag: *t})
+			}
 		}
-		gone = *t
-		list.Items = append(list.Items[:index], list.Items[index+1:]...)
+		sort.Slice(gone, func(i, j int) bool { return gone[i].index < gone[j].index })
+		for k := len(gone) - 1; k >= 0; k-- {
+			i := gone[k].index
+			list.Items = append(list.Items[:i], list.Items[i+1:]...)
+		}
 		return nil
 	})
 	if err != nil {
 		return "", err
 	}
-	token := strconv.FormatInt(s.d.Now().UnixNano(), 36) + strconv.Itoa(index)
+	if len(gone) == 0 {
+		return "", ErrChanged
+	}
+	token := strconv.FormatInt(s.d.Now().UnixNano(), 36) + strconv.Itoa(gone[0].index)
 	s.mu.Lock()
 	for k, r := range s.removed {
 		if s.d.Now().Sub(r.at) > undoTime {
 			delete(s.removed, k)
 		}
 	}
-	s.removed[token] = removedEntry{id: id, index: index, tag: gone, at: s.d.Now()}
+	s.removed[token] = removedEntry{id: id, gone: gone, at: s.d.Now()}
 	s.mu.Unlock()
 	return token, nil
 }
 
 const undoTime = 15 * time.Minute
 
-// Undo puts a removed server back where it was.
+// Undo puts removed servers back where they were.
 func (s *Service) Undo(id, token string) error {
 	s.mu.Lock()
 	r, ok := s.removed[token]
@@ -402,8 +428,11 @@ func (s *Service) Undo(id, token string) error {
 		return ErrExpired
 	}
 	return s.edit(id, func(list *nbt.ListTag) error {
-		i := min(r.index, len(list.Items))
-		list.Items = append(list.Items[:i], append([]nbt.Tag{r.tag}, list.Items[i:]...)...)
+		// In ascending order each one's old place is right again once those before it are back.
+		for _, g := range r.gone {
+			i := min(g.index, len(list.Items))
+			list.Items = append(list.Items[:i], append([]nbt.Tag{g.tag}, list.Items[i:]...)...)
+		}
 		return nil
 	})
 }

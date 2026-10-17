@@ -157,3 +157,8 @@ class Router {
 export const router = new Router();
 export const go = (r: Route, opts?: { replace?: boolean; root?: boolean }) => router.go(r, opts);
 export const back = () => router.back();
+
+/** What a page left in its own history entry, so Back returns to it as it was left. */
+export const kept = <T>(key: string): T | undefined => (history.state as Record<string, unknown> | null)?.[key] as T | undefined;
+/** Keeps a page's state (plain data) in the history entry it shows in. */
+export const keep = (key: string, value: unknown) => history.replaceState({ ...history.state, [key]: value }, '');
