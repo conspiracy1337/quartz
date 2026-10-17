@@ -137,7 +137,8 @@
   }
 
   function sentinel(node: HTMLElement) {
-    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && void loadMore(), { rootMargin: '400px' });
+    // The list scrolls itself, so the next page loads 400px before its own bottom edge.
+    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && void loadMore(), { root: node.closest('.list-fill'), rootMargin: '400px' });
     io.observe(node);
     return { destroy: () => io.disconnect() };
   }
@@ -175,8 +176,9 @@
 
 <PageHeader title="Browse" style="padding-bottom: 16px; border-bottom: 1px solid var(--line)" />
 <div class="bw">
-  <section class="scroll" aria-label="Results">
-    <div class="page" style="gap: 12px; padding-top: 4px">
+  <!-- The results end at the window's bottom and scroll inside, as the instance tabs' tables do. -->
+  <section class="results" aria-label="Results">
+    <div class="page page-fill" style="gap: 12px; padding-top: 4px">
       <Tabs items={PROJECT_TYPES.map((t) => ({ key: t.kind, label: t.label }))} active={type} label="Content type" onselect={pickType} />
       <div style="display: flex; gap: 8px">
         <SearchField bind:value={search} label="Search" placeholder="Search {projectType(type).label.toLowerCase()}" style="flex: 1 1 auto" height={36} />
@@ -184,7 +186,7 @@
         <Select bind:value={sort} options={SORTS} label="Sort results" style="width: 150px; height: 36px" />
       </div>
       {#if lost.length && rows?.length}<p class="small faint" style="margin: 0">{lost.map((x) => SRC_NAMES[x]).join(' and ')} couldn't be reached; showing {SRC_NAMES[lost[0] === 'modrinth' ? 'curseforge' : 'modrinth']} only.</p>{/if}
-      <div class="list">
+      <div class="list list-fill">
         {#if rows}
           {#each rows as r (r.id)}
             {@const m = merged(r)}
@@ -254,6 +256,9 @@
   /* Content-type tabs, search and results on the left; the filter sidebar sits to their right. */
   .bw{display:grid;grid-template-columns:minmax(0,1fr) 220px;flex:1 1 auto;min-height:0;position:relative}
   .bw .filters{display:flex}
+  .results{display:flex;flex-direction:column;min-height:0}
+  /* Always down to the bottom gutter: results replacing the skeleton never move its edge. */
+  .results .list-fill{flex:1 1 0}
   .fbtn{display:none !important}
   /* Narrow windows: the sidebar hides behind the Filters button and opens over the results, on the menu surface. */
   @media (max-width:1100px){.bw{grid-template-columns:minmax(0,1fr)}.bw .filters{display:none}.fbtn{display:inline-flex !important}
