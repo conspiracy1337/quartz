@@ -192,7 +192,7 @@
               <Tile art={r.art ?? artOf(r.name, r.icon)} size="lg" />
               <a href={href({ name: 'project', id: r.ref })} style="min-width: 0; text-decoration: none"><span style="display: flex; gap: 8px; align-items: baseline; min-width: 0"><span class="trunc" style="font-weight: 600">{r.name}</span><span class="small faint trunc" style="flex: 0 1 auto">by {r.author}</span></span><span class="muted clamp2" style="display: -webkit-box; margin-top: 2px; height: 40px">{r.summary}</span></a>
               <span class="opt" style="flex-direction: column; gap: 2px"><span class="tnum muted small">{r.norisk ? `From ${SRC_NAMES.norisk}` : `${compact(m.downloads)} downloads`}</span><span class="small faint">Updated {ago(m.updated)}</span></span>
-              <span style="display: flex; justify-content: flex-end">{#if isInstalled(r)}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={showTarget && !target} onclick={() => install(r)}>Install</button>{/if}</span>
+              <span style="display: flex; justify-content: flex-end">{#if isInstalled(r)}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm btn-accent" disabled={showTarget && !target} onclick={() => install(r)}>Install</button>{/if}</span>
             </div>
           {:else}
             <Empty text={failed || 'No projects match these filters.'} />
