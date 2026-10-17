@@ -4,7 +4,7 @@
   import { bytes, compact, errorText, shortMonthDay, shortDate } from '$lib/format';
   import { ANY_LOADER_NAMES, LOADER_NAMES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
-  import { query } from '$lib/query.svelte';
+  import { lastCount, query, rememberCount } from '$lib/query.svelte';
   import { go, href, isPackSource } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
   import { browseTarget } from '$lib/instances';
@@ -69,6 +69,9 @@
   ]);
   /** The newest version for the target that the installed one would update to. */
   const latest = $derived(versions.data?.find((v) => v.action === 'Update' && p?.channels.includes(v.channel.toLowerCase())));
+  // An update offered last visit keeps its button's place while the versions load (as the update banner does).
+  const updateKey = $derived(`project.update.${id}.${target?.id ?? ''}`);
+  $effect(() => void (!versions.loading && versions.data && target && p?.installed && rememberCount(updateKey, latest ? 1 : 0)));
   const forTarget = $derived(target ? `${target.name} (${target.minecraft}${target.loader ? `, ${LOADER_NAMES[target.loader.kind]}` : ''})` : '');
 
   function install(version?: string) {
@@ -127,7 +130,8 @@
             {#if target && p.installed}
               <section style="display: flex; flex-direction: column; gap: 6px"><h2 class="h3">For {target.name}</h2>
                 <div class="small muted">{`Version ${p.installed.version.split('+')[0]} is installed.${latest ? ` ${latest.number.split('+')[0]} is available.` : ''}`}</div>
-                {#if latest}<a href={href({ name: 'instance', id: target.id, tab: kind?.content ?? 'mods', sub: 'updates' })} class="btn btn-sm">Update to {latest.number.split('+')[0]}</a>{/if}
+                {#if latest}<a href={href({ name: 'instance', id: target.id, tab: kind?.content ?? 'mods', sub: 'updates' })} class="btn btn-sm">Update to {latest.number.split('+')[0]}</a>
+                {:else if versions.loading && lastCount(updateKey)}<span class="sk" style="height: 28px; width: 120px" aria-hidden="true"></span>{/if}
               </section>
               <div class="divider"></div>
             {/if}

@@ -335,7 +335,7 @@
     return api.content.setPackOrder(instanceId, ids);
   }
 
-  // Resource packs: drag an enabled row to reorder (the hint says so). The row
+  // Resource packs: drag an enabled row to reorder. The row
   // follows the pointer and the rows it passes make room; no new elements.
   const reorderable = $derived(kind === 'resourcepacks' && chip === 0 && search.trim() === '' && !sort);
   let drag = $state<{ id: string; y0: number; dy: number; h: number; from: number; to: number } | null>(null);
