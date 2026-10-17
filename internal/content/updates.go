@@ -464,7 +464,7 @@ func (s *Service) submit(inst string, k Kind, title, subtitle string, picked []*
 		}))
 	}
 	in, _ := s.d.Instances.Get(inst)
-	spec := tasks.NewJob(tasks.Meta{Title: title, Subtitle: subtitle, Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "update"})
+	spec := tasks.NewJob(tasks.Meta{Title: title, Subtitle: subtitle, Art: in.TaskArt(), Kind: "update"})
 	if len(downloads) > 0 {
 		spec.Step("Downloads", tasks.Bytes, downloads...)
 	}

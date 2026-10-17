@@ -550,7 +550,7 @@ func (s *Service) move(ctx context.Context, in instance.Instance, t Target, from
 	if keep {
 		title = "Copying " + t.Name
 	}
-	spec := tasks.NewJob(tasks.Meta{Title: title, Subtitle: in.Name, Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "sync"}).
+	spec := tasks.NewJob(tasks.Meta{Title: title, Subtitle: in.Name, Art: in.TaskArt(), Kind: "sync"}).
 		Step("Moving files", tasks.Count, works...)
 	job, err := s.c.Tasks.Submit(spec)
 	if err != nil {

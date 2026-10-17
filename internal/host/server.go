@@ -262,7 +262,7 @@ func (s *Service) prepare(ctx context.Context, srv *server, in instance.Instance
 		}
 	}
 	spec, err := s.d.Installer.PlanServer(install.ServerRequest{Server: res, Java: plan, ProcessorJava: s.d.Java.Installed(own),
-		Meta: tasks.Meta{Title: in.Name, Subtitle: "Server for " + gameLabel(in), Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "install"}})
+		Meta: tasks.Meta{Title: in.Name, Subtitle: "Server for " + gameLabel(in), Art: in.TaskArt(), Kind: "install"}})
 	if err != nil {
 		return "", nil, err
 	}

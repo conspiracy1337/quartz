@@ -172,7 +172,7 @@ func (s *Service) Install(ctx context.Context, token, name string, look Look, en
 	if err := os.MkdirAll(game, 0o700); err != nil {
 		return "", err
 	}
-	meta := tasks.Meta{Title: orElse(name, p.Name), Subtitle: "Installing as a new instance", Art: tasks.Art{Background: art.Background, Initial: art.Initial}, Kind: "install"}
+	meta := tasks.Meta{Title: orElse(name, p.Name), Subtitle: "Installing as a new instance", Art: instance.Instance{Art: art, Icon: look.Icon, Loader: p.Loader}.TaskArt(), Kind: "install"}
 	files, set, packSpec, err := s.filesSpec(meta, p, work)
 	if err != nil {
 		_ = os.RemoveAll(work)

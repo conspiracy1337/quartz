@@ -4,6 +4,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf16"
+
+	"quartz/internal/core/tasks"
 )
 
 // tints are the instance tile colours (look.ts TINTS in the UI).
@@ -29,4 +31,14 @@ func ArtFor(name string) Art {
 		}
 	}
 	return Art{Background: tints[h%uint32(len(tints))], Initial: initial}
+}
+
+// TaskArt is the instance's tile on a job's row: its colour and letter, its
+// picture, and its loader, whose mark shows when it has neither.
+func (in Instance) TaskArt() tasks.Art {
+	l := in.Loader
+	if l == "" {
+		l = "none"
+	}
+	return tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial, Icon: in.Icon, Loader: l}
 }

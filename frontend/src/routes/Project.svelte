@@ -2,7 +2,7 @@
   import { api } from '$lib/api';
   import type { Loader, ProjectVersion, Src } from '$lib/api/types';
   import { bytes, compact, errorText, shortMonthDay, shortDate } from '$lib/format';
-  import { ANY_LOADER_NAMES, LOADER_NAMES, SRC_NAMES, projectType } from '$lib/labels';
+  import { ANY_LOADER_NAMES, LOADER_NAMES, SRC_NAMES, isModLoader, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { lastCount, query, rememberCount } from '$lib/query.svelte';
   import { go, href, isPackSource } from '$lib/router.svelte';
@@ -28,7 +28,6 @@
   const SOURCES = ['modrinth', 'curseforge', 'norisk'] as const;
   /** A version's channel as one boxed letter: green R, orange B, red A. */
   const CHANNEL_BADGE = { Release: 'badge-ok', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
-  const isModLoader = (l: string): l is Loader => l in LOADER_NAMES;
 
   const instances = query(() => api.instances.list(), 'instances.list');
   const target = $derived(browseTarget(instances.data ?? [], session.browseTarget));
@@ -212,7 +211,7 @@
   <Menu x={chooser.x} y={chooser.y} label="Install into" title="Install into" onclose={() => (chooser = null)}>
     {#each instances.data ?? [] as i (i.id)}
       <button class="mi" role="menuitem" onclick={() => { session.addTo(i.id); chooser = null; }}>
-        <Tile art={i.art} icon={i.icon} size="sm" /><span class="trunc">{i.name}</span><span class="small faint">{i.id === target?.id ? 'Selected' : ''}</span>
+        <Tile art={i.art} icon={i.icon} loader={i.loader?.kind ?? ''} size="sm" /><span class="trunc">{i.name}</span><span class="small faint">{i.id === target?.id ? 'Selected' : ''}</span>
       </button>
     {/each}
   </Menu>

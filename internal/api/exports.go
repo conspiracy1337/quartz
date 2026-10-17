@@ -108,7 +108,7 @@ func (x *Exports) Export(id string, p exporting.Plan) (ExportResult, error) {
 	if _, err := x.d.Instances.Update(id, func(i *instance.Instance) error { i.Export = &p.Meta; return nil }); err != nil {
 		return ExportResult{}, err
 	}
-	spec := tasks.NewJob(tasks.Meta{Title: "Exporting " + in.Name, Subtitle: filepath.Base(dest), Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "export"}).
+	spec := tasks.NewJob(tasks.Meta{Title: "Exporting " + in.Name, Subtitle: filepath.Base(dest), Art: in.TaskArt(), Kind: "export"}).
 		Step("Packing files", tasks.Count, tasks.Func("write the export", func(ctx context.Context) error {
 			if err := x.guard(id); err != nil {
 				return err

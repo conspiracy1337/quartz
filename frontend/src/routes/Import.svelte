@@ -164,7 +164,7 @@
             <div style="display: flex; flex-direction: column; gap: 10px" aria-hidden="true"><div class="sk" style="height: 10px; width: 40%"></div><div class="sk" style="height: 10px; width: 32%"></div><div class="sk" style="height: 10px; width: 36%"></div></div>
           {/if}
           <label class="field"><span class="field-label">Instance name</span><span class="input"><input bind:value={name} oninput={() => (named = true)} placeholder="Enter Instance Name" maxlength="64" /></span></label>
-          <div class="field"><span class="field-label">Appearance</span><LookEditor bind:look {name} meta={pack ? `${pack.minecraft}${pack.loader ? `, ${pack.loader}` : ''}` : ''} /></div>
+          <div class="field"><span class="field-label">Appearance</span><LookEditor bind:look {name} meta={pack ? `${pack.minecraft}${pack.loader ? `, ${pack.loader}` : ''}` : ''} loader={pack?.loader.toLowerCase() ?? ''} /></div>
           <button class="btn btn-accent btn-lg btn-block" disabled={!pack || inspecting || !name.trim() || busy} onclick={install}>{busy ? 'Downloading the pack…' : 'Install'}</button>
         </div>
       </section>

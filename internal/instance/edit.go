@@ -54,9 +54,6 @@ func (s *Store) SetLook(id string, l Look) (Instance, error) {
 	}
 	l.Art.Initial = strings.TrimSpace(l.Art.Initial)
 	return s.Update(id, func(in *Instance) error {
-		if l.Art.Initial == "" {
-			l.Art.Initial = strings.ToUpper(string([]rune(in.Name)[:1]))
-		}
 		in.Art, in.Icon, in.Banner = l.Art, l.Icon, l.Banner
 		return nil
 	})

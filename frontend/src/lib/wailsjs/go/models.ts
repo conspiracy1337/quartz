@@ -3548,6 +3548,8 @@ export namespace tasks {
 	export class Art {
 	    background: string;
 	    initial?: string;
+	    icon?: string;
+	    loader?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Art(source);
@@ -3557,6 +3559,8 @@ export namespace tasks {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.background = source["background"];
 	        this.initial = source["initial"];
+	        this.icon = source["icon"];
+	        this.loader = source["loader"];
 	    }
 	}
 	export class StepView {

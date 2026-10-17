@@ -780,7 +780,7 @@ func (s *Service) Update(ctx context.Context, id, version string, backupWorlds b
 	if err := os.MkdirAll(work, 0o700); err != nil {
 		return "", err
 	}
-	meta := tasks.Meta{Title: in.Name, Subtitle: "Updating to " + next.Version, Art: tasks.Art{Background: in.Art.Background, Initial: in.Art.Initial}, Kind: "update"}
+	meta := tasks.Meta{Title: in.Name, Subtitle: "Updating to " + next.Version, Art: in.TaskArt(), Kind: "update"}
 	files, set, spec, err := s.filesSpec(meta, next, work)
 	if err != nil {
 		_ = os.RemoveAll(work)

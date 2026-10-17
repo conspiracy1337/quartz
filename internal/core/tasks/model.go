@@ -44,10 +44,14 @@ const (
 	Count Unit = "count" // "2,318 of 3,604"
 )
 
-// Art is the tile shown next to a job (same shape as the UI's Art type).
+// Art is the tile shown next to a job (the UI's Art type). A job for an
+// instance also carries its picture and its loader ("none" for vanilla), so
+// the row shows the instance's own tile.
 type Art struct {
 	Background string `json:"background"`
 	Initial    string `json:"initial,omitempty"`
+	Icon       string `json:"icon,omitempty"`
+	Loader     string `json:"loader,omitempty"`
 }
 
 // Meta describes a job to the user.

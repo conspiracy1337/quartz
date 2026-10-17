@@ -77,7 +77,7 @@
           <div role="listitem">
             <div class="dl-row">
               <button class="dl-chev" class:open={isOpen(d, i)} onclick={() => (open[d.id] = !isOpen(d, i))} aria-expanded={isOpen(d, i)} aria-label="Show steps for {name}"><Icon name="chevron-right" size={12} sw={2.2} /></button>
-              <Tile art={d.meta.art} />
+              <Tile art={d.meta.art} icon={d.meta.art.icon} loader={d.meta.art.loader} />
               <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{name}</span><span class="trunc small faint" style="display: block">{d.meta.subtitle}</span></span>
               <span class="dl-eta" style="color: {isPaused ? 'var(--warn)' : 'var(--faint)'}">{jobEta(d)}</span>
               <span class="dl-detail muted">{mb(d.doneBytes)} of {bytes(d.totalBytes)}</span>
@@ -122,7 +122,7 @@
           {@const ok = d.state === 'done'}
           <div class="dl-row" role="listitem">
             <span></span>
-            <Tile art={d.meta.art} />
+            <Tile art={d.meta.art} icon={d.meta.art.icon} loader={d.meta.art.loader} />
             <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{d.meta.title}</span><span class="trunc small faint" style="display: block">{historySub(d)}</span></span>
             <span class="dl-eta" style="color: {ok ? 'var(--faint)' : 'var(--danger)'}">{ok ? 'Done' : 'Failed'}</span>
             <span class="dl-detail muted">{ok ? bytes(d.totalBytes) : `${mb(d.doneBytes)} of ${bytes(d.totalBytes)}`}</span>

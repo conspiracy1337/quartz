@@ -621,9 +621,6 @@ func (s *Store) Create(req CreateRequest) (Instance, error) {
 		Loader: req.Loader, LoaderVersion: req.LoaderVersion, KeepLoaderUpdated: true,
 		Sandbox: rules.Settings{On: req.Sandbox, Preset: rules.Standard}, Created: time.Now().UTC(),
 	}
-	if in.Art.Initial == "" {
-		in.Art.Initial = strings.ToUpper(string([]rune(name)[:1]))
-	}
 	if err := os.MkdirAll(s.GameDir(in.ID), 0o700); err != nil {
 		return Instance{}, err
 	}

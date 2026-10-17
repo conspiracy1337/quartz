@@ -96,7 +96,7 @@
     <div class="list">
       {#each trash.data ?? [] as e (e.key)}
         <div class="row tr">
-          <Tile art={e.art} icon={e.icon} />
+          <Tile art={e.art} icon={e.icon} loader={e.loader ?? ''} />
           <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{e.name}</span><span class="trunc small faint" style="display: block">Minecraft {e.minecraft}, moved to the trash {ago(e.trashedAt)}</span></span>
           <span class="small muted opt tnum">{plural(daysLeft(e), 'day')} left</span>
           <span style="display: flex; gap: 6px; justify-content: flex-end"><button class="btn btn-sm" onclick={() => restore(e)}>Restore</button><button class="btn btn-sm btn-danger" onclick={(ev) => confirm(ev, `Delete ${e.name} for good? It can't be restored.`, 'Delete', () => purge(e))}>Delete now</button></span>

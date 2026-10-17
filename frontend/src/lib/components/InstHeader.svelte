@@ -5,7 +5,7 @@
   import { href, type InstanceTab } from '../router.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
-  import InstanceMark from '../ui/InstanceMark.svelte';
+  import Tile from '../ui/Tile.svelte';
   import Tabs from '../ui/Tabs.svelte';
   import { below } from '../ui/Menu.svelte';
   import { loaderLabel } from '../labels';
@@ -39,9 +39,7 @@
 <header style="font-family: var(--font); color: var(--text); padding: 16px 28px 0; background: var(--bg)">
   <div class="crumbs"><a href={href({ name: 'library' })}>Library</a><Icon name="chevron-right" size={12} sw={2} /><span class="muted">{i.name}</span></div>
   <div style="display: grid; grid-template-columns: 56px minmax(0,1fr) auto; align-items: center; column-gap: 16px; height: 56px; margin-top: 14px">
-    <div class="ico" style="width: 56px; height: 56px; border-radius: 10px; background: {i.art.background}; font-size: 22px" aria-hidden="true">
-      <InstanceMark art={i.art} icon={i.icon} />
-    </div>
+    <Tile art={i.art} icon={i.icon} loader={i.loader?.kind ?? ''} style="width: 56px; height: 56px; flex-basis: 56px; border-radius: 10px; font-size: 22px" />
     <div style="min-width: 0; display: flex; flex-direction: column; gap: 4px">
       <h1 class="h1 trunc">{i.name}</h1>
       <div class="muted" style="display: flex; gap: 14px; height: 20px; align-items: center; overflow: hidden; white-space: nowrap">
