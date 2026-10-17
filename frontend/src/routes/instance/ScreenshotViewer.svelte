@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import { bytes, shortMonthDay, clock } from '$lib/format';
-  import { query } from '$lib/query.svelte';
+  import { query, skeletonRows } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -62,13 +62,17 @@
       <button class="btn btn-icon" onclick={() => (i = (i + 1) % n)} aria-label="Next"><Icon name="chevron-right" size={14} sw={2} /></button>
     </div>
     <div class="film" role="listbox" aria-label="Screenshots">
-      {#each list as s, k (s.id)}<button class="fi" class:on={k === i} style="background: {s.art.background}" onclick={() => (i = k)} aria-label={when(s.takenAt)} role="option" aria-selected={k === i}></button>{/each}
+      {#each list as s, k (s.id)}<button class="fi" class:on={k === i} style="background: {s.art.background}" onclick={() => (i = k)} aria-label={when(s.takenAt)} role="option" aria-selected={k === i}></button>
+      {:else}{#if !shots.data}{#each { length: skeletonRows(`screenshots.${instanceId}`, 8) } as _, k (k)}<div class="fi sk" aria-hidden="true"></div>{/each}{/if}{/each}
     </div>
   </section>
   <aside aria-label="Details" style="border-left: 1px solid var(--line); padding: 16px 18px; display: flex; flex-direction: column; gap: 14px">
     {#if cur}
       <div><h2 class="h3 mono trunc">{cur.file}</h2><div class="small faint tnum">{when(cur.takenAt)}</div></div>
       <div class="kv small" style="grid-template-columns: 76px minmax(0,1fr); row-gap: 8px"><span>Size</span><span class="mono">{cur.width} × {cur.height}</span><span>File</span><span class="mono">{bytes(cur.bytes)}</span><span>World</span><span>{cur.world}</span></div>
+    {:else if !shots.data}
+      <div aria-hidden="true"><div class="h3"><span class="sk sk-text" style="height: 12px; width: 160px"></span></div><div class="small"><span class="sk sk-text" style="width: 110px"></span></div></div>
+      <div class="kv small" style="grid-template-columns: 76px minmax(0,1fr); row-gap: 8px" aria-hidden="true"><span>Size</span><span><span class="sk sk-text" style="width: 80px"></span></span><span>File</span><span><span class="sk sk-text" style="width: 56px"></span></span><span>World</span><span><span class="sk sk-text" style="width: 96px"></span></span></div>
     {/if}
     <div style="display: flex; flex-direction: column; gap: 6px">
       <button class="btn btn-block" disabled={!cur} onclick={() => cur && run('Copy image', () => api.screenshots.copy(instanceId, cur.id), 'copied')}>Copy image</button>

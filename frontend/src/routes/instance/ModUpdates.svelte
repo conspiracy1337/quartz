@@ -135,7 +135,7 @@
   </div>
   <!-- Until the first answer, the notes shown last time hold their place, so the buttons stay put. -->
   {#if !review}
-    {#snippet note()}<span class="small muted"><span class="sk" style="display: inline-block; vertical-align: middle; height: 10px; width: 50%"></span></span>{/snippet}
+    {#snippet note()}<span class="small muted"><span class="sk sk-text" style="width: 50%"></span></span>{/snippet}
     {#each { length: lastCount(`review.${i.id}.${kind}.failed`) ?? 0 } as _, k (k)}<div class="card" style="padding: 12px 16px" aria-hidden="true">{@render note()}</div>{/each}
     {#if lastCount(`review.${i.id}.${kind}.locked`)}<div class="card" style="display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 14px; align-items: center; padding: 12px 16px" aria-hidden="true">{@render note()}<span class="sk" style="height: 28px; width: 64px"></span></div>{/if}
   {/if}

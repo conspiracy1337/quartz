@@ -6,7 +6,7 @@
   import SkinFigure from '$lib/components/SkinFigure.svelte';
   import { searchIn } from '$lib/format';
   import { STEVE, accountLook, capeLook, capeTile, skinLook } from '$lib/look';
-  import { query, rememberCount, skeletonRows } from '$lib/query.svelte';
+  import { lastCount, query, rememberCount, skeletonRows } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { session } from '$lib/session.svelte';
   import SearchField from '$lib/ui/SearchField.svelte';
@@ -41,6 +41,8 @@
   const capeList = $derived(capes.data?.capes ?? []);
   // How many cape tiles there were (No cape counts), so the skeleton has the loaded height next time.
   $effect(() => void (capes.data && rememberCount('capes', capeList.length + 1)));
+  // The cape grid's count last time (No cape included), for the heading until capes are in.
+  const lastCapes = lastCount('capes');
   const capeId = $derived(capeSel ?? capes.data?.worn ?? '');
   const cape = $derived(capeList.find((c) => c.id === capeId));
   // With an empty library the model shows what the account wears: its default skin.
@@ -99,7 +101,7 @@
         <SplitButton accent disabled={busy} onclick={upload} menuLabel="More ways to add a skin" expanded={!!addMenu} onmenu={(e) => (addMenu = below(e))}>Upload skin</SplitButton>
       </div>
       <section aria-label="Your skins" style="display: flex; flex-direction: column; gap: 10px">
-        <h2 class="h3">Your skins <span class="count">{skins.data?.length ?? ''}</span></h2>
+        <h2 class="h3">Your skins <span class="count">{skins.data?.length ?? lastCount('skins') ?? ''}</span></h2>
         <div class="wg" role="radiogroup" aria-label="Skin">
           {#each list as s (s.hash)}
             <button class="wc" class:on={cur?.hash === s.hash} onclick={() => (skinSel = s.hash)} role="radio" aria-checked={cur?.hash === s.hash}>
@@ -113,7 +115,7 @@
         </div>
       </section>
       <section aria-label="Capes" style="display: flex; flex-direction: column; gap: 10px">
-        <h2 class="h3">Cape <span class="count">{capes.data ? capeList.length : ''}</span></h2>
+        <h2 class="h3">Cape <span class="count">{capes.data ? capeList.length : lastCapes === undefined ? '' : lastCapes - 1}</span></h2>
         <div class="wg" role="radiogroup" aria-label="Cape">
           {#if capes.data}
             <button class="cp" class:on={capeId === ''} onclick={() => (capeSel = '')} role="radio" aria-checked={capeId === ''}><span class="cp-art" style="background: {NO_CAPE}" aria-hidden="true"></span><span class="trunc small">No cape</span>{#if capes.data.worn === ''}<span class="worn" title="In use"><Icon name="check" size={10} sw={3} /></span>{/if}</button>
@@ -132,7 +134,7 @@
       {#if skins.data && accounts.data}<PlayerModel {...shown} {...capeLook(cape)} fill scale={tall.current ? 11 : short.current ? 6 : 8} />{/if}
     </div>
     <div class="wd-info">
-      <div style="min-width: 0"><div class="h2 trunc">{#if skins.data}{cur?.name ?? '\u00a0'}{:else}<span class="sk" style="display: inline-block; vertical-align: middle; height: 16px; width: 140px" aria-hidden="true"></span>{/if}</div><div class="small faint">{cape ? `${cape.name} cape` : 'No cape'}, {shown.slim ? 'slim' : 'classic'} arms</div></div>
+      <div style="min-width: 0"><div class="h2 trunc">{#if skins.data}{cur?.name ?? '\u00a0'}{:else}<span class="sk sk-text" style="height: 16px; width: 140px" aria-hidden="true"></span>{/if}</div><div class="small faint">{cape ? `${cape.name} cape` : 'No cape'}, {shown.slim ? 'slim' : 'classic'} arms</div></div>
       <Seg options={ARMS} value={shown.slim ? 'slim' : 'classic'} label="Arm type" fill center onchange={setArms} />
       <button class="btn btn-accent btn-lg btn-block" disabled={!me || !cur || busy || (!newSkin && !newCape)} onclick={wear}>{apply}</button>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px">

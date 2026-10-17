@@ -73,7 +73,7 @@
   </div>
 </div>
 <div class="pfoot">
-  <span class="muted">{i.loader ? loaderLabel(i.loader) : 'No loader'}</span><Icon name="arrow-right" size={12} sw={2} /><span class="pfoot-to">{!loaders.data ? '' : list.length ? `${opt?.name} ${sel?.name}` : 'No loader'}</span>
+  <span class="muted">{i.loader ? loaderLabel(i.loader) : 'No loader'}</span><Icon name="arrow-right" size={12} sw={2} /><span class="pfoot-to">{#if !loaders.data}<span class="sk sk-text" style="width: 100px" aria-hidden="true"></span>{:else}{list.length ? `${opt?.name} ${sel?.name}` : 'No loader'}{/if}</span>
   {#if compat}<span class="small faint" style="margin-left: 8px">{compat}</span>{/if}
   <span style="margin-left: auto; display: flex; gap: 8px"><a href={back} class="btn">Cancel</a><button class="btn btn-accent" disabled={isCurrent || busy || !loaders.data} onclick={apply}>{action}</button></span>
 </div>

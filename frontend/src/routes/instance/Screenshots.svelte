@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import { Day, clock, searchIn } from '$lib/format';
-  import { query } from '$lib/query.svelte';
+  import { lastChips, query, rememberChips, skeletonRows, type ChipRow } from '$lib/query.svelte';
   import { revs } from '$lib/revs.svelte';
   import { href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
@@ -14,7 +14,8 @@
   const WEEK = 7 * 86_400_000;
   // Keyed, so a second visit shows them at once; the instance page is remounted per instance.
   // svelte-ignore state_referenced_locally
-  const shots = query(() => api.screenshots.list(instanceId), `screenshots.${instanceId}`);
+  const key = `screenshots.${instanceId}`;
+  const shots = query(() => api.screenshots.list(instanceId), key);
   let search = $state('');
   let filter = $state<string>('all');
 
@@ -26,6 +27,10 @@
     ...worlds.map((w) => ({ key: `world:${w}`, label: w })),
   ]);
   const match = (s: (typeof list)[number], key: string) => key === 'all' || (key === 'week' ? Date.now() - s.takenAt < WEEK : `world:${s.world}` === key);
+  // The chips as shown: until the screenshots are in, the row this tab had last time, so the
+  // world chips and the counts hold their place.
+  const chipRow = $derived<ChipRow>(shots.data ? chips.map((c) => ({ ...c, count: list.filter((s) => match(s, c.key)).length })) : (lastChips(key) ?? chips.map((c) => ({ ...c, count: 0 }))));
+  $effect(() => void (shots.data && rememberChips(key, chipRow)));
   const q = $derived(search.trim().toLowerCase());
   const found = (s: (typeof list)[number]) => !q || Day(s.takenAt).toLowerCase().includes(q) || s.world.toLowerCase().includes(q);
   const shown = $derived(list.filter((s) => match(s, filter) && found(s)));
@@ -60,37 +65,37 @@
   }
 </script>
 
-<div class="scroll">
-  <div class="page" style="gap: 12px; padding-top: 16px">
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
-      <SearchField bind:value={search} label="Search screenshots" placeholder={searchIn('screenshots', shots.data?.length)} style="flex: 0 1 280px" />
-      <div style="display: flex; gap: 6px; flex-wrap: wrap">
-        {#each chips as c (c.key)}<button class="chip" class:on={filter === c.key} onclick={() => (filter = c.key)}>{c.label}<span class="count">{list.filter((s) => match(s, c.key)).length}</span></button>{/each}
-      </div>
-      <div style="flex: 1 1 0"></div>
-      {#if selecting}
-        <button class="btn" onclick={endSelect}>Cancel</button>
-        <button class="btn btn-danger" disabled={!picked.length} onclick={trashPicked}>Move {picked.length || ''} to trash</button>
-      {:else}
-        <button class="btn" onclick={() => (selecting = true)}>Select</button>
-      {/if}
+<!-- The grid scrolls inside itself under the toolbar, as the other tabs' tables do. -->
+<div class="page page-fill" style="gap: 12px; padding-top: 16px">
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+    <SearchField bind:value={search} label="Search screenshots" placeholder={searchIn('screenshots', shots.data?.length)} style="flex: 0 1 280px" />
+    <div style="display: flex; gap: 6px; flex-wrap: wrap">
+      {#each chipRow as c (c.key)}<button class="chip" class:on={filter === c.key} onclick={() => (filter = c.key ?? 'all')}>{c.label}<span class="count">{c.count}</span></button>{/each}
     </div>
-    <div class="sg">
-      {#if shots.data}
-        {#each shown as s (s.id)}
-          <a href={href({ name: 'instance', id: instanceId, tab: 'screenshots', sub: s.id })} class="sh" class:on={picked.includes(s.id)} style="background: {s.art.background}" aria-label="{selecting ? (picked.includes(s.id) ? 'Unselect' : 'Select') : 'Open'} {when(s.takenAt)}" onclick={(e) => toggle(e, s.id)}><span class="cap tnum">{when(s.takenAt)}</span></a>
-        {:else}
-          <Empty text={emptyText} style="grid-column: 1 / -1" />
-        {/each}
+    <div style="flex: 1 1 0"></div>
+    {#if selecting}
+      <button class="btn" onclick={endSelect}>Cancel</button>
+      <button class="btn btn-danger" disabled={!picked.length} onclick={trashPicked}>Move {picked.length || ''} to trash</button>
+    {:else}
+      <button class="btn" onclick={() => (selecting = true)}>Select</button>
+    {/if}
+  </div>
+  <div class="sg list-fill">
+    {#if shots.data}
+      {#each shown as s (s.id)}
+        <a href={href({ name: 'instance', id: instanceId, tab: 'screenshots', sub: s.id })} class="sh" class:on={picked.includes(s.id)} style="background: {s.art.background}" aria-label="{selecting ? (picked.includes(s.id) ? 'Unselect' : 'Select') : 'Open'} {when(s.takenAt)}" onclick={(e) => toggle(e, s.id)}><span class="cap tnum">{when(s.takenAt)}</span></a>
       {:else}
-        {#each { length: 12 } as _, k (k)}<div class="sk" style="aspect-ratio: 16/9; border-radius: 8px" aria-hidden="true"></div>{/each}
-      {/if}
-    </div>
+        <Empty text={emptyText} style="grid-column: 1 / -1" />
+      {/each}
+    {:else}
+      {#each { length: skeletonRows(key, 12) } as _, k (k)}<div class="sk" style="aspect-ratio: 16/9; border-radius: 8px" aria-hidden="true"></div>{/each}
+    {/if}
   </div>
 </div>
 
 <style>
-  .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  /* The padding keeps focus rings (2px, 2px out) inside the scroll box. */
+  .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:4px;margin:-4px}
   .sh{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:0;padding:0;display:block;width:100%}
   .sh .cap{position:absolute;inset:auto 0 0 0;padding:20px 10px 8px;background:linear-gradient(transparent,rgba(0,0,0,.7));color:#fff;font-size:12px;text-align:left;opacity:0;transition:opacity 140ms ease}
   .sh:hover .cap,.sh:focus-visible .cap{opacity:1}

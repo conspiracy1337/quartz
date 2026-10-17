@@ -3,7 +3,7 @@
   import type { ActivityKind, Instance, SyncEntry } from '$lib/api/types';
   import { Day, fullDate, gb, plural } from '$lib/format';
   import { loaderLabel } from '$lib/labels';
-  import { query, skeletonRows } from '$lib/query.svelte';
+  import { lastCount, query, skeletonRows } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -77,7 +77,7 @@
       </div>
     </section>
     <section class="card ov-card" aria-label="Updates" style="grid-area: updates">
-      <div class="card-head"><h2 class="h3">Updates <span class="count">{updates.data?.length ?? ''}</span></h2>{#if updates.data?.length}<a href={href({ name: 'instance', id: i.id, tab: 'mods', sub: 'updates' })} class="btn btn-sm btn-accent">Review</a>{/if}</div>
+      <div class="card-head"><h2 class="h3">Updates <span class="count">{updates.data?.length ?? lastCount(`updates.${i.id}`) ?? ''}</span></h2>{#if updates.data?.length}<a href={href({ name: 'instance', id: i.id, tab: 'mods', sub: 'updates' })} class="btn btn-sm btn-accent">Review</a>{/if}</div>
       <div class="ov-body">
         {#each updates.data ?? [] as u (u.name)}
           <div class="up"><Tile art={u.art} size="sm" /><span class="trunc">{u.name}</span><span class="mono muted">{u.from} to {u.to}</span></div>
