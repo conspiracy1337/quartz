@@ -9,7 +9,7 @@
   import Logo from '$lib/ui/Logo.svelte';
   import SetupLayout from './SetupLayout.svelte';
 
-  const info = query(() => api.app.info());
+  const info = query(() => api.app.info(), 'app.info');
   const LOOKS = [
     { theme: 'monolith', name: 'Dark', bg: 'linear-gradient(90deg,#0c0c0e 0 28%,#0a0a0b 28%)' },
     { theme: 'light', name: 'Light', bg: 'linear-gradient(90deg,#ededef 0 28%,#f6f6f7 28%)' },

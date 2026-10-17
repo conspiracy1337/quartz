@@ -3,7 +3,7 @@
   import type { ActivityKind, Instance, SyncEntry } from '$lib/api/types';
   import { Day, fullDate, gb, plural } from '$lib/format';
   import { loaderLabel } from '$lib/labels';
-  import { query } from '$lib/query.svelte';
+  import { query, skeletonRows } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -16,8 +16,11 @@
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
 
-  const activity = query(() => api.instances.activity(i.id));
-  const updates = query(() => api.instances.pendingUpdates(i.id));
+  // Keyed, so going back to Overview shows them at once; the page is remounted per instance.
+  // svelte-ignore state_referenced_locally
+  const activity = query(() => api.instances.activity(i.id), `activity.${i.id}`);
+  // svelte-ignore state_referenced_locally
+  const updates = query(() => api.instances.pendingUpdates(i.id), `updates.${i.id}`);
   let filter = $state<'all' | ActivityKind>('all');
   // The instance's own Discord switch (Integrations holds the global one).
   async function setDiscord(on: boolean) {
@@ -32,7 +35,7 @@
   const events = $derived((activity.data ?? []).filter((e) => filter === 'all' || e.kind === filter));
   const contentLine = $derived(`${i.counts.mods} mods, ${i.counts.resourcepacks} packs, ${i.counts.worlds} worlds`);
   // How many shared targets this instance joins that are on, the shared keybinds counting as one.
-  const sync = query(() => api.sync.groups());
+  const sync = query(() => api.sync.groups(), 'sync.groups');
   const syncCount = $derived.by(() => {
     const g = sync.data;
     if (!g) return undefined;
@@ -54,7 +57,7 @@
           </div>
         {:else}
           {#if activity.data}<Empty text="No activity yet. Sessions and changes show up here." />
-          {:else}{#each { length: 5 } as _, k (k)}<div class="ev" aria-hidden="true"><div class="sk" style="width: 28px; height: 28px; border-radius: 7px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {[48, 36, 56, 40, 30][k]}%"></div><div class="sk" style="height: 10px; width: 28%"></div></div><div class="sk" style="height: 10px; width: 48px"></div></div>{/each}{/if}
+          {:else}{#each { length: Math.min(5, skeletonRows(`activity.${i.id}`, 5)) } as _, k (k)}<div class="ev" aria-hidden="true"><div class="sk" style="width: 28px; height: 28px; border-radius: 7px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {[48, 36, 56, 40, 30][k]}%"></div><div class="sk" style="height: 10px; width: 28%"></div></div><div class="sk" style="height: 10px; width: 48px"></div></div>{/each}{/if}
         {/each}
       </div>
     </section>
@@ -80,7 +83,7 @@
           <div class="up"><Tile art={u.art} size="sm" /><span class="trunc">{u.name}</span><span class="mono muted">{u.from} to {u.to}</span></div>
         {:else}
           {#if updates.data}<Empty text="Everything is up to date." />
-          {:else}{#each { length: 3 } as _, k (k)}<div class="up" aria-hidden="true"><div class="sk" style="width: 24px; height: 24px; border-radius: 6px"></div><div class="sk" style="height: 12px; width: {[44, 32, 52][k]}%"></div><div class="sk" style="height: 10px; width: 90px"></div></div>{/each}{/if}
+          {:else}{#each { length: Math.min(3, skeletonRows(`updates.${i.id}`, 3)) } as _, k (k)}<div class="up" aria-hidden="true"><div class="sk" style="width: 24px; height: 24px; border-radius: 6px"></div><div class="sk" style="height: 12px; width: {[44, 32, 52][k]}%"></div><div class="sk" style="height: 10px; width: 90px"></div></div>{/each}{/if}
         {/each}
       </div>
     </section>

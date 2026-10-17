@@ -11,8 +11,9 @@
   import ToggleRow from '$lib/ui/ToggleRow.svelte';
   import Empty from '$lib/ui/Empty.svelte';
 
-  const groups = query(() => api.sync.groups());
-  const keys = query(() => api.sync.keybinds());
+  // Keyed (instance settings and Overview share them), so a second visit shows them at once.
+  const groups = query(() => api.sync.groups(), 'sync.groups');
+  const keys = query(() => api.sync.keybinds(), 'sync.keybinds');
   let custom = $state('');
 
   const users = (e: SyncEntry, total: number) => (e.enabled && e.available ? `${e.users}/${total}` : '—');

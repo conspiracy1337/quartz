@@ -3,7 +3,7 @@
   import LogsFrame from '$lib/components/LogsFrame.svelte';
   import { bytes } from '$lib/format';
   import { revs } from '$lib/revs.svelte';
-  import { query, skeletonRows } from '$lib/query.svelte';
+  import { query, rememberCount, skeletonRows } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Empty from '$lib/ui/Empty.svelte';
@@ -24,6 +24,12 @@
   let picked = $state('');
   const logs = $derived((files.data ?? []).filter((f) => !f.crash));
   const crashes = $derived((files.data ?? []).filter((f) => f.crash));
+  // Both lists' sizes, so each skeleton has its loaded height next time.
+  $effect(() => {
+    if (!files.data) return;
+    rememberCount(`logs.list.${instanceId}`, logs.length);
+    rememberCount(`logs.crashes.${instanceId}`, crashes.length);
+  });
   const selected = $derived(logs.some((f) => f.name === picked) ? picked : (logs[0]?.name ?? ''));
   const title = $derived(run ? run.title : selected);
   const text = query(() => (run ? api.logs.runText(instanceId, run.runId, run.kind) : selected ? api.logs.text(instanceId, selected) : Promise.resolve('')));
@@ -70,13 +76,13 @@
       <button class="rail-row" class:on={!run && selected === f.name} onclick={() => pick(f.name)}><Icon name="file" size={14} /><span class="trunc mono">{f.name}</span><span class="small faint">{bytes(f.bytes)}</span></button>
     {:else}
       {#if files.data}<span class="small faint" style="padding: 6px 10px">None yet</span>
-      {:else}{#each { length: skeletonRows(`logs.files.${instanceId}`, 3) } as _, k (k)}{@render skRow(k)}{/each}{/if}
+      {:else}{#each { length: skeletonRows(`logs.list.${instanceId}`, 3) } as _, k (k)}{@render skRow(k)}{/each}{/if}
     {/each}
     <div class="side-label" style="margin-top: 10px">Crash reports</div>
     {#each crashes as f (f.name)}
       <button class="rail-row" onclick={() => session.open({ kind: 'crash', instanceId, file: f.name })}><Icon name="warn" size={14} color="var(--danger)" /><span class="trunc mono">{f.name}</span><span class="small faint">{bytes(f.bytes)}</span></button>
     {:else}
-      {#if files.data}<span class="small faint" style="padding: 6px 10px">None</span>{:else}{@render skRow(0)}{/if}
+      {#if files.data}<span class="small faint" style="padding: 6px 10px">None</span>{:else}{#each { length: skeletonRows(`logs.crashes.${instanceId}`, 1) } as _, k (k)}{@render skRow(k)}{/each}{/if}
     {/each}
   {/snippet}
   <section class="lv" aria-label={title || 'Log file'}>

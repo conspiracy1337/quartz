@@ -18,7 +18,7 @@
   ] as const;
 
   const inst = query(() => api.instances.get(instanceId));
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const worlds = query(() => api.worlds.list(instanceId));
   const servers = query(() => api.servers.list(instanceId));
 

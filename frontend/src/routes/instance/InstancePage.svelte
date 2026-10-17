@@ -24,7 +24,9 @@
   let { id, tab, sub }: Props = $props();
 
   const CONTENT: InstanceTab[] = ['mods', 'resourcepacks', 'shaders', 'datapacks', 'worlds', 'servers'];
-  const instance = query(() => api.instances.get(id));
+  // Keyed, so going back to an instance shows it at once; the page is remounted per instance.
+  // svelte-ignore state_referenced_locally
+  const instance = query(() => api.instances.get(id), `instance.${id}`);
   const i = $derived(instance.data?.id === id ? instance.data : undefined);
   // Review screens replace the instance header with their own top bar.
   const review = $derived((managed(tab as ContentKind) && CONTENT.includes(tab) && sub === 'updates') || (tab === 'overview' && sub === 'update'));
@@ -46,7 +48,7 @@
       <Overview instance={i} />
     {:else if CONTENT.includes(tab)}
       <!-- The tab's table scrolls inside itself, so the page holds still. -->
-      {#key tab}<ContentTab instanceId={i.id} kind={tab as ContentKind} chip={tab === 'mods' && sub === 'client-only' ? 'Client only' : undefined} />{/key}
+      {#key tab}<ContentTab instanceId={i.id} kind={tab as ContentKind} count={i.counts[tab as ContentKind]} chip={tab === 'mods' && sub === 'client-only' ? 'Client only' : undefined} />{/key}
     {:else if tab === 'screenshots'}
       {#if sub}<ScreenshotViewer instanceId={i.id} shotId={sub} />{:else}<Screenshots instanceId={i.id} />{/if}
     {:else if tab === 'logs'}

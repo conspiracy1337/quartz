@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { Instance } from '$lib/api/types';
-  import { query } from '$lib/query.svelte';
+  import { query, rememberCount, skeletonRows } from '$lib/query.svelte';
   import { href } from '$lib/router.svelte';
   import { move, repair, trash } from '$lib/instanceActions';
   import { capitalize, gb, gbField, plural } from '$lib/format';
@@ -20,9 +20,12 @@
   let { instance: i }: Props = $props();
 
   // Only what is turned on in Syncing shows here, in the same order.
-  const sync = query(() => api.sync.groups());
-  const sharedKeys = query(() => api.sync.keybinds());
+  // Keyed (Syncing and Overview share them), so a second visit shows them at once.
+  const sync = query(() => api.sync.groups(), 'sync.groups');
+  const sharedKeys = query(() => api.sync.keybinds(), 'sync.keybinds');
   const syncable = $derived(sync.data ? [...sync.data.files, ...sync.data.folders, ...sync.data.mods, ...sync.data.custom].filter((e) => e.enabled && e.available) : []);
+  // How many rows the synced list had, so its skeleton has the loaded height next time.
+  $effect(() => void (sync.data && rememberCount('sync.syncable', syncable.length)));
   // Joining moves the instance's own items into the shared copy; leaving keeps a copy.
   const join = (target: string, on: boolean) =>
     edit(async () => {
@@ -34,13 +37,13 @@
   // the instance's own (saved through Go).
   // svelte-ignore state_referenced_locally
   let st = $state($state.snapshot(i.settings));
-  const info = query(() => api.app.info());
-  const runtimes = query(() => api.java.runtimes());
+  const info = query(() => api.app.info(), 'app.info');
+  const runtimes = query(() => api.java.runtimes(), 'java.runtimes');
   const javaOptions = $derived([{ value: '', label: `Automatic (${i.javaAuto})` }, ...(runtimes.data ?? []).map((r) => ({ value: r.path, label: r.name }))]);
   const suggestGb = $derived(prefs.value?.java.suggestMemory ? suggestMemoryGb(i.counts.mods, info.data?.memoryMb ?? 0) : 0);
   const memoryDesc = $derived(info.data?.memoryMb ? `This PC has ${gb(info.data.memoryMb)} GB.${suggestGb ? ` ${suggestGb} GB suits ${plural(i.counts.mods, 'mod')}.` : ''}` : undefined);
   // The account this instance always plays as (Prism, Pandora); one that was removed stays listed.
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const accountOptions = $derived.by(() => {
     const opts = [{ value: '', label: 'Default account' }, ...(accounts.data ?? []).map((a) => ({ value: a.id, label: a.name }))];
     if (st.account && !opts.some((o) => o.value === st.account)) opts.push({ value: st.account, label: 'Removed account' });
@@ -140,10 +143,14 @@
     <section class="sec" aria-label="Syncing">
       <div class="sec-h"><h2 class="h3">Syncing</h2><a href={href({ name: 'syncing' })} class="btn btn-sm btn-ghost">Sync settings</a></div>
       <div class="card">
-        <Setting title="Shared keybinds" desc="Writes your {plural(sharedKeys.data?.length ?? 0, 'chosen key')} into this instance on every launch. Other options stay untouched."><Toggle on={i.sync.keys} label="Shared keybinds" onchange={(v) => edit(() => api.instances.setSharedKeys(i.id, v), 'Shared keybinds')} /></Setting>
+        <Setting title="Shared keybinds" loading={!sharedKeys.data} desc="Writes your {plural(sharedKeys.data?.length ?? 0, 'chosen key')} into this instance on every launch. Other options stay untouched."><Toggle on={i.sync.keys} label="Shared keybinds" onchange={(v) => edit(() => api.instances.setSharedKeys(i.id, v), 'Shared keybinds')} /></Setting>
         <div class="divider"></div>
         <div class="tgl-grid">
-          {#each syncable as e (e.id)}<ToggleRow name={e.name || 'Custom'} hint={e.path} on={i.sync.join.includes(e.id)} onchange={(v) => join(e.id, v)} />{/each}
+          {#if sync.data}
+            {#each syncable as e (e.id)}<ToggleRow name={e.name || 'Custom'} hint={e.path} on={i.sync.join.includes(e.id)} onchange={(v) => join(e.id, v)} />{/each}
+          {:else}
+            {#each { length: skeletonRows('sync.syncable', 4) } as _, k (k)}<div class="tgl" aria-hidden="true"><span class="sk" style="height: 12px; width: {[46, 38, 52, 42][k % 4]}%"></span><span class="sk" style="width: 30px; height: 18px; border-radius: 9px"></span></div>{/each}
+          {/if}
         </div>
       </div>
     </section>

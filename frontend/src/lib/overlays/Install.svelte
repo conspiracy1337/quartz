@@ -20,7 +20,7 @@
   let { ref, source, instanceId, content, version = '' }: Props = $props();
 
   const inst = query(() => api.instances.get(instanceId));
-  const info = query(() => api.app.info());
+  const info = query(() => api.app.info(), 'app.info');
   const tabInfo = query(() => (content === 'datapacks' ? api.content.info(instanceId) : Promise.resolve(undefined)));
   let world = $state('');
   const worlds = $derived(tabInfo.data?.worlds ?? []);

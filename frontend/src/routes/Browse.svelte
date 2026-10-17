@@ -7,7 +7,7 @@
   import { ago, compact, errorText } from '$lib/format';
   import { LOADER_NAMES, PROJECT_TYPES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
-  import { query, skeletonRows, warm } from '$lib/query.svelte';
+  import { query, rememberCount, skeletonRows, warm } from '$lib/query.svelte';
   import { PROJECT_KINDS, go, href, isPackSource } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
   import { browseTarget } from '$lib/instances';
@@ -63,6 +63,8 @@
   const categories = query(() => api.browse.categories(type), `browse.categories.${type}`);
   // The other tabs' categories are fixed lists: load them now, so switching tabs shows them at once.
   for (const k of PROJECT_KINDS) warm(`browse.categories.${k}`, () => api.browse.categories(k));
+  // Each group's size too, so the filter skeleton has the loaded height next time.
+  $effect(() => categories.data?.forEach((g, k) => rememberCount(`browse.categories.${type}.${k}`, g.names.length)));
   // Results the search marked as not installed flip once their download lands.
   const owned = query(() => (showTarget && target ? api.browse.installed(target.id) : Promise.resolve([])));
   const isInstalled = (r: ProjectHit) => r.installed || r.ref.split('+').some((p) => owned.data?.includes(p));
@@ -219,7 +221,7 @@
     {/if}
     {#if !categories.data}
       {#each { length: skeletonRows(`browse.categories.${type}`, 1) } as _, k (k)}
-        <div class="fg" aria-hidden="true"><div class="sk" style="height: 12px; width: 72px; margin: 4px 0"></div>{#each { length: 6 } as _, j (j)}<div class="fl"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div class="sk" style="height: 10px; width: {[60, 48, 70, 54, 64, 44][j]}%"></div><span></span></div>{/each}</div>
+        <div class="fg" aria-hidden="true"><div class="sk" style="height: 12px; width: 72px; margin: 4px 0"></div>{#each { length: skeletonRows(`browse.categories.${type}.${k}`, 6) } as _, j (j)}<div class="fl"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div class="sk" style="height: 10px; width: {[60, 48, 70, 54, 64, 44][j % 6]}%"></div><span></span></div>{/each}</div>
       {/each}
     {/if}
     {#each categories.data ?? [] as g (g.title)}

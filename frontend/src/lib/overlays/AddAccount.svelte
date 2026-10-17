@@ -27,7 +27,7 @@
   const NAME = /^[A-Za-z0-9_]{3,16}$/;
 
   const ready = query(() => api.accounts.microsoftReady());
-  const accounts = query(() => api.accounts.list());
+  const accounts = query(() => api.accounts.list(), 'accounts');
   const again = $derived(accountId ? accounts.data?.find((a) => a.id === accountId) : undefined);
 
   async function addOffline() {

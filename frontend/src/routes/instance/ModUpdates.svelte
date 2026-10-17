@@ -5,6 +5,7 @@
   import { hasBridge } from '$lib/bridge';
   import { bytes } from '$lib/format';
   import { prefs } from '$lib/prefs.svelte';
+  import { lastCount, rememberCount, skeletonRows } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
   import { CHANNELS } from '$lib/settings/registry';
   import { session } from '$lib/session.svelte';
@@ -41,6 +42,9 @@
     loading = true;
     try {
       review = await api.content.review(i.id, kind, fresh);
+      rememberCount(`review.${i.id}.${kind}`, review.updates.length);
+      rememberCount(`review.${i.id}.${kind}.failed`, review.failed.length);
+      rememberCount(`review.${i.id}.${kind}.locked`, review.locked.length ? 1 : 0);
       // Everything that can be downloaded starts picked; the preview keeps the design's sample choice.
       // Updates picked on the content tab come ticked; otherwise every update that needs no manual download.
       const want = session.updatePick;
@@ -114,7 +118,7 @@
 <div class="page page-fill" style="gap: 12px; padding-top: 16px">
   <div class="list list-fill" use:listKeys>
     {#if loading}
-      {#each { length: 6 } as _, k (k)}<div class="row ur" aria-hidden="true"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div class="sk" style="width: 32px; height: 32px; border-radius: 7px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {[40, 30, 46, 34, 52, 38][k]}%"></div><div class="sk" style="height: 10px; width: 24%"></div></div><div class="sk opt" style="height: 10px; width: 70%"></div><div class="sk" style="height: 28px; width: 84px; justify-self: end"></div></div>{/each}
+      {#each { length: skeletonRows(`review.${i.id}.${kind}`, 6) } as _, k (k)}<div class="row ur" aria-hidden="true"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div class="sk" style="width: 32px; height: 32px; border-radius: 7px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {[40, 30, 46, 34, 52, 38][k]}%"></div><div class="sk" style="height: 10px; width: 24%"></div></div><div class="sk opt" style="height: 10px; width: 70%"></div><div class="sk" style="height: 28px; width: 84px; justify-self: end"></div></div>{/each}
     {:else}
     {#each list as u, k (u.id)}
       <div class="row ur">
@@ -129,6 +133,12 @@
     {/each}
     {/if}
   </div>
+  <!-- Until the first answer, the notes shown last time hold their place, so the buttons stay put. -->
+  {#if !review}
+    {#snippet note()}<span class="small muted"><span class="sk" style="display: inline-block; vertical-align: middle; height: 10px; width: 50%"></span></span>{/snippet}
+    {#each { length: lastCount(`review.${i.id}.${kind}.failed`) ?? 0 } as _, k (k)}<div class="card" style="padding: 12px 16px" aria-hidden="true">{@render note()}</div>{/each}
+    {#if lastCount(`review.${i.id}.${kind}.locked`)}<div class="card" style="display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 14px; align-items: center; padding: 12px 16px" aria-hidden="true">{@render note()}<span class="sk" style="height: 28px; width: 64px"></span></div>{/if}
+  {/if}
   {#each failed as f (f)}
     <!-- Composed from the locked card: a platform that couldn't be asked. -->
     <div class="card" style="padding: 12px 16px"><span class="small muted">{f}</span></div>

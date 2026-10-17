@@ -8,7 +8,7 @@
   import Setting from '$lib/ui/Setting.svelte';
   import SettingsTab from './SettingsTab.svelte';
 
-  const info = query(() => api.app.info());
+  const info = query(() => api.app.info(), 'app.info');
   const u = $derived(session.update);
   // The row's description says where the updater is (composed text).
   const status = $derived.by(() => {

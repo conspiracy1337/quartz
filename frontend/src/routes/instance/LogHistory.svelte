@@ -3,7 +3,7 @@
   import type { RunResult } from '$lib/api/types';
   import LogsFrame from '$lib/components/LogsFrame.svelte';
   import { Day, clock, hours } from '$lib/format';
-  import { query } from '$lib/query.svelte';
+  import { query, skeletonRows } from '$lib/query.svelte';
   import { go } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
   import Empty from '$lib/ui/Empty.svelte';
@@ -11,7 +11,9 @@
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
 
-  const runs = query(() => api.logs.runs(instanceId));
+  // Keyed, so a second visit shows the runs at once and the skeleton has their number.
+  // svelte-ignore state_referenced_locally
+  const runs = query(() => api.logs.runs(instanceId), `logs.runs.${instanceId}`);
   // A run's details open under it; the latest crash, the run people come here to look at, starts open.
   let picked = $state<number | null | undefined>(undefined);
   const cur = $derived(picked !== undefined ? picked : (runs.data?.findIndex((r) => r.result === 'crash') ?? -1));
@@ -52,7 +54,7 @@
       {/if}
     {:else}
       {#if runs.data}<Empty text="No launches yet. Each launch is kept here with its log." />
-      {:else}{#each { length: 6 } as _, k (k)}<div class="row hrow" aria-hidden="true"><div class="sk" style="height: 12px; width: {[60, 52, 66, 48, 58, 54][k]}%"></div><div class="sk" style="height: 10px; width: 24px"></div><div class="sk" style="height: 20px; width: 64px"></div><div class="sk" style="height: 10px; width: 56px"></div></div>{/each}{/if}
+      {:else}{#each { length: skeletonRows(`logs.runs.${instanceId}`, 6) } as _, k (k)}<div class="row hrow" aria-hidden="true"><div class="sk" style="height: 12px; width: {[60, 52, 66, 48, 58, 54][k % 6]}%"></div><div class="sk" style="height: 10px; width: 24px"></div><div class="sk" style="height: 20px; width: 64px"></div><div class="sk" style="height: 10px; width: 56px"></div></div>{/each}{/if}
     {/each}
   </div>
 </LogsFrame>
