@@ -92,13 +92,16 @@
 <div class="scroll">
   <div style="max-width: 760px; margin: 0 auto; padding: 28px 24px 32px; display: flex; flex-direction: column; gap: 18px">
     <div style="display: flex; align-items: center; gap: 8px"><h1 class="h1" style="margin-right: auto">New instance</h1><a href={href({ name: 'import' })} class="btn"><Icon name="upload" size={14} sw={1.8} />Import file</a><a href={href({ name: 'browse', type: 'modpack' })} class="btn">Modpack</a></div>
-    <label class="field"><span class="sr">Name</span><input class="name" bind:value={name} placeholder="Enter Instance Name" maxlength="64" /></label>
-    <div class="field"><span class="field-label">Appearance</span><LookEditor bind:look {name} {meta} loader={jar ? '' : l.kind} /></div>
-    <div class="field"><span class="field-label">Minecraft version</span><VersionPicker start={jar?.minecraft ?? ''} startBadge="From jar" onpick={(v) => (version = v)} /></div>
     <div class="field"><span class="field-label">Mod loader</span>
       {#snippet mark(v: number)}<LoaderIcon kind={LOADERS[v]?.kind ?? 'none'} size={14} />{/snippet}
       <Seg options={loaderOptions} bind:value={loader} label="Mod loader" icon={mark} fill center />
       <span class="small faint">{jar ? 'Custom jars run without a mod loader.' : `${line} You can change it later under Version and loader.`}</span>
+    </div>
+    <div class="field"><span class="field-label">Minecraft version</span><VersionPicker start={jar?.minecraft ?? ''} startBadge="From jar" onpick={(v) => (version = v)} /></div>
+    <div class="field"><span class="field-label">Appearance</span>
+      <LookEditor bind:look {name} {meta} loader={jar ? '' : l.kind}>
+        <label class="field"><span class="field-label">Instance name</span><span class="input"><input bind:value={name} placeholder="Enter Instance Name" maxlength="64" /></span></label>
+      </LookEditor>
     </div>
     <section class="field" aria-label="Share with other instances">
       <span class="field-label">Share with other instances</span>
@@ -125,8 +128,6 @@
 </div>
 
 <style>
-  .name::placeholder{color:var(--faint)}
-  .name{all:unset;font-size:20px;line-height:28px;font-weight:600;letter-spacing:-0.02em;border-bottom:1px solid var(--line-2);padding-bottom:6px}
   .adv{display:flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--muted);padding:0;height:28px}
   .adv :global(svg){transition:transform 160ms var(--ease)}
   .adv.open :global(svg){transform:rotate(90deg)}
