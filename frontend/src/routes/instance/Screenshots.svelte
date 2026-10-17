@@ -95,7 +95,8 @@
 
 <style>
   /* The padding keeps focus rings (2px, 2px out) inside the scroll box. */
-  .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:4px;margin:-4px}
+  /* max-content rows: the box is shrunk to the window, and 16:9 tiles have no minimum height of their own. */
+  .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));grid-auto-rows:max-content;gap:12px;padding:4px;margin:-4px}
   .sh{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:0;padding:0;display:block;width:100%}
   .sh .cap{position:absolute;inset:auto 0 0 0;padding:20px 10px 8px;background:linear-gradient(transparent,rgba(0,0,0,.7));color:#fff;font-size:12px;text-align:left;opacity:0;transition:opacity 140ms ease}
   .sh:hover .cap,.sh:focus-visible .cap{opacity:1}
