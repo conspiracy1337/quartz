@@ -3,7 +3,7 @@
   import LogsFrame from '$lib/components/LogsFrame.svelte';
   import { bytes } from '$lib/format';
   import { revs } from '$lib/revs.svelte';
-  import { query } from '$lib/query.svelte';
+  import { query, skeletonRows } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Empty from '$lib/ui/Empty.svelte';
@@ -11,7 +11,10 @@
   interface Props { instanceId: string }
   let { instanceId }: Props = $props();
 
-  const files = query(() => revs.load('instances', () => api.logs.files(instanceId)));
+  // Keyed, so a second visit lists the files at once (the first shows as many skeleton rows as last time).
+  // The instance page is remounted for each instance, so the key follows it.
+  // svelte-ignore state_referenced_locally
+  const files = query(() => revs.load('instances', () => api.logs.files(instanceId)), `logs.files.${instanceId}`);
   // A run's saved file opened from Launch history, else a file of the logs folder.
   // svelte-ignore state_referenced_locally
   const opened = session.runFile?.instanceId === instanceId ? session.runFile : null;
@@ -51,23 +54,29 @@
   const tone = (l: string) => (l.includes('/ERROR]') ? 'var(--danger)' : l.includes('/WARN]') ? 'var(--warn)' : undefined);
 </script>
 
+{#snippet skRow(k: number)}
+  <div class="rail-row" aria-hidden="true"><span class="sk" style="width: 14px; height: 14px"></span><span class="sk" style="height: 12px; width: {[70, 56, 64][k % 3]}%"></span><span class="sk" style="height: 10px; width: 40px"></span></div>
+{/snippet}
+
 <LogsFrame {instanceId} active="files">
   {#snippet tools()}
     <div style="flex: 1 1 0"></div>
-    <button class="btn btn-sm" disabled={!old.data} onclick={deleteOld}>Delete old logs{old.data ? `, ${bytes(old.data)}` : ''}</button>
+    <!-- Wide enough for its size, so the button keeps its place when the size comes in. -->
+    <button class="btn btn-sm" style="min-width: 160px" disabled={!old.data} onclick={deleteOld}>Delete old logs{old.data ? `, ${bytes(old.data)}` : ''}</button>
   {/snippet}
   {#snippet rail()}
     <div class="side-label">Logs</div>
     {#each logs as f (f.name)}
       <button class="rail-row" class:on={!run && selected === f.name} onclick={() => pick(f.name)}><Icon name="file" size={14} /><span class="trunc mono">{f.name}</span><span class="small faint">{bytes(f.bytes)}</span></button>
     {:else}
-      {#if files.data}<span class="small faint" style="padding: 6px 10px">None yet</span>{/if}
+      {#if files.data}<span class="small faint" style="padding: 6px 10px">None yet</span>
+      {:else}{#each { length: skeletonRows(`logs.files.${instanceId}`, 3) } as _, k (k)}{@render skRow(k)}{/each}{/if}
     {/each}
     <div class="side-label" style="margin-top: 10px">Crash reports</div>
     {#each crashes as f (f.name)}
       <button class="rail-row" onclick={() => session.open({ kind: 'crash', instanceId, file: f.name })}><Icon name="warn" size={14} color="var(--danger)" /><span class="trunc mono">{f.name}</span><span class="small faint">{bytes(f.bytes)}</span></button>
     {:else}
-      {#if files.data}<span class="small faint" style="padding: 6px 10px">None</span>{/if}
+      {#if files.data}<span class="small faint" style="padding: 6px 10px">None</span>{:else}{@render skRow(0)}{/if}
     {/each}
   {/snippet}
   <section class="lv" aria-label={title || 'Log file'}>

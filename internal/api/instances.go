@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -730,10 +731,37 @@ func (s *Instances) Duplicate(id string) (string, error) {
 }
 
 // OpenFolder shows the instance's game folder in the file manager.
-func (s *Instances) OpenFolder(id string) error {
+func (s *Instances) OpenFolder(id string) error { return s.OpenTabFolder(id, "overview") }
+
+// tabFolders is the folder each instance page tab opens, relative to the game
+// folder ("" is the game folder itself). Only these names are accepted, so a
+// tab can never name a path of its own.
+var tabFolders = map[string]string{
+	"overview": "", "mods": "mods", "resourcepacks": "resourcepacks", "shaders": "shaderpacks",
+	"datapacks": "saves", "worlds": "saves", "servers": "", "screenshots": "screenshots",
+	"logs": "logs", "settings": "",
+}
+
+// ErrBadTab is returned for a tab name the instance page doesn't have.
+var ErrBadTab = errors.New("api: unknown instance tab")
+
+// OpenTabFolder shows the folder behind an instance page tab in the file
+// manager (its mods folder for Mods, the game folder for Overview), creating
+// it when the game hasn't yet.
+func (s *Instances) OpenTabFolder(id, tab string) error {
+	rel, ok := tabFolders[tab]
+	if !ok {
+		return ErrBadTab
+	}
 	dir, err := s.d.Store.GameDirSafe(id)
 	if err != nil {
 		return err
+	}
+	if rel != "" {
+		dir = s.d.Store.Path(id, rel)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
 	}
 	return procx.OpenFolder(dir)
 }

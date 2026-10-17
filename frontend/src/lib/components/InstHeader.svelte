@@ -30,6 +30,10 @@
     { key: 'logs', label: 'Logs', href: to('logs') },
     { key: 'settings', label: 'Settings', href: to('settings') },
   ] satisfies { key: InstanceTab; label: string; count?: number; href: string }[]);
+  // What the folder button opens (as Go's tabFolders): the tab's own folder, saves, or the game folder.
+  const OWN: InstanceTab[] = ['mods', 'resourcepacks', 'shaders', 'screenshots', 'logs'];
+  const folderName = $derived(OWN.includes(tab) ? (tabs.find((t) => t.key === tab)?.label.toLowerCase() ?? '') : tab === 'worlds' || tab === 'datapacks' ? 'saves' : 'instance');
+  const openFolder = () => api.instances.openTabFolder(i.id, tab).catch((e: unknown) => session.fail('Open folder', e));
 </script>
 
 <header style="font-family: var(--font); color: var(--text); padding: 16px 28px 0; background: var(--bg)">
@@ -52,7 +56,6 @@
       {#if host?.state === 'running'}
         <button class="btn" style="height: 40px; border-color: color-mix(in srgb, var(--accent) 45%, transparent)" title="Server running" aria-pressed={session.hostPanel} onclick={() => (session.hostPanel = !session.hostPanel)}><span class="dot live" aria-hidden="true"></span><span class="mono" style="font-size: 12px">{host.address}</span></button>
       {/if}
-      <button class="btn-bare" aria-label="Open folder" title="Open folder" onclick={() => api.instances.openFolder(i.id)}><Icon name="folder" size={18} /></button>
       {#if running}
         <button class="btn btn-stop" onclick={() => session.stop(i.id)}><Icon name="stop" size={12} />Stop</button>
       {:else}
@@ -61,6 +64,9 @@
       <button class="btn btn-icon" style="height: 40px; width: 40px" aria-label="More actions" aria-haspopup="menu" aria-expanded={menuOpen} onclick={(e) => (session.instanceMenu = { instanceId: i.id, ...below(e) })}><Icon name="more" /></button>
     </div>
   </div>
-  <Tabs items={tabs} active={tab} label="Instance" style="margin-top: 18px" />
+  <Tabs items={tabs} active={tab} label="Instance" style="margin-top: 18px">
+    <!-- Opens the folder behind the tab shown: mods for Mods, the game folder for Overview. -->
+    {#snippet end()}<button class="btn-bare" aria-label="Open {folderName} folder" title="Open {folderName} folder" onclick={openFolder}><Icon name="folder" size={16} /></button>{/snippet}
+  </Tabs>
 </header>
 

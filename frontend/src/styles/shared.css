@@ -9,8 +9,11 @@
 @media (prefers-reduced-motion:no-preference){.spin{animation:spin 700ms linear infinite}}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Sticky action bar at the bottom of a picker page (Version, Loader). */
+/* Sticky action bar at the bottom of a picker page (Version, Loader). The action and the
+   picked version keep a width, so neither moves when the choice comes in. */
 .pfoot{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:12px 28px;border-top:1px solid var(--line);background:var(--bg)}
+.pfoot .btn-accent{min-width:200px}
+.pfoot-to{min-width:120px}
 
 /* An instance's chosen picture fills its tile. */
 .ico-pic{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
@@ -24,3 +27,16 @@
 .icard:hover{border-color:var(--line-2)}
 /* The cover is translucent, which lifts it into its own layer; the icon sits above it explicitly. */
 .icard-cover{min-height:0}
+
+/* Minecraft's own pixel art (the grass block, the minecraft.net mark) stays crisp at any size. */
+.px{image-rendering:pixelated;flex:none;display:block}
+
+/* A page whose table ends at the window's bottom gutter: the page takes the height left,
+   the table shrinks to fit and scrolls inside under its sticky column titles. */
+.page-fill{flex:1 1 auto;min-height:0}
+.list-fill{flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.list-fill > .row-head{position:sticky;top:0;z-index:1;box-shadow:0 1px 0 var(--line)}
+/* The same for a picker page (Version, Loader): both columns' lists reach the footer whatever they hold. */
+.picker-fill{flex:1 1 auto;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch}
+.picker-fill > section{display:flex;flex-direction:column;min-height:0}
+.picker-fill > section > .list{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain}

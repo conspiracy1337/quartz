@@ -9,8 +9,9 @@
   /** Version families on the left, that family's releases on the right. Both lists share one
       fixed height and scroll, so their edges line up and nothing moves when you pick. */
   /** `start` opens on that exact release (snapshots too) and marks it with `startBadge`. */
-  interface Props { current?: string; start?: string; startBadge?: string; onpick?: (id: string) => void }
-  let { current = '', start = '', startBadge = '', onpick }: Props = $props();
+  /** fill: the lists end at the page's bottom instead of their fixed height (the Change version page). */
+  interface Props { current?: string; start?: string; startBadge?: string; fill?: boolean; onpick?: (id: string) => void }
+  let { current = '', start = '', startBadge = '', fill = false, onpick }: Props = $props();
 
   // Retry reloads after an offline failure (reading tries re-runs the query).
   let tries = $state(0);
@@ -56,7 +57,7 @@
   }
 </script>
 
-<div class="vp picker">
+<div class="vp picker" class:picker-fill={fill}>
   <section aria-label="Version family">
     <div class="plabel"><span>Version</span><span class="tnum">{families.data?.length ?? ''}</span></div>
     <div class="list plist vp-box" role="radiogroup" aria-label="Version family">
@@ -90,7 +91,7 @@
 
 <style>
   .vp{width:100%;font-family:var(--font);color:var(--text)}
-  .vp-box{height:352px}
+  .vp:not(.picker-fill) .vp-box{height:352px}
   .vp-snap{display:flex;gap:8px;align-items:center;color:var(--muted)}
   .vp .prow.min{grid-template-columns:16px minmax(0,1fr) 64px 104px}
   @media (max-width:1100px){.vp .prow.min{grid-template-columns:16px minmax(0,1fr) 64px}.vp-date{display:none}}

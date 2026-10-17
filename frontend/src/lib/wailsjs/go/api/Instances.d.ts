@@ -28,6 +28,8 @@ export function MoveDefault(arg1:string):Promise<string>;
 
 export function OpenFolder(arg1:string):Promise<void>;
 
+export function OpenTabFolder(arg1:string,arg2:string):Promise<void>;
+
 export function Opened(arg1:string):Promise<void>;
 
 export function Purge(arg1:string):Promise<void>;

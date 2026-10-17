@@ -9,16 +9,18 @@
     desc?: string;
     /** Keeps the description on one line (cards that must never grow). */
     oneLine?: boolean;
+    /** The description is still loading: a skeleton line holds its place. */
+    loading?: boolean;
     href?: string;
     class?: string;
     style?: string;
     children?: Snippet;
   }
-  let { title, desc, oneLine = false, href, class: cls = '', style, children }: Props = $props();
+  let { title, desc, oneLine = false, loading = false, href, class: cls = '', style, children }: Props = $props();
 </script>
 
 {#snippet text()}
-  <span><span class="setting-title" style="display: block">{title}</span>{#if desc}<span class="setting-desc" class:trunc={oneLine} style="display: block">{desc}</span>{/if}</span>
+  <span><span class="setting-title" style="display: block">{title}</span>{#if loading}<span class="setting-desc" style="display: block" aria-hidden="true"><span class="sk" style="display: inline-block; vertical-align: middle; height: 10px; width: 40%"></span></span>{:else if desc}<span class="setting-desc" class:trunc={oneLine} style="display: block">{desc}</span>{/if}</span>
 {/snippet}
 
 {#if href}

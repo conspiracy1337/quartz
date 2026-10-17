@@ -17,7 +17,7 @@
   let { instanceId, x, y }: Props = $props();
 
   const accounts = query(() => api.accounts.list());
-  const instances = query(() => api.instances.list());
+  const instances = query(() => api.instances.list(), 'instances.list');
   const inst = $derived(instances.data?.find((i) => i.id === instanceId));
   const running = $derived(session.busy(instanceId));
   const host = $derived(session.hosting?.instanceId === instanceId ? session.hosting : null);

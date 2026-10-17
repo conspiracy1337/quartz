@@ -10,10 +10,6 @@ export function List(arg1) {
   return window['go']['api']['Screenshots']['List'](arg1);
 }
 
-export function OpenFolder(arg1) {
-  return window['go']['api']['Screenshots']['OpenFolder'](arg1);
-}
-
 export function ShowInFolder(arg1, arg2) {
   return window['go']['api']['Screenshots']['ShowInFolder'](arg1, arg2);
 }

@@ -25,7 +25,7 @@
   <div class="icard-cover" style="background: {coverOf(art, banner)}" style:opacity={isPicture(banner) ? undefined : 0.9}></div>
   <div style="padding: 0 14px 12px; display: flex; flex-direction: column; justify-content: space-between; min-width: 0">
     <span class="ico ico-lg" style="background: {art.background}; margin-top: -24px; box-shadow: 0 0 0 3px var(--panel); position: relative; z-index: 1"><InstanceMark {art} {icon} /></span>
-    <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{name}</span><span class="trunc small muted" style="display: block">{meta}</span></span>
+    <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{name}</span><span class="trunc small muted" style="display: block">{meta || '\u00a0'}</span></span>
     <span class="small faint tnum" style="display: flex; justify-content: space-between"><span>{left}</span><span>{right}</span></span>
   </div>
   {@render children?.()}

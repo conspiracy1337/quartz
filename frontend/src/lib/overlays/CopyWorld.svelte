@@ -10,7 +10,7 @@
   interface Props { instanceId: string; folder: string; name: string; sub: string }
   let { instanceId, folder, name, sub }: Props = $props();
 
-  const instances = query(() => api.instances.list());
+  const instances = query(() => api.instances.list(), 'instances.list');
   const others = $derived((instances.data ?? []).filter((i) => i.id !== instanceId));
   const here = $derived(instances.data?.find((i) => i.id === instanceId)?.name ?? '');
   let target = $state('');

@@ -1472,7 +1472,6 @@ export namespace content {
 	    }
 	}
 	export class TabInfo {
-	    shaderMod: string;
 	    worlds: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -1481,7 +1480,6 @@ export namespace content {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.shaderMod = source["shaderMod"];
 	        this.worlds = source["worlds"];
 	    }
 	}

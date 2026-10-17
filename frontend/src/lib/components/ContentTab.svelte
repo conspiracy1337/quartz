@@ -10,7 +10,7 @@
   import { api } from '../api';
   import { managed } from '../api/content';
   import type { AddResult, ContentItem, ContentKind, ContentStatus, Source } from '../api/types';
-  import { hasBridge, onEvent } from '../bridge';
+  import { onEvent } from '../bridge';
   import { players, plural, searchIn, sentenceList } from '../format';
   import { query } from '../query.svelte';
   import { revs } from '../revs.svelte';
@@ -36,7 +36,7 @@
 
   type Chip = { label: string; test: (c: ContentItem) => boolean };
   /** browse: Add opens Browse (projects always do; worlds come from CurseForge without being tracked). */
-  interface Config { noun: string; primary: string; toggles: boolean; browse?: boolean; exclusive?: boolean; hint?: string; projects: boolean; chips: (items: ContentItem[]) => Chip[] }
+  interface Config { noun: string; primary: string; toggles: boolean; browse?: boolean; exclusive?: boolean; projects: boolean; chips: (items: ContentItem[]) => Chip[] }
   const all: Chip = { label: 'All', test: () => true };
   const CONFIG: Record<ContentKind, Config> = {
     mods: { noun: 'mods', primary: 'Add mods', toggles: true, projects: true,
@@ -44,10 +44,8 @@
       chips: (items) => [all, { label: 'Updates', test: (c) => c.status?.kind === 'update' }, { label: 'Disabled', test: (c) => !c.enabled },
         ...(items.some((c) => c.clientOnly) ? [{ label: 'Client only', test: (c: ContentItem) => !!c.clientOnly }] : [])] },
     resourcepacks: { noun: 'resource packs', primary: 'Add resource packs', toggles: true, projects: true,
-      hint: 'Enabled packs higher in the list override the ones below. Drag a row to reorder.',
       chips: () => [all, { label: 'Enabled', test: (c) => c.enabled }, { label: 'Disabled', test: (c) => !c.enabled }] },
-    shaders: { noun: 'shader packs', primary: 'Add shaders', toggles: true, exclusive: true, projects: true,
-      hint: 'Only one shader pack runs at a time. Uses Iris 1.8.1.', chips: () => [all] },
+    shaders: { noun: 'shader packs', primary: 'Add shaders', toggles: true, exclusive: true, projects: true, chips: () => [all] },
     datapacks: { noun: 'data packs', primary: 'Add data packs', toggles: true, projects: true,
       chips: (items) => [{ label: 'All worlds', test: () => true }, ...[...new Set(items.map((c) => c.group).filter((g) => g !== undefined))].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
     worlds: { noun: 'worlds', primary: 'Add world', toggles: false, projects: false, browse: true,
@@ -65,9 +63,6 @@
   // Worlds and servers have their own row menus and actions (WorldsMenu, ServersMenu).
   const hasMenu = $derived(isManaged || kind === 'worlds' || kind === 'servers');
   const info = query(() => (managed(kind) ? api.content.info(instanceId) : Promise.resolve(null)));
-  // The shader hint names the shader mod the instance has (Iris or Oculus).
-  // Until its info loads, the app names no mod (the preview keeps the design's sample).
-  const hint = $derived(kind === 'shaders' && info.data ? `Only one shader pack runs at a time. ${info.data.shaderMod ? `Uses ${info.data.shaderMod}.` : 'Shaders need Iris or Oculus.'}` : kind === 'shaders' && hasBridge() ? 'Only one shader pack runs at a time.' : cfg.hint);
   const EMPTY: Record<ContentKind, string> = {
     mods: 'No mods yet.', resourcepacks: 'No resource packs yet.', shaders: 'No shader packs yet.',
     datapacks: 'No data packs yet.', worlds: 'No worlds yet. They show up here after you play.', servers: 'No servers yet.',
@@ -104,7 +99,7 @@
   const COLUMNS = $derived<Col[]>(
     isManaged ? [{ key: 'state', label: 'State' }, { label: '' }, { key: 'name', label: 'Name' }, { key: 'status', label: 'Status', cls: 'c-stat' }, { key: 'version', label: 'Version' }, { key: 'source', label: 'Platform', cls: 'cc opt' }]
     : kind === 'worlds' ? [{ label: '' }, { key: 'name', label: 'Name' }, { label: '' }, { key: 'mode', label: 'Mode' }]
-    : [{ label: '' }, { key: 'name', label: 'Name' }, { key: 'version', label: 'Version', cls: 'end' }, { key: 'players', label: 'Players', cls: 'end' }, { key: 'ping', label: 'Ping', cls: 'end' }, { label: '' }],
+    : [{ label: '' }, { key: 'name', label: 'Name' }, { key: 'version', label: 'Version', cls: 'end' }, { key: 'players', label: 'Players', cls: 'end' }, { key: 'ping', label: 'Ping', cls: 'end' }],
   );
   // A column title sorts by it, again the other way, a third time back to the tab's own order:
   // by name, or as Go lists them (resource packs' load order, worlds by last played, servers as saved).
@@ -269,7 +264,7 @@
     }
   }
 
-  // A row's Play or Join opens the game straight into that world or server.
+  // A row menu's Play or Join opens the game straight into that world or server.
   function rowAction(c: ContentItem) {
     if (kind === 'worlds') return session.play(instanceId, '', { kind: 'world', target: c.id });
     const address = api.servers.entry(instanceId, c.id)?.address;
@@ -443,7 +438,7 @@
   }
 </script>
 
-<div class="page" style="gap: 12px; padding-top: 16px; font-family: var(--font); color: var(--text)">
+<div class="page page-fill" style="gap: 12px; padding-top: 16px; font-family: var(--font); color: var(--text)">
   <!-- One line whatever the data: the search gives way first (280 down to 160 px), then the chips scroll. -->
   <div class="ct-tools">
     <SearchField bind:value={search} label="Search" placeholder={searchIn(cfg.noun, items.data?.length)} style="flex: 0 1000 280px; min-width: 160px" />
@@ -459,8 +454,7 @@
       <button class="btn btn-accent" onclick={primary}><Icon name="plus" size={14} sw={2} />{cfg.primary}</button>
     {/if}
   </div>
-  {#if hint}<p class="small faint" style="margin: 0">{hint}</p>{/if}
-  <div class="list" use:listKeys>
+  <div class="list list-fill" use:listKeys>
     <!-- Column titles sort; the last cells hold select-all and the tab's check (updates, servers). -->
     <div class="row row-head crow {layout}">
       {#each COLUMNS as col, k (k)}
@@ -493,7 +487,7 @@
           {:else if layout === 'worlds'}
             <span class="media" style="background: {c.art.background}"></span>
             <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></span>
-            <span class="c-stat">{#if b}<span class="badge trunc {b.cls}">{b.text}</span>{/if}{#if c.action}<button class="btn btn-sm" onclick={() => rowAction(c)}>{c.action}</button>{/if}</span>
+            <span class="c-stat">{#if b}<span class="badge trunc {b.cls}">{b.text}</span>{/if}</span>
             <span class="muted trunc">{c.meta}</span>
           {:else}
             <span class="media" style="background: {c.art.background}"></span>
@@ -501,7 +495,6 @@
             <span class="end">{#if c.server}<ServerVersion server={c.server} />{/if}</span>
             <span class="end mono muted tnum trunc">{players(c.server?.players)}</span>
             <span class="end"><ServerPing ms={c.server?.pingMs} /></span>
-            <span class="end">{#if c.action}<button class="btn btn-sm" onclick={() => rowAction(c)}>{c.action}</button>{/if}</span>
           {/if}
           <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {c.name}" aria-haspopup="menu" disabled={!hasMenu} onclick={(e) => openMenu(e, c)}><Icon name="more" size={14} /></button>
         </div>
@@ -519,7 +512,7 @@
           {:else if layout === 'worlds'}
             <div></div><div class="sk" style="height: 10px; width: 64px"></div>
           {:else}
-            <div class="end"><div class="sk" style="height: 20px; width: 52px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 56px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 64px"></div></div><div></div>
+            <div class="end"><div class="sk" style="height: 20px; width: 52px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 56px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 64px"></div></div>
           {/if}
           <div></div>
         </div>
@@ -558,7 +551,8 @@
   {@const c = menu.item}
   <Menu x={menu.x} y={menu.y} label="More for {c.name}" onclose={() => (menu = null)}>
     {#if kind === 'worlds'}
-      <!-- WorldsMenu.dc.html: Play stays on the row. -->
+      <!-- WorldsMenu.dc.html, led by Play as the servers' menu is led by Join. -->
+      <button class="mi" role="menuitem" onclick={() => act(async () => rowAction(c), 'Play')}><Icon name="play" size={14} /><span>Play</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(async () => session.open({ kind: 'rename-world', instanceId, folder: c.id, name: c.name }), 'Rename')}><Icon name="file" size={14} /><span>Rename</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(async () => session.copy(await api.worlds.seed(instanceId, c.id), 'Seed'), 'Copy seed')}><Icon name="link" size={14} /><span>Copy seed</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => exportWorld(c), 'Export')}><Icon name="download" size={14} /><span>Export as .zip</span><span></span></button>
@@ -607,15 +601,15 @@
   /* The .tabs idiom; the padding keeps focus rings inside the scroll box. */
   .ct-chips{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px;margin:-3px}
   /* Columns (ContentTable.dc.html). Mods and packs: state, icon, name, status, version, platform,
-     select, more. Worlds: icon, name, Play, mode, more. Servers: icon, name, then version, players
-     and ping in equal columns with a wider gap, Join, more. */
+     select, more. Worlds: icon, name, status, mode, more. Servers: icon, name, then version,
+     players and ping in equal columns with a wider gap, more. Play and Join live in the ⋮ menu. */
   .crow.managed{grid-template-columns:30px 32px minmax(0,1fr) 136px 72px 48px 28px 28px}
   .crow.worlds{grid-template-columns:32px minmax(0,1fr) 112px 104px 28px}
-  .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,120px) 64px 28px;column-gap:24px}
+  .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,120px) 28px;column-gap:24px}
   @media (max-width:1100px){
     .crow.managed{grid-template-columns:30px 32px minmax(0,1fr) 136px 72px 28px 28px}
     .crow .opt{display:none}
-    .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,96px) 64px 28px;column-gap:16px}
+    .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,96px) 28px;column-gap:16px}
   }
   /* Status is right-aligned with room before the version. */
   .c-stat{display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0;margin-right:16px}
@@ -623,7 +617,7 @@
   .cc{display:flex;justify-content:center;align-items:center}
   .src{width:20px;height:20px;display:grid;place-items:center;color:var(--faint)}
   .media{width:32px;height:32px;border-radius:6px;display:grid;place-items:center;font-weight:600;font-size:13px;color:#0a0a0b}
-  .bulk{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:8px;align-items:center;padding:12px 0;background:var(--bg)}
+  .bulk{flex:none;display:flex;justify-content:flex-end;gap:8px;align-items:center}
   /* Dragging a resource pack: the held row rides above the others, which slide to make room. */
   .crow[role="listitem"]{cursor:grab}
   .crow.drag{position:relative;z-index:1;cursor:grabbing;background:var(--raise);user-select:none}

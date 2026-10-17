@@ -31,7 +31,7 @@ const serverArt = (name: string, online: boolean, icon?: string): Art =>
 
 export const worldItem = (w: GoWorld): ContentItem => ({
   id: w.folder, name: w.name, sub: `${capital(ago(w.lastPlayed))}, ${bytes(w.bytes)}`, meta: w.mode, art: worldArt(w),
-  enabled: true, action: 'Play', group: w.mode,
+  enabled: true, group: w.mode,
 });
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -44,7 +44,7 @@ const serverStats = (s: Pick<GoServer, 'online' | 'version' | 'fit' | 'fitVersio
 
 export const serverItem = (s: GoServer): ContentItem => ({
   id: String(s.index), name: s.name, sub: s.address, meta: '', art: serverArt(s.name, s.online, s.icon),
-  enabled: true, online: s.online, server: serverStats(s), ...(s.online ? { action: 'Join' as const } : {}),
+  enabled: true, online: s.online, server: serverStats(s),
 });
 
 /** What the server dialog edits, kept beside the rows by their id. */
@@ -78,7 +78,6 @@ export const worldsApi = {
   undo: bridged(WorldsGo.Undo, (_id: string, _token: string) => undefined),
   seed: bridged(WorldsGo.Seed, (_id: string, _folder: string) => '-4172144997902289642'),
   showInFolder: bridged(WorldsGo.ShowInFolder, (_id: string, _folder: string) => undefined),
-  openFolder: bridged(WorldsGo.OpenFolder, (_id: string) => undefined),
 };
 
 export const serversApi = {
@@ -103,7 +102,6 @@ export const screenshotsApi = {
     hasBridge() ? revs.load('screenshots', () => ScreenshotsGo.List(id).then((l) => l.map(toShot))) : preview(home.instanceShots),
   copy: bridged(ScreenshotsGo.Copy, (_id: string, _name: string) => undefined),
   showInFolder: bridged(ScreenshotsGo.ShowInFolder, (_id: string, _name: string) => undefined),
-  openFolder: bridged(ScreenshotsGo.OpenFolder, (_id: string) => undefined),
   useAsPicture: bridged(ScreenshotsGo.UseAsPicture, (_id: string, _name: string) => undefined),
   useAsBanner: bridged(ScreenshotsGo.UseAsBanner, (_id: string, _name: string) => undefined),
   trash: bridged(ScreenshotsGo.Trash, (_id: string, _names: string[]) => 'preview'),

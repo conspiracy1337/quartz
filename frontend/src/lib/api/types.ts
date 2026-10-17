@@ -126,7 +126,6 @@ export interface ContentItem {
   source?: Source;
   enabled: boolean;
   status?: ContentStatus;
-  action?: 'Play' | 'Join';
   /** Filter group: the world for data packs, the game mode for worlds. */
   group?: string;
   online?: boolean;
@@ -145,7 +144,7 @@ export interface ContentItem {
 }
 
 /** What a content tab shows besides its rows. */
-export interface ContentInfo { shaderMod: string; worlds: string[] }
+export interface ContentInfo { worlds: string[] }
 /** The outcome of dropping files on a content tab. */
 export interface AddResult { added: string[]; rejected: { name: string; reason: string }[] }
 /** The shared content store's size, and how much of it nothing uses. */

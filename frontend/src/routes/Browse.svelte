@@ -7,8 +7,8 @@
   import { ago, compact, errorText } from '$lib/format';
   import { LOADER_NAMES, PROJECT_TYPES, SRC_NAMES, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
-  import { query } from '$lib/query.svelte';
-  import { go, href, isPackSource } from '$lib/router.svelte';
+  import { query, skeletonRows, warm } from '$lib/query.svelte';
+  import { PROJECT_KINDS, go, href, isPackSource } from '$lib/router.svelte';
   import { installInto } from '$lib/instanceActions';
   import { browseTarget } from '$lib/instances';
   import { session } from '$lib/session.svelte';
@@ -47,18 +47,22 @@
   let side = $state<'' | 'client' | 'server'>('');
   /** Modpacks become new instances, so their version is picked by hand ("" for any). */
   let game = $state('');
-  const releases = query(() => api.versions.minecraft());
+  const releases = query(() => api.versions.minecraft(), 'versions.minecraft');
   const GAMES = $derived([{ value: '', label: 'Any version' }, ...(releases.data ?? []).flatMap((f) => f.releases.map((v) => ({ value: v.id, label: v.id })))]);
   const hide = session.browseHide;
 
   // svelte-ignore state_referenced_locally
   if (startInstance) session.addTo(startInstance);
-  const instances = query(() => api.instances.list());
+  const instances = query(() => api.instances.list(), 'instances.list');
   const target = $derived(browseTarget(instances.data ?? [], session.browseTarget));
   const showTarget = $derived(type !== 'modpack');
   // Worlds come from CurseForge alone, untracked: no loader, side or Modrinth-only filters apply.
   const isWorld = $derived(type === 'world');
-  const categories = query(() => api.browse.categories(type));
+  // Browse is remounted for each type, so the key follows it.
+  // svelte-ignore state_referenced_locally
+  const categories = query(() => api.browse.categories(type), `browse.categories.${type}`);
+  // The other tabs' categories are fixed lists: load them now, so switching tabs shows them at once.
+  for (const k of PROJECT_KINDS) warm(`browse.categories.${k}`, () => api.browse.categories(k));
   // Results the search marked as not installed flip once their download lands.
   const owned = query(() => (showTarget && target ? api.browse.installed(target.id) : Promise.resolve([])));
   const isInstalled = (r: ProjectHit) => r.installed || r.ref.split('+').some((p) => owned.data?.includes(p));
@@ -198,7 +202,9 @@
     </div>
   </section>
   <aside id="browse-filters" class="filters scroll" class:open={filtersOpen} aria-label="Filters" bind:this={filtersEl} style="border-left: 1px solid var(--line); padding: 16px; flex-direction: column; gap: 18px">
-    {#if showTarget && target}
+    {#if showTarget && !instances.data}
+      <div class="fg" aria-hidden="true"><span class="field-label">Adding to</span><div class="sk" style="height: 32px; border-radius: 6px"></div></div>
+    {:else if showTarget && target}
       {@const t = target}
       <div class="fg"><span class="field-label">Adding to</span>
         <Select value={t.id} options={(instances.data ?? []).map((i) => ({ value: i.id, label: i.name }))} label="Instance to add to" style="width: 100%" onchange={(v) => session.addTo(v)}>
@@ -207,9 +213,14 @@
       </div>
     {/if}
     {#if showTarget}
-      <div class="fg"><span class="field-label">{isWorld ? 'Minecraft version' : 'Version and loader'}</span><div style="display: flex; gap: 6px">{#if target}<button class="chip" class:on={useVersion} aria-pressed={useVersion} onclick={() => (useVersion = !useVersion)}>{target.minecraft}</button>{#if target.loader && !isWorld}<button class="chip" class:on={useLoader} aria-pressed={useLoader} onclick={() => (useLoader = !useLoader)}>{LOADER_NAMES[target.loader.kind]}</button>{/if}{/if}</div></div>
+      <div class="fg"><span class="field-label">{isWorld ? 'Minecraft version' : 'Version and loader'}</span><div style="display: flex; gap: 6px">{#if target}<button class="chip" class:on={useVersion} aria-pressed={useVersion} onclick={() => (useVersion = !useVersion)}>{target.minecraft}</button>{#if target.loader && !isWorld}<button class="chip" class:on={useLoader} aria-pressed={useLoader} onclick={() => (useLoader = !useLoader)}>{LOADER_NAMES[target.loader.kind]}</button>{/if}{:else if !instances.data}<span class="sk" style="width: 56px; height: 24px; border-radius: 12px" aria-hidden="true"></span>{/if}</div></div>
     {:else}
       <div class="fg"><span class="field-label">Minecraft version</span><Select bind:value={game} options={GAMES} label="Minecraft version" style="width: 100%" /></div>
+    {/if}
+    {#if !categories.data}
+      {#each { length: skeletonRows(`browse.categories.${type}`, 1) } as _, k (k)}
+        <div class="fg" aria-hidden="true"><div class="sk" style="height: 12px; width: 72px; margin: 4px 0"></div>{#each { length: 6 } as _, j (j)}<div class="fl"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div class="sk" style="height: 10px; width: {[60, 48, 70, 54, 64, 44][j]}%"></div><span></span></div>{/each}</div>
+      {/each}
     {/if}
     {#each categories.data ?? [] as g (g.title)}
       <div class="fg"><span class="field-label">{g.title}</span>

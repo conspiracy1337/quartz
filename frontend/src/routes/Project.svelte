@@ -30,7 +30,7 @@
   const CHANNEL_BADGE = { Release: 'badge-ok', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
   const isModLoader = (l: string): l is Loader => l in LOADER_NAMES;
 
-  const instances = query(() => api.instances.list());
+  const instances = query(() => api.instances.list(), 'instances.list');
   const target = $derived(browseTarget(instances.data ?? [], session.browseTarget));
   const project = query(() => api.browse.project(id, target?.id ?? ''));
   // svelte-ignore state_referenced_locally

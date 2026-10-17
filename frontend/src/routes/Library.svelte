@@ -20,7 +20,7 @@
   const SORTS = [{ value: 'last', label: 'Last played' }, { value: 'name', label: 'Name' }, { value: 'playtime', label: 'Playtime' }] as const;
   const SKELETON_WIDTHS = ['70%', '55%', '80%', '60%', '65%', '72%', '50%', '68%', '58%', '76%', '62%', '54%'];
 
-  const list = query(() => api.instances.list());
+  const list = query(() => api.instances.list(), 'instances.list');
   let search = $state('');
   let filter = $state<Filter>('all');
   let sort = $state<Sort>('last');

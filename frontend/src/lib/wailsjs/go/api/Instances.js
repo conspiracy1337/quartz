@@ -50,6 +50,10 @@ export function OpenFolder(arg1) {
   return window['go']['api']['Instances']['OpenFolder'](arg1);
 }
 
+export function OpenTabFolder(arg1, arg2) {
+  return window['go']['api']['Instances']['OpenTabFolder'](arg1, arg2);
+}
+
 export function Opened(arg1) {
   return window['go']['api']['Instances']['Opened'](arg1);
 }
