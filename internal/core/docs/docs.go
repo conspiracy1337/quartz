@@ -6,17 +6,15 @@
 package docs
 
 import (
-	"bytes"
 	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/renderer/html"
 	xhtml "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+
+	"quartz/internal/core/markdown"
 )
 
 const (
@@ -66,22 +64,13 @@ const smallPic = 64
 // to drop it.
 type Picture func(url string) string
 
-var md = goldmark.New(
-	goldmark.WithExtensions(extension.GFM),
-	// Raw HTML passes through to the HTML reader below, which keeps text only.
-	goldmark.WithRendererOptions(html.WithUnsafe()),
-)
-
-// Markdown converts a Markdown description (raw HTML inside is allowed).
+// Markdown converts a Markdown description (raw HTML inside is allowed: it
+// passes through to the HTML reader below, which keeps text only).
 func Markdown(src string, pic Picture) []Block {
 	if len(src) > maxInput {
 		src = src[:maxInput]
 	}
-	var buf bytes.Buffer
-	if err := md.Convert([]byte(src), &buf); err != nil {
-		return nil
-	}
-	return HTML(buf.String(), pic)
+	return HTML(markdown.HTML(src), pic)
 }
 
 // HTML converts an HTML description.
