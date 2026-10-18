@@ -44,8 +44,8 @@
   const detail = (a: Account) => a.detail || (a.refreshedAt ? `Microsoft account, refreshed automatically ${since(a.refreshedAt)}` : 'Microsoft account');
 
   const STATUS: Record<Account['status'], { label: string; color: string }> = {
-    valid: { label: 'Token valid', color: 'var(--ok)' },
-    expired: { label: 'Token expired', color: 'var(--warn)' },
+    valid: { label: 'Valid token', color: 'var(--ok)' },
+    expired: { label: 'Expired token', color: 'var(--warn)' },
     signin: { label: 'Refresh failed', color: 'var(--danger)' },
     offline: { label: 'Local', color: 'var(--faint)' },
   };
