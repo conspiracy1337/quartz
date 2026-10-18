@@ -47,7 +47,7 @@
     valid: { label: 'Token valid', color: 'var(--ok)' },
     expired: { label: 'Token expired', color: 'var(--warn)' },
     signin: { label: 'Refresh failed', color: 'var(--danger)' },
-    offline: { label: 'Offline', color: 'var(--faint)' },
+    offline: { label: 'Local', color: 'var(--faint)' },
   };
 </script>
 
@@ -66,7 +66,7 @@
         </div>
       {:else}
         {#if accounts.data}
-          <Empty text="No accounts yet. Sign in with Microsoft, or add an offline account to play now." action="Add account" onclick={() => session.open({ kind: 'add-account' })} />
+          <Empty text="No accounts yet. Sign in with Microsoft, or add a local account to play now." action="Add account" onclick={() => session.open({ kind: 'add-account' })} />
         {:else}
         {#each { length: skeletonRows('accounts', 3) } as _, k (k)}
           <div class="row ar" aria-hidden="true"><div class="sk" style="width: 40px; height: 40px; border-radius: 8px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 30%"></div><div class="sk" style="height: 10px; width: 55%"></div></div><span></span><div class="sk opt" style="height: 10px; width: 80px; justify-self: end"></div><div class="sk" style="height: 28px; width: 28px"></div></div>

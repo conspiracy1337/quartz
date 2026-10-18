@@ -149,7 +149,7 @@
         <div class="divider"></div>
         <Setting title="Show on your local network" desc="Friends on the same Wi-Fi see it in their server list." style="min-height: 48px"><Toggle bind:on={lan} label="Show on your local network" /></Setting>
         <div class="divider"></div>
-        <Setting title="Allow offline accounts" desc="Lets players join without a Microsoft account. Less safe." style="min-height: 48px"><Toggle bind:on={offline} label="Allow offline accounts" /></Setting>
+        <Setting title="Allow local accounts" desc="Lets players join without a Microsoft account. Less safe." style="min-height: 48px"><Toggle bind:on={offline} label="Allow local accounts" /></Setting>
         {#if setup.data?.canSandbox || setup.data?.sandboxLocked}
           <div class="divider"></div>
           <Setting title="Sandbox" desc={setup.data.sandboxLocked ? 'This instance is sandboxed, so its server is too.' : 'Runs the server where it can only reach its own folder and the world.'} style="min-height: 48px">

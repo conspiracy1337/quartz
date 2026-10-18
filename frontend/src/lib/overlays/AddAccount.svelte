@@ -23,7 +23,7 @@
   let st = $state(idle());
   let started = $state(false);
   let now = $state(Date.now());
-  const MODES = [{ value: 'browser', label: 'Browser' }, { value: 'code', label: 'Code' }, { value: 'offline', label: 'Offline' }] as const;
+  const MODES = [{ value: 'browser', label: 'Browser' }, { value: 'code', label: 'Code' }, { value: 'offline', label: 'Local' }] as const;
   const NAME = /^[A-Za-z0-9_]{3,16}$/;
 
   const ready = query(() => api.accounts.microsoftReady());
@@ -37,7 +37,7 @@
       revs.bump('accounts');
       session.close();
     } catch (e) {
-      session.fail('Offline account', e);
+      session.fail('Local account', e);
     } finally {
       saving = false;
     }
@@ -99,7 +99,7 @@
 <Dialog title="Add an account" sub={again ? `Sign in again as ${again.name}` : undefined} width={480} onclose={() => session.close()}>
   <Seg options={MODES} bind:value={mode} label="Sign-in method" fill />
   {#if mode !== 'offline' && ready.data === false}
-    <div class="card" style="padding: 10px 12px"><span class="small muted">Microsoft sign-in isn't set up in this build. You can still add an offline account.</span></div>
+    <div class="card" style="padding: 10px 12px"><span class="small muted">Microsoft sign-in isn't set up in this build. You can still add a local account.</span></div>
   {:else if mode === 'browser'}
     <div style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start">
       <p class="muted" style="margin: 0">Sign in with Microsoft in your browser. You will come back here automatically.</p>
@@ -123,7 +123,7 @@
   {:else}
     <div style="display: flex; flex-direction: column; gap: 12px">
       <label class="field"><span class="field-label">Player name</span><span class="input"><input bind:value={name} maxlength="16" placeholder="TestDummy" /></span><span class="field-help">3 to 16 letters, numbers or underscores.</span></label>
-      <div class="card" style="padding: 10px 12px"><span class="small muted">Offline accounts can play singleplayer and LAN, and servers that allow it. Skins only show locally.</span></div>
+      <div class="card" style="padding: 10px 12px"><span class="small muted">Local accounts can play singleplayer and LAN, and servers that allow it. Skins only show locally.</span></div>
     </div>
   {/if}
   {#if mode !== 'offline' && st.error && st.error.reason !== 'cancelled'}
@@ -137,7 +137,7 @@
   {/if}
   {#snippet foot()}
     <button class="btn" onclick={() => session.close()}>Cancel</button>
-    {#if mode === 'offline'}<button class="btn btn-accent" disabled={saving || !NAME.test(name)} onclick={addOffline}>Add offline account</button>{/if}
+    {#if mode === 'offline'}<button class="btn btn-accent" disabled={saving || !NAME.test(name)} onclick={addOffline}>Add local account</button>{/if}
   {/snippet}
 </Dialog>
 

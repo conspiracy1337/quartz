@@ -20,7 +20,7 @@ func TestViewStatus(t *testing.T) {
 		"expired": {ms(-time.Minute, false), "expired", ""},
 		"at end":  {ms(0, false), "expired", ""},
 		"signin":  {ms(time.Hour, true), "signin", "The password was changed."},
-		"offline": {accounts.Account{Kind: accounts.Offline}, "offline", "Offline account, for local testing"},
+		"offline": {accounts.Account{Kind: accounts.Offline}, "offline", "Local account, for testing"},
 	}
 	for name, c := range cases {
 		if v := view(c.a, "", now); v.Status != c.status || v.Detail != c.detail {
