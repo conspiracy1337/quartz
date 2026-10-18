@@ -56,7 +56,7 @@
     <button class="mi" role="menuitem" onclick={() => act(() => session.play(instanceId, a.isDefault ? '' : a.id))}>
       <span class="avatar la-av" aria-hidden="true" style="background: {avatar(a, 20)}"></span>
       <span class="trunc">{a.name}</span>
-      <span class="small faint">{a.isDefault ? 'Default' : a.kind === 'offline' ? 'Offline' : ''}</span>
+      <span class="small faint">{a.isDefault ? 'Default' : a.kind === 'offline' ? 'Local' : ''}</span>
     </button>
   {:else}
     {#if accounts.data}<button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'add-account' }))}><span></span><span>Add account</span><span></span></button>{/if}

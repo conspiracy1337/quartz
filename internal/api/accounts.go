@@ -90,7 +90,7 @@ func view(a accounts.Account, def string, now time.Time) AccountView {
 	}
 	switch {
 	case a.Kind == accounts.Offline:
-		v.Status, v.Detail = "offline", "Offline account, for local testing"
+		v.Status, v.Detail = "offline", "Local account, for testing"
 	case a.Reauth:
 		v.Status, v.Detail = "signin", a.Problem
 	case a.Expired(now):

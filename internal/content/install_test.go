@@ -86,7 +86,7 @@ func TestPlanInstallEdges(t *testing.T) {
 	e := newEnv(t)
 	e.svc.d.Platforms = []modplatform.Provider{&fakePlatform{src: modplatform.Modrinth,
 		projects: map[string]modplatform.Project{"PT": {Title: "Terralith"}},
-		versions: map[string][]modplatform.Version{"PT": {{Source: modplatform.Modrinth, ProjectID: "PT", ID: "t", Type: "beta"}}}}}
+		versions: map[string][]modplatform.Version{"PT": {{Source: modplatform.Modrinth, ProjectID: "PT", ID: "t", Number: "t1", Type: "beta"}}}}}
 	ctx := context.Background()
 	if _, err := e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: DataPacks, Source: modplatform.Modrinth, Project: "PT", World: "../x"}); !errors.Is(err, ErrPickWorld) {
 		t.Fatalf("bad world: %v", err)
@@ -95,8 +95,13 @@ func TestPlanInstallEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	pl, err := e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: DataPacks, Source: modplatform.Modrinth, Project: "PT", World: "New World"})
+	if err != nil || pl.Version != "t1" {
+		t.Fatalf("a pack's only beta not offered: %+v %v", pl, err)
+	}
+	// A mod keeps to the channel: its only beta is no version at all.
+	pl, err = e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.Modrinth, Project: "PT"})
 	if err != nil || pl.Version != "" {
-		t.Fatalf("a beta offered on the release channel: %+v %v", pl, err)
+		t.Fatalf("a mod's beta offered on the release channel: %+v %v", pl, err)
 	}
 	if _, err := e.svc.ApplyInstall(pl.PlanID, nil); err == nil {
 		t.Fatal("applied a plan without a version")

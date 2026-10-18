@@ -78,7 +78,7 @@
     <a href={href({ name: 'accounts' })} class="side-acct" style="text-decoration: none; color: var(--text)">
       {#if me}
         <span class="avatar" aria-hidden="true" style="background: {avatar(me, 28)}; image-rendering: pixelated"></span>
-        <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{me.name}</span><span class="trunc small faint" style="display: block">{me.kind === 'microsoft' ? 'Microsoft account' : 'Offline account'}</span></span>
+        <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{me.name}</span><span class="trunc small faint" style="display: block">{me.kind === 'microsoft' ? 'Microsoft account' : 'Local account'}</span></span>
       {:else if accounts.data}
         <span class="avatar" aria-hidden="true" style="background: var(--raise)"></span>
         <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">Add account</span><span class="trunc small faint" style="display: block">No account yet</span></span>
