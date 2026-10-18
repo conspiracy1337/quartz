@@ -5,7 +5,7 @@
 import { api } from './api';
 import type { HostOptions, HostState } from './api/host';
 import type { UpdateState } from './api/system';
-import type { ContentKind, PlayInto, ServerEntry, Src } from './api/types';
+import type { ContentKind, InstallPlan, PlayInto, ServerEntry, Src } from './api/types';
 import { copyText } from './clipboard';
 import { errorText } from './format';
 import { rememberCount } from './query.svelte';
@@ -16,7 +16,8 @@ import { go } from './router.svelte';
 
 export type Overlay =
   | { kind: 'add-account'; mode?: AddAccountMode; accountId?: string }
-  | { kind: 'install'; ref: string; source: Src; instanceId: string; content: ContentKind; version?: string }
+  /** `plan` is one already made (installInto's), so the dialog doesn't plan again. */
+  | { kind: 'install'; ref: string; source: Src; instanceId: string; content: ContentKind; version?: string; plan?: InstallPlan }
   /** A run's crash (runId), or a report in crash-reports (file). */
   | { kind: 'crash'; instanceId: string; runId?: string; file?: string }
   /** Add a server, or edit `entry`. */

@@ -2,6 +2,7 @@
 // the account's default skin (one of Minecraft's 18) when it wears none of its own.
 import type { Account, Art, Cape, Skin } from './api/types';
 import { crop, defaultURL, skinURL, textureURL } from './components/skinUV';
+import { gb } from './format';
 
 /** PlayerModel's skin props. */
 export interface SkinLook { texture: string; slim: boolean }
@@ -78,3 +79,9 @@ export function artOf(name: string, src?: string): Art {
 /** "6 GB suits 48 mods": about 2 GB plus 85 MB a mod, never more than half the PC's memory (0 when unknown). */
 export const suggestMemoryGb = (mods: number, memoryMb: number) =>
   mods > 0 && memoryMb > 0 ? Math.min(Math.max(2, Math.round((2048 + mods * 85) / 1024)), Math.floor(memoryMb / 2048)) : 0;
+
+/** The GB to suggest when `mods` want more memory than the instance is set to (`setMb`), else 0. */
+export function memoryShort(mods: number, memoryMb: number, setMb: number) {
+  const want = suggestMemoryGb(mods, memoryMb), set = gb(setMb);
+  return want > 0 && set > 0 && want > set ? want : 0;
+}

@@ -1,10 +1,12 @@
 // Actions on one instance that several screens offer (the header's menu and the
 // instance settings), written once so they behave and word themselves the same.
 import { api } from './api';
-import type { ContentKind, Instance, Src } from './api/types';
+import type { ContentKind, Instance, InstallPlan, Src } from './api/types';
 
 /** What the shared actions need to know about an instance. */
 type Named = Pick<Instance, 'id' | 'name'>;
+import { memoryShort } from './look';
+import { prefs } from './prefs.svelte';
 import { revs } from './revs.svelte';
 import { go } from './router.svelte';
 import { session } from './session.svelte';
@@ -93,13 +95,25 @@ export async function downloading(job: unknown) {
   session.downloadPanel = true;
 }
 
-/** Installs a project into an instance: content opens the Install dialog (version and
-    dependencies); a world has neither, so it downloads straight away. */
+/** Installs a project into an instance. A plan with nothing to decide downloads straight away;
+    otherwise the Install dialog shows it (version, dependencies, memory). Data packs ask for a
+    world first; a world has no plan, so it always downloads straight away. */
 export async function installInto(instanceId: string, ref: string, source: Src, content: ContentKind, version = '') {
-  if (content !== 'worlds') return session.open({ kind: 'install', ref, source, instanceId, content, ...(version ? { version } : {}) });
+  const open = (plan?: InstallPlan) => session.open({ kind: 'install', ref, source, instanceId, content, ...(version ? { version } : {}), ...(plan ? { plan } : {}) });
+  if (content === 'datapacks') return open();
   try {
-    await downloading(await api.browse.installWorld(instanceId, ref, version));
+    if (content === 'worlds') return await downloading(await api.browse.installWorld(instanceId, ref, version));
+    const [plan, inst, info] = await Promise.all([api.browse.planInstall(instanceId, content, '', ref, source, version), api.instances.get(instanceId), api.app.info()]);
+    if (!settled(plan, inst, info.memoryMb)) return open(plan);
+    await downloading(await api.browse.applyInstall(plan.planId, []));
   } catch (e) {
     session.fail('Install', e);
   }
+}
+
+/** Nothing to show: a version fits, it is a new item, every dependency is required and
+    already on, and the memory hint would stay quiet. */
+function settled(p: InstallPlan, inst: Instance, memoryMb: number) {
+  const quiet = p.kind !== 'mods' || prefs.value?.java.suggestMemory === false || !memoryShort(p.mods + 1, memoryMb, inst.memoryMB.max);
+  return !!p.version && !p.replaces && p.deps.every((d) => d.required && d.installed && !d.off && !d.unavailable) && quiet;
 }

@@ -73,13 +73,18 @@
   $effect(() => void (!versions.loading && versions.data && target && p?.installed && rememberCount(updateKey, latest ? 1 : 0)));
   const forTarget = $derived(target ? `${target.name} (${target.minecraft}${target.loader ? `, ${LOADER_NAMES[target.loader.kind]}` : ''})` : '');
 
-  function install(version?: string) {
+  // The install buttons rest until the install starts (or its dialog opens).
+  let installing = $state(false);
+  async function install(version?: string) {
     if (!p || !kind) return;
     if (!kind.content && isPackSource(src)) {
       if (side) session.packHint = { ref: p.ref, name: side.name, author: side.author, summary: side.summary, ...(side.icon ? { icon: side.icon } : {}) };
       return go({ name: 'import', ref: p.ref, source: src, ...(version ? { version } : {}) });
     }
-    if (target && kind.content) void installInto(target.id, p.ref, src, kind.content, version);
+    if (!target || !kind.content) return;
+    installing = true;
+    await installInto(target.id, p.ref, src, kind.content, version);
+    installing = false;
   }
   const choose = (e: MouseEvent) => (chooser = below(e));
   const open = (url: string) => (e: MouseEvent) => {
@@ -104,7 +109,7 @@
         </div>
         <!-- A modpack installs as its own instance, so only content gets the instance chooser. -->
         {#if kind?.content}
-          <SplitButton size="lg" accent disabled={!target} onclick={() => install()} menuLabel="Choose instance" expanded={!!chooser} onmenu={choose}>Install</SplitButton>
+          <SplitButton size="lg" accent disabled={!target || installing} onclick={() => install()} menuLabel="Choose instance" expanded={!!chooser} onmenu={choose}>Install</SplitButton>
         {:else}
           <button class="btn btn-accent btn-lg" disabled={!kind} onclick={() => install()}>Install</button>
         {/if}
@@ -165,7 +170,7 @@
                 <span class="muted opt tnum">{v.downloads ? compact(v.downloads) : '–'}</span>
                 <span class="mono muted opt">{v.bytes ? bytes(v.bytes) : '–'}</span>
                 <span style="display: flex; justify-content: flex-end">
-                  {#if !v.action}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={!!kind?.content && !target} onclick={() => install(v.id)}>{v.action}</button>{/if}
+                  {#if !v.action}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm" disabled={(!!kind?.content && !target) || installing} onclick={() => install(v.id)}>{v.action}</button>{/if}
                 </span>
               </div>
               {#if openVersion === i}

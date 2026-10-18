@@ -153,21 +153,25 @@
     cats = {};
   }
 
-  /** A row installs from the platform its project page defaults to. */
+  /** A row installs from the platform its project page defaults to; its button rests until the install starts. */
+  let installing = $state<Record<string, boolean>>({});
   async function install(r: ProjectHit) {
     const t = projectType(type);
     const into = t.content ? target : undefined;
     let source: Src = r.modrinth ? 'modrinth' : r.curseforge ? 'curseforge' : 'norisk';
+    installing[r.ref] = true;
     try {
       if (r.modrinth && r.curseforge) source = await api.browse.prefer(r.ref, into?.id ?? '');
+      if (!t.content && isPackSource(source)) {
+        session.packHint = { ref: r.ref, name: r.name, author: r.author, summary: r.summary, ...(r.icon ? { icon: r.icon } : {}) };
+        return go({ name: 'import', ref: r.ref, source });
+      }
+      if (into && t.content) await installInto(into.id, r.ref, source, t.content);
     } catch (e) {
-      return session.fail('Install', e);
+      session.fail('Install', e);
+    } finally {
+      delete installing[r.ref];
     }
-    if (!t.content && isPackSource(source)) {
-      session.packHint = { ref: r.ref, name: r.name, author: r.author, summary: r.summary, ...(r.icon ? { icon: r.icon } : {}) };
-      return go({ name: 'import', ref: r.ref, source });
-    }
-    if (into && t.content) void installInto(into.id, r.ref, source, t.content);
   }
 </script>
 
@@ -192,7 +196,7 @@
               <Tile art={r.art ?? artOf(r.name, r.icon)} size="lg" />
               <a href={href({ name: 'project', id: r.ref })} style="min-width: 0; text-decoration: none"><span style="display: flex; gap: 8px; align-items: baseline; min-width: 0"><span class="trunc" style="font-weight: 600">{r.name}</span><span class="small faint trunc" style="flex: 0 1 auto">by {r.author}</span></span><span class="muted clamp2" style="display: -webkit-box; margin-top: 2px; height: 40px">{r.summary}</span></a>
               <span class="opt" style="flex-direction: column; gap: 2px"><span class="tnum muted small">{r.norisk ? (r.norisk.daily ? dailyUsers(r.norisk.daily) : '\u00a0') : `${compact(m.downloads)} downloads`}</span><span class="small faint">Updated {ago(m.updated)}</span></span>
-              <span style="display: flex; justify-content: flex-end">{#if isInstalled(r)}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm btn-accent" disabled={showTarget && !target} onclick={() => install(r)}>Install</button>{/if}</span>
+              <span style="display: flex; justify-content: flex-end">{#if isInstalled(r)}<span class="small" style="color: var(--accent)">Installed</span>{:else}<button class="btn btn-sm btn-accent" disabled={(showTarget && !target) || installing[r.ref]} onclick={() => install(r)}>Install</button>{/if}</span>
             </div>
           {:else}
             <Empty text={failed || 'No projects match these filters.'} />

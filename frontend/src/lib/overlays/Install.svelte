@@ -1,10 +1,10 @@
 <script lang="ts">
   import { api } from '../api';
-  import type { ContentKind, InstallDep, Src } from '../api/types';
+  import type { ContentKind, InstallDep, InstallPlan, Src } from '../api/types';
   import { bytes, errorText, gb, plural } from '../format';
   import { LOADER_NAMES, PROJECT_TYPES } from '../labels';
   import { downloading } from '../instanceActions';
-  import { artOf, suggestMemoryGb } from '../look';
+  import { artOf, memoryShort } from '../look';
   import { prefs } from '../prefs.svelte';
   import { query } from '../query.svelte';
   import { session } from '../session.svelte';
@@ -15,9 +15,9 @@
   import Select from '../ui/Select.svelte';
   import Tile from '../ui/Tile.svelte';
 
-  /** Install a project (a given version, or the newest that fits) into an instance, with its dependencies. */
-  interface Props { ref: string; source: Src; instanceId: string; content: ContentKind; version?: string | undefined }
-  let { ref, source, instanceId, content, version = '' }: Props = $props();
+  /** Install a project (a given version, or the newest that fits) into an instance, with its dependencies; `plan` is one already made. */
+  interface Props { ref: string; source: Src; instanceId: string; content: ContentKind; version?: string | undefined; plan?: InstallPlan | undefined }
+  let { ref, source, instanceId, content, version = '', plan: made }: Props = $props();
 
   const inst = query(() => api.instances.get(instanceId));
   const info = query(() => api.app.info(), 'app.info');
@@ -28,7 +28,7 @@
     if (!world && worlds[0]) world = worlds[0];
   });
   const waiting = $derived(content === 'datapacks' && !world);
-  const plan = query(() => (waiting ? Promise.resolve(undefined) : api.browse.planInstall(instanceId, content, world, ref, source, version)));
+  const plan = query(() => (waiting ? Promise.resolve(undefined) : made ? Promise.resolve(made) : api.browse.planInstall(instanceId, content, world, ref, source, version)));
   let optional = $state<Record<string, boolean>>({});
   let busy = $state(false);
 
@@ -41,11 +41,11 @@
     if (d.off) return 'Required, turned off; will be turned on';
     return d.installed ? 'Required, already installed' : 'Required';
   }
-  const loader = $derived(inst.data?.loader ? `, ${LOADER_NAMES[inst.data.loader.kind]}` : '');
+  // Only a mod is built for a loader; a pack fits by the game version alone.
+  const loader = $derived(content === 'mods' && inst.data?.loader ? `, ${LOADER_NAMES[inst.data.loader.kind]}` : '');
   // Composed: shown only when the mods after this install would want more memory than the instance has.
-  const suggest = $derived(p && content === 'mods' && prefs.value?.java.suggestMemory !== false ? suggestMemoryGb(p.mods + count, info.data?.memoryMb ?? 0) : 0);
+  const suggest = $derived(p && content === 'mods' && prefs.value?.java.suggestMemory !== false ? memoryShort(p.mods + count, info.data?.memoryMb ?? 0, inst.data?.memoryMB.max ?? 0) : 0);
   const setGb = $derived(gb(inst.data?.memoryMB.max ?? 0));
-  const short = $derived(suggest > 0 && setGb > 0 && suggest > setGb);
 
   async function install() {
     if (!p) return;
@@ -91,7 +91,7 @@
   {:else if plan.loading && !p}
     <div class="list" aria-hidden="true"><div class="dep"><div class="sk" style="width: 16px; height: 16px"></div><div class="sk" style="width: 28px; height: 28px"></div><div class="sk" style="height: 12px; width: 40%"></div><span></span></div></div>
   {/if}
-  {#if short}
+  {#if suggest}
     <div class="card" style="padding: 10px 12px; display: grid; grid-template-columns: 16px minmax(0,1fr); gap: 10px; border-color: color-mix(in srgb, var(--info) 30%, var(--line))">
       <Icon name="info" size={16} sw={1.8} color="var(--info)" />
       <span class="small muted">{suggest} GB suits {plural(p!.mods + count, 'mod')}. This instance is set to {setGb} GB.</span>
