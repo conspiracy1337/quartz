@@ -27,6 +27,9 @@ func detect() Support {
 		return exec.CommandContext(ctx, bin, args...).CombinedOutput() //nolint:gosec // fixed arguments to a fixed binary
 	}
 	s := Support{}
+	if fi, err := os.Stat(bin); err == nil {
+		s.Setuid = fi.Mode()&os.ModeSetuid != 0
+	}
 	if out, err := run("--version"); err == nil {
 		s.Version = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(out)), "bubblewrap"))
 	}

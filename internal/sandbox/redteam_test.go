@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/procx"
 	"quartz/internal/sandbox/rules"
 )
@@ -176,7 +177,7 @@ func runProbe(t *testing.T, e *redteamEnv, preset string, set rules.Settings) ma
 	for k, v := range e.tools {
 		env = append(env, k+"="+v)
 	}
-	spec, j, err := New(Config{DataRoot: e.root}).Wrap(r, procx.Spec{Argv: []string{e.javaBin, "-jar", e.jarPath}, Dir: e.game, Env: env})
+	spec, j, err := New(Config{DataRoot: e.root, Shim: landlock.Self}).Wrap(r, procx.Spec{Argv: []string{e.javaBin, "-jar", e.jarPath}, Dir: e.game, Env: env})
 	if err != nil {
 		t.Fatalf("[%s] Wrap: %v", preset, err)
 	}

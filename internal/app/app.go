@@ -39,6 +39,7 @@ import (
 	"quartz/internal/core/events"
 	"quartz/internal/core/hashx"
 	"quartz/internal/core/httpcache"
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/localimg"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/netx"
@@ -421,7 +422,7 @@ func (a *app) buildTasks() error {
 		LogConfigs: a.paths.LogConfigs(), Natives: a.paths.Natives(),
 	})
 	a.buildGame()
-	a.sandbox = sandbox.New(sandbox.Config{DataRoot: a.paths.Root, Log: a.log})
+	a.sandbox = sandbox.New(sandbox.Config{DataRoot: a.paths.Root, Log: a.log, Shim: landlock.Self})
 	a.instances.OnPurge(func(id string) {
 		if err := a.sandbox.Forget(id); err != nil {
 			a.log.Warn("removing an instance's sandbox failed", "instance", id, "err", err)

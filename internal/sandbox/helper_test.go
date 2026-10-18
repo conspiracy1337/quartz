@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/procx"
 	"quartz/internal/sandbox/rules"
 )
@@ -21,6 +22,7 @@ import (
 // helper then probes what it can reach and prints one "name=result" line
 // per probe ("ok" or the error).
 func TestMain(m *testing.M) {
+	landlock.Main() // the fixture's runs go through this binary as the shim
 	if os.Getenv("QUARTZ_SANDBOX_HELPER") != "" {
 		helper()
 		return
@@ -88,6 +90,7 @@ type jailFixture struct {
 	root, game, other, secret string
 	store, pack, ro, rw       string
 	scratch, data, listen     string
+	abstract                  string // a host abstract unix socket (Linux)
 }
 
 func newJailFixture(t *testing.T) *jailFixture {
@@ -146,7 +149,15 @@ func newJailFixture(t *testing.T) *jailFixture {
 		}
 	}()
 	f.listen = ln.Addr().String()
-	f.s = New(Config{DataRoot: root})
+	if runtime.GOOS == "linux" {
+		f.abstract = fmt.Sprintf("@quartz-sandbox-test-%d", os.Getpid())
+		al, err := net.Listen("unix", f.abstract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = al.Close() })
+	}
+	f.s = New(Config{DataRoot: root, Shim: landlock.Self})
 	t.Cleanup(func() { _ = f.s.Forget("sandbox-test") })
 	return f
 }
@@ -165,7 +176,7 @@ func (f *jailFixture) runArgs(t *testing.T, set rules.Settings, mode string) (pr
 		Read:      []string{filepath.Dir(exe), filepath.Join(f.root, "store", "libraries"), filepath.Join(f.root, "store", "assets")},
 		Redirects: []Redirect{{From: filepath.Join(f.data, "skins"), To: f.skins()}}}
 	env := append(FilterEnv(os.Environ()), "QUARTZ_SANDBOX_HELPER="+mode, "GAME="+f.game, "OTHER="+f.other, "SECRET="+f.secret,
-		"PARENT="+fmt.Sprint(os.Getpid()), "RO="+f.ro, "RW="+f.rw, "STORE="+f.store, "LISTEN="+f.listen, "SKINS="+f.skins())
+		"PARENT="+fmt.Sprint(os.Getpid()), "RO="+f.ro, "RW="+f.rw, "STORE="+f.store, "LISTEN="+f.listen, "SKINS="+f.skins(), "ABSTRACT="+f.abstract)
 	spec, j, err := f.s.Wrap(r, procx.Spec{Argv: []string{exe}, Dir: f.game, Env: env})
 	if err != nil {
 		t.Fatal(err)

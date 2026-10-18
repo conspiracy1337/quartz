@@ -4,17 +4,12 @@ package sandbox
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
-
-	"quartz/internal/core/fsx"
 )
 
 // dpyMode is how a run reaches the desktop display. The display is the sandbox's
@@ -73,7 +68,7 @@ func mintUntrusted(display, xauthority, scratch string) (string, bool) {
 	_ = os.Remove(out)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "-f", out, "generate", display, ".", "untrusted", "timeout", "0")
+	cmd := exec.CommandContext(ctx, bin, "-f", out, "generate", display, ".", "untrusted", "timeout", "0") //nolint:gosec // xauth from PATH, fixed arguments; the display is one argument, no shell
 	env := []string{"DISPLAY=" + display, "PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
 	if xauthority != "" {
 		env = append(env, "XAUTHORITY="+xauthority)
@@ -112,27 +107,4 @@ func delEnv(env []string, names ...string) []string {
 		}
 	}
 	return out
-}
-
-// machineID writes a fresh random machine-id for this run into dir (which is not
-// bound into the jail) and returns its path. A per-run random id is bound over
-// /etc/machine-id so a mod reads an unlinkable value, never the host's stable id.
-func machineID(dir string) (string, error) {
-	if dir == "" {
-		return "", fmt.Errorf("sandbox: no run folder")
-	}
-	id, err := randHex(16)
-	if err != nil {
-		return "", err
-	}
-	p := filepath.Join(dir, "machine-id")
-	return p, fsx.AtomicWrite(p, []byte(id+"\n"), fsx.FilePerm)
-}
-
-func randHex(n int) (string, error) {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }

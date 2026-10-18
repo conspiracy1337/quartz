@@ -59,6 +59,31 @@ a broken security invariant; the escapes are reported in its log.
   network abuse, and a real fix needs a userspace NAT that isn't available. The
   game keeps host network access under Standard; Strict still removes it.
 
+## Status (round 2)
+
+- **#1 follow-up: host abstract unix sockets — FIXED (Linux 6.12+).** Abstract
+  sockets belong to the network namespace, not the filesystem, so under Standard
+  (shared host network) the jail could still reach every host service listening
+  on one, the X server's `@/tmp/.X11-unix/X0` included, without any bind mount.
+  On an X session that allows local-user access, this would have bypassed the
+  untrusted cookie. Each run now goes through the launcher as a shim
+  (`internal/core/landlock`) that applies a Landlock scope
+  (`ABSTRACT_UNIX_SOCKET | SIGNAL`) and then execs bubblewrap in place. The
+  jail's own abstract sockets still work; host ones get `EPERM`. Older
+  kernels, or a setuid bwrap, log a warning and run unscoped; Strict is still
+  covered there by its own net namespace.
+- **#3 follow-up: hostname, NIC MACs, disk serials — FIXED.** The jail is named
+  `quartz` (`--hostname`) and gets a synthesized `/etc/hosts` (the host's
+  entries minus any line naming the host, so LAN names still resolve). The
+  sysfs dirs of network cards and block devices are masked next to DMI
+  (`maskSys` in `scrub_linux.go`); GPU PCI/DRM nodes stay.
+- The matrix's `leak-machine-id` row still prints LEAK because some id is
+  readable; `checkInvariants` asserts it is not the host's.
+
+The jail tests (`TestJailStandard`, run by `go test`) assert the abstract-socket
+scope, the hostname and that no MAC address is readable. Without the shim, the
+abstract check fails.
+
 The regression tests for all of the above live in `redteam_test.go`
 (`checkInvariants`): run `QUARTZ_REDTEAM=1 go test ./internal/sandbox -run
 TestRedteamEscapes -v`.
