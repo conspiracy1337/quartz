@@ -9,7 +9,7 @@ export const accounts: Account[] = [
   { id: 'a1', name: 'Kestrel_Vane', kind: 'microsoft', status: 'valid', detail: '', isDefault: true, defaultSkin: def('wide-steve'), skinHash: 'wide-kai', slim: false, refreshedAt: minutesAgo(12) },
   { id: 'a2', name: 'NightOwl_42', kind: 'microsoft', status: 'expired', detail: '', isDefault: false, defaultSkin: def('slim-alex'), skinHash: 'slim-noor', slim: true, refreshedAt: minutesAgo(1500) },
   { id: 'a3', name: 'BuilderBea', kind: 'microsoft', status: 'signin', detail: 'The password was changed', isDefault: false, defaultSkin: def('wide-efe'), skinHash: 'slim-makena', slim: true, refreshedAt: minutesAgo(4000) },
-  { id: 'a4', name: 'TestDummy', kind: 'offline', status: 'offline', detail: 'Offline account, for local testing', isDefault: false, defaultSkin: def('slim-zuri'), skinHash: '', slim: false, refreshedAt: 0 },
+  { id: 'a4', name: 'TestDummy', kind: 'offline', status: 'offline', detail: 'Local account, for testing', isDefault: false, defaultSkin: def('slim-zuri'), skinHash: '', slim: false, refreshedAt: 0 },
 ];
 
 const skin = (hash: string, name: string, days: number): Skin => ({ hash, name, slim: hash.startsWith('slim-'), added: minutesAgo(days * 1440), source: 'file' });
@@ -39,7 +39,7 @@ export const capes: Capes = {
 export const mockAccounts = {
   list: () => accounts,
   addOffline: (name: string): Account => {
-    const a: Account = { id: `o${accounts.length + 1}`.padEnd(32, '0'), name, kind: 'offline', status: 'offline', detail: 'Offline account, for local testing', isDefault: !accounts.length, defaultSkin: def('wide-ari'), skinHash: '', slim: false, refreshedAt: 0 };
+    const a: Account = { id: `o${accounts.length + 1}`.padEnd(32, '0'), name, kind: 'offline', status: 'offline', detail: 'Local account, for testing', isDefault: !accounts.length, defaultSkin: def('wide-ari'), skinHash: '', slim: false, refreshedAt: 0 };
     accounts.push(a);
     return a;
   },
