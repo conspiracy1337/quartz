@@ -20,3 +20,10 @@ inside a double-quoted here-string where PowerShell ran `$(...)` from the
 notification text. Everything else is upstream, unchanged (`examples/` left
 out). Wails reaches `wintoast.registerClassFactory` by `//go:linkname`, so
 keep that function's name and signature.
+
+## lo (github.com/samber/lo v1.49.1)
+
+Wails calls only `lo.Filter` and `lo.Must` (on every OS), but importing lo
+ran its package init: two compiled regexes and `golang.org/x/text`'s
+cases, language and norm tables (~300 KB). The copy holds just those two
+functions and their helpers, verbatim.

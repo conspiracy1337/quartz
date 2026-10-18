@@ -50,3 +50,5 @@ require (
 )
 
 replace git.sr.ht/~jackmordaunt/go-toast/v2 => ./third_party/go-toast
+
+replace github.com/samber/lo => ./third_party/lo
