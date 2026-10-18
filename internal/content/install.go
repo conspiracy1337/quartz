@@ -122,8 +122,18 @@ func (s *Service) PlanInstall(ctx context.Context, r InstallRequest) (*InstallPl
 		if ver, err = cat.Version(ctx, r.Project, r.Version); err != nil {
 			return nil, err
 		}
-	} else if ver, ok = s.newest(ctx, p, r.Project, q); !ok {
-		return out, nil // nothing fits: the dialog says so
+	} else {
+		// A pack has no loader to break, so only the game version has to fit:
+		// a less stable build beats none (Fresh Animations is beta-only).
+		last := r.Channel
+		if r.Kind != Mods {
+			last = modplatform.Alpha
+		}
+		if ver, ok, err = s.newest(ctx, p, r.Project, q, last); err != nil {
+			return nil, err
+		} else if !ok {
+			return out, nil // nothing fits: the dialog says so
+		}
 	}
 	pres := s.presence(&v)
 	pl := &plan{inst: r.Instance, kind: r.Kind, at: s.now(), query: q, items: map[string]*planned{}}
@@ -142,13 +152,25 @@ func (s *Service) PlanInstall(ctx context.Context, r InstallRequest) (*InstallPl
 	return out, nil
 }
 
-// newest is the newest version the query and channel allow.
-func (s *Service) newest(ctx context.Context, p modplatform.Provider, project string, q modplatform.Query) (modplatform.Version, bool) {
+// newest is the newest version the query allows on its channel, else on
+// each less stable one up to last.
+func (s *Service) newest(ctx context.Context, p modplatform.Provider, project string, q modplatform.Query, last modplatform.Channel) (modplatform.Version, bool, error) {
 	vs, err := p.Versions(ctx, project, modplatform.Query{Game: q.Game, Loaders: q.Loaders})
 	if err != nil {
-		return modplatform.Version{}, false
+		return modplatform.Version{}, false, err
 	}
-	return pick(vs, q, q.Channel)
+	v, ok := pickUpTo(vs, q, last)
+	return v, ok, nil
+}
+
+// pickUpTo is pick on the query's channel, then on each less stable one up to last.
+func pickUpTo(vs []modplatform.Version, q modplatform.Query, last modplatform.Channel) (modplatform.Version, bool) {
+	for ch := q.Channel; ch <= last; ch++ {
+		if v, ok := pick(vs, q, ch); ok {
+			return v, true
+		}
+	}
+	return modplatform.Version{}, false
 }
 
 // pick is the newest of vs that the loaders and channel allow.
@@ -186,12 +208,7 @@ func (s *Service) depVersion(ctx context.Context, p modplatform.Provider, d modp
 	if d.Kind == modplatform.DepRequired {
 		last = modplatform.Alpha
 	}
-	for ch := q.Channel; ch <= last; ch++ {
-		if v, ok := pick(vs, q, ch); ok {
-			return v, true
-		}
-	}
-	return modplatform.Version{}, false
+	return pickUpTo(vs, q, last)
 }
 
 func overlaps(a, b []string) bool {
