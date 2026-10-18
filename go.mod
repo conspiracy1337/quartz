@@ -48,3 +48,5 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )
+
+replace git.sr.ht/~jackmordaunt/go-toast/v2 => ./third_party/go-toast
