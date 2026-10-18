@@ -18,7 +18,10 @@
 // build without the Microsoft and CurseForge IDs unless given
 // -allow-missing. The key pair lives in
 // ~/.config/quartz-release (QUARTZ_RELEASE_KEYS moves it).
-// Publishing is a separate step you run yourself:
+// Releases are normally made by pushing a vX.Y.Z tag: the release workflow
+// (.github/workflows/release.yml) runs build on every platform, then
+// manifest, then publishes (see changelog/README.md). By hand, publishing
+// is a separate step:
 //
 //	gh release create v1.0.0 dist/* --repo conspiracy1337/quartz
 package main
