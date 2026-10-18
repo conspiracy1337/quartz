@@ -532,7 +532,7 @@ func TestPropertiesEditor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"server-port=25570\n", "max-players=6\n", "view-distance=12\n", "motd=Friends\n", "pvp=true\n", "level-name=New world\n"} {
+	for _, want := range []string{"server-port=25570\n", "max-players=6\n", "view-distance=12\n", "motd=Friends\n", "pvp=true\n", "level-name=New world\n", "max-tick-time=60000\n"} {
 		if !strings.Contains(p.Text, want) {
 			t.Errorf("preview misses %q:\n%s", want, p.Text)
 		}

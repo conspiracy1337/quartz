@@ -7,8 +7,8 @@
   import Icon from '../ui/Icon.svelte';
 
   /** The server's server.properties in the mono text field (DlgHostProps.dc.html). Text is
-      dim; a line is bright when it differs from Minecraft's default or when the Host dialog
-      sets it. A layer behind the see-through field draws it, so editing stays plain text. */
+      dim; a line is bright when it differs from Minecraft's default (keys without one, such as
+      mods' or random ones, stay dim) or when the Host dialog sets it. A layer behind the see-through field draws it, so editing stays plain text. */
   interface Props { instanceId: string; name: string; onclose: () => void }
   let { instanceId, name, onclose }: Props = $props();
 
@@ -27,8 +27,8 @@
   const bright = (p: HostProperties, line: string) => {
     const k = keyOf(line);
     if (!k) return false;
-    const v = line.trimStart().slice(k.length).replace(/^\s*[=:]?\s*/, '');
-    return p.dialog.includes(k) || p.defaults[k] !== v;
+    const v = line.trimStart().slice(k.length).replace(/^\s*[=:]?\s*/, '').replace(/\\(.)/g, '$1');
+    return p.dialog.includes(k) || (k in p.defaults && p.defaults[k] !== v);
   };
 
   let back = $state<HTMLElement>();

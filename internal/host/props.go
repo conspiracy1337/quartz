@@ -113,22 +113,37 @@ func motd(name string) string {
 	return strings.TrimSpace(s)
 }
 
-// vanillaProps are Minecraft's own server.properties defaults (1.21),
-// which the editor dims lines against.
+// vanillaProps are Minecraft's own server.properties defaults: the latest
+// release's full set plus keys older versions still write (pvp,
+// enable-command-block). The editor dims lines against them. The management
+// server's secret is random per server, so it has no default.
 var vanillaProps = map[string]string{
-	"accepts-transfers": "false", "allow-flight": "false", "broadcast-console-to-ops": "true", "difficulty": "easy",
-	"enable-command-block": "false", "enable-query": "false", "enable-rcon": "false", "enforce-whitelist": "false",
-	"force-gamemode": "false", "gamemode": "survival", "generate-structures": "true", "hardcore": "false",
-	"level-name": "world", "max-players": "20", "max-world-size": "29999984", "motd": "A Minecraft Server",
-	"online-mode": "true", "pvp": "true", "server-ip": "", "server-port": "25565", "simulation-distance": "10",
-	"spawn-protection": "16", "view-distance": "10", "white-list": "false",
+	"accepts-transfers": "false", "allow-flight": "false", "broadcast-console-to-ops": "true", "broadcast-rcon-to-ops": "true",
+	"bug-report-link": "", "chat-spam-threshold-seconds": "10", "command-spam-threshold-seconds": "10", "difficulty": "easy",
+	"enable-code-of-conduct": "false", "enable-command-block": "false", "enable-jmx-monitoring": "false", "enable-query": "false",
+	"enable-rcon": "false", "enable-status": "true", "enforce-secure-profile": "true", "enforce-whitelist": "false",
+	"entity-broadcast-range-percentage": "100", "force-gamemode": "false", "function-permission-level": "2", "gamemode": "survival",
+	"generate-structures": "true", "generator-settings": "{}", "hardcore": "false", "hide-online-players": "false",
+	"initial-disabled-packs": "", "initial-enabled-packs": "vanilla", "level-name": "world", "level-seed": "",
+	"level-type": "minecraft:normal", "log-ips": "true", "management-server-allowed-origins": "", "management-server-enabled": "false",
+	"management-server-host": "localhost", "management-server-port": "0", "management-server-tls-enabled": "true",
+	"management-server-tls-keystore": "", "management-server-tls-keystore-password": "", "max-chained-neighbor-updates": "1000000",
+	"max-players": "20", "max-tick-time": "60000", "max-world-size": "29999984", "motd": "A Minecraft Server",
+	"network-compression-threshold": "256", "online-mode": "true", "op-permission-level": "4", "pause-when-empty-seconds": "60",
+	"player-idle-timeout": "0", "prevent-proxy-connections": "false", "pvp": "true", "query.port": "25565", "rate-limit": "0",
+	"rcon.password": "", "rcon.port": "25575", "region-file-compression": "deflate", "require-resource-pack": "false",
+	"resource-pack": "", "resource-pack-id": "", "resource-pack-prompt": "", "resource-pack-sha1": "", "server-ip": "",
+	"server-port": "25565", "simulation-distance": "10", "spawn-protection": "16", "status-heartbeat-interval": "0",
+	"sync-chunk-writes": "true", "text-filtering-config": "", "text-filtering-version": "0", "use-native-transport": "true",
+	"view-distance": "10", "white-list": "false",
 }
 
 // Properties is what the server.properties editor shows.
 type Properties struct {
 	Text string `json:"text"`
-	// Defaults are Minecraft's values; a line that differs is shown bright,
-	// as are the Dialog keys, which the Host dialog's fields set.
+	// Defaults are Minecraft's values; a line that differs is shown bright
+	// (keys without one stay dim), as are the Dialog keys, which the Host
+	// dialog's fields set.
 	Defaults map[string]string `json:"defaults"`
 	Dialog   []string          `json:"dialog"`
 }
