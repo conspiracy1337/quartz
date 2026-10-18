@@ -232,3 +232,27 @@ func TestCopyStaged(t *testing.T) {
 		t.Fatal("the original stayed behind")
 	}
 }
+
+func TestMoveTakesTheWebviewLast(t *testing.T) {
+	from, to := t.TempDir(), filepath.Join(t.TempDir(), "new")
+	for _, f := range []string{"settings.json", "webview/EBWebView/lockfile", "webview/EBWebView/Default/Preferences"} {
+		p := filepath.Join(from, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := move(from, to); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"settings.json", "webview/EBWebView/Default/Preferences"} {
+		if _, err := os.Stat(filepath.Join(to, f)); err != nil {
+			t.Errorf("%s didn't move: %v", f, err)
+		}
+	}
+	if entries, _ := os.ReadDir(from); len(entries) != 0 {
+		t.Errorf("left behind: %v", entries)
+	}
+}

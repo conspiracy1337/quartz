@@ -27,8 +27,10 @@ export const app = {
   openDataFolder: bridged(AppGo.OpenDataFolder, () => undefined),
   /** What the launcher was asked to open from outside since the last call (links, files, the command line). */
   pending: bridged(AppGo.Pending, (): OpenTarget[] => []),
-  /** Asks for a new data folder; the launcher restarts to move there ('' when cancelled). */
-  changeDataFolder: bridged(AppGo.ChangeDataFolder, () => ''),
+  /** Asks for a new data folder and returns where the data would go ('' when cancelled); nothing moves yet. */
+  chooseDataFolder: bridged(AppGo.ChooseDataFolder, () => ''),
+  /** Moves to the folder chooseDataFolder picked: the launcher restarts (true) or there is nothing to do (false). */
+  applyDataFolder: bridged(AppGo.ApplyDataFolder, () => false),
   /** Closes the launcher even with downloads unfinished (they can be retried after the next start). */
   quit: bridged(AppGo.Quit, () => undefined),
 };

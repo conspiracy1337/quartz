@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"quartz/internal/brand"
 	"quartz/internal/core/fsx"
@@ -75,6 +76,31 @@ func Target(dir string) string {
 // MoveTo makes root the data folder from the next start on. Unless root
 // already holds launcher data, the current data moves there on that start.
 func (p Paths) MoveTo(root string) error {
+	root = filepath.Clean(root)
+	if err := p.CheckMove(root); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(p.pointer), dirPerm); err != nil {
+		return err
+	}
+	ptr := pointer{Root: root}
+	if !IsDataFolder(root) {
+		ptr.MoveFrom = p.Root
+	}
+	if root == filepath.Clean(p.Default) {
+		// Back to the OS location: the pointer goes, the move still happens.
+		ptr.Root = p.Default
+	}
+	b, err := json.Marshal(ptr)
+	if err != nil {
+		return err
+	}
+	return fsx.AtomicWrite(p.pointer, b, fsx.FilePerm)
+}
+
+// CheckMove tells whether root can become the data folder (it creates root
+// and tries writing there).
+func (p Paths) CheckMove(root string) error {
 	if p.Chosen != ByDefault && p.Chosen != ByPointer || p.pointer == "" {
 		return ErrFixedRoot
 	}
@@ -96,22 +122,7 @@ func (p Paths) MoveTo(root string) error {
 		return fmt.Errorf("%w: it isn't writable", ErrBadRoot)
 	}
 	_ = os.Remove(probe)
-	if err := os.MkdirAll(filepath.Dir(p.pointer), dirPerm); err != nil {
-		return err
-	}
-	ptr := pointer{Root: root}
-	if !IsDataFolder(root) {
-		ptr.MoveFrom = p.Root
-	}
-	if root == filepath.Clean(p.Default) {
-		// Back to the OS location: the pointer goes, the move still happens.
-		ptr.Root = p.Default
-	}
-	b, err := json.Marshal(ptr)
-	if err != nil {
-		return err
-	}
-	return fsx.AtomicWrite(p.pointer, b, fsx.FilePerm)
+	return nil
 }
 
 // ApplyMove finishes a data folder change on startup, before anything is
@@ -184,8 +195,42 @@ const stagingDir = ".quartz-move"
 // moveMargin is room left free on the new drive after a copy.
 const moveMargin = 256 << 20
 
+// webviewDir is the webview's own storage (Paths.Webview). It moves last
+// and only as far as it can: WebView2 processes of the run that asked for
+// the move may still be closing and hold it, and what it keeps (UI
+// conveniences, caches) is rebuilt when it's missing.
+const webviewDir = "webview"
+
+// webviewWait is how long a move waits for the webview to let go.
+var webviewWait = 10 * time.Second
+
 // move brings every entry of from into to (see ApplyMove).
 func move(from, to string) error {
+	waitWebviewClosed(filepath.Join(from, webviewDir))
+	if err := moveEntries(from, to, func(n string) bool { return n != stagingDir && n != webviewDir }); err != nil {
+		return err
+	}
+	if err := moveEntries(from, to, func(n string) bool { return n == webviewDir }); err != nil {
+		_ = os.RemoveAll(filepath.Join(to, webviewDir))
+		_ = os.RemoveAll(filepath.Join(from, webviewDir))
+	}
+	return nil
+}
+
+// waitWebviewClosed waits until no WebView2 process holds the webview
+// folder: its lockfile is gone or can be removed (it can't while open).
+func waitWebviewClosed(dir string) {
+	lock := filepath.Join(dir, "EBWebView", "lockfile")
+	for deadline := time.Now().Add(webviewWait); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		if err := os.Remove(lock); err == nil || errors.Is(err, os.ErrNotExist) {
+			return
+		}
+	}
+}
+
+// moveEntries moves the entries of from that keep selects into to, all or
+// nothing.
+func moveEntries(from, to string, keep func(string) bool) error {
 	if err := os.MkdirAll(to, dirPerm); err != nil {
 		return err
 	}
@@ -198,7 +243,7 @@ func move(from, to string) error {
 	}
 	var names []string
 	for _, e := range entries {
-		if n := e.Name(); n != stagingDir {
+		if n := e.Name(); keep(n) {
 			names = append(names, n)
 		}
 	}

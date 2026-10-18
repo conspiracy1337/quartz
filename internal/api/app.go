@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -20,6 +21,9 @@ type App struct {
 	ctx   *Ctx
 	paths paths.Paths
 	d     AppDeps
+
+	mu     sync.Mutex
+	chosen string // the data folder picked in ChooseDataFolder, not applied yet
 }
 
 // AppDeps are what the App facade works with.
@@ -53,13 +57,11 @@ func (a *App) Quit() {
 // ErrNotPristine means instances exist, so the data folder stays put.
 var ErrNotPristine = errors.New("api: the data folder can only change before you have instances")
 
-// ChangeDataFolder asks for a folder (native dialog) and makes it the data
-// folder: the launcher restarts and moves what it has so far there. It
-// returns "" when cancelled.
-func (a *App) ChangeDataFolder() (string, error) {
-	if a.paths.Chosen != paths.ByDefault && a.paths.Chosen != paths.ByPointer {
-		return "", paths.ErrFixedRoot
-	}
+// ChooseDataFolder asks for a folder (native dialog) and returns where the
+// data would go, without moving anything: ApplyDataFolder does that. It
+// returns "" when cancelled. The folder is remembered here, so only one
+// the user picked can be applied.
+func (a *App) ChooseDataFolder() (string, error) {
 	if a.d.Pristine != nil && !a.d.Pristine() {
 		return "", ErrNotPristine
 	}
@@ -67,14 +69,37 @@ func (a *App) ChangeDataFolder() (string, error) {
 	if err != nil || dir == "" {
 		return "", err
 	}
-	target := paths.Target(dir)
-	if filepath.Clean(target) == a.paths.Root {
-		return "", nil
+	target := filepath.Clean(paths.Target(dir))
+	if target != a.paths.Root {
+		if err := a.paths.CheckMove(target); err != nil {
+			return "", err
+		}
+	}
+	a.mu.Lock()
+	a.chosen = target
+	a.mu.Unlock()
+	return target, nil
+}
+
+// ApplyDataFolder makes the folder from ChooseDataFolder the data folder:
+// the launcher restarts and moves what it has so far there. It reports
+// whether it restarts (false: nothing was chosen, or the folder is the
+// current one).
+func (a *App) ApplyDataFolder() (bool, error) {
+	a.mu.Lock()
+	target := a.chosen
+	a.chosen = ""
+	a.mu.Unlock()
+	if target == "" || target == a.paths.Root {
+		return false, nil
+	}
+	if a.d.Pristine != nil && !a.d.Pristine() {
+		return false, ErrNotPristine
 	}
 	if err := a.paths.MoveTo(target); err != nil {
-		return "", err
+		return false, err
 	}
-	return target, a.d.Restart()
+	return true, a.d.Restart()
 }
 
 type AppInfo struct {
