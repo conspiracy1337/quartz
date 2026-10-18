@@ -166,6 +166,10 @@ func (j *Jail) Close() {
 type Config struct {
 	DataRoot string // the launcher's data folder: never reachable as a whole
 	Log      *slog.Logger
+	// Shim is the launcher's own executable, which scopes a run with
+	// Landlock before it becomes bubblewrap (Linux; see package landlock).
+	// Empty starts bubblewrap directly.
+	Shim string
 }
 
 // Service builds jails.

@@ -9,6 +9,7 @@ import (
 
 	"quartz/internal/app"
 	"quartz/internal/cli"
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/paths"
 	"quartz/internal/core/procx"
 	"quartz/internal/intent"
@@ -21,6 +22,7 @@ var assets embed.FS
 const restartWait = 15 * time.Second
 
 func main() {
+	landlock.Main() // a sandboxed run's scope shim; returns at once otherwise
 	wd, _ := os.Getwd()
 	args, err := intent.Parse(os.Args[1:], wd)
 	if err != nil || args.Command.Headless() {

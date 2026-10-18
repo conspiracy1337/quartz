@@ -18,6 +18,7 @@ import (
 	"quartz/internal/content"
 	"quartz/internal/content/store"
 	"quartz/internal/core/events"
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/localimg"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/nbt"
@@ -79,7 +80,7 @@ func TestHost(t *testing.T) {
 	preset := os.Getenv("QUARTZ_IT_SANDBOX")
 	svc := host.New(host.Deps{Instances: insts, Installer: h.installer(), Java: h.java, Tasks: h.tasks, Content: cs, Store: blobs, Worlds: ws,
 		Accounts: accs, Settings: st, Bus: bus, Redactor: logging.NewRedactor(""), Log: h.log,
-		Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log}), StoreRead: h.storeRead()})
+		Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log, Shim: landlock.Self}), StoreRead: h.storeRead()})
 
 	var mu sync.Mutex
 	var lines []string

@@ -15,6 +15,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"quartz/internal/core/bwrap"
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/procx"
 	"quartz/internal/sandbox/rules"
 )
@@ -37,6 +39,17 @@ func platformProbes() {
 	say("tiocsti", e)
 	ifs, _ := net.Interfaces()
 	say("interfaces", fmt.Errorf("%d", len(ifs)))
+	say("abstract", func() error {
+		c, err := net.DialTimeout("unix", os.Getenv("ABSTRACT"), 2*time.Second)
+		if err == nil {
+			_ = c.Close()
+		}
+		return err
+	}())
+	h, _ := os.Hostname()
+	say("hostname", fmt.Errorf("%s", h))
+	macs, _ := filepath.Glob("/sys/class/net/*/address")
+	say("macs", fmt.Errorf("%d", len(macs)))
 }
 
 func checkPlatform(t *testing.T, got map[string]string) {
@@ -51,6 +64,18 @@ func checkPlatform(t *testing.T, got map[string]string) {
 	}
 	if !strings.Contains(got["write-store"], "read-only") {
 		t.Errorf("write-store = %q", got["write-store"])
+	}
+	// Host fingerprints: the jail names itself and shows no network card.
+	if got["hostname"] != hostname {
+		t.Errorf("hostname = %q, want %q", got["hostname"], hostname)
+	}
+	if got["macs"] != "0" {
+		t.Errorf("%s network card addresses readable", got["macs"])
+	}
+	// The host's abstract sockets (the X server's among them) share the
+	// network namespace; Landlock's scope keeps the game off them.
+	if landlock.Supported() && !bwrap.Detect().Setuid && got["abstract"] != "operation not permitted" {
+		t.Errorf("abstract = %q: a host abstract socket is reachable", got["abstract"])
 	}
 	// Only what the desktop rules bind (the PulseAudio cookie, MangoHud's
 	// settings) shows in the home folder.
@@ -87,5 +112,22 @@ func TestJailLeftoversEndWithGame(t *testing.T) {
 	_ = c.Wait()
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("the run ended only after %v", d)
+	}
+}
+
+func TestNamesHost(t *testing.T) {
+	for line, want := range map[string]bool{
+		"127.0.1.1\talice-laptop":                    true,
+		"127.0.1.1 alice-laptop.lan alias":           true,
+		"127.0.0.1 localhost":                        false,
+		"192.168.1.5 mc.lan # alice-laptop's server": false,
+		"10.0.0.2 alice-laptopish":                   false,
+		"# 127.0.1.1 alice-laptop":                   false,
+		"alice-laptop":                               false, // an address alone names nothing
+		"":                                           false,
+	} {
+		if got := namesHost(line, "alice-laptop"); got != want {
+			t.Errorf("namesHost(%q) = %v, want %v", line, got, want)
+		}
 	}
 }

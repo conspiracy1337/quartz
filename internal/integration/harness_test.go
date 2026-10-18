@@ -14,11 +14,19 @@ import (
 
 	"quartz/internal/core/download"
 	"quartz/internal/core/httpcache"
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/netx"
 	"quartz/internal/core/tasks"
 	"quartz/internal/java"
 	"quartz/internal/meta"
 )
+
+// TestMain lets sandboxed runs use this binary as their Landlock shim, as
+// they use the launcher.
+func TestMain(m *testing.M) {
+	landlock.Main()
+	os.Exit(m.Run())
+}
 
 type harness struct {
 	t      *testing.T

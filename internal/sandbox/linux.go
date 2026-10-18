@@ -14,6 +14,7 @@ import (
 
 	"quartz/internal/core/bwrap"
 	"quartz/internal/core/fsx"
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/procx"
 	discordipc "quartz/internal/discord"
 	"quartz/internal/sandbox/rules"
@@ -47,8 +48,8 @@ var systemDirs = []string{"/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "
 // etcFiles are the parts of /etc a game needs: name lookup, TLS roots,
 // fonts, time, the dynamic linker, drivers and system Java configuration.
 var etcFiles = []string{
-	"resolv.conf", "hosts", "host.conf", "nsswitch.conf", "gai.conf", "ld.so.cache", "ld.so.conf", "ld.so.conf.d", "localtime",
-	"timezone", "locale.conf", "fonts", "ssl", "pki", "ca-certificates", "crypto-policies", "alternatives", "machine-id",
+	"resolv.conf", "host.conf", "nsswitch.conf", "gai.conf", "ld.so.cache", "ld.so.conf", "ld.so.conf.d", "localtime",
+	"timezone", "locale.conf", "fonts", "ssl", "pki", "ca-certificates", "crypto-policies", "alternatives",
 	"os-release", "lsb-release", "drirc", "vulkan", "glvnd", "OpenCL", "nvidia", "asound.conf", "alsa", "pulse", "pipewire",
 }
 
@@ -62,15 +63,22 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 	// leaves running (a mod's daemon, a bus it autolaunched) ends with it
 	// instead of keeping the run alive. The JVM handles SIGTERM, so Stop
 	// still lets it save and quit.
-	a.Add(sup.Bin, "--unshare-user", "--unshare-pid", "--as-pid-1", "--unshare-uts", "--unshare-cgroup-try")
+	// A neutral hostname: the host's often names its owner.
+	a.Add(sup.Bin, "--unshare-user", "--unshare-pid", "--as-pid-1", "--unshare-uts", "--hostname", hostname, "--unshare-cgroup-try")
 	if sup.DisableUserns {
 		a.Add("--disable-userns")
 	}
-	x11 := !r.Headless && os.Getenv("DISPLAY") != ""
-	if !x11 {
-		// X11 clients share memory with the X server (MIT-SHM), so its IPC
-		// namespace stays shared, as Flatpak does.
+	dm, cookie := displayMode(r, spec.Env)
+	if dm != dpyXTrusted {
+		// Only a trusted X client needs the shared IPC namespace (MIT-SHM for
+		// the X server); Wayland, an untrusted X cookie and headless do not.
 		a.Add("--unshare-ipc")
+	}
+	switch dm {
+	case dpyWayland:
+		s.c.Log.Info("sandbox: Wayland display; X server withheld (set QUARTZ_X11=1 if the game can't open a window)")
+	case dpyXTrusted:
+		s.c.Log.Warn("sandbox: X display isolation unavailable (no Wayland and no SECURITY extension); the game can see other X clients", "display", getEnv(spec.Env, "DISPLAY"))
 	}
 	if !r.Headless && r.Level(rules.Internet) == rules.Blocked {
 		a.Add("--unshare-net")
@@ -93,6 +101,14 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 		return procx.Spec{}, nil, err
 	}
 	a.RoBind(passwd, "/etc/passwd").RoBind(group, "/etc/group")
+	// A fresh random machine-id, so a mod can't read the host's stable one.
+	if mid, err := machineID(r.Scratch); err == nil {
+		a.RoBind(mid, "/etc/machine-id").RoBind(mid, "/var/lib/dbus/machine-id")
+	}
+	// The host's hosts file often names the host; this one names the jail.
+	if h, err := hostsFile(r.Scratch); err == nil {
+		a.RoBind(h, "/etc/hosts")
+	}
 
 	// Home: an empty throwaway folder, or the real one read-only. The
 	// player's own folders come next, then the launcher's data is hidden
@@ -149,7 +165,7 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 		a.RoBind(f.Real, f.Seen)
 	}
 
-	env := spec.Env
+	env := applyDisplayEnv(spec.Env, dm, cookie)
 	if !r.Headless {
 		env = desktop(&a, r, s.home, env)
 	}
@@ -183,6 +199,15 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 	}
 	a.Add("--chdir", r.GameDir, "--")
 	spec.Argv = append(a.List(), spec.Argv...)
+	switch {
+	case s.c.Shim == "":
+	case sup.Setuid:
+		s.c.Log.Warn("sandbox: bubblewrap is setuid, so the run isn't Landlock-scoped; host abstract sockets stay reachable unless the network is blocked")
+	case !landlock.Supported():
+		s.c.Log.Warn("sandbox: this kernel has no Landlock scopes (Linux 6.12+); host abstract sockets stay reachable unless the network is blocked")
+	default:
+		spec.Argv = landlock.Command(s.c.Shim, spec.Argv)
+	}
 	spec.Env, spec.ExtraFiles = env, files
 	return spec, j, nil
 }
@@ -290,6 +315,7 @@ func desktop(a *bwrap.Args, r Run, home string, env []string) []string {
 			a.RoBind(d, d)
 		}
 	}
+	maskSys(a)
 	if d := getEnv(env, "DISPLAY"); d != "" {
 		if n, ok := displayNumber(d); ok {
 			sock := "/tmp/.X11-unix/X" + n

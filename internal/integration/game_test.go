@@ -13,6 +13,7 @@ import (
 
 	"quartz/internal/accounts"
 	"quartz/internal/core/events"
+	"quartz/internal/core/landlock"
 	"quartz/internal/core/logging"
 	"quartz/internal/core/sysinfo"
 	"quartz/internal/core/tasks"
@@ -155,7 +156,7 @@ func TestLaunchOffline(t *testing.T) {
 	l := launch.New(launch.Config{
 		Instances: insts, Accounts: mgr, Installer: h.installer(), Loaders: h.loaders(), Java: h.java, Tasks: h.tasks,
 		Settings: st, Bus: bus, Redactor: red, BinDir: filepath.Join(h.root, "store", "bin"), Log: h.log,
-		Views: runview.New(runview.Config{Log: h.log}), Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log}), StoreRead: h.storeRead(),
+		Views: runview.New(runview.Config{Log: h.log}), Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log, Shim: landlock.Self}), StoreRead: h.storeRead(),
 	})
 	progress := map[int]string{}
 	bus.Subscribe(events.LaunchProgress, func(p any) {
@@ -284,7 +285,7 @@ func TestTwoCopies(t *testing.T) {
 		Instances: insts, Accounts: mgr, Installer: h.installer(), Loaders: h.loaders(), Java: h.java, Tasks: h.tasks,
 		Settings: st, Bus: bus, Redactor: red, BinDir: filepath.Join(h.root, "store", "bin"), Log: h.log,
 		Syncing: shared, Views: runview.New(runview.Config{Log: h.log}),
-		Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log}), StoreRead: h.storeRead(),
+		Sandbox: sandbox.New(sandbox.Config{DataRoot: h.root, Log: h.log, Shim: landlock.Self}), StoreRead: h.storeRead(),
 	})
 	bus.Subscribe(events.GameLog, func(p any) {
 		for _, ln := range p.(launch.LogBatch).Lines {

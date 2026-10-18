@@ -17,6 +17,9 @@ type Support struct {
 	Jail bool
 	// DisableUserns: --disable-userns is understood (bubblewrap 0.8).
 	DisableUserns bool
+	// Setuid: the binary is setuid root (older distributions), so it must
+	// not be started with no_new_privs set.
+	Setuid bool
 	// Reason says, for the player, why Bin or Jail is missing.
 	Reason string
 }
