@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/scrypt"
@@ -176,25 +175,37 @@ func loadSecret() (minisign.SecretKey, error) {
 	return unseal(data, pass)
 }
 
-// publicKey is the base64 line built into releases.
-func publicKey() (string, error) {
+// loadPublic reads the public key built into releases.
+func loadPublic() (minisign.PublicKey, error) {
 	dir, err := keyDir()
 	if err != nil {
-		return "", err
+		return minisign.PublicKey{}, err
 	}
 	data, err := os.ReadFile(filepath.Join(dir, pubFile)) //nolint:gosec // our own key folder
 	if err != nil {
-		return "", fmt.Errorf("no public key (run keygen first): %w", err)
+		return minisign.PublicKey{}, fmt.Errorf("no public key (run keygen first): %w", err)
 	}
-	k, err := minisign.ParsePublicKey(string(data))
+	return minisign.ParsePublicKey(string(data))
+}
+
+// publicKey is the base64 line built into releases.
+func publicKey() (string, error) {
+	k, err := loadPublic()
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(k.String()), nil
+	return k.String(), nil
 }
 
+// signFile writes path.minisig, after checking the signature against the
+// public key builds carry: a key pair that doesn't belong together would
+// otherwise ship releases that installed launchers refuse.
 func signFile(path string) error {
 	sk, err := loadSecret()
+	if err != nil {
+		return err
+	}
+	pub, err := loadPublic()
 	if err != nil {
 		return err
 	}
@@ -202,5 +213,9 @@ func signFile(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path+".minisig", sk.Sign(data, "file:"+filepath.Base(path)), 0o644) //nolint:gosec // published next to the file
+	sig := sk.Sign(data, "file:"+filepath.Base(path))
+	if _, err := pub.Verify(data, sig); err != nil {
+		return fmt.Errorf("the signing key doesn't match %s: %w", pubFile, err)
+	}
+	return os.WriteFile(path+".minisig", sig, 0o644) //nolint:gosec // published next to the file
 }

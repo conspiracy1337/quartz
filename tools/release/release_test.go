@@ -262,3 +262,46 @@ func TestReleaseBuildsCarryNoDevTags(t *testing.T) {
 		}
 	}
 }
+
+func TestSignFileRefusesAMismatchedKeyPair(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("QUARTZ_RELEASE_KEYS", dir)
+	t.Setenv("QUARTZ_RELEASE_PASSPHRASE", "correct horse battery")
+	pub, sec, err := minisign.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _, err := minisign.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	box, err := seal(sec, []byte("correct horse battery"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(name string, b []byte) {
+		if err := os.WriteFile(filepath.Join(dir, name), b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(secretFile, box)
+	write("update.json", []byte(`{"version":"1.0.0"}`))
+	target := filepath.Join(dir, "update.json")
+
+	write(pubFile, []byte(other.File()))
+	if err := signFile(target); err == nil || !strings.Contains(err.Error(), "doesn't match") {
+		t.Fatal("a public key from another pair must be refused:", err)
+	}
+	if _, err := os.Stat(target + ".minisig"); !os.IsNotExist(err) {
+		t.Fatal("no signature may be written for a mismatched pair")
+	}
+
+	write(pubFile, []byte(pub.File()))
+	if err := signFile(target); err != nil {
+		t.Fatal(err)
+	}
+	sig, _ := os.ReadFile(target + ".minisig")
+	if _, err := pub.Verify([]byte(`{"version":"1.0.0"}`), sig); err != nil {
+		t.Fatal(err)
+	}
+}
