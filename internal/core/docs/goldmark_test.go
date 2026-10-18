@@ -121,11 +121,11 @@ func reachable(src string) string {
 	src = strings.ToValidUTF8(src, "\uFFFD")
 	var b strings.Builder
 	for i := 0; i < len(src); i++ {
-		switch {
-		case src[i] == '\r':
-		case src[i] == '\t':
+		switch src[i] {
+		case '\r':
+		case '\t':
 			b.WriteString("    ")
-		case src[i] == '\v' || src[i] == '\f':
+		case '\v', '\f':
 			b.WriteByte(' ') // never in descriptions; goldmark trims them in places
 		default:
 			b.WriteByte(src[i])

@@ -93,18 +93,6 @@ func (n *node) insertAfter(s *node) {
 	n.next = s
 }
 
-func (n *node) insertBefore(s *node) {
-	s.parent = n.parent
-	s.next = n
-	s.prev = n.prev
-	if n.prev != nil {
-		n.prev.next = s
-	} else if n.parent != nil {
-		n.parent.first = s
-	}
-	n.prev = s
-}
-
 func (n *node) unlink() {
 	if n.prev != nil {
 		n.prev.next = n.next

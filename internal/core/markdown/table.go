@@ -124,7 +124,7 @@ func tableRow(line string, aligns []byte, header bool) []string {
 			return cells
 		}
 		end := pos
-		for end < limit && !(line[end] == '|' && (end == 0 || line[end-1] != '\\')) {
+		for end < limit && (line[end] != '|' || end > 0 && line[end-1] == '\\') {
 			end++
 		}
 		cells = append(cells, trimSpace(line[pos:end]))

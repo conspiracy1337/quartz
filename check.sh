@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs every check a change must pass before it is merged: formatting, vet,
 # lint, Go and frontend tests, a production build and its release checks
-# (no development tags, under the 20 MB limit). Stops at the first failure.
+# (no development tags, Linux and Windows under the 20 MB limit). Stops at
+# the first failure.
 #   ./check.sh           offline checks
 #   ./check.sh -online   also the integration tests and govulncheck (network)
 set -euo pipefail
@@ -54,9 +55,16 @@ step "production build"
 ./build.sh >/dev/null
 go run ./tools/release verify build/bin/quartz
 
+# Windows builds come out about 1 MB larger (PE relocations and unwind data,
+# WebView2 bindings), so the limit is checked there too; the frontend is
+# reused from the build above.
+step "windows build"
+./build.sh -platform windows/amd64 -s -o quartz.exe >/dev/null
+go run ./tools/release verify build/bin/quartz.exe
+
 if $online; then
   step "integration tests"
-  go test -tags "integration${tags:+,$tags}" ./internal/integration/
+  go test -tags "integration${tags:+,$tags}" ./internal/integration/ ./internal/core/docs/
 
   step "govulncheck"
   govulncheck -tags "$tags" ./...

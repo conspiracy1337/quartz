@@ -521,7 +521,7 @@ func (p *parser) htmlBlockType(s string) int {
 		if blockTags[name] {
 			return 6
 		}
-		if name != "script" && name != "style" && name != "pre" && p.tip.kind != kParagraph && !(closing && hasAttr) {
+		if name != "script" && name != "style" && name != "pre" && p.tip.kind != kParagraph && (!closing || !hasAttr) {
 			return 7
 		}
 	}

@@ -279,7 +279,7 @@ func (in *inline) backslash() {
 	in.pos++
 	if in.pos < len(in.s) {
 		c := in.s[in.pos]
-		if c == '\n' && !(in.pos >= 2 && in.s[in.pos-2] == '\\') {
+		if c == '\n' && (in.pos < 2 || in.s[in.pos-2] != '\\') {
 			in.pos++
 			in.add(&node{kind: kHardBreak})
 			for in.pos < len(in.s) && isSpaceOrTab(in.s[in.pos]) {
@@ -830,7 +830,12 @@ func (in *inline) until(rest string, from int, closer string, memo int) int {
 // checkbox reads a task list item's "[ ]" or "[x]".
 func (in *inline) checkbox() bool {
 	s := in.s[in.pos:]
-	if len(s) < 3 || s[0] != '[' || s[2] != ']' || !(s[1] == 'x' || s[1] == 'X' || isSpace(s[1]) || s[1] == '\f') {
+	if len(s) < 3 || s[0] != '[' || s[2] != ']' {
+		return false
+	}
+	switch s[1] {
+	case 'x', 'X', ' ', '\t', '\n', '\r', '\f':
+	default:
 		return false
 	}
 	in.pos += 3
@@ -884,9 +889,10 @@ func (in *inline) linkify(at, skip int) bool {
 		}
 	}
 	i++
-	if line[i-1] == ')' {
+	switch line[i-1] {
+	case ')':
 		i -= max(0, strings.Count(line[:i], ")")-strings.Count(line[:i], "("))
-	} else if line[i-1] == ';' {
+	case ';':
 		j := i - 2
 		for j >= 0 && isAlnum(line[j]) {
 			j--

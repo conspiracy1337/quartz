@@ -24,18 +24,18 @@ func commonMark(src string) string {
 }
 
 type renderer struct {
-	strings.Builder
+	out strings.Builder
 }
 
 // raw writes an HTML block as it is, but for NUL (as goldmark).
 func (r *renderer) raw(s string) {
-	r.WriteString(strings.ReplaceAll(s, "\x00", "\uFFFD"))
+	r.out.WriteString(strings.ReplaceAll(s, "\x00", "\uFFFD"))
 }
 
 // cr starts a new line unless the output is at one.
 func (r *renderer) cr() {
-	if s := r.String(); s != "" && s[len(s)-1] != '\n' {
-		r.WriteByte('\n')
+	if s := r.out.String(); s != "" && s[len(s)-1] != '\n' {
+		r.out.WriteByte('\n')
 	}
 }
 
@@ -64,7 +64,7 @@ func render(doc *node) string {
 			n, entering = n.parent, false
 		}
 	}
-	return r.String()
+	return r.out.String()
 }
 
 func isContainerKind(k kind) bool {
@@ -90,115 +90,115 @@ func (r *renderer) enter(n *node) bool {
 	case kParagraph:
 		if !tightParagraph(n) {
 			r.cr()
-			r.WriteString("<p>")
+			r.out.WriteString("<p>")
 		}
 	case kHeading:
 		r.cr()
-		r.WriteString("<h" + strconv.Itoa(n.level) + ">")
+		r.out.WriteString("<h" + strconv.Itoa(n.level) + ">")
 	case kThematicBreak:
 		r.cr()
-		r.WriteString("<hr />")
+		r.out.WriteString("<hr />")
 		r.cr()
 	case kBlockQuote:
 		r.cr()
-		r.WriteString("<blockquote>")
+		r.out.WriteString("<blockquote>")
 		r.cr()
 	case kList:
 		r.cr()
 		if n.list.ordered {
 			if n.list.start != 1 {
-				r.WriteString(`<ol start="` + strconv.Itoa(n.list.start) + `">`)
+				r.out.WriteString(`<ol start="` + strconv.Itoa(n.list.start) + `">`)
 			} else {
-				r.WriteString("<ol>")
+				r.out.WriteString("<ol>")
 			}
 		} else {
-			r.WriteString("<ul>")
+			r.out.WriteString("<ul>")
 		}
 		r.cr()
 	case kItem:
-		r.WriteString("<li>")
+		r.out.WriteString("<li>")
 	case kCodeBlock:
 		r.cr()
-		r.WriteString("<pre><code")
+		r.out.WriteString("<pre><code")
 		if lang, _, _ := strings.Cut(n.info, " "); lang != "" {
-			r.WriteString(` class="language-`)
-			escapeHTML(&r.Builder, lang)
-			r.WriteByte('"')
+			r.out.WriteString(` class="language-`)
+			escapeHTML(&r.out, lang)
+			r.out.WriteByte('"')
 		}
-		r.WriteByte('>')
-		escapeHTML(&r.Builder, n.literal)
-		r.WriteString("</code></pre>")
+		r.out.WriteByte('>')
+		escapeHTML(&r.out, n.literal)
+		r.out.WriteString("</code></pre>")
 		r.cr()
 	case kHTMLBlock:
 		r.cr()
 		r.raw(n.literal)
 	case kTable:
 		r.cr()
-		r.WriteString("<table>\n")
+		r.out.WriteString("<table>\n")
 	case kTableRow:
 		if n.header {
-			r.WriteString("<thead>\n")
+			r.out.WriteString("<thead>\n")
 		} else if n.prev != nil && n.prev.header {
-			r.WriteString("<tbody>\n")
+			r.out.WriteString("<tbody>\n")
 		}
-		r.WriteString("<tr>\n")
+		r.out.WriteString("<tr>\n")
 	case kTableCell:
-		r.WriteString("<" + cellTag(n))
+		r.out.WriteString("<" + cellTag(n))
 		switch n.align {
 		case 'l':
-			r.WriteString(` align="left"`)
+			r.out.WriteString(` align="left"`)
 		case 'c':
-			r.WriteString(` align="center"`)
+			r.out.WriteString(` align="center"`)
 		case 'r':
-			r.WriteString(` align="right"`)
+			r.out.WriteString(` align="right"`)
 		}
-		r.WriteByte('>')
+		r.out.WriteByte('>')
 	case kText:
-		escapeHTML(&r.Builder, n.literal)
+		escapeHTML(&r.out, n.literal)
 	case kSoftBreak:
-		r.WriteByte('\n')
+		r.out.WriteByte('\n')
 	case kHardBreak:
-		r.WriteString("<br />\n")
+		r.out.WriteString("<br />\n")
 	case kCode:
-		r.WriteString("<code>")
-		escapeHTML(&r.Builder, n.literal)
-		r.WriteString("</code>")
+		r.out.WriteString("<code>")
+		escapeHTML(&r.out, n.literal)
+		r.out.WriteString("</code>")
 	case kHTMLInline:
-		r.WriteString(n.literal)
+		r.out.WriteString(n.literal)
 	case kCheckbox:
 		if n.checked {
-			r.WriteString(`<input checked="" disabled="" type="checkbox" /> `)
+			r.out.WriteString(`<input checked="" disabled="" type="checkbox" /> `)
 		} else {
-			r.WriteString(`<input disabled="" type="checkbox" /> `)
+			r.out.WriteString(`<input disabled="" type="checkbox" /> `)
 		}
 	case kEmph:
-		r.WriteString("<em>")
+		r.out.WriteString("<em>")
 	case kStrong:
-		r.WriteString("<strong>")
+		r.out.WriteString("<strong>")
 	case kDel:
-		r.WriteString("<del>")
+		r.out.WriteString("<del>")
 	case kLink:
-		r.WriteString(`<a href="`)
-		escapeHTML(&r.Builder, linkDest(n))
-		r.WriteByte('"')
+		r.out.WriteString(`<a href="`)
+		escapeHTML(&r.out, linkDest(n))
+		r.out.WriteByte('"')
 		if n.title != "" {
-			r.WriteString(` title="`)
-			escapeHTML(&r.Builder, unescape(n.title))
-			r.WriteByte('"')
+			r.out.WriteString(` title="`)
+			escapeHTML(&r.out, unescape(n.title))
+			r.out.WriteByte('"')
 		}
-		r.WriteByte('>')
+		r.out.WriteByte('>')
 	case kImage:
-		r.WriteString(`<img src="`)
-		escapeHTML(&r.Builder, linkDest(n))
-		r.WriteString(`" alt="`)
-		escapeHTML(&r.Builder, plainText(n))
-		r.WriteByte('"')
+		r.out.WriteString(`<img src="`)
+		escapeHTML(&r.out, linkDest(n))
+		r.out.WriteString(`" alt="`)
+		escapeHTML(&r.out, plainText(n))
+		r.out.WriteByte('"')
 		if n.title != "" {
-			r.WriteString(` title="`)
-			escapeHTML(&r.Builder, unescape(n.title))
-			r.WriteByte('"')
+			r.out.WriteString(` title="`)
+			escapeHTML(&r.out, unescape(n.title))
+			r.out.WriteByte('"')
 		}
-		r.WriteString(" />")
+		r.out.WriteString(" />")
 		return false
 	}
 	return true
@@ -208,47 +208,47 @@ func (r *renderer) exit(n *node) {
 	switch n.kind {
 	case kParagraph:
 		if !tightParagraph(n) {
-			r.WriteString("</p>")
+			r.out.WriteString("</p>")
 			r.cr()
 		}
 	case kHeading:
-		r.WriteString("</h" + strconv.Itoa(n.level) + ">")
+		r.out.WriteString("</h" + strconv.Itoa(n.level) + ">")
 		r.cr()
 	case kBlockQuote:
 		r.cr()
-		r.WriteString("</blockquote>")
+		r.out.WriteString("</blockquote>")
 		r.cr()
 	case kList:
 		r.cr()
 		if n.list.ordered {
-			r.WriteString("</ol>")
+			r.out.WriteString("</ol>")
 		} else {
-			r.WriteString("</ul>")
+			r.out.WriteString("</ul>")
 		}
 		r.cr()
 	case kItem:
-		r.WriteString("</li>")
+		r.out.WriteString("</li>")
 		r.cr()
 	case kTable:
 		if n.last != nil && !n.last.header {
-			r.WriteString("</tbody>\n")
+			r.out.WriteString("</tbody>\n")
 		}
-		r.WriteString("</table>\n")
+		r.out.WriteString("</table>\n")
 	case kTableRow:
-		r.WriteString("</tr>\n")
+		r.out.WriteString("</tr>\n")
 		if n.header {
-			r.WriteString("</thead>\n")
+			r.out.WriteString("</thead>\n")
 		}
 	case kTableCell:
-		r.WriteString("</" + cellTag(n) + ">\n")
+		r.out.WriteString("</" + cellTag(n) + ">\n")
 	case kEmph:
-		r.WriteString("</em>")
+		r.out.WriteString("</em>")
 	case kStrong:
-		r.WriteString("</strong>")
+		r.out.WriteString("</strong>")
 	case kDel:
-		r.WriteString("</del>")
+		r.out.WriteString("</del>")
 	case kLink:
-		r.WriteString("</a>")
+		r.out.WriteString("</a>")
 	}
 }
 

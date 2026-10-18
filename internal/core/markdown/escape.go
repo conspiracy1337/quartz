@@ -28,7 +28,9 @@ func isHex(c byte) bool { return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' ||
 
 func isPunctRune(r rune) bool { return unicode.IsPunct(r) || unicode.IsSymbol(r) }
 
-func isSpaceRune(r rune) bool { return r < 0x80 && isSpace(byte(r)) || unicode.IsSpace(r) }
+// isSpaceRune is goldmark's util.IsSpaceRune (its ASCII spaces are all
+// unicode.IsSpace).
+func isSpaceRune(r rune) bool { return unicode.IsSpace(r) }
 
 func isBlank(s string) bool {
 	for i := 0; i < len(s); i++ {
@@ -290,7 +292,7 @@ func urlEscape(s string, resolve bool) string {
 // the one common full folding (ß, ẞ → ss) added.
 func normalizeLabel(s string) string {
 	s = strings.Trim(s, " \t\n\v\f\r")
-	s = strings.Join(strings.FieldsFunc(s, func(r rune) bool { return r < 0x80 && isSpace(byte(r)) }), " ")
+	s = strings.Join(strings.FieldsFunc(s, func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' }), " ")
 	s = strings.ToLower(strings.ToUpper(s))
 	return strings.NewReplacer("ß", "ss", "ẞ", "ss").Replace(s)
 }
