@@ -25,10 +25,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"quartz/internal/core/bwrap"
 	"quartz/internal/core/landlock"
 	"quartz/internal/core/procx"
 	"quartz/internal/sandbox/rules"
@@ -39,7 +41,7 @@ type redteamEnv struct {
 	secret, homeFile                string
 	jarDir, jarPath                 string
 	javaBin                         string
-	listen                          string
+	listen, abstract                string
 	tools                           map[string]string // CANARY_* -> absolute path
 }
 
@@ -54,6 +56,9 @@ func TestRedteamEscapes(t *testing.T) {
 		t.Skip("no DISPLAY: the X11 vectors need a running X/XWayland server")
 	}
 	javaBin, javacBin, jarBin := findJDK(t)
+	// A planted secret in the launcher's own environment: FilterEnv must drop it,
+	// so the game never sees it (positive control for the env-leak vector).
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "CANARY-LEAKED-SECRET-must-not-reach-the-game")
 	e := setupRedteam(t, javaBin)
 	compileProbe(t, javacBin, jarBin, e)
 
@@ -75,12 +80,33 @@ func TestRedteamEscapes(t *testing.T) {
 // --- invariants: these must hold under every preset. ---
 
 func checkInvariants(t *testing.T, results map[string]map[string]string) {
+	landlockScoped := landlock.Supported() && !bwrap.Detect().Setuid
 	for preset, got := range results {
 		must := func(vector, want string) {
 			if v := got[vector]; v != "" && result(v) != want {
 				t.Errorf("[%s] INVARIANT BROKEN %s: got %q, want %s", preset, vector, result(v), want)
 			}
 		}
+		// mustNot fails only on a specific escape value, so SKIP (FFI absent) and
+		// BLOCKED/OPEN both pass - the right shape for the FFI-gated vectors.
+		mustNot := func(vector, bad string) {
+			if v := got[vector]; v != "" && result(v) == bad {
+				t.Errorf("[%s] INVARIANT BROKEN %s: got %s :: %s", preset, vector, bad, detail(v))
+			}
+		}
+		// The abstract-socket scope (round 2's headline fix): the host X server
+		// and the canary abstract socket must be unreachable where Landlock runs.
+		if landlockScoped {
+			mustNot("abstract-x11", "REACHABLE")
+			mustNot("abstract-canary", "REACHABLE")
+		}
+		// seccomp must hold regardless of preset or Landlock.
+		mustNot("sock-family-alg", "REACHABLE")
+		mustNot("sock-family-packet", "REACHABLE")
+		mustNot("seccomp-raw", "REACHABLE")
+		// Round-2 fingerprint scrubbing and the env filter.
+		mustNot("hw-ids", "LEAK")
+		mustNot("env-leak", "LEAK")
 		must("fs-launcher-secret", "BLOCKED")
 		must("fs-home-secret", "BLOCKED")
 		must("no-new-privs", "INFO") // NoNewPrivs=1
@@ -112,9 +138,10 @@ func checkInvariants(t *testing.T, results map[string]map[string]string) {
 			}
 		}
 	}
-	// Strict must remove the host network.
+	// Strict must remove the host network, so loopback, netlink and the host
+	// connection table are all gone once the net namespace is unshared.
 	if s := results["Strict"]; s != nil {
-		for _, v := range []string{"net-loopback", "net-netlink"} {
+		for _, v := range []string{"net-loopback", "net-netlink", "proc-net"} {
 			if r := result(s[v]); r != "" && r != "BLOCKED" {
 				t.Errorf("[Strict] INVARIANT BROKEN %s: got %q, want BLOCKED (Strict unshares the net namespace)", v, r)
 			}
@@ -173,11 +200,15 @@ func runProbe(t *testing.T, e *redteamEnv, preset string, set rules.Settings) ma
 		"CANARY_HOME="+e.homeFile,
 		"CANARY_GAME="+e.game,
 		"CANARY_LISTEN="+e.listen,
+		"CANARY_ABSTRACT="+e.abstract,
 	)
 	for k, v := range e.tools {
 		env = append(env, k+"="+v)
 	}
-	spec, j, err := New(Config{DataRoot: e.root, Shim: landlock.Self}).Wrap(r, procx.Spec{Argv: []string{e.javaBin, "-jar", e.jarPath}, Dir: e.game, Env: env})
+	// --enable-native-access silences the FFI warning (JDK 17+); the probe uses
+	// the Foreign Function API to issue the raw syscalls a real mod would.
+	argv := []string{e.javaBin, "--enable-native-access=ALL-UNNAMED", "-jar", e.jarPath}
+	spec, j, err := New(Config{DataRoot: e.root, Shim: landlock.Self}).Wrap(r, procx.Spec{Argv: argv, Dir: e.game, Env: env})
 	if err != nil {
 		t.Fatalf("[%s] Wrap: %v", preset, err)
 	}
@@ -264,6 +295,25 @@ func setupRedteam(t *testing.T, javaBin string) *redteamEnv {
 	}()
 	e.listen = ln.Addr().String()
 
+	// A host abstract unix socket: a known-present target for the abstract-socket
+	// scope. Abstract names live in the net namespace, so the mount wall can't
+	// hide it; the Landlock scope must. "@" is Go's spelling of a leading NUL.
+	e.abstract = fmt.Sprintf("@quartz-redteam-%d", os.Getpid())
+	al, err := net.Listen("unix", e.abstract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = al.Close() })
+	go func() {
+		for {
+			c, err := al.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
+
 	// Host binaries the probe execs to show seccomp denials and netlink reach;
 	// absolute paths, valid inside the jail because /usr is bound read-only.
 	for env, name := range map[string]string{"CANARY_IP": "ip", "CANARY_UNSHARE": "unshare", "CANARY_MOUNT": "mount", "CANARY_STRACE": "strace"} {
@@ -290,13 +340,18 @@ func compileProbe(t *testing.T, javacBin, jarBin string, e *redteamEnv) {
 	}
 }
 
-// findJDK returns java, javac and jar from one JDK >= 16.
+// findJDK returns java, javac and jar from one JDK >= 16. QUARTZ_JDK_BIN wins
+// outright; otherwise it prefers the highest feature version present, so the FFI
+// vectors (stable in JDK 22) run by default instead of being skipped.
 func findJDK(t *testing.T) (javaBin, javacBin, jarBin string) {
 	t.Helper()
-	var bins []string
 	if b := os.Getenv("QUARTZ_JDK_BIN"); b != "" {
-		bins = append(bins, b)
+		if jv, jc, jr, ok := jdkTriple(b); ok {
+			return jv, jc, jr
+		}
+		t.Skipf("QUARTZ_JDK_BIN=%s has no java+javac+jar", b)
 	}
+	var bins []string
 	home, _ := os.UserHomeDir()
 	for _, pat := range []string{
 		filepath.Join(home, ".asdf/installs/java/*/bin"),
@@ -306,20 +361,46 @@ func findJDK(t *testing.T) (javaBin, javacBin, jarBin string) {
 		m, _ := filepath.Glob(pat)
 		bins = append(bins, m...)
 	}
-	for _, b := range bins {
-		jc, jr, jv := filepath.Join(b, "javac"), filepath.Join(b, "jar"), filepath.Join(b, "java")
-		if fileExists(jc) && fileExists(jr) && fileExists(jv) {
-			return jv, jc, jr
-		}
-	}
 	if jc, err := exec.LookPath("javac"); err == nil {
-		b := filepath.Dir(jc)
-		if fileExists(filepath.Join(b, "jar")) && fileExists(filepath.Join(b, "java")) {
-			return filepath.Join(b, "java"), jc, filepath.Join(b, "jar")
+		bins = append(bins, filepath.Dir(jc))
+	}
+	best := -1
+	for _, b := range bins {
+		jv, jc, jr, ok := jdkTriple(b)
+		if !ok {
+			continue
+		}
+		if m := javaMajor(jv); m > best {
+			best, javaBin, javacBin, jarBin = m, jv, jc, jr
 		}
 	}
-	t.Skip("no JDK (java+javac+jar) found; set QUARTZ_JDK_BIN")
-	return "", "", ""
+	if best < 0 {
+		t.Skip("no JDK (java+javac+jar) found; set QUARTZ_JDK_BIN")
+	}
+	return javaBin, javacBin, jarBin
+}
+
+func jdkTriple(bin string) (jv, jc, jr string, ok bool) {
+	jv, jc, jr = filepath.Join(bin, "java"), filepath.Join(bin, "javac"), filepath.Join(bin, "jar")
+	return jv, jc, jr, fileExists(jv) && fileExists(jc) && fileExists(jr)
+}
+
+// javaMajor is the feature version from `java -version` (e.g. "26.0.2" -> 26),
+// or 0 if it can't be read.
+func javaMajor(javaBin string) int {
+	out, err := exec.Command(javaBin, "-version").CombinedOutput()
+	if err != nil {
+		return 0
+	}
+	i := strings.IndexByte(string(out), '"')
+	if i < 0 {
+		return 0
+	}
+	ver := string(out)[i+1:]
+	ver = ver[:strings.IndexByte(ver, '"')]
+	ver = strings.TrimPrefix(ver, "1.") // 1.8 -> 8
+	n, _ := strconv.Atoi(strings.SplitN(ver, ".", 2)[0])
+	return n
 }
 
 func hostMachineID() string {

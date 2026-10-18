@@ -25,6 +25,9 @@
 
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.lang.foreign.*;
+import java.lang.foreign.MemoryLayout.PathElement;
+import java.lang.invoke.MethodHandle;
 import java.net.*;
 import java.nio.*;
 import java.nio.channels.*;
@@ -54,6 +57,17 @@ public class Probe {
         try { new X11().run(); } catch (Throwable t) { line("x11", "ERROR", t.toString()); }
         try { seccomp(); } catch (Throwable t) { line("seccomp", "ERROR", t.toString()); }
         try { devices(); } catch (Throwable t) { line("devices", "ERROR", t.toString()); }
+        // Round-3 vectors: the attack surface round 2 created or left open, fired
+        // the way a real malicious mod would (raw libc calls via the Foreign
+        // Function API, or a bundled JNI .so) rather than Java's stdlib.
+        try { abstractSockets(); } catch (Throwable t) { line("abstract", "ERROR", t.toString()); }
+        try { x11Tcp(); } catch (Throwable t) { line("x11-tcp", "ERROR", t.toString()); }
+        try { socketFamilies(); } catch (Throwable t) { line("sock-family", "ERROR", t.toString()); }
+        try { seccompRaw(); } catch (Throwable t) { line("seccomp-raw", "ERROR", t.toString()); }
+        try { procNet(); } catch (Throwable t) { line("proc-net", "ERROR", t.toString()); }
+        try { hardwareIds(); } catch (Throwable t) { line("hw-ids", "ERROR", t.toString()); }
+        try { audioCapture(); } catch (Throwable t) { line("audio-capture", "ERROR", t.toString()); }
+        try { envLeak(); } catch (Throwable t) { line("env-leak", "ERROR", t.toString()); }
         System.out.flush();
         Runtime.getRuntime().halt(0);
     }
@@ -195,6 +209,273 @@ public class Probe {
         }
         line("devices", open.isEmpty() ? "BLOCKED" : "OPEN",
              open.isEmpty() ? "no GPU/audio device nodes" : "device nodes open to the game: " + open + " (by design; direct host-hardware surface)");
+    }
+
+    // ============================================================
+    // Round-3 vectors. These use Native (libc via the Foreign Function API) so
+    // the probe issues the exact syscalls a mod would, independent of which host
+    // binaries exist. On a JDK that gates FFI (< 22, Minecraft's bundled 21
+    // without --enable-preview) Native is unavailable and these print SKIP.
+    // ============================================================
+
+    // --- Abstract unix sockets: round 2's headline fix. Abstract names live in
+    // the network namespace, not the filesystem, so under Standard (shared netns)
+    // the mount wall can't hide them; the Landlock scope must. The real prize is
+    // the host X server at @/tmp/.X11-unix/X<n> - an alternate path to the X11
+    // takeover that survives the path-socket being withheld on Wayland. ---
+    static void abstractSockets() {
+        if (!Native.ok()) { line("abstract-x11", "SKIP", Native.why()); line("abstract-canary", "SKIP", Native.why()); return; }
+        // A mod needs no DISPLAY to find the X server: :0 is the near-universal
+        // default, so try the real number if present, then 0..2 as a mod would.
+        LinkedHashSet<Integer> dpys = new LinkedHashSet<>();
+        int d = displayNumber(); if (d >= 0) dpys.add(d);
+        dpys.add(0); dpys.add(1); dpys.add(2);
+        String lastErr = "no attempt";
+        boolean reached = false;
+        for (int n : dpys) {
+            Native.Conn c = Native.connectUnix("/tmp/.X11-unix/X" + n, true);
+            if (c.fd >= 0) { Native.close(c.fd); line("abstract-x11", "REACHABLE", "connected to the host X server's abstract socket @/tmp/.X11-unix/X" + n + " - the Landlock scope did NOT block it; the X11 takeover is back via the abstract namespace"); reached = true; break; }
+            lastErr = "X" + n + " -> " + c.err();
+        }
+        if (!reached) line("abstract-x11", "BLOCKED", "the host X server's abstract socket is unreachable (" + lastErr + ") - abstract-socket scope holds even without DISPLAY");
+        // A known-present host abstract socket (the harness listens on it), so a
+        // BLOCKED result proves the scope, not merely that nothing was listening.
+        String canary = env("CANARY_ABSTRACT");
+        if (!canary.isEmpty()) {
+            String nm = canary.startsWith("@") ? canary.substring(1) : canary;
+            Native.Conn c = Native.connectUnix(nm, true);
+            if (c.fd >= 0) line("abstract-canary", "REACHABLE", "connected to a host abstract socket @" + nm + " outside the sandbox - abstract namespace is NOT scoped");
+            else line("abstract-canary", "BLOCKED", "connect(@" + nm + ") refused: " + c.err() + " - host abstract sockets are unreachable");
+        } else line("abstract-canary", "SKIP", "no CANARY_ABSTRACT");
+    }
+
+    // --- X over TCP: if the server listens on 6000+n (not -nolisten tcp), the
+    // shared netns offers it even with every unix socket withheld. ---
+    static void x11Tcp() {
+        int dpy = displayNumber();
+        if (dpy < 0) dpy = 0; // a mod tries :0 regardless of its own DISPLAY
+        int port = 6000 + dpy;
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress("127.0.0.1", port), 1500);
+            line("x11-tcp", "REACHABLE", "host X server reachable over TCP 127.0.0.1:" + port + " - another display path under the shared network");
+        } catch (Exception e) {
+            line("x11-tcp", "BLOCKED", "X over TCP 127.0.0.1:" + port + " refused (" + e.getClass().getSimpleName() + ")");
+        }
+    }
+
+    // --- Socket-family allowlist (seccomp). Only AF_UNSPEC/UNIX/INET/INET6/
+    // NETLINK may be created; the rest must get EAFNOSUPPORT. AF_ALG needs no
+    // capability, so unsandboxed it succeeds - a clean proof the filter runs.
+    // AF_PACKET (raw sniffing) also needs CAP_NET_RAW, so note the errno. ---
+    static void socketFamilies() {
+        if (!Native.ok()) { line("sock-family-alg", "SKIP", Native.why()); line("sock-family-packet", "SKIP", Native.why()); return; }
+        final int EAFNOSUPPORT = 97;
+        Native.Conn alg = Native.socket(38, 5, 0); // AF_ALG, SOCK_SEQPACKET
+        if (alg.fd >= 0) { Native.close(alg.fd); line("sock-family-alg", "REACHABLE", "AF_ALG socket created - the seccomp family allowlist is NOT filtering (userspace crypto / unexpected families reachable)"); }
+        else line("sock-family-alg", "BLOCKED", "AF_ALG refused: " + alg.err() + (alg.errno == EAFNOSUPPORT ? " (EAFNOSUPPORT - family allowlist enforced)" : ""));
+        Native.Conn pkt = Native.socket(17, 3, 0); // AF_PACKET, SOCK_RAW
+        if (pkt.fd >= 0) { Native.close(pkt.fd); line("sock-family-packet", "REACHABLE", "AF_PACKET raw socket created - host-network packet sniffing possible"); }
+        else line("sock-family-packet", "BLOCKED", "AF_PACKET refused: " + pkt.err() + (pkt.errno == EAFNOSUPPORT ? " (EAFNOSUPPORT - seccomp, before the capability check)" : " (also needs CAP_NET_RAW)"));
+    }
+
+    // --- Seccomp denylist, fired as raw syscalls (no host binaries needed). ---
+    static void seccompRaw() {
+        if (!Native.ok()) { line("seccomp-raw", "SKIP", Native.why()); return; }
+        if (!System.getProperty("os.arch").equals("amd64")) { line("seccomp-raw", "SKIP", "syscall numbers are amd64-only here"); return; }
+        // x86_64 syscall numbers (match seccomp/nr_amd64.go).
+        int[][] calls = {
+            {272, 0x10000000, 0, 0}, // unshare(CLONE_NEWUSER)
+            {165, 0, 0, 0},          // mount
+            {101, 16, 1, 0},         // ptrace(PTRACE_ATTACH, 1)
+            {321, 0, 0, 0},          // bpf
+            {425, 1, 0, 0},          // io_uring_setup
+            {250, 0, 0, 0},          // keyctl
+            {308, 0, 0, 0},          // setns
+            {298, 0, 0, 0},          // perf_event_open
+            {310, 1, 0, 0},          // process_vm_readv(pid=1,...)
+            {248, 0, 0, 0},          // add_key
+        };
+        String[] names = {"unshare", "mount", "ptrace", "bpf", "io_uring_setup", "keyctl", "setns", "perf_event_open", "process_vm_readv", "add_key"};
+        final int EPERM = 1, ENOSYS = 38;
+        StringBuilder blocked = new StringBuilder(), open = new StringBuilder();
+        for (int i = 0; i < calls.length; i++) {
+            Native.Conn r = Native.syscall(calls[i][0], calls[i][1], calls[i][2], calls[i][3]);
+            boolean denied = r.fd < 0 && (r.errno == EPERM || r.errno == ENOSYS);
+            (denied ? blocked : open).append(names[i]).append('(').append(r.errno == EPERM ? "EPERM" : r.errno == ENOSYS ? "ENOSYS" : ("ret=" + r.fd + "/errno=" + r.errno)).append(") ");
+        }
+        if (open.length() == 0) line("seccomp-raw", "BLOCKED", "all denylisted syscalls refused: " + blocked.toString().trim());
+        else line("seccomp-raw", "REACHABLE", "syscalls NOT refused: " + open.toString().trim() + " | refused: " + blocked.toString().trim());
+    }
+
+    // --- /proc/net: the host connection table, readable without `ip`/netlink
+    // when the netns is shared. Part of the accepted network risk under Standard;
+    // must be empty/loopback-only once Strict unshares the net. ---
+    static void procNet() {
+        int peers = 0, listen = 0;
+        for (String f : new String[]{"/proc/net/tcp", "/proc/net/tcp6"}) {
+            try {
+                List<String> lines = Files.readAllLines(Paths.get(f));
+                for (int i = 1; i < lines.size(); i++) {
+                    String[] p = lines.get(i).trim().split("\\s+");
+                    if (p.length < 4) continue;
+                    if (p[3].equals("0A")) listen++; else peers++;   // 0A = TCP_LISTEN
+                }
+            } catch (Exception ignore) {}
+        }
+        if (peers + listen == 0) line("proc-net", "BLOCKED", "/proc/net/tcp* empty - no host sockets (net namespace isolated)");
+        else line("proc-net", "REACHABLE", "host connection table via /proc/net: " + listen + " listening + " + peers + " established/other sockets visible (passive recon, no tools needed)");
+    }
+
+    // --- Stable hardware IDs round 2 masks: NIC MACs, disk serials, DMI serial.
+    // Any readable value here is a cross-run fingerprint; all must be gone. ---
+    static void hardwareIds() {
+        ArrayList<String> leaks = new ArrayList<>();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(Paths.get("/sys/class/net"))) {
+            for (Path nic : ds) {
+                if (nic.getFileName().toString().equals("lo")) continue;
+                try {
+                    String mac = Files.readString(nic.resolve("address")).trim();
+                    if (!mac.isEmpty() && !mac.equals("00:00:00:00:00:00")) leaks.add(nic.getFileName() + "=" + mac);
+                } catch (Exception ignore) {}
+            }
+        } catch (Exception ignore) {}
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(Paths.get("/sys/block"))) {
+            for (Path blk : ds) {
+                for (String f : new String[]{"device/serial", "device/wwid", "serial", "wwid"}) {
+                    try {
+                        String v = Files.readString(blk.resolve(f)).trim();
+                        if (!v.isEmpty()) { leaks.add(blk.getFileName() + "/" + f + "=" + v); break; }
+                    } catch (Exception ignore) {}
+                }
+            }
+        } catch (Exception ignore) {}
+        try {
+            String s = Files.readString(Paths.get("/sys/class/dmi/id/product_serial")).trim();
+            if (!s.isEmpty()) leaks.add("dmi.product_serial=" + s);
+        } catch (Exception ignore) {}
+        if (leaks.isEmpty()) line("hw-ids", "BLOCKED", "no NIC MAC, disk serial or DMI serial readable - hardware IDs masked");
+        else line("hw-ids", "LEAK", "stable hardware identifiers readable: " + leaks);
+    }
+
+    // --- Audio server reach = microphone capture surface. Graphics is always-on
+    // (even under Strict) and binds the PipeWire/Pulse sockets, so a mod that
+    // bundles the client libs can record. Accepted risk; reported as OPEN. ---
+    static void audioCapture() {
+        String run = env("XDG_RUNTIME_DIR");
+        ArrayList<String> reachable = new ArrayList<>();
+        if (!run.isEmpty() && Native.ok()) {
+            for (String s : new String[]{"pipewire-0", "pulse/native"}) {
+                Native.Conn c = Native.connectUnix(run + "/" + s, false);
+                if (c.fd >= 0) { reachable.add(s); Native.close(c.fd); }
+            }
+        }
+        if (reachable.isEmpty()) line("audio-capture", Native.ok() ? "BLOCKED" : "SKIP", Native.ok() ? "no audio server socket reachable" : Native.why());
+        else line("audio-capture", "OPEN", "audio server reachable (" + reachable + "); a mod with the client libs can capture the microphone - by design under the always-on Graphics rule");
+    }
+
+    // --- Environment leak: FilterEnv must keep launcher secrets out of the game's
+    // environment. Scan the process's own environ for credential-shaped names. ---
+    static void envLeak() {
+        ArrayList<String> hits = new ArrayList<>();
+        // Credential-shaped names. Deliberately NOT "SESSION"/"KEY" alone: the
+        // desktop-session hints FilterEnv passes on purpose (XDG_SESSION_TYPE,
+        // DBUS_SESSION_BUS_ADDRESS, XAUTHORITY) are plumbing, not secrets.
+        String[] needles = {"TOKEN", "SECRET", "PASSWORD", "PASSWD", "BEARER", "CREDENTIAL",
+                            "APIKEY", "API_KEY", "ACCESS_KEY", "PRIVATE_KEY", "REFRESH"};
+        for (String k : System.getenv().keySet()) {
+            String u = k.toUpperCase();
+            if (u.startsWith("CANARY")) continue; // injected by the harness itself
+            for (String n : needles) if (u.contains(n)) { hits.add(k); break; }
+        }
+        if (hits.isEmpty()) line("env-leak", "BLOCKED", "no credential-shaped variables in the game environment (FilterEnv held, incl. a planted secret)");
+        else line("env-leak", "LEAK", "credential-shaped env vars visible to the game: " + hits);
+    }
+
+    static int displayNumber() {
+        String display = env("DISPLAY");
+        if (display.isEmpty() || display.indexOf(':') < 0) return -1;
+        try { return Integer.parseInt(display.substring(display.indexOf(':') + 1).split("\\.")[0]); }
+        catch (Exception e) { return -1; }
+    }
+
+    // --- libc via the Foreign Function API: socket/connect/syscall/close with
+    // errno capture. A hostile mod would use exactly this (or a bundled JNI .so)
+    // to reach past the JDK's stdlib; the kernel filters don't care who calls. ---
+    static final class Native {
+        static boolean inited, available;
+        static String reason = "FFI not initialised";
+        static Linker L; static StructLayout CAP; static Linker.Option ERR;
+        static MethodHandle hSocket, hConnect, hClose, hSyscall;
+
+        static synchronized boolean ok() {
+            if (!inited) {
+                inited = true;
+                try {
+                    L = Linker.nativeLinker();
+                    CAP = Linker.Option.captureStateLayout();
+                    ERR = Linker.Option.captureCallState("errno");
+                    hSocket = dh("socket", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+                    hConnect = dh("connect", FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+                    hClose = L.downcallHandle(L.defaultLookup().find("close").get(), FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
+                    hSyscall = dh("syscall", FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG));
+                    available = true;
+                } catch (Throwable t) {
+                    reason = "FFI unavailable (" + t.getClass().getSimpleName() + "); needs JDK >= 22";
+                }
+            }
+            return available;
+        }
+        static String why() { return reason; }
+        static MethodHandle dh(String n, FunctionDescriptor d) { return L.downcallHandle(L.defaultLookup().find(n).get(), d, ERR); }
+        static int errnoOf(MemorySegment cs) { return cs.get(ValueLayout.JAVA_INT, CAP.byteOffset(PathElement.groupElement("errno"))); }
+
+        static final class Conn { int fd; int errno; Conn(int fd, int e){this.fd=fd;this.errno=e;} String err(){return errnoName(errno);} }
+
+        static Conn socket(int domain, int type, int proto) {
+            try (Arena a = Arena.ofConfined()) {
+                MemorySegment cs = a.allocate(CAP);
+                int fd = (int) hSocket.invoke(cs, domain, type, proto);
+                return new Conn(fd, fd < 0 ? errnoOf(cs) : 0);
+            } catch (Throwable t) { return new Conn(-1, -1); }
+        }
+        static void close(int fd) { try { hClose.invoke(fd); } catch (Throwable ignore) {} }
+
+        // connectUnix: AF_UNIX connect to a path, or an abstract name (leading NUL).
+        static Conn connectUnix(String name, boolean abstractNs) {
+            try (Arena a = Arena.ofConfined()) {
+                MemorySegment cs = a.allocate(CAP);
+                int fd = (int) hSocket.invoke(cs, 1, 1, 0); // AF_UNIX, SOCK_STREAM
+                if (fd < 0) return new Conn(-1, errnoOf(cs));
+                byte[] nb = name.getBytes(StandardCharsets.US_ASCII);
+                MemorySegment sa = a.allocate(2 + 108);
+                sa.set(ValueLayout.JAVA_SHORT, 0, (short) 1); // sun_family = AF_UNIX
+                int off = 2;
+                if (abstractNs) { sa.set(ValueLayout.JAVA_BYTE, off, (byte) 0); off++; }
+                MemorySegment.copy(MemorySegment.ofArray(nb), 0, sa, off, Math.min(nb.length, 107));
+                int alen = off + nb.length;
+                int rc = (int) hConnect.invoke(cs, fd, sa, alen);
+                int e = rc < 0 ? errnoOf(cs) : 0;
+                if (rc < 0) { close(fd); return new Conn(-1, e); }
+                return new Conn(fd, 0);
+            } catch (Throwable t) { return new Conn(-1, -1); }
+        }
+
+        static Conn syscall(long nr, long a1, long a2, long a3) {
+            try (Arena a = Arena.ofConfined()) {
+                MemorySegment cs = a.allocate(CAP);
+                long rc = (long) hSyscall.invoke(cs, nr, a1, a2, a3, 0L, 0L, 0L);
+                return new Conn((int) rc, rc < 0 ? errnoOf(cs) : 0);
+            } catch (Throwable t) { return new Conn(-1, -1); }
+        }
+
+        static String errnoName(int e) {
+            switch (e) {
+                case 1: return "EPERM"; case 2: return "ENOENT"; case 13: return "EACCES";
+                case 38: return "ENOSYS"; case 97: return "EAFNOSUPPORT"; case 111: return "ECONNREFUSED";
+                case 0: return "ok"; case -1: return "FFI-error";
+                default: return "errno " + e;
+            }
+        }
     }
 
     // --- Raw X11 client over the bound path socket. ---

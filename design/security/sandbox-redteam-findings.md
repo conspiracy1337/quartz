@@ -88,6 +88,58 @@ The regression tests for all of the above live in `redteam_test.go`
 (`checkInvariants`): run `QUARTZ_REDTEAM=1 go test ./internal/sandbox -run
 TestRedteamEscapes -v`.
 
+## Round 3 — adversarial re-test (2026-10-19)
+
+A pen-test pass that attacks the seams round 2 created or left open, fired the way
+a real malicious mod would: raw libc `socket`/`connect`/`syscall` through the
+JDK's Foreign Function API (a mod can equally bundle a JNI `.so`), not Java's
+stdlib. Run it with a JDK >= 22 so the FFI vectors execute (they `SKIP` on 21):
+
+```
+QUARTZ_JDK_BIN=~/.jdks/openjdk-26.0.2/bin QUARTZ_REDTEAM=1 \
+  go test ./internal/sandbox -run TestRedteamEscapes -v
+```
+
+Runtime matrix (this KDE/Wayland + XWayland box, kernel 7.0, Landlock active):
+
+| vector | Standard | Strict | meaning |
+|---|---|---|---|
+| abstract-x11 | BLOCKED | BLOCKED | host X server's **abstract** socket `@/tmp/.X11-unix/X0` unreachable — the round-2 fix holds even with no `DISPLAY` |
+| abstract-canary | BLOCKED | BLOCKED | a known-present host abstract socket unreachable (Landlock scope, proven against a live target) |
+| x11-tcp | BLOCKED | BLOCKED | no host X server on TCP 6000+ |
+| sock-family-alg | BLOCKED | BLOCKED | `AF_ALG` → `EAFNOSUPPORT` (seccomp family allowlist runs) |
+| sock-family-packet | BLOCKED | BLOCKED | `AF_PACKET` raw socket refused (no host packet sniffing) |
+| seccomp-raw | BLOCKED | BLOCKED | raw `unshare/mount/ptrace/bpf/io_uring_setup/keyctl/setns/perf_event_open/process_vm_readv/add_key` all `EPERM`/`ENOSYS` |
+| hw-ids | BLOCKED | BLOCKED | no NIC MAC, disk serial or DMI serial readable |
+| env-leak | BLOCKED | BLOCKED | `FilterEnv` strips a planted `AWS_SECRET_ACCESS_KEY`; no credential-shaped vars reach the game |
+| proc-net | **REACHABLE** | BLOCKED | `/proc/net/tcp*` lists the host connection table (no tools needed) under the shared netns |
+| audio-capture | **OPEN** | **OPEN** | PipeWire/Pulse sockets reachable → microphone capture surface |
+
+Negative control: rerunning one probe with the Landlock shim disabled
+(`Shim: ""`) flips `abstract-x11` and `abstract-canary` to **REACHABLE** under
+Standard — i.e. the mod connects straight to the host X server again — proving the
+scope is what closes it (and that the test has teeth). Under Strict both stay
+BLOCKED even without the shim, because Strict's net-namespace unshare isolates
+abstract sockets independently (defense in depth).
+
+### No new escapes. Everything round 2 fixed still holds, with runtime proof.
+
+Two findings are **accepted risk** (owner decision), documented, not changed:
+
+- **Shared host network under Standard** (unchanged from #2) now also covers
+  `proc-net`: a mod reads `/proc/net/tcp`+`tcp6` directly to enumerate the host's
+  listening and established sockets — passive recon with no `ip`/netlink needed.
+  Strict removes it with the rest of the network.
+- **Microphone / audio capture.** `Graphics` is always-on (even under Strict) and
+  binds the PipeWire/Pulse sockets, so a mod that bundles the client libraries can
+  record the microphone. Same class as the GPU/audio device nodes: a by-design
+  opening for the game's own audio. Left as accepted risk this round; closing it
+  would need a separate Microphone rule (UI) or dropping the audio socket under
+  Strict only.
+
+The round-3 vectors and invariants live in `redteam_test.go` and
+`testdata/redteam/Probe.java`.
+
 ## Findings, ranked (original proof)
 
 ### 1. HIGH — X11/XWayland full takeover; not closed by any preset
