@@ -13,7 +13,7 @@ a{color:inherit}
 /* ---------- app shell ---------- */
 .app{display:flex;height:100vh;min-height:600px;overflow:hidden;background:var(--bg)}
 .app-side{flex:0 0 auto;height:100%}
-.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.main{position:relative;flex:1 1 auto;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 .main-page{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .scroll{flex:1 1 auto;min-height:0;overflow:auto}
 .page{padding:20px 28px 28px;display:flex;flex-direction:column;gap:20px}

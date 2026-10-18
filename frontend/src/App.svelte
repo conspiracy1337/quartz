@@ -125,9 +125,15 @@
   {/if}
 {/snippet}
 
+<!-- Inside <main> the toast centres on the page, not on the window with the sidebar. -->
+{#snippet toast()}
+  {#if session.toast}{#key session.toastSeq}<Toast {...session.toast} />{/key}{/if}
+{/snippet}
+
 <div class="app" style="position: relative">
   {#if route.name === 'setup'}
     {#if route.step === 1}<Welcome />{:else if route.step === 2}<SignIn />{:else}<ImportLaunchers />{/if}
+    {@render toast()}
   {:else}
     <div class="app-side"><Sidebar active={sideKey(route)} instanceId={route.name === 'instance' ? route.id : undefined} downloads={tasks.active.length} /></div>
     <main class="main">
@@ -138,6 +144,7 @@
       <div class="main-page">{@render page(route)}</div>
       <!-- The Downloads page and the download panel show the same queue, so the bar would only repeat it. -->
       {#if route.name !== 'downloads' && !downloadPanel}<StatusBar />{/if}
+      {@render toast()}
     </main>
   {/if}
 
@@ -147,7 +154,6 @@
   <!-- An install from Browse or a project page: its queue floats until it ends (the launch panel wins the corner). -->
   {#if downloadPanel}<DownloadPanel />{/if}
   {#if hostPanel && session.hostShown}<HostPanel host={session.hostShown} />{/if}
-  {#if session.toast}{#key session.toastSeq}<Toast {...session.toast} />{/key}{/if}
   {#if session.instanceMenu}{#key session.instanceMenu}<InstanceMenu {...session.instanceMenu} />{/key}{/if}
 
   <!-- Keyed by the overlay object: a dialog keeps reading its own props after a handler closes it. -->
