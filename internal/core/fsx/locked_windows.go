@@ -29,3 +29,8 @@ func Locked(path string) bool {
 	_ = windows.UnlockFileEx(h, 0, 1, 0, &ol)
 	return false
 }
+
+// inUse reports an error from another process having the file open.
+func inUse(err error) bool {
+	return errors.Is(err, windows.ERROR_ACCESS_DENIED) || errors.Is(err, windows.ERROR_SHARING_VIOLATION)
+}

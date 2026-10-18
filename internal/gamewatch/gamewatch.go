@@ -67,6 +67,17 @@ func (w *Watcher) Watch(id string) {
 	go w.loop(fw, id)
 }
 
+// Forget stops following instance id before its folder moves: an open
+// watch holds the folders, and Windows can't move them then.
+func (w *Watcher) Forget(id string) {
+	w.mu.Lock()
+	watching := w.id == id
+	w.mu.Unlock()
+	if watching {
+		w.Watch("")
+	}
+}
+
 func (w *Watcher) loop(fw *fsnotify.Watcher, id string) {
 	for {
 		select {

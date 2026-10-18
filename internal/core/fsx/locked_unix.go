@@ -23,3 +23,7 @@ func Locked(path string) bool {
 	}
 	return lk.Type != unix.F_UNLCK
 }
+
+// inUse reports an error from another process having the file open: Unix
+// renames don't fail for that.
+func inUse(error) bool { return false }

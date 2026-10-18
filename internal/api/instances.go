@@ -44,6 +44,9 @@ type InstanceDeps struct {
 	Hosting func(id string) bool
 	// Content counts items and moves mods along with version changes; nil in tests.
 	Content *content.Service
+	// Unwatch stops following an instance's worlds and screenshots before
+	// its folder moves; nil in tests.
+	Unwatch func(id string)
 	// Worlds and Servers count an instance's worlds and servers; nil in tests.
 	Worlds  Counter
 	Servers Counter
@@ -567,9 +570,7 @@ func (s *Instances) Trash(id string) (instance.TrashEntry, error) {
 	if err := s.guard(id); err != nil {
 		return instance.TrashEntry{}, err
 	}
-	if s.d.Content != nil {
-		s.d.Content.Forget(id)
-	}
+	s.release(id)
 	in, _ := s.d.Store.Get(id)
 	e, err := s.d.Store.Trash(id, time.Now())
 	if err == nil {
@@ -579,6 +580,17 @@ func (s *Instances) Trash(id string) (instance.TrashEntry, error) {
 		s.d.Bus.Emit(events.InstancesChanged, nil)
 	}
 	return e, err
+}
+
+// release lets go of an instance's folders before they move: open watches
+// hold them, and Windows can't move a folder with anything open inside.
+func (s *Instances) release(id string) {
+	if s.d.Content != nil {
+		s.d.Content.Forget(id)
+	}
+	if s.d.Unwatch != nil {
+		s.d.Unwatch(id)
+	}
 }
 
 // TrashList lists the trash, newest first.
@@ -678,6 +690,7 @@ func (s *Instances) move(id, parent string) (string, error) {
 			if err := s.guard(id); err != nil {
 				return err
 			}
+			s.release(id)
 			_, err := s.d.Store.Move(ctx, plan, nil)
 			if err == nil {
 				s.d.Bus.Emit(events.InstancesChanged, nil)

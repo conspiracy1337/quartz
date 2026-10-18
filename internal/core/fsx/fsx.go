@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -183,4 +184,19 @@ func FileName(name, fallback string) string {
 		return fallback
 	}
 	return name
+}
+
+// renameWait bounds how long Rename retries.
+const renameWait = 3 * time.Second
+
+// Rename is os.Rename, retried for a few seconds while another process has
+// something open inside (Windows refuses to rename a folder then; virus
+// scanners and the search indexer open new files for a moment).
+func Rename(from, to string) error {
+	err := os.Rename(from, to)
+	for wait, deadline := 50*time.Millisecond, time.Now().Add(renameWait); err != nil && inUse(err) && time.Now().Before(deadline); wait *= 2 {
+		time.Sleep(wait)
+		err = os.Rename(from, to)
+	}
+	return err
 }

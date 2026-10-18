@@ -68,7 +68,7 @@ func (s *Store) Move(ctx context.Context, p MovePlan, progress func(done, total 
 		return Instance{}, err
 	}
 	_ = os.Remove(p.To) // an empty target folder is fine
-	renamed := os.Rename(p.From, p.To) == nil
+	renamed := fsx.Rename(p.From, p.To) == nil
 	if !renamed {
 		if err := copyTree(ctx, p.From, p.To, copyOpts{progress: progress}); err != nil {
 			_ = os.RemoveAll(p.To)

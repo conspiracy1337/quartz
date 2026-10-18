@@ -59,7 +59,7 @@ func (s *Store) Trash(id string, now time.Time) (TrashEntry, error) {
 		return TrashEntry{}, err
 	}
 	dst := filepath.Join(s.trash, key)
-	if err := os.Rename(s.Dir(id), dst); err != nil {
+	if err := fsx.Rename(s.Dir(id), dst); err != nil {
 		return TrashEntry{}, err
 	}
 	delete(s.files, id)
@@ -139,7 +139,7 @@ func (s *Store) Restore(key string) (Instance, error) {
 		id = s.newID(e.Name)
 	}
 	src := filepath.Join(s.trash, key)
-	if err := os.Rename(src, s.Dir(id)); err != nil {
+	if err := fsx.Rename(src, s.Dir(id)); err != nil {
 		s.mu.Unlock()
 		return Instance{}, err
 	}
