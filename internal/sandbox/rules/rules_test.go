@@ -1,6 +1,9 @@
 package rules
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 func TestPresets(t *testing.T) {
 	std := Default()
@@ -17,7 +20,7 @@ func TestPresets(t *testing.T) {
 		{std, Discord, "windows", Blocked}, // the only choice there
 		{std, Home, "linux", Blocked},
 		{strict, Synced, "linux", RO},
-		{strict, Internet, "linux", Blocked},
+		{strict, Internet, "linux", LAN},
 		{strict, Discord, "linux", Blocked},
 		{strict, Graphics, "linux", Allowed},
 		{strict, Instance, "darwin", RW},
@@ -46,7 +49,7 @@ func TestSetLevelGoesCustom(t *testing.T) {
 	}
 	// Custom keeps what shows; Standard resets.
 	c := Default().Apply(Strict, "linux").Apply(Custom, "linux")
-	if c.Level(Internet, "linux") != Blocked {
+	if c.Level(Internet, "linux") != LAN {
 		t.Fatal("custom lost the strict levels")
 	}
 	if c.Apply(Standard, "linux").Level(Internet, "linux") != Allowed {
@@ -55,14 +58,19 @@ func TestSetLevelGoesCustom(t *testing.T) {
 }
 
 func TestNormalize(t *testing.T) {
+	// Absolute paths differ by OS (filepath.IsAbs wants a drive on Windows).
+	abs := "/srv/"
+	if runtime.GOOS == "windows" {
+		abs = `C:\srv\`
+	}
 	s := Settings{Preset: "bogus", Levels: map[ID]Level{Internet: "maybe"}, Folders: []Folder{
-		{ID: "a1", Path: "/srv/maps", Level: RO},
-		{ID: "a1", Path: "/srv/other", Level: RO}, // duplicate id
+		{ID: "a1", Path: abs + "maps", Level: RO},
+		{ID: "a1", Path: abs + "other", Level: RO}, // duplicate id
 		{ID: "b2", Path: "relative", Level: RO},
-		{ID: "c3", Path: "/srv/x", Level: Allowed},
-		{ID: "BAD", Path: "/srv/y", Level: RW},
+		{ID: "c3", Path: abs + "x", Level: Allowed},
+		{ID: "BAD", Path: abs + "y", Level: RW},
 	}}.Normalize()
-	if s.Preset != Standard || s.Levels != nil || len(s.Folders) != 1 || s.Folders[0].Path != "/srv/maps" {
+	if s.Preset != Standard || s.Levels != nil || len(s.Folders) != 1 || s.Folders[0].Path != abs+"maps" {
 		t.Fatalf("got %+v", s)
 	}
 }

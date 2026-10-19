@@ -259,11 +259,14 @@ func TestJailStandard(t *testing.T) {
 	checkPlatform(t, got)
 }
 
-func TestJailStrictHasNoNetwork(t *testing.T) {
+// Blocked is the no-network level (Strict keeps the network: LAN-only on
+// Windows, full elsewhere, since a no-network server is useless).
+func TestJailBlockedHasNoNetwork(t *testing.T) {
 	f := newJailFixture(t)
-	got := f.probe(t, rules.Default().Apply(rules.Strict, runtime.GOOS))
+	set, _ := rules.Default().SetLevel(rules.Internet, rules.Blocked, runtime.GOOS)
+	got := f.probe(t, set)
 	if got["dial"] == "ok" {
-		t.Error("Strict reached the network")
+		t.Error("Blocked reached the network")
 	}
 }
 

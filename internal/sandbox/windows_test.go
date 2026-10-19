@@ -5,11 +5,42 @@ package sandbox
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"quartz/internal/sandbox/rules"
 )
+
+// networkCaps follow the Internet level, the same for a game and a server:
+// Allowed is internet + LAN, the Strict LAN level is LAN only (so a strict
+// instance can still join/host a LAN or VPN game, but not reach the internet),
+// and Blocked is none.
+func TestNetworkCaps(t *testing.T) {
+	std := rules.Default()
+	strict := rules.Default().Apply(rules.Strict, "windows")
+	blocked, _ := rules.Default().SetLevel(rules.Internet, rules.Blocked, "windows")
+	all := []windows.WELL_KNOWN_SID_TYPE{windows.WinCapabilityInternetClientSid,
+		windows.WinCapabilityInternetClientServerSid, windows.WinCapabilityPrivateNetworkClientServerSid}
+	lan := []windows.WELL_KNOWN_SID_TYPE{windows.WinCapabilityPrivateNetworkClientServerSid}
+	for _, c := range []struct {
+		name string
+		r    Run
+		want []windows.WELL_KNOWN_SID_TYPE
+	}{
+		{"game-standard", Run{Rules: std}, all},
+		{"game-strict-lan-only", Run{Rules: strict}, lan},
+		{"game-blocked", Run{Rules: blocked}, nil},
+		{"server-standard", Run{Rules: std, Headless: true}, all},
+		{"server-strict-lan-only", Run{Rules: strict, Headless: true}, lan},
+	} {
+		if got := networkCaps(c.r); !slices.Equal(got, c.want) {
+			t.Errorf("%s: networkCaps = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
 
 func platformProbes() {
 	_, err := os.ReadDir(os.Getenv("USERPROFILE"))
@@ -70,9 +101,11 @@ func TestContainerNames(t *testing.T) {
 	}
 }
 
-// A protected folder denies the container every change, also to the files
-// in it, ahead of the game folder's inherited grant.
-func TestProtectedFolder(t *testing.T) {
+// A protected folder leaves the container read-only on the files in it, even
+// after the game folder's inherited modify, and seals it so that modify can't
+// flow back in. A deny entry would not hold (see sealReadOnly), so the test
+// checks the effective access, not ACE order.
+func TestSealReadOnly(t *testing.T) {
 	game := t.TempDir()
 	mods := filepath.Join(game, "mods")
 	if err := os.Mkdir(mods, 0o700); err != nil {
@@ -85,27 +118,36 @@ func TestProtectedFolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The game folder hands the container an inheritable modify (the hazard).
 	if err := grantPath(game, sid, accessModify, true); err != nil {
 		t.Fatal(err)
 	}
-	for range 2 {
-		if err := denyPath(mods, sid, denyChange); err != nil {
+	for range 2 { // idempotent: sealing twice is fine
+		if err := sealReadOnly(mods, sid); err != nil {
 			t.Fatal(err)
 		}
 	}
+	// On a file inside, the container keeps read/execute but not write.
+	const writeData = 0x0002 // FILE_WRITE_DATA
 	sd, err := windows.GetNamedSecurityInfo(filepath.Join(mods, "a.jar"), windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		t.Fatal(err)
 	}
 	dacl, _, _ := sd.DACL()
-	var order []byte
+	var read, write bool
 	for i := range uint32(dacl.AceCount) {
 		var ace *windows.ACCESS_ALLOWED_ACE
-		if windows.GetAce(dacl, i, &ace) == nil && (*windows.SID)(unsafe.Pointer(&ace.SidStart)).Equals(sid) {
-			order = append(order, ace.Header.AceType)
+		if windows.GetAce(dacl, i, &ace) != nil || !(*windows.SID)(unsafe.Pointer(&ace.SidStart)).Equals(sid) {
+			continue
 		}
+		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE {
+			t.Errorf("container has a non-allow entry type %d; sealing should leave only a read grant", ace.Header.AceType)
+			continue
+		}
+		read = read || uint32(ace.Mask)&accessRead == accessRead
+		write = write || uint32(ace.Mask)&writeData != 0
 	}
-	if len(order) != 2 || order[0] != windows.ACCESS_DENIED_ACE_TYPE || order[1] != windows.ACCESS_ALLOWED_ACE_TYPE {
-		t.Fatalf("the file's entries for the container, in order: %v", order)
+	if !read || write {
+		t.Fatalf("container access on the protected file: read=%v write=%v, want read-only", read, write)
 	}
 }

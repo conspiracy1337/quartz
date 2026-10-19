@@ -11,15 +11,16 @@ import (
 )
 
 // Level is how far the game reaches one thing. Folders take rw, ro or no;
-// switches (internet, Discord, graphics) take on or no.
+// Discord and graphics take on or no; internet takes on, lan or no.
 type Level string
 
 // Levels, named as the UI shows them.
 const (
-	RW      Level = "rw" // Read and write
-	RO      Level = "ro" // Read only: writes stay private to the run and are dropped
-	Blocked Level = "no" // Blocked
-	Allowed Level = "on" // Allowed
+	RW      Level = "rw"  // Read and write
+	RO      Level = "ro"  // Read only: writes stay private to the run and are dropped
+	Blocked Level = "no"  // Blocked
+	Allowed Level = "on"  // Allowed
+	LAN     Level = "lan" // Internet only: the local network (and VPN) but not the internet
 	Remove  Level = "remove"
 )
 
@@ -69,7 +70,13 @@ var Table = []Rule{
 	{ID: Libraries, Standard: RO, Strict: RO, choices: []Level{RO}},
 	{ID: Java, Standard: RO, Strict: RO, choices: []Level{RO}},
 	{ID: Synced, Standard: RW, Strict: RO, choices: []Level{RW, RO, Blocked}},
-	{ID: Internet, Standard: Allowed, Strict: Blocked, choices: []Level{Allowed, Blocked}},
+	// Internet has three levels. Allowed is the full network; LAN keeps the
+	// local network and VPNs (so a Strict instance can still join or host a
+	// LAN/Radmin game) but not the internet; Blocked removes the network. LAN
+	// is enforced only where the OS can filter by destination (Windows app
+	// container capabilities); Linux and macOS can't allow LAN while blocking
+	// the internet, so they treat LAN as Blocked (see each backend).
+	{ID: Internet, Standard: Allowed, Strict: LAN, choices: []Level{Allowed, LAN, Blocked}},
 	// An app container can't open Discord's named pipe.
 	{ID: Discord, Standard: Allowed, Strict: Blocked, choices: []Level{Allowed, Blocked}, fixed: []string{"windows"}},
 	{ID: Graphics, Standard: Allowed, Strict: Allowed, choices: []Level{Allowed}},

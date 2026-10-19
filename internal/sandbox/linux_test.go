@@ -86,9 +86,13 @@ func checkPlatform(t *testing.T, got map[string]string) {
 	}
 }
 
-func TestJailStrictLoopbackOnly(t *testing.T) {
+// The Blocked internet level unshares the net namespace, leaving only
+// loopback. (Strict keeps the host network now — a no-network server is
+// useless and outbound abuse isn't the threat.)
+func TestJailBlockedLoopbackOnly(t *testing.T) {
 	f := newJailFixture(t)
-	if got := f.probe(t, rules.Default().Apply(rules.Strict, "linux")); got["interfaces"] != "1" {
+	set, _ := rules.Default().SetLevel(rules.Internet, rules.Blocked, "linux")
+	if got := f.probe(t, set); got["interfaces"] != "1" {
 		t.Errorf("interfaces = %s", got["interfaces"])
 	}
 }

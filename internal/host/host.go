@@ -18,7 +18,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -97,9 +96,11 @@ type Deps struct {
 	// WorldOpen reports whether a game has the world folder open, or will
 	// merge its own copy of it back: such a world can't be hosted.
 	WorldOpen func(dir string) bool
-	// Sandbox runs a sandboxed instance's server in its sandbox (headless;
-	// not on Windows, where an app container can't take connections from
-	// this computer). StoreRead are the store folders the server reads.
+	// Sandbox runs a sandboxed instance's server in its sandbox (headless),
+	// following the instance's profile as the game does. On Windows the app
+	// container can't take same-machine connections (a loopback exemption
+	// needs admin), so a sandboxed server there is reachable from other
+	// devices, not this PC. StoreRead are the store folders the server reads.
 	Sandbox   *sandbox.Service
 	StoreRead []string
 	// Icons holds the server icons players pick (the instance icon library).
@@ -229,7 +230,7 @@ func (s *Service) options(in instance.Instance) Options {
 
 // canSandbox reports whether hosted servers can run in the sandbox here.
 func (s *Service) canSandbox() bool {
-	return s.d.Sandbox != nil && runtime.GOOS != "windows" && s.d.Sandbox.Status().Available
+	return s.d.Sandbox != nil && s.d.Sandbox.Status().Available
 }
 
 func hasWorld(ws []worlds.World, folder string) bool {

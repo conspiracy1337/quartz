@@ -9,7 +9,7 @@ describe('the preview sandbox', () => {
     expect(v.preset).toBe('standard');
     expect(v.rows.map((r) => r.id)).toEqual(['instance', 'mods', 'libraries', 'java', 'synced', 'internet', 'discord', 'graphics', 'home']);
     v = await sandboxApi.setPreset('fo', 'strict');
-    expect([level(v, 'internet'), level(v, 'discord'), level(v, 'synced'), level(v, 'graphics')]).toEqual(['no', 'no', 'ro', 'on']);
+    expect([level(v, 'internet'), level(v, 'discord'), level(v, 'synced'), level(v, 'graphics')]).toEqual(['lan', 'no', 'ro', 'on']);
     v = await sandboxApi.setLevel('fo', 'internet', 'on');
     expect(v.preset).toBe('custom');
     expect(level(v, 'synced')).toBe('ro');

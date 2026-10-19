@@ -138,15 +138,11 @@ func checkInvariants(t *testing.T, results map[string]map[string]string) {
 			}
 		}
 	}
-	// Strict must remove the host network, so loopback, netlink and the host
-	// connection table are all gone once the net namespace is unshared.
-	if s := results["Strict"]; s != nil {
-		for _, v := range []string{"net-loopback", "net-netlink", "proc-net"} {
-			if r := result(s[v]); r != "" && r != "BLOCKED" {
-				t.Errorf("[Strict] INVARIANT BROKEN %s: got %q, want BLOCKED (Strict unshares the net namespace)", v, r)
-			}
-		}
-	}
+	// Note: Strict no longer removes the network. A no-network server is
+	// useless and outbound abuse isn't the threat model, so only the Custom
+	// Blocked level unshares the net namespace (not exercised by these two
+	// presets); the shared host network under Standard and Strict is the
+	// documented accepted risk (see §2 of sandbox-redteam-findings.md).
 }
 
 // --- findings: print the full matrix and the confirmed escapes. ---

@@ -5,7 +5,10 @@
 package instance
 
 import (
+	"bytes"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -56,12 +59,17 @@ type WindowSettings struct {
 // is split into words like a shell would, but no shell ever runs it; $VAR
 // references (the $INST_* values and the environment) are expanded per word.
 type CommandSettings struct {
-	PreLaunch    string   `json:"preLaunch"` // must succeed before the game starts
-	Wrapper      string   `json:"wrapper"`   // put in front of java, e.g. "prime-run"
-	PostExit     string   `json:"postExit"`  // runs after the game closes, with $EXIT_CODE
-	Env          []EnvVar `json:"env"`
-	SystemGLFW   bool     `json:"systemGlfw"`
-	SystemOpenAL bool     `json:"systemOpenal"`
+	PreLaunch string   `json:"preLaunch"` // must succeed before the game starts
+	Wrapper   string   `json:"wrapper"`   // put in front of java, e.g. "prime-run"
+	PostExit  string   `json:"postExit"`  // runs after the game closes, with $EXIT_CODE
+	Env       []EnvVar `json:"env"`
+	// Sig authenticates the commands above as set in this launcher (an HMAC
+	// over them with the per-install key). Commands run programs, so a foreign
+	// or hand-edited instance.json carrying them is ignored unless its Sig
+	// verifies; see Store.verified and Store.signCommands.
+	Sig          string `json:"sig,omitempty"`
+	SystemGLFW   bool   `json:"systemGlfw"`
+	SystemOpenAL bool   `json:"systemOpenal"`
 }
 
 // EnvVar is one extra environment variable for the game.
@@ -397,6 +405,9 @@ type Store struct {
 	mu    sync.Mutex
 	files map[string]*jsonfile.Store[Instance]
 
+	keyOnce sync.Once
+	key     []byte // per-install HMAC key authenticating command settings
+
 	locate  atomic.Pointer[Locator]
 	onPurge atomic.Pointer[func(id string)]
 }
@@ -546,7 +557,7 @@ func (s *Store) List() []Instance {
 	s.mu.Lock()
 	out := make([]Instance, 0, len(s.files))
 	for _, f := range s.files {
-		out = append(out, f.Get())
+		out = append(out, s.verified(f.Get()))
 	}
 	s.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool { return lastActive(out[j]).Before(lastActive(out[i])) })
@@ -568,7 +579,76 @@ func (s *Store) Get(id string) (Instance, error) {
 	if !ok {
 		return Instance{}, ErrUnknown
 	}
-	return f.Get(), nil
+	return s.verified(f.Get()), nil
+}
+
+// commandKey is the per-install key that authenticates command settings, kept
+// next to the trash folder (outside any instance, so a game's sandbox can't
+// reach it). It is created once; if it can't be read or written the gate
+// degrades to the prior behaviour (commands are trusted) rather than breaking
+// the launcher.
+func (s *Store) commandKey() []byte {
+	s.keyOnce.Do(func() {
+		path := filepath.Join(filepath.Dir(s.dir), "commands.key")
+		if b, err := os.ReadFile(path); err == nil && len(b) == sha256.Size {
+			s.key = b
+			return
+		}
+		k := make([]byte, sha256.Size)
+		if _, err := rand.Read(k); err != nil {
+			s.log.Warn("can't make the command-settings key; commands aren't origin-checked", "err", err)
+			return
+		}
+		if err := os.WriteFile(path, k, 0o600); err != nil {
+			s.log.Warn("can't store the command-settings key; commands aren't origin-checked", "err", err)
+			return
+		}
+		s.key = k
+	})
+	return s.key
+}
+
+// signCommands is the HMAC authenticating an instance's commands. The id is
+// bound in so a signed instance.json can't be reused under another id. Returns
+// "" when no key is available (the gate is then inactive).
+func (s *Store) signCommands(id string, c CommandSettings) string {
+	key := s.commandKey()
+	if key == nil {
+		return ""
+	}
+	var b bytes.Buffer
+	for _, p := range []string{id, c.PreLaunch, c.Wrapper, c.PostExit} {
+		b.WriteString(p)
+		b.WriteByte(0) // commands reject NUL, so it's an unambiguous separator
+	}
+	for _, e := range c.Env {
+		b.WriteString(e.Name)
+		b.WriteByte(0)
+		b.WriteString(e.Value)
+		b.WriteByte(0)
+	}
+	m := hmac.New(sha256.New, key)
+	m.Write(b.Bytes())
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// verified blanks an instance's commands when their signature doesn't match
+// this install's key, so a command added by a foreign or hand-edited
+// instance.json never runs. Commands set through the launcher (Store.SetSettings)
+// carry a valid signature; everything else is dropped. Pure reads (List, Get)
+// return the sanitised copy; the file on disk is left as is.
+func (s *Store) verified(in Instance) Instance {
+	c := &in.Settings.Commands
+	if c.PreLaunch == "" && c.Wrapper == "" && c.PostExit == "" && len(c.Env) == 0 {
+		return in
+	}
+	want := s.signCommands(in.ID, *c)
+	if want == "" || (c.Sig != "" && hmac.Equal([]byte(c.Sig), []byte(want))) {
+		return in // verified, or no key so the gate is inactive
+	}
+	s.log.Warn("ignoring an instance's commands: not set in this launcher", "instance", in.ID)
+	c.PreLaunch, c.Wrapper, c.PostExit, c.Env, c.Sig = "", "", "", nil, ""
+	return in
 }
 
 // CreateRequest is what the New instance screen sends.
@@ -721,6 +801,9 @@ func (s *Store) SetSettings(id string, st Settings) (Instance, error) {
 			return Instance{}, err
 		}
 	}
+	// Authenticate the commands as set in this launcher, so a later foreign or
+	// hand-edited instance.json carrying different ones is ignored (verified).
+	st.Commands.Sig = s.signCommands(id, st.Commands)
 	return s.Update(id, func(in *Instance) error { in.Settings = st; return nil })
 }
 

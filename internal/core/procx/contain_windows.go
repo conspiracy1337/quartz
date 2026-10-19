@@ -128,13 +128,30 @@ func startContained(s Spec) (*Child, error) {
 	if s.NoConsole {
 		flags |= createNoWindow
 	}
+	// A kill-on-close job object so a child the game detaches dies with it: the
+	// AppContainer alone has no equivalent of the Linux pid namespace, so
+	// without this a mod could leave a process running (still holding the
+	// container's folders and network) after the game and launcher close. The
+	// game starts suspended, joins the job, then runs, so no child can escape
+	// the window before it is in the job.
+	job, jobErr := newKillOnCloseJob()
+	if jobErr == nil {
+		flags |= windows.CREATE_SUSPENDED
+	}
 	var pi windows.ProcessInformation
 	err = windows.CreateProcess(appName, cmdLine, nil, nil, true, flags, &env[0], dir, &si.StartupInfo, &pi)
 	runtime.KeepAlive(sc)
 	runtime.KeepAlive(caps)
 	runtime.KeepAlive(handles)
 	if err != nil {
+		if job != 0 {
+			_ = windows.CloseHandle(job)
+		}
 		return fail(err)
+	}
+	if job != 0 {
+		_ = windows.AssignProcessToJobObject(job, pi.Process)
+		_, _ = windows.ResumeThread(pi.Thread)
 	}
 	_ = windows.CloseHandle(pi.Thread)
 	// Our handle keeps the process object, so its id can't be reused before
@@ -142,13 +159,43 @@ func startContained(s Spec) (*Child, error) {
 	p, err := os.FindProcess(int(pi.ProcessId))
 	_ = windows.CloseHandle(pi.Process)
 	if err != nil {
+		if job != 0 {
+			_ = windows.CloseHandle(job)
+		}
 		return fail(err)
 	}
 	return &Child{Process: p, Stdin: parent[0], Stdout: parent[1], Stderr: parent[2], wait: func() (*os.ProcessState, error) {
 		st, err := p.Wait()
+		// Closing the last handle to the job reaps any process the game left
+		// behind (kill-on-close), then the pipes go.
+		if job != 0 {
+			_ = windows.CloseHandle(job)
+		}
 		closeAll(parent[1:])
 		return st, err
 	}}, nil
+}
+
+// newKillOnCloseJob makes a job object that terminates every process still in
+// it once the last handle closes, so leftovers die with the game.
+//
+//nolint:gosec // Win32 calls on Go-owned memory
+func newKillOnCloseJob() (windows.Handle, error) {
+	job, err := windows.CreateJobObject(nil, nil)
+	if err != nil {
+		return 0, err
+	}
+	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
+		BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
+			LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | windows.JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION,
+		},
+	}
+	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
+		_ = windows.CloseHandle(job)
+		return 0, err
+	}
+	return job, nil
 }
 
 // envBlock is a CreateProcess environment: NUL-separated, double-NUL ended.

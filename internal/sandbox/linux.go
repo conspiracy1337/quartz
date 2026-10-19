@@ -80,7 +80,12 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 	case dpyXTrusted:
 		s.c.Log.Warn("sandbox: X display isolation unavailable (no Wayland and no SECURITY extension); the game can see other X clients", "display", getEnv(spec.Env, "DISPLAY"))
 	}
-	if !r.Headless && r.Level(rules.Internet) == rules.Blocked {
+	// Network is removed only when Blocked. The namespace is all-or-nothing, so
+	// it can't allow the LAN while blocking the internet (as Windows does for
+	// the LAN level); since a no-network server is useless and outbound abuse
+	// isn't the threat model, the LAN level keeps the full host network here,
+	// like Allowed. Games and servers alike.
+	if r.Level(rules.Internet) == rules.Blocked {
 		a.Add("--unshare-net")
 	}
 	a.Add("--proc", "/proc", "--dev", "/dev").Tmpfs("/dev/shm").Tmpfs("/tmp")

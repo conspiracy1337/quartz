@@ -15,7 +15,7 @@
   interface Props { instance: Instance }
   let { instance: i }: Props = $props();
 
-  const LEVELS: Record<SandboxLevel, [string, string]> = { rw: ['Read and write', 'l-rw'], ro: ['Read only', 'l-ro'], no: ['Blocked', 'l-no'], on: ['Allowed', 'l-rw'], remove: ['Remove', 'l-no'] };
+  const LEVELS: Record<SandboxLevel, [string, string]> = { rw: ['Read and write', 'l-rw'], ro: ['Read only', 'l-ro'], no: ['Blocked', 'l-no'], on: ['Allowed', 'l-rw'], lan: ['LAN only', 'l-ro'], remove: ['Remove', 'l-no'] };
   // Each rule's name and icon, and the description shown when Go names no path.
   const RULES: Record<string, { name: string; icon: IconName; path: string }> = {
     instance: { name: 'This instance', icon: 'folder', path: '' },

@@ -9,7 +9,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -506,7 +505,7 @@ func serverArgs(res *install.Server, srv *server) []string {
 // spawn starts the server process and follows it until it exits.
 func (s *Service) spawn(ctx context.Context, srv *server, javaPath string, argv []string) error {
 	spec := procx.Spec{Argv: append([]string{javaPath}, argv...), Dir: srv.dir, Env: java.CleanEnv(os.Environ()), NoConsole: true}
-	if srv.rules.On && s.d.Sandbox != nil && runtime.GOOS != "windows" {
+	if srv.rules.On && s.d.Sandbox != nil {
 		spec.Env = java.CleanEnv(sandbox.FilterEnv(os.Environ()))
 		r := sandbox.Run{Instance: srv.id, Rules: srv.rules, GameDir: srv.dir, Headless: true,
 			Scratch: filepath.Join(srv.dir, ".quartz", "sandbox"),

@@ -57,7 +57,11 @@ a broken security invariant; the escapes are reported in its log.
 - **#2 shared network — ACCEPTED RISK (not fixed).** Per the maintainer: the
   Minecraft malware threat model is account/credential theft, not outbound
   network abuse, and a real fix needs a userspace NAT that isn't available. The
-  game keeps host network access under Standard; Strict still removes it.
+  game keeps host network access under Standard. (Update 2026-10-19: Strict no
+  longer removes the network either — a no-network server is useless and
+  outbound abuse isn't the threat; only the Custom `Blocked` internet level
+  unshares the net namespace now. Windows, which can filter by capability, keeps
+  a LAN-only Strict.)
 
 ## Status (round 2)
 
@@ -129,7 +133,8 @@ Two findings are **accepted risk** (owner decision), documented, not changed:
 - **Shared host network under Standard** (unchanged from #2) now also covers
   `proc-net`: a mod reads `/proc/net/tcp`+`tcp6` directly to enumerate the host's
   listening and established sockets — passive recon with no `ip`/netlink needed.
-  Strict removes it with the rest of the network.
+  Only the Custom `Blocked` internet level removes it with the rest of the
+  network (Strict no longer does; see the 2026-10-19 note above).
 - **Microphone / audio capture.** `Graphics` is always-on (even under Strict) and
   binds the PipeWire/Pulse sockets, so a mod that bundles the client libraries can
   record the microphone. Same class as the GPU/audio device nodes: a by-design
@@ -219,5 +224,6 @@ Noted, not a defect.
 - **PID namespace** — the jail sees only its own processes.
 - **seccomp denylist** — `unshare`, `mount` and `ptrace` are all refused
   ([seccomp/nr_amd64.go](../../internal/sandbox/seccomp/nr_amd64.go)).
-- **Strict removes the network** — loopback and netlink both blocked once the net
-  namespace is unshared.
+- **The `Blocked` internet level removes the network** — loopback and netlink both
+  blocked once the net namespace is unshared. (Strict kept this originally; as of
+  2026-10-19 Strict keeps the network and only Custom `Blocked` unshares it.)
