@@ -51,16 +51,12 @@ step "frontend: svelte-check"
 step "frontend: vitest"
 (cd frontend && pnpm run --silent test)
 
-step "production build"
+# build.sh produces both binaries in one run. Windows comes out about 1 MB
+# larger (PE relocations and unwind data, WebView2 bindings), so the 20 MB
+# limit is checked on both.
+step "production build (Linux + Windows)"
 ./build.sh >/dev/null
-go run ./tools/release verify build/bin/quartz
-
-# Windows builds come out about 1 MB larger (PE relocations and unwind data,
-# WebView2 bindings), so the limit is checked there too; the frontend is
-# reused from the build above.
-step "windows build"
-./build.sh -platform windows/amd64 -s -o quartz.exe >/dev/null
-go run ./tools/release verify build/bin/quartz.exe
+go run ./tools/release verify build/bin/quartz build/bin/quartz.exe
 
 if $online; then
   step "integration tests"

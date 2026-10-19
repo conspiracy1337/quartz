@@ -1421,5 +1421,5 @@ Gathered here from the sections above for quick review.
   - `build` and `ldflags` read the gitignored `.env` next to `go.mod` ([.env.example](.env.example)): taken literally (a CurseForge key holds `$`), service IDs only, and the environment wins.
 - **Wrapper jar:** a reproducible Java 8 build of the stdin launcher, pinned by SHA-256. [tools/wrapperjar/](tools/wrapperjar/)
 - **Builds:**
-  - [build.sh](build.sh) makes a one-command stripped production build.
+  - [build.sh](build.sh) makes a one-command stripped production build for both Linux and Windows (`build/bin/quartz` and `build/bin/quartz.exe`).
   - Build-time IDs (Microsoft client ID, CurseForge key, Discord ID, update public key) come in through ldflags with env overrides. A malformed ID turns its feature off. One validator per ID is shared by the launcher and the release tool. [brand.go](internal/brand/brand.go)
