@@ -2063,6 +2063,7 @@ export namespace instance {
 	    wrapper: string;
 	    postExit: string;
 	    env: EnvVar[];
+	    sig?: string;
 	    systemGlfw: boolean;
 	    systemOpenal: boolean;
 	
@@ -2076,6 +2077,7 @@ export namespace instance {
 	        this.wrapper = source["wrapper"];
 	        this.postExit = source["postExit"];
 	        this.env = this.convertValues(source["env"], EnvVar);
+	        this.sig = source["sig"];
 	        this.systemGlfw = source["systemGlfw"];
 	        this.systemOpenal = source["systemOpenal"];
 	    }
