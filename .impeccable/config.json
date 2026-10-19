@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "frontend/src/lib/ui/Tile.svelte"
+        ],
+        "createdAt": "2026-10-17T03:33:58.460Z",
+        "reason": "Claude: the img only renders inside {#if src}, so src is never empty (same markup as the former InstanceMark)"
+      }
+    ]
+  }
+}
