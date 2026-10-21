@@ -4,6 +4,7 @@ package desktop
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -54,5 +55,34 @@ func TestWindowsCommandsKeepDataFolder(t *testing.T) {
 	}
 	if got := runValue(w); got != `"C:\Q\quartz.exe" "--dir" "D:\Games\Q" --minimized` {
 		t.Errorf("run value %q", got)
+	}
+}
+
+// holder tells this launcher's links from another copy's (still installed)
+// and from a handler whose program is gone.
+func TestWindowsHolder(t *testing.T) {
+	w := scratch(t)
+	exe, err := os.Executable() // a program that exists
+	if err != nil {
+		t.Fatal(err)
+	}
+	main, side := Want{Exe: exe, Links: true}, Want{Exe: exe, Dir: `D:\Test\data`, Links: true}
+	if got := w.holder(main); got != heldByNone {
+		t.Errorf("nothing registered: holder = %d", got)
+	}
+	if err := w.apply(Want{}, main); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.holder(main); got != heldByUs {
+		t.Errorf("own links: holder = %d", got)
+	}
+	if got := w.holder(side); got != heldByOther {
+		t.Errorf("seen from a --dir copy: holder = %d", got)
+	}
+	if err := w.apply(Want{}, Want{Exe: `C:\gone\quartz.exe`, Links: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.holder(main); got != heldByNone {
+		t.Errorf("program gone: holder = %d", got)
 	}
 }

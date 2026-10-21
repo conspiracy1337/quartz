@@ -142,3 +142,26 @@ func TestRegisterKeepsDataFolder(t *testing.T) {
 		t.Errorf("autostart:\n%s", a)
 	}
 }
+
+// holder reads the app-menu entry back: this launcher's, another copy's
+// (still installed), or none.
+func TestLinuxHolder(t *testing.T) {
+	_, l, _ := testLinux(t)
+	exe, err := os.Executable() // a program that exists
+	if err != nil {
+		t.Fatal(err)
+	}
+	main, side := Want{Exe: exe, Links: true}, Want{Exe: exe, Dir: "/tmp/test data", Links: true}
+	if got := l.holder(main); got != heldByNone {
+		t.Errorf("no entry: holder = %d", got)
+	}
+	if err := l.apply(Want{}, main); err != nil {
+		t.Fatal(err)
+	}
+	if got := l.holder(main); got != heldByUs {
+		t.Errorf("own entry: holder = %d", got)
+	}
+	if got := l.holder(side); got != heldByOther {
+		t.Errorf("seen from a --dir copy: holder = %d", got)
+	}
+}

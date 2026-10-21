@@ -24,6 +24,9 @@ func newSystem() system {
 
 func (d darwin) agentPath() string { return filepath.Join(d.agents, brand.AppID+".plist") }
 
+// holder is always this launcher: the app bundle itself declares the links.
+func (darwin) holder(Want) holding { return heldByUs }
+
 func (d darwin) apply(_, want Want) error {
 	if !want.Autostart {
 		return removeIfExists(d.agentPath())

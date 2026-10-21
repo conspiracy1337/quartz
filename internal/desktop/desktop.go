@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"quartz/internal/brand"
@@ -53,9 +54,34 @@ type Registrar struct {
 
 // system is one OS's registration. apply moves from was (zero: nothing
 // recorded) to want; it must remove only entries that point at was.Exe or
-// want.Exe.
+// want.Exe. holder says who the system runs for the launcher's own entry now.
 type system interface {
 	apply(was, want Want) error
+	holder(want Want) holding
+}
+
+// holding is who the system's registration of the launcher points at.
+type holding int
+
+const (
+	heldByUs    holding = iota // this launcher with this data folder (or nothing to tell)
+	heldByNone                 // nobody, or a launcher whose program is gone
+	heldByOther                // another copy of the launcher that still exists
+)
+
+// holderOf classifies a registered command line (the program and its
+// arguments, without the link placeholder).
+func holderOf(argv []string, want Want) holding {
+	switch {
+	case len(argv) == 0:
+		return heldByNone
+	case slices.Equal(argv, want.Argv()):
+		return heldByUs
+	}
+	if _, err := os.Stat(argv[0]); err != nil {
+		return heldByNone
+	}
+	return heldByOther
 }
 
 // ErrUnsupported means registration doesn't exist on this OS.
@@ -81,7 +107,10 @@ func Executable() (string, error) {
 func Dev() bool { return throwaway }
 
 // Sync registers or unregisters so the system matches want, doing nothing
-// when want equals what was recorded last time.
+// when want equals what was recorded last time and the system still points
+// at this launcher. A copy with its own data folder (--dir: a portable or
+// test copy) leaves another launcher's registration alone; the launcher
+// without one takes it back when it starts.
 func (r *Registrar) Sync(want Want) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -90,7 +119,12 @@ func (r *Registrar) Sync(want Want) error {
 	if err != nil {
 		was = Want{}
 	}
-	if was == want {
+	held := r.sys.holder(want)
+	if held == heldByOther && want.Dir != "" {
+		r.log.Info("another copy of the launcher is registered with the system; leaving it", "exe", want.Exe)
+		return nil
+	}
+	if was == want && (held == heldByUs || !want.Links) {
 		return nil
 	}
 	if err := r.sys.apply(was, want); err != nil {
