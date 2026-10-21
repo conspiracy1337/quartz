@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -40,5 +41,19 @@ MimeType=x-scheme-handler/modrinth;
 	}
 	if strings.Count(got, "\n") != strings.Count(want, "\n") {
 		t.Fatal("a value must never add a line")
+	}
+}
+
+// ParseExec reads back exactly what ExecLine wrote, dropping the field code.
+func TestParseExecRoundTrip(t *testing.T) {
+	for _, argv := range [][]string{
+		{"/opt/quartz"},
+		{"/home/a b/quartz", "--dir", "/data/my games", "--launch", "x"},
+		{"/p/q", `a"b`, "$HOME", "`x", `C:\x`, "100%", "ünï 日本"},
+	} {
+		got := ParseExec(ExecLine(argv) + " %U")
+		if !slices.Equal(got, argv) {
+			t.Errorf("ParseExec(ExecLine(%q)) = %q", argv, got)
+		}
 	}
 }

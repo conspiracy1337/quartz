@@ -90,3 +90,58 @@ func ExecLine(argv []string) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// ParseExec reads an Exec value back into the program and its arguments,
+// undoing ExecLine: the string escapes, then the quoting; a field code such
+// as %U is dropped and %% is a literal %.
+func ParseExec(v string) []string {
+	var unescaped strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] == '\\' && i+1 < len(v) {
+			i++
+			switch v[i] {
+			case 's':
+				unescaped.WriteByte(' ')
+			case 'n', 't', 'r':
+				continue
+			default:
+				unescaped.WriteByte(v[i])
+			}
+			continue
+		}
+		unescaped.WriteByte(v[i])
+	}
+	var out []string
+	var arg strings.Builder
+	inArg, quoted := false, false
+	s := unescaped.String()
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case quoted && c == '\\' && i+1 < len(s):
+			i++
+			arg.WriteByte(s[i])
+		case c == '"':
+			quoted, inArg = !quoted, true
+		case !quoted && c == ' ':
+			if inArg {
+				out = append(out, arg.String())
+				arg.Reset()
+				inArg = false
+			}
+		case c == '%' && i+1 < len(s):
+			i++
+			if s[i] == '%' {
+				arg.WriteByte('%')
+				inArg = true
+			}
+		default:
+			arg.WriteByte(c)
+			inArg = true
+		}
+	}
+	if inArg {
+		out = append(out, arg.String())
+	}
+	return out
+}

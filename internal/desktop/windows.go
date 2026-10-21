@@ -138,6 +138,18 @@ func (w winSys) unregister(ours func(cmd string) bool) error {
 	return w.deleteTree(w.software + `\Capabilities`)
 }
 
+// holder reads who the launcher's own link scheme opens with.
+func (w winSys) holder(want Want) holding {
+	argv, err := windows.DecomposeCommandLine(w.get(w.classes+`\`+brand.Scheme+`\shell\open\command`, ""))
+	if err != nil {
+		return heldByNone
+	}
+	if n := len(argv); n > 0 && argv[n-1] == "%1" {
+		argv = argv[:n-1]
+	}
+	return holderOf(argv, want)
+}
+
 // runValue is the Run entry: the launcher, started minimized.
 func runValue(w Want) string { return command(w.Argv()) + " " + intent.MinimizedFlag }
 

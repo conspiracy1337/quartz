@@ -124,6 +124,20 @@ func (l linux) writeIcon() error {
 	return nil
 }
 
+// holder reads who the app-menu entry (which carries the links) runs.
+func (l linux) holder(want Want) holding {
+	data, err := fsx.ReadCapped(l.entryPath(), 64<<10)
+	if err != nil {
+		return heldByNone
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if v, ok := strings.CutPrefix(line, "Exec="); ok {
+			return holderOf(ParseExec(v), want)
+		}
+	}
+	return heldByNone
+}
+
 func (l linux) apply(was, want Want) error {
 	if err := l.writeIcon(); err != nil {
 		return err
