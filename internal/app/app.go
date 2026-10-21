@@ -181,13 +181,16 @@ func Run(o Options) error {
 	a.args, a.flagDir = o.Args, o.DataDir
 	appFacade := api.NewApp(a.ctx, a.paths, api.AppDeps{Opens: a.opens, Discord: a.presence.Ready(),
 		Pristine: func() bool { return len(a.instances.List()) == 0 }, Restart: a.restart, Quit: a.quit})
+	// The page is 1200×760 to start and at least 960×600, whatever frame the
+	// system draws around it.
+	fw, fh := windowFrame()
 	return wails.Run(&options.App{
 		Title:            brand.Name,
-		Width:            1200,
-		Height:           760,
+		Width:            1200 + fw,
+		Height:           760 + fh,
 		WindowStartState: startState(o.Args.Minimized),
-		MinWidth:         960,
-		MinHeight:        600,
+		MinWidth:         960 + fw,
+		MinHeight:        600 + fh,
 		BackgroundColour: &options.RGBA{R: 0x0a, G: 0x0a, B: 0x0b, A: 0xff},
 		AssetServer:      &assetserver.Options{Assets: o.Assets, Handler: a.images()},
 		// Dropped files reach Go only (api.Drops); the webview never opens them.
