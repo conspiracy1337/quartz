@@ -12,9 +12,11 @@
   import MenuConfirm from '$lib/ui/MenuConfirm.svelte';
   import { since } from '$lib/format';
   import { avatar } from '$lib/look';
+  import { keychainName } from '$lib/labels';
   import { prefs } from '$lib/prefs.svelte';
 
   const accounts = query(() => api.accounts.list(), 'accounts');
+  const info = query(() => api.app.info(), 'app.info');
   const acc = $derived(prefs.value?.accounts);
 
   /** The row's "More" menu; removing asks once more inside it. */
@@ -92,7 +94,7 @@
     {/if}
     <section class="card card-pad" aria-label="Security" style="display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 12px">
       <Icon name="lock" size={18} sw={1.8} color="var(--accent)" />
-      <span class="small muted">Sign-in tokens are kept in your system keychain, not in launcher files. Tokens are removed from logs before you share them.</span>
+      <span class="small muted">Sign-in tokens are kept in {keychainName(info.data?.os)}, not in launcher files. Tokens are removed from logs before you share them.</span>
     </section>
   </div>
 </div>

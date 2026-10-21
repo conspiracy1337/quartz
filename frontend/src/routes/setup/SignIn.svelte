@@ -2,6 +2,8 @@
   import { untrack } from 'svelte';
   import { api } from '$lib/api';
   import { onEvent } from '$lib/bridge';
+  import { keychainName } from '$lib/labels';
+  import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
   import { session, type AddAccountMode } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -19,6 +21,8 @@
       });
     });
   });
+
+  const info = query(() => api.app.info(), 'app.info');
 
   const OPTIONS: { mode: AddAccountMode; title: string; sub: string; icon: IconName; strong?: boolean }[] = [
     { mode: 'browser', title: 'Sign in with Microsoft', sub: 'Opens your browser', icon: 'microsoft', strong: true },
@@ -41,7 +45,7 @@
       </button>
     {/each}
   </div>
-  <div class="small faint" style="display: flex; gap: 8px; align-items: center"><Icon name="lock" size={14} sw={1.8} />Your sign-in is stored in the system keychain.</div>
+  <div class="small faint" style="display: flex; gap: 8px; align-items: center"><Icon name="lock" size={14} sw={1.8} />Your sign-in is stored in {keychainName(info.data?.os)}.</div>
   <div style="display: flex; justify-content: space-between; align-items: center"><a href={href({ name: 'setup', step: 1 })} class="btn btn-ghost">Back</a><a href={href({ name: 'setup', step: 3 })} class="btn btn-ghost">Skip for now</a></div>
 </SetupLayout>
 

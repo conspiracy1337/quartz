@@ -3,6 +3,7 @@
 // places with two different labels or behaviours.
 import { settingsApi, type AppInfo, type Settings } from '../api/system';
 import { gb, gbField } from '../format';
+import { keychainName } from '../labels';
 import type { Route, SettingsTab } from '../router.svelte';
 
 type Opt = { value: string; label: string };
@@ -73,7 +74,7 @@ export const registry: SettingDef[] = [
   { id: 'proxyUser', tab: 'downloads', group: 'Downloads', title: 'Proxy user name', desc: 'Leave empty if the proxy needs no sign-in.', when: customProxy, control: { kind: 'inputs', fields: [
     { label: 'User name', placeholder: 'Optional', get: (s) => s.downloads.proxyCustom.user, set: (s, v) => (s.downloads.proxyCustom.user = v) },
   ] } },
-  { id: 'proxyPassword', tab: 'downloads', group: 'Downloads', title: 'Proxy password', desc: 'Kept in your system keychain, never in a file.', when: customProxy, control: { kind: 'secret', has: () => settingsApi.hasProxyPassword(), save: (v) => settingsApi.setProxyPassword(v) } },
+  { id: 'proxyPassword', tab: 'downloads', group: 'Downloads', title: 'Proxy password', desc: (info) => `Kept in ${keychainName(info?.os)}, never in a file.`, when: customProxy, control: { kind: 'secret', has: () => settingsApi.hasProxyPassword(), save: (v) => settingsApi.setProxyPassword(v) } },
   { id: 'modChannel', tab: 'downloads', group: 'Mod updates', title: 'Mod update channel', desc: 'The least stable versions to offer when checking for mod updates.', control: { kind: 'seg', options: CHANNELS, get: (s) => s.updates.modChannel, set: (s, v) => (s.updates.modChannel = v) } },
 
   { id: 'discord', tab: 'integrations', group: 'Integrations', title: 'Discord status', desc: (info) => (info && !info.discord ? 'Not set up in this build.' : 'Shows the instance and Minecraft version you are playing.'), control: { kind: 'toggle', get: (s) => s.integrations.discordStatus, set: (s, v) => (s.integrations.discordStatus = v), disabled: (info) => !!info && !info.discord } },
