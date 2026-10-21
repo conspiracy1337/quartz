@@ -200,3 +200,30 @@ func Rename(from, to string) error {
 	}
 	return err
 }
+
+// ErrInUse is returned by ReplaceDir when a running program (a game) has
+// files open in the folder; the folder is left as it was.
+var ErrInUse = errors.New("a running game is using these files; close it and try again")
+
+// ReplaceDir puts the finished folder tmp in place of dst without ever
+// leaving dst half-deleted: the old folder is moved aside first, so when a
+// running program holds files in it (Windows refuses to move it then) it
+// stays whole and tmp is dropped.
+func ReplaceDir(tmp, dst string) error {
+	old := dst + ".old"
+	_ = os.RemoveAll(old)
+	if err := Rename(dst, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		_ = os.RemoveAll(tmp)
+		if inUse(err) {
+			return fmt.Errorf("%w (%s)", ErrInUse, filepath.Base(dst))
+		}
+		return err
+	}
+	if err := Rename(tmp, dst); err != nil {
+		_ = os.Rename(old, dst)
+		_ = os.RemoveAll(tmp)
+		return err
+	}
+	_ = os.RemoveAll(old)
+	return nil
+}

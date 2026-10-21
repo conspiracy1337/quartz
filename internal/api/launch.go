@@ -67,6 +67,10 @@ func (a *Launch) Repair(id string) (string, error) {
 	if err := checkInstanceID(id); err != nil {
 		return "", err
 	}
+	// A running game has its game files open, and Windows can't replace those.
+	if a.l.Busy(id) {
+		return "", ErrBusy
+	}
 	return a.l.Repair(a.ctx.Get(), id)
 }
 

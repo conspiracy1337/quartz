@@ -89,3 +89,35 @@ func TestFileName(t *testing.T) {
 		}
 	}
 }
+
+// ReplaceDir swaps a finished folder in, first install or replacement alike,
+// and leaves neither the new folder's nor the old one's name behind.
+func TestReplaceDir(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "natives")
+	put := func(name, file string) string {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(p, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(p, file), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if err := ReplaceDir(put("natives.tmp", "first"), dst); err != nil {
+		t.Fatalf("first install: %v", err)
+	}
+	if err := ReplaceDir(put("natives.tmp", "second"), dst); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	entries, _ := os.ReadDir(dst)
+	if len(entries) != 1 || entries[0].Name() != "second" {
+		t.Errorf("dst holds %v, want only the new folder's file", entries)
+	}
+	for _, left := range []string{"natives.tmp", "natives.old"} {
+		if _, err := os.Stat(filepath.Join(dir, left)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s was left behind (%v)", left, err)
+		}
+	}
+}
