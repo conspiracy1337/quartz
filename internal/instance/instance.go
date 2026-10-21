@@ -720,25 +720,7 @@ func (s *Store) Create(req CreateRequest) (Instance, error) {
 
 // newID builds "<slug>-<4 hex>" from the name; it never changes afterwards.
 func (s *Store) newID(name string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(name) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-			dash = false
-		case !dash && b.Len() > 0:
-			b.WriteByte('-')
-			dash = true
-		}
-		if b.Len() >= 40 {
-			break
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	if slug == "" {
-		slug = "instance"
-	}
+	slug := idSlug(name)
 	for {
 		var r [2]byte
 		_, _ = rand.Read(r[:])
