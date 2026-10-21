@@ -18,6 +18,10 @@ export const loaderLabel = (l: LoaderRef) => `${LOADER_NAMES[l.kind]} ${l.versio
 export const instanceMeta = (i: Pick<InstanceSummary, 'minecraft' | 'loader'>) =>
   i.loader ? `${i.minecraft}, ${LOADER_NAMES[i.loader.kind]}` : i.minecraft;
 
+/** Where the system keeps sign-ins and passwords, as that system names it. */
+export const keychainName = (os?: string) =>
+  os === 'windows' ? 'Windows Credential Manager' : os === 'darwin' ? 'your login keychain' : 'your system keyring';
+
 /** Settings tab names, for the tab strip and for "Settings, Downloads" hints. */
 export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   general: 'General', appearance: 'Appearance', java: 'Java', downloads: 'Downloads', storage: 'Storage',
