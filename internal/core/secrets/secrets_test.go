@@ -12,7 +12,7 @@ import (
 
 func TestKeychainRoundTrip(t *testing.T) {
 	keyring.MockInit()
-	k := NewKeychain()
+	k := NewKeychain("")
 	if _, err := k.Get("proxy-password"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing key: %v", err)
 	}
@@ -32,14 +32,14 @@ func TestKeychainRoundTrip(t *testing.T) {
 
 func TestUnavailableKeychain(t *testing.T) {
 	keyring.MockInitWithError(errors.New("no dbus"))
-	if err := NewKeychain().Set("k", "v"); !errors.Is(err, ErrUnavailable) {
+	if err := NewKeychain("").Set("k", "v"); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestLongValuesAreChunked(t *testing.T) {
 	keyring.MockInit()
-	k := NewKeychain()
+	k := NewKeychain("")
 	long := strings.Repeat("abcdefghij", 500) // 5000 bytes: three chunks
 	if err := k.Set("msa-refresh:x", long); err != nil {
 		t.Fatal(err)
@@ -67,5 +67,27 @@ func TestLongValuesAreChunked(t *testing.T) {
 		if _, err := keyring.Get(brand.AppID, key); !errors.Is(err, keyring.ErrNotFound) {
 			t.Fatalf("%s survived delete: %v", key, err)
 		}
+	}
+}
+
+// A copy with a data folder of its own neither reads nor deletes the user's
+// launcher's secrets, and two such copies stay apart too.
+func TestOwnFolderKeychainsStayApart(t *testing.T) {
+	keyring.MockInit()
+	main, side, other := NewKeychain(""), NewKeychain("/games/test"), NewKeychain("/games/other")
+	if err := main.Set("msa-refresh:x", "mine"); err != nil {
+		t.Fatal(err)
+	}
+	if err := side.Set("msa-refresh:x", "the copy's"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Get("msa-refresh:x"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("another copy read it: %v", err)
+	}
+	if err := side.Delete("msa-refresh:x"); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := main.Get("msa-refresh:x"); err != nil || v != "mine" {
+		t.Errorf("the user's launcher's token after the copy signed out: %q, %v", v, err)
 	}
 }

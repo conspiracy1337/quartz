@@ -48,6 +48,17 @@ var (
 	ErrBadRoot = errors.New("paths: that folder can't hold the launcher's data")
 )
 
+// OwnFolder is the data folder of a copy that keeps one of its own (--dir,
+// QUARTZ_DIR or a portable copy), or "" for the user's launcher, whose
+// folder setup or the OS picked. Per-user state outside the data folder
+// (the keychain) is kept apart for such a copy.
+func (p Paths) OwnFolder() string {
+	if p.Chosen == ByFlag || p.Chosen == ByEnv || p.Chosen == ByPortable {
+		return p.Root
+	}
+	return ""
+}
+
 // FixedDir is the data folder when only this start's --dir or QUARTZ_DIR
 // names it (other starts would use another one), else "".
 func (p Paths) FixedDir() string {

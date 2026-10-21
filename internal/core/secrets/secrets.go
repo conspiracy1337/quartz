@@ -4,8 +4,11 @@
 package secrets
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,8 +43,17 @@ const (
 // Keychain is the OS keychain, namespaced by the app ID.
 type Keychain struct{ service string }
 
-// NewKeychain returns the launcher's keychain store.
-func NewKeychain() *Keychain { return &Keychain{service: brand.AppID} }
+// NewKeychain returns the launcher's keychain store. The user's launcher
+// (ownFolder "") keeps its secrets under the app ID; a copy with a data
+// folder of its own (paths.OwnFolder) under the app ID and that folder, so
+// signing out there never deletes the user's launcher's tokens.
+func NewKeychain(ownFolder string) *Keychain {
+	if ownFolder == "" {
+		return &Keychain{service: brand.AppID}
+	}
+	sum := sha256.Sum256([]byte(filepath.Clean(ownFolder)))
+	return &Keychain{service: brand.AppID + "." + hex.EncodeToString(sum[:6])}
+}
 
 func (k *Keychain) Get(key string) (string, error) {
 	head, err := k.raw(key)

@@ -88,3 +88,16 @@ func TestEnsure(t *testing.T) {
 		}
 	}
 }
+
+// Only a copy that keeps a data folder of its own reports it.
+func TestOwnFolder(t *testing.T) {
+	for by, own := range map[Chosen]bool{ByFlag: true, ByEnv: true, ByPortable: true, ByPointer: false, ByDefault: false} {
+		want := ""
+		if own {
+			want = "/data"
+		}
+		if got := (Paths{Root: "/data", Chosen: by}).OwnFolder(); got != want {
+			t.Errorf("%s: OwnFolder() = %q, want %q", by, got, want)
+		}
+	}
+}
