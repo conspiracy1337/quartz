@@ -283,8 +283,7 @@ func (m *Manager) planArchive(ctx context.Context, vendor string, major int) (*P
 			err = finishInstall(tmp, vendor, major, rel.version)
 		}
 		if err == nil {
-			_ = os.RemoveAll(dir)
-			err = os.Rename(tmp, dir)
+			err = fsx.ReplaceDir(tmp, dir)
 		}
 		if err != nil {
 			_ = os.RemoveAll(tmp)

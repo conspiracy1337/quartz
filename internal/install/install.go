@@ -454,8 +454,7 @@ func (in *Installer) extractNatives(r *Resolved) error {
 	if err := markComplete(tmp); err != nil {
 		return err
 	}
-	_ = os.RemoveAll(r.NativesDir)
-	return os.Rename(tmp, r.NativesDir)
+	return fsx.ReplaceDir(tmp, r.NativesDir)
 }
 
 // legacyAssets lays assets out by name for versions that read them that way
