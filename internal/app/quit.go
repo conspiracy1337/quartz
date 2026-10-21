@@ -14,25 +14,42 @@ import (
 // toast that asked stays up.
 const quitAgain = 8 * time.Second
 
-// beforeClose keeps the launcher open while downloads are unfinished (they
-// would stop and need a retry): the UI says so and offers to quit anyway.
-// Closing again while it says so quits. Quits the launcher asks for itself
-// (restart, update, "Close" when a game starts) pass through.
+// beforeClose keeps the launcher open while it still has work running: a
+// game or hosted server (quitting ends a sandboxed one with the launcher, and
+// stops tracking any other) or unfinished downloads (they would stop and need
+// a retry). The UI says so and offers to quit anyway; closing again while it
+// says so quits. Quits the launcher asks for itself (restart, update) pass
+// through.
 func (a *app) beforeClose(context.Context) (prevent bool) {
 	if a.forceQuit.Load() {
 		return false
 	}
-	n := len(a.tasks.Snapshot().Active)
+	st := a.launcher.Status()
+	subject, text, busy := closeBlocker(len(st.Running)+len(st.Launching), len(a.host.Status()), len(a.tasks.Snapshot().Active))
 	now := time.Now()
-	if n == 0 || now.Sub(time.Unix(0, a.quitAsked.Swap(now.UnixNano()))) < quitAgain {
+	if !busy || now.Sub(time.Unix(0, a.quitAsked.Swap(now.UnixNano()))) < quitAgain {
 		return false
-	}
-	subject, text := strconv.Itoa(n)+" downloads", "aren't finished yet"
-	if n == 1 {
-		subject, text = "1 download", "isn't finished yet"
 	}
 	a.opens.Show(api.OpenTarget{Kind: api.OpenQuitBlocked, Subject: subject, Text: text})
 	return true
+}
+
+// closeBlocker words what closing would cut short, most important first;
+// busy is false when nothing would.
+func closeBlocker(games, servers, downloads int) (subject, text string, busy bool) {
+	switch {
+	case games == 1:
+		return "1 game", "is still running", true
+	case games > 1:
+		return strconv.Itoa(games) + " games", "are still running", true
+	case servers > 0:
+		return "Your server", "is still running", true
+	case downloads == 1:
+		return "1 download", "isn't finished yet", true
+	case downloads > 1:
+		return strconv.Itoa(downloads) + " downloads", "aren't finished yet", true
+	}
+	return "", "", false
 }
 
 // quit closes the launcher without asking.
