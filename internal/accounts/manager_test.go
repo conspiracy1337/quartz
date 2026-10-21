@@ -59,7 +59,7 @@ func newWorld(t *testing.T) *world {
 		t.Fatal(err)
 	}
 	w.m = NewManager(Config{
-		Store: store, Secrets: secrets.NewKeychain(), Auth: svc, Skins: lib, Redactor: logging.NewRedactor(""), Bus: w.bus,
+		Store: store, Secrets: secrets.NewKeychain(""), Auth: svc, Skins: lib, Redactor: logging.NewRedactor(""), Bus: w.bus,
 		Settings: func() settings.Accounts { return w.prefs },
 		InUse:    func(id string) bool { return w.inUse[id] },
 		Log:      log,
@@ -143,7 +143,7 @@ func TestSignInStoresTokensOnlyInTheKeychain(t *testing.T) {
 	if d, _ := w.m.Store().Default(); d.ID != a.ID {
 		t.Fatal("the first account should be the default")
 	}
-	refresh, err := secrets.NewKeychain().Get(msaKey(a.ID))
+	refresh, err := secrets.NewKeychain("").Get(msaKey(a.ID))
 	if err != nil || !strings.HasPrefix(refresh, "fake-refresh-") {
 		t.Fatalf("refresh token: %q %v", refresh, err)
 	}
@@ -163,7 +163,7 @@ func TestSignInStoresTokensOnlyInTheKeychain(t *testing.T) {
 	if err := w.m.Remove(a.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := secrets.NewKeychain().Get(msaKey(a.ID)); !errors.Is(err, secrets.ErrNotFound) {
+	if _, err := secrets.NewKeychain("").Get(msaKey(a.ID)); !errors.Is(err, secrets.ErrNotFound) {
 		t.Fatalf("token survived removal: %v", err)
 	}
 }

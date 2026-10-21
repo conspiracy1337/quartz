@@ -319,7 +319,7 @@ func build(o Options) (*app, error) {
 	}
 	a := &app{
 		paths: p, log: log, logFile: logFile, redactor: redactor, bus: bus, settings: store,
-		css: theme.NewCustomCSS(bus, log), secrets: secrets.NewKeychain(), http: httpClient, ctx: &api.Ctx{},
+		css: theme.NewCustomCSS(bus, log), secrets: secrets.NewKeychain(p.OwnFolder()), http: httpClient, ctx: &api.Ctx{},
 		crashed: crashed, moveErr: moveErr,
 	}
 	a.network = network.New(httpClient, store.Get().Downloads, a.secrets, redactor, log)
