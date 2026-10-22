@@ -399,15 +399,15 @@ func (c *Content) PlanInstall(instanceID, kind, world, ref, source, version stri
 		Project: r.ID(src), Version: version, Channel: c.channel()})
 }
 
-// ApplyInstall starts the install job with the optional dependencies picked.
-func (c *Content) ApplyInstall(planID string, optional []string) (string, error) {
-	if !planIDRe.MatchString(planID) || len(optional) > 64 {
+// ApplyInstall starts the install job, leaving out the dependencies in skip.
+func (c *Content) ApplyInstall(planID string, skip []string) (string, error) {
+	if !planIDRe.MatchString(planID) || len(skip) > 64 {
 		return "", ErrBadCheck
 	}
-	for _, id := range optional {
+	for _, id := range skip {
 		if !depIDRe.MatchString(id) {
 			return "", ErrBadItem
 		}
 	}
-	return c.d.Service.ApplyInstall(planID, optional)
+	return c.d.Service.ApplyInstall(planID, skip)
 }

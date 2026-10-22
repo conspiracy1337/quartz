@@ -46,20 +46,21 @@ func TestPlanAndApplyInstallWithDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pl.Name != "Iris Shaders" || pl.Version != "1.8.1" || pl.Mods != 1 || len(pl.Deps) != 3 {
+	// Fabric API is installed and up to date, so it isn't listed.
+	if pl.Name != "Iris Shaders" || pl.Version != "1.8.1" || pl.Mods != 1 || len(pl.Deps) != 2 {
 		t.Fatalf("plan %+v", pl)
 	}
 	want := []struct {
-		name                string
-		required, installed bool
-	}{{"Sodium", true, false}, {"Fabric API", true, true}, {"Indium", false, false}}
+		name     string
+		required bool
+	}{{"Sodium", true}, {"Indium", false}}
 	for i, w := range want {
 		d := pl.Deps[i]
-		if d.Name != w.name || d.Required != w.required || d.Installed != w.installed {
+		if d.Name != w.name || d.Required != w.required || d.Installed {
 			t.Fatalf("dep %d = %+v, want %+v", i, d, w)
 		}
 	}
-	job, err := e.svc.ApplyInstall(pl.PlanID, nil) // Indium left out
+	job, err := e.svc.ApplyInstall(pl.PlanID, []string{"dep-modrinth-PO"}) // Indium left out
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,10 +76,22 @@ func TestPlanAndApplyInstallWithDependencies(t *testing.T) {
 		t.Fatalf("activity %+v", a)
 	}
 
-	// Installing it again plans a replacement of the installed file.
+	// Installing it again plans a replacement of the installed file, and the
+	// installed Sodium, now outdated, is offered as an update.
+	sodiumNew := sodiumV
+	sodiumNew.ID, sodiumNew.Number, sodiumNew.Published = "s07", "0.7", day.Add(24*time.Hour)
+	fp := e.svc.d.Platforms[0].(*fakePlatform)
+	fp.versions["PS"] = []modplatform.Version{sodiumNew, sodiumV}
 	again, err := e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.Modrinth, Project: "PI"})
 	if err != nil || again.Replaces != "1.8.1" {
 		t.Fatalf("replace plan %+v %v", again, err)
+	}
+	if len(again.Deps) == 0 || again.Deps[0].Name != "Sodium" || !again.Deps[0].Installed || again.Deps[0].Update != "0.6" || again.Deps[0].Version != "0.7" {
+		t.Fatalf("an outdated dependency must be offered as an update: %+v", again.Deps)
+	}
+	sp, _ := e.svc.plan(again.PlanID)
+	if v := sp.items["dep-modrinth-PS"]; v == nil || v.item == "" {
+		t.Fatal("the update must replace the installed item")
 	}
 }
 
@@ -98,10 +111,22 @@ func TestPlanInstallEdges(t *testing.T) {
 	if err != nil || pl.Version != "t1" {
 		t.Fatalf("a pack's only beta not offered: %+v %v", pl, err)
 	}
-	// A mod keeps to the channel: its only beta is no version at all.
+	if pl.Channel != "Beta" {
+		t.Fatalf("a beta picked on the release channel must say so: %+v", pl)
+	}
+	// A mod with only a beta gets it too, named as such.
 	pl, err = e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.Modrinth, Project: "PT"})
-	if err != nil || pl.Version != "" {
-		t.Fatalf("a mod's beta offered on the release channel: %+v %v", pl, err)
+	if err != nil || pl.Version != "t1" || pl.Channel != "Beta" {
+		t.Fatalf("a mod's only beta not offered: %+v %v", pl, err)
+	}
+	pl, err = e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.Modrinth, Project: "PT", Channel: modplatform.Beta})
+	if err != nil || pl.Channel != "" {
+		t.Fatalf("a beta on the beta channel needs no note: %+v %v", pl, err)
+	}
+	// No build at all: no version.
+	e.svc.d.Platforms[0].(*fakePlatform).versions["PT"] = nil
+	if pl, err = e.svc.PlanInstall(ctx, InstallRequest{Instance: e.id, Kind: Mods, Source: modplatform.Modrinth, Project: "PT"}); err != nil || pl.Version != "" {
+		t.Fatalf("a build for another game version offered: %+v %v", pl, err)
 	}
 	if _, err := e.svc.ApplyInstall(pl.PlanID, nil); err == nil {
 		t.Fatal("applied a plan without a version")
@@ -221,12 +246,15 @@ func TestInstallDependencyEdges(t *testing.T) {
 		t.Errorf("the pinned version must be used, not the newest")
 	}
 	eng := e.withTasks(cdn{main.File.URL: mainJar, beta.File.URL: betaJar, pinned.File.URL: pinnedJar})
-	job, err := e.svc.ApplyInstall(pl.PlanID, nil)
+	job, err := e.svc.ApplyInstall(pl.PlanID, []string{"dep-modrinth-PV"}) // a required one left out
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := eng.Wait(ctx, job); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.game, "mods", "pinned.jar")); err == nil {
+		t.Error("a skipped required dependency was installed")
 	}
 	if _, err := os.Stat(filepath.Join(e.game, "mods", "cloth.jar")); err != nil {
 		t.Error("the turned-off dependency was not turned on")

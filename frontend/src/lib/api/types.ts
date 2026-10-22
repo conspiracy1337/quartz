@@ -376,6 +376,10 @@ export interface ProjectVersion {
 export interface VersionNotes { id: string; number: string; published: number; items: string[] }
 export interface InstallDep {
   id: string; name: string; summary?: string; icon?: string; art?: PreviewOnly<Art>; required: boolean; installed: boolean; size: number; blocked?: boolean;
+  /** The build it installs ("" when none does). */
+  version?: string;
+  /** Installed, and this is the outdated version the build replaces. */
+  update?: string;
   /** Installed but turned off: the install turns it on. */
   off?: boolean;
   /** Required, but no build fits this instance: it is left out. */
@@ -383,6 +387,8 @@ export interface InstallDep {
 }
 export interface InstallPlan {
   planId: string; name: string; kind: ContentKind; version: string; size: number;
+  /** The picked build's channel when nothing as stable as the update channel fits. */
+  channel?: 'Beta' | 'Alpha';
   replaces?: string; blocked?: boolean; deps: InstallDep[]; mods: number;
 }
 export interface PackStats { mods: number; modBytes: number; files: number; folders: string[]; blocked: number; foreign: string[] }

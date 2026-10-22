@@ -126,8 +126,8 @@ export const otherLaunchers: OtherLauncher[] = [
 export const installPlan: InstallPlan = {
   planId: 'preview', name: 'Distant Horizons', kind: 'mods', version: '2.3.0-b', size: 4_200_000, mods: 48,
   deps: [
-    { id: 'dep-modrinth-fabric-api', name: 'Fabric API', required: true, installed: true, size: 0, art: { background: '#dbc18e', initial: 'F' } },
-    { id: 'dep-modrinth-indium', name: 'Indium', summary: 'improves Sodium compatibility', required: false, installed: false, size: 160_000, art: { background: '#c7a3e8', initial: 'I' } },
+    { id: 'dep-modrinth-fabric-api', name: 'Fabric API', required: true, installed: true, version: '0.116.1', update: '0.110.0', size: 2_300_000, art: { background: '#dbc18e', initial: 'F' } },
+    { id: 'dep-modrinth-indium', name: 'Indium', summary: 'improves Sodium compatibility', required: false, installed: false, version: '1.0.36', size: 160_000, art: { background: '#c7a3e8', initial: 'I' } },
   ],
 };
 

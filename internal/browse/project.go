@@ -301,18 +301,13 @@ func fits(v modplatform.Version, t *Target) bool {
 	return !modLoader
 }
 
-var channels = map[string]string{"release": "Release", "beta": "Beta", "alpha": "Alpha"}
-
 func versionRow(v modplatform.Version, inst *InstalledVersion) VersionRow {
-	r := VersionRow{ID: v.ID, Number: v.Number, Channel: channels[v.Type], Minecraft: strings.Join(v.Game, ", "),
+	r := VersionRow{ID: v.ID, Number: v.Number, Channel: modplatform.ChannelName(v.Type), Minecraft: strings.Join(v.Game, ", "),
 		Published: v.Published.UnixMilli(), Bytes: v.File.Size, Downloads: v.Downloads, Loaders: []string{}, Action: "Install"}
 	for _, l := range v.Loaders {
 		if _, ok := loaderNames[l]; ok && !slices.Contains(r.Loaders, l) {
 			r.Loaders = append(r.Loaders, l)
 		}
-	}
-	if r.Channel == "" {
-		r.Channel = "Release"
 	}
 	if inst != nil {
 		switch {

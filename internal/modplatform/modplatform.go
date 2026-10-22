@@ -63,6 +63,18 @@ func (c Channel) Allows(t string) bool {
 	return false
 }
 
+// ChannelName is a release type as the UI shows it: Release, Beta or Alpha
+// (an unknown type counts as a release).
+func ChannelName(t string) string {
+	switch t {
+	case "beta":
+		return "Beta"
+	case "alpha":
+		return "Alpha"
+	}
+	return "Release"
+}
+
 // DepKind is how a version relates to another project.
 type DepKind string
 

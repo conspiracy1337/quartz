@@ -34,6 +34,9 @@ type InstallPlan struct {
 	Name    string `json:"name"`
 	Kind    Kind   `json:"kind"`
 	Version string `json:"version"` // "" when nothing fits
+	// Channel is the picked build's channel ("Beta", "Alpha") when nothing
+	// as stable as the update channel fits, so the dialog says so.
+	Channel string `json:"channel,omitempty"`
 	Size    int64  `json:"size"`
 	// Replaces is the installed version this one replaces ("" for a new item).
 	Replaces string       `json:"replaces,omitempty"`
@@ -53,6 +56,10 @@ type InstallDep struct {
 	Installed bool   `json:"installed"`
 	Size      int64  `json:"size"`
 	Blocked   bool   `json:"blocked,omitempty"`
+	// Version is the build it installs ("" when none does).
+	Version string `json:"version,omitempty"`
+	// Update is the installed version a newer build replaces ("" unless installed and outdated).
+	Update string `json:"update,omitempty"`
 	// Off: installed but turned off; the install turns it on.
 	Off bool `json:"off,omitempty"`
 	// Unavailable: required, but no build fits this instance on any channel.
@@ -123,20 +130,21 @@ func (s *Service) PlanInstall(ctx context.Context, r InstallRequest) (*InstallPl
 			return nil, err
 		}
 	} else {
-		// A pack has no loader to break, so only the game version has to fit:
-		// a less stable build beats none (Fresh Animations is beta-only).
-		last := r.Channel
-		if r.Kind != Mods {
-			last = modplatform.Alpha
-		}
-		if ver, ok, err = s.newest(ctx, p, r.Project, q, last); err != nil {
+		// A less stable build beats none (Fresh Animations is beta-only); the
+		// dialog names its channel.
+		if ver, ok, err = s.newest(ctx, p, r.Project, q, modplatform.Alpha); err != nil {
 			return nil, err
 		} else if !ok {
 			return out, nil // nothing fits: the dialog says so
 		}
+		if !r.Channel.Allows(ver.Type) {
+			if name := modplatform.ChannelName(ver.Type); name != "Release" {
+				out.Channel = name
+			}
+		}
 	}
 	pres := s.presence(&v)
-	pl := &plan{inst: r.Instance, kind: r.Kind, at: s.now(), query: q, items: map[string]*planned{}}
+	pl := &plan{inst: r.Instance, kind: r.Kind, at: s.now(), query: q, items: map[string]*planned{}, enable: map[string]string{}}
 	main := &planned{id: "main", name: proj.Title, v: ver, p: proj, provider: p, dir: dir}
 	if item, e, ident, ok := pres.find(r.Source, r.Project); ok {
 		main.item, main.old, main.cur, main.dir = item, e, ident, ""
@@ -220,8 +228,9 @@ func overlaps(a, b []string) bool {
 	return false
 }
 
-// planInstallDeps walks required dependencies breadth first (installed ones
-// are listed but not planned) and lists the direct optional ones.
+// planInstallDeps walks required dependencies breadth first and lists the
+// direct optional ones. An installed one is listed only when the install
+// changes it: turned off (it is turned on) or outdated (it is updated).
 func (s *Service) planInstallDeps(ctx context.Context, pl *plan, out *InstallPlan, p modplatform.Provider, ver modplatform.Version, pres presence, q modplatform.Query) {
 	type node struct {
 		dep   modplatform.Dep
@@ -260,14 +269,21 @@ func (s *Service) planInstallDeps(ctx context.Context, pl *plan, out *InstallPla
 			dep.Icon = s.d.Picture(dp.Icon)
 		}
 		if it, ok := pres.lookup(p.Source(), pid, dp.Slug); ok {
-			if required {
-				dep.Installed = true
-				if it.item != "" && strings.HasSuffix(it.e.Rel, Disabled) {
-					dep.Off = true
-					pl.enable = append(pl.enable, it.item)
-				}
-				out.Deps = append(out.Deps, dep)
+			// A turned-off required one is only turned on (an update would
+			// rename the item the job turns on); an optional one stays off.
+			dep.Installed = true
+			off := it.item != "" && strings.HasSuffix(it.e.Rel, Disabled)
+			switch {
+			case off && required:
+				dep.Off = true
+				pl.enable[dep.ID] = it.item
+			case !off && found && newer(dv, it.ident, p.Source(), pid) && q.Channel.Allows(dv.Type):
+				dep.Update, dep.Version, dep.Size, dep.Blocked = it.ident.Version, dv.Number, dv.File.Size, dv.File.URL == ""
+				pl.add(&planned{id: dep.ID, item: it.item, name: dep.Name, old: it.e, cur: it.ident, v: dv, p: dp, provider: p})
+			default:
+				continue // up to date: nothing to show
 			}
+			out.Deps = append(out.Deps, dep)
 			continue
 		}
 		if !found {
@@ -277,9 +293,9 @@ func (s *Service) planInstallDeps(ctx context.Context, pl *plan, out *InstallPla
 			}
 			continue
 		}
-		dep.Size, dep.Blocked = dv.File.Size, dv.File.URL == ""
+		dep.Size, dep.Blocked, dep.Version = dv.File.Size, dv.File.URL == "", dv.Number
 		out.Deps = append(out.Deps, dep)
-		pl.add(&planned{id: dep.ID, name: dep.Name, v: dv, p: dp, provider: p, optional: !required})
+		pl.add(&planned{id: dep.ID, name: dep.Name, v: dv, p: dp, provider: p})
 		if required && n.depth < maxDepDepth {
 			for _, d := range dv.Deps {
 				if d.Kind == modplatform.DepRequired {
@@ -292,9 +308,15 @@ func (s *Service) planInstallDeps(ctx context.Context, pl *plan, out *InstallPla
 	sort.SliceStable(out.Deps, func(i, j int) bool { return out.Deps[i].Required && !out.Deps[j].Required })
 }
 
-// ApplyInstall downloads the plan's version, its required dependencies and
-// the optional ones picked, and puts them in place as one job.
-func (s *Service) ApplyInstall(planID string, optional []string) (string, error) {
+// newer reports whether v is a later build of the installed item than the
+// one it has, judged on the platform v comes from.
+func newer(v modplatform.Version, have *Ident, src modplatform.Source, project string) bool {
+	return have != nil && have.Source == string(src) && have.ProjectID == project && v.ID != have.VersionID && v.Published.Unix() > have.Published
+}
+
+// ApplyInstall downloads the plan's version and its dependencies, except the
+// ones skipped, and puts them in place as one job.
+func (s *Service) ApplyInstall(planID string, skip []string) (string, error) {
 	pl, err := s.plan(planID)
 	if err != nil {
 		return "", err
@@ -306,7 +328,7 @@ func (s *Service) ApplyInstall(planID string, optional []string) (string, error)
 	var picked []*planned
 	for _, key := range pl.order {
 		pi := pl.items[key]
-		if pi.optional && !slices.Contains(optional, pi.id) {
+		if pi != main && slices.Contains(skip, pi.id) {
 			continue
 		}
 		picked = append(picked, pi)
@@ -320,9 +342,15 @@ func (s *Service) ApplyInstall(planID string, optional []string) (string, error)
 		title = fmt.Sprintf("%s %s", main.name, main.v.Number)
 	}
 	var finish func(context.Context) error
-	if len(pl.enable) > 0 {
+	var enable []string
+	for id, item := range pl.enable {
+		if !slices.Contains(skip, id) {
+			enable = append(enable, item)
+		}
+	}
+	if len(enable) > 0 {
 		finish = func(ctx context.Context) error {
-			for _, item := range pl.enable {
+			for _, item := range enable {
 				if e, err := s.entry(pl.inst, item); err == nil {
 					_ = s.rename(ctx, pl.inst, e, true)
 				}

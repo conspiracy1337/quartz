@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { api } from '$lib/api';
-  import { mergePage } from '$lib/browse';
+  import { mergePage, resumeBrowse, type BrowseState } from '$lib/browse';
   import { hasBridge } from '$lib/bridge';
   import type { BrowseSort, ProjectHit, ProjectKind, Src } from '$lib/api/types';
   import { ago, compact, dailyUsers, errorText } from '$lib/format';
@@ -27,9 +27,10 @@
   const SORTS = [{ value: 'relevance', label: 'Relevance' }, { value: 'downloads', label: 'Downloads' }, { value: 'updated', label: 'Recently updated' }] as const;
   const SKELETON: [string, string][] = [['30%', '60%'], ['24%', '50%'], ['36%', '70%'], ['28%', '40%'], ['32%', '64%'], ['40%', '56%'], ['26%', '48%']];
 
-  // The search lives in this page's history entry, so Back returns to it as it was left.
-  interface Kept { type: ProjectKind; search: string; sort: BrowseSort; cats: Record<string, boolean>; useVersion: boolean; useLoader: boolean; side: '' | 'client' | 'server'; game: string }
-  const saved = kept<Kept>('browse');
+  // The search lives in this page's history entry, so Back returns to it as it was left;
+  // a new entry (the sidebar, a project's crumb) picks up the one last left.
+  // svelte-ignore state_referenced_locally
+  const saved = kept<BrowseState>('browse') ?? resumeBrowse(session.browseLast, startType);
   // svelte-ignore state_referenced_locally
   let type = $state<ProjectKind>(saved?.type ?? startType ?? 'mod');
   let search = $state(saved?.search ?? '');
@@ -50,7 +51,11 @@
   let side = $state<'' | 'client' | 'server'>(saved?.side ?? '');
   /** Modpacks become new instances, so their version is picked by hand ("" for any). */
   let game = $state(saved?.game ?? '');
-  $effect(() => keep('browse', { type, search, sort, cats: $state.snapshot(cats), useVersion, useLoader, side, game } satisfies Kept));
+  $effect(() => {
+    const now: BrowseState = { type, search, sort, cats: $state.snapshot(cats), useVersion, useLoader, side, game };
+    keep('browse', now);
+    session.browseLast = now;
+  });
   const releases = query(() => api.versions.minecraft(), 'versions.minecraft');
   const GAMES = $derived([{ value: '', label: 'Any version' }, ...(releases.data ?? []).flatMap((f) => f.releases.map((v) => ({ value: v.id, label: v.id })))]);
   const hide = session.browseHide;

@@ -41,4 +41,7 @@ export const projectType = (k: ProjectKind) => PROJECT_TYPES.find((t) => t.kind 
 /** The project type a content tab installs. */
 export const projectKindOf = (c: ContentKind): ProjectKind => PROJECT_TYPES.find((t) => t.content === c)?.kind ?? 'mod';
 
+/** A version's channel as a badge: green release, orange beta, red alpha. */
+export const CHANNEL_BADGE = { Release: 'badge-ok', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
+
 export const SRC_NAMES: Record<Src, string> = { modrinth: 'Modrinth', curseforge: 'CurseForge', norisk: 'NoRisk' };

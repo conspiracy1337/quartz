@@ -111,9 +111,9 @@ export async function installInto(instanceId: string, ref: string, source: Src, 
   }
 }
 
-/** Nothing to show: a version fits, it is a new item, every dependency is required and
-    already on, and the memory hint would stay quiet. */
+/** Nothing to show: a version on the update channel fits, it is a new item, it brings no
+    dependency (an installed, up-to-date one isn't listed), and the memory hint would stay quiet. */
 function settled(p: InstallPlan, inst: Instance, memoryMb: number) {
   const quiet = p.kind !== 'mods' || prefs.value?.java.suggestMemory === false || !memoryShort(p.mods + 1, memoryMb, inst.memoryMB.max);
-  return !!p.version && !p.replaces && p.deps.every((d) => d.required && d.installed && !d.off && !d.unavailable) && quiet;
+  return !!p.version && !p.channel && !p.replaces && p.deps.length === 0 && quiet;
 }

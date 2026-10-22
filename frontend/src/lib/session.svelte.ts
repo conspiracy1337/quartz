@@ -10,6 +10,7 @@ import { copyText } from './clipboard';
 import { errorText } from './format';
 import { rememberCount } from './query.svelte';
 import type { TargetPick } from './instances';
+import type { BrowseState } from './browse';
 import { hasBridge, onEvent } from './bridge';
 import { revs } from './revs.svelte';
 import { go } from './router.svelte';
@@ -89,6 +90,9 @@ class Session {
   packPick = $state<{ instanceId: string; version: string } | null>(null);
   /** Items a content tab's selection sends to the update review, ticked there instead of its defaults. */
   updatePick = $state<Set<string> | null>(null);
+  /** Browse's search and filters as last left, kept while the launcher runs, so the sidebar
+      or a project page's crumb opens it as Back would. */
+  browseLast = $state.raw<BrowseState | null>(null);
   /** Browse's "Hide projects with" choices, kept while the launcher runs. */
   browseHide = $state({ ai: true, ads: false, installed: true });
   /** A file a launch saved, for the Log files viewer to show (set by Launch history's Open). */

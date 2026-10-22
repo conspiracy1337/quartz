@@ -1165,6 +1165,8 @@ export namespace content {
 	    installed: boolean;
 	    size: number;
 	    blocked?: boolean;
+	    version?: string;
+	    update?: string;
 	    off?: boolean;
 	    unavailable?: boolean;
 	
@@ -1182,6 +1184,8 @@ export namespace content {
 	        this.installed = source["installed"];
 	        this.size = source["size"];
 	        this.blocked = source["blocked"];
+	        this.version = source["version"];
+	        this.update = source["update"];
 	        this.off = source["off"];
 	        this.unavailable = source["unavailable"];
 	    }
@@ -1191,6 +1195,7 @@ export namespace content {
 	    name: string;
 	    kind: string;
 	    version: string;
+	    channel?: string;
 	    size: number;
 	    replaces?: string;
 	    blocked?: boolean;
@@ -1207,6 +1212,7 @@ export namespace content {
 	        this.name = source["name"];
 	        this.kind = source["kind"];
 	        this.version = source["version"];
+	        this.channel = source["channel"];
 	        this.size = source["size"];
 	        this.replaces = source["replaces"];
 	        this.blocked = source["blocked"];
