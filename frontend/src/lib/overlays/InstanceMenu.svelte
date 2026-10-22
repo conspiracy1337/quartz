@@ -34,7 +34,7 @@
     {@const i = inst}
     {#if running}
       {@const kill = session.stopping[i.id]}
-      <button class="mi" role="menuitem" onclick={() => act(() => session.stop(i.id))}><Icon name={kill ? 'x' : 'stop'} size={14} /><span>{kill ? 'Kill' : 'Stop'}</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(() => session.stop(i.id))}><Icon name={kill ? 'skull' : 'stop'} size={14} /><span>{kill ? 'Kill' : 'Stop'}</span><span></span></button>
     {:else}
       <button class="mi" role="menuitem" onclick={() => act(() => session.play(i.id))}><Icon name="play" size={14} /><span>Play</span><span></span></button>
     {/if}

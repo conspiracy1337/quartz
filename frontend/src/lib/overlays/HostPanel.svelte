@@ -86,7 +86,7 @@
   </div>
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 12px 14px 14px">
     <button class="btn btn-sm btn-accent" disabled={host.state !== 'stopped'} onclick={() => session.restartHost(id)}><Icon name="play" size={11} />Start</button>
-    <button class="btn btn-sm btn-danger" disabled={host.state === 'stopped'} title={session.hostStopping ? 'Force the server to quit now' : 'Save the world and stop'} onclick={() => session.stopHost(id)}><Icon name={session.hostStopping ? 'x' : 'stop'} size={10} sw={session.hostStopping ? 2.5 : 1.6} />{session.hostStopping ? 'Kill' : 'Stop'}</button>
+    <button class="btn btn-sm btn-danger" disabled={host.state === 'stopped'} title={session.hostStopping ? 'Force the server to quit now' : 'Save the world and stop'} onclick={() => session.stopHost(id)}><Icon name={session.hostStopping ? 'skull' : 'stop'} size={10} />{session.hostStopping ? 'Kill' : 'Stop'}</button>
   </div>
 </section>
 

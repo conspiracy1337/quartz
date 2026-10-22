@@ -20,7 +20,7 @@
   import ShortcutDialog from '$lib/overlays/ShortcutDialog.svelte';
   import ExportDialog from '$lib/overlays/ExportDialog.svelte';
   import Rollback from '$lib/overlays/Rollback.svelte';
-  import ShotLightbox from '$lib/overlays/ShotLightbox.svelte';
+  import ShotFullscreen from '$lib/overlays/ShotFullscreen.svelte';
   import Shortcuts from '$lib/overlays/Shortcuts.svelte';
   import Toast from '$lib/overlays/Toast.svelte';
   import UpdateBanner from '$lib/overlays/UpdateBanner.svelte';
@@ -173,7 +173,7 @@
     {:else if overlay.kind === 'shortcut'}<ShortcutDialog instanceId={overlay.instanceId} />
     {:else if overlay.kind === 'export'}<ExportDialog instanceId={overlay.instanceId} />
     {:else if overlay.kind === 'rollback'}<Rollback instanceId={overlay.instanceId} snapshot={overlay.snapshot} />
-    {:else if overlay.kind === 'shot'}<ShotLightbox instanceId={overlay.instanceId} shotId={overlay.shotId} />
+    {:else if overlay.kind === 'shot'}<ShotFullscreen instanceId={overlay.instanceId} shotId={overlay.shotId} />
     {:else if overlay.kind === 'rename' || overlay.kind === 'look'}<InstanceEdit kind={overlay.kind} instanceId={overlay.instanceId} />
     {/if}
   {/each}
