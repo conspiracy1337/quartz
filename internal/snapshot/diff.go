@@ -19,7 +19,7 @@ import (
 )
 
 // Row is one change a rollback can undo. From is how it is now, To how the
-// snapshot has it.
+// restore point has it.
 type Row struct {
 	Key string `json:"key"`
 	// Kind is a content kind, or version | pack | packs | shader | files.
@@ -32,7 +32,7 @@ type Row struct {
 	To          string `json:"to,omitempty"`
 	Icon        string `json:"icon,omitempty"`
 	Detail      string `json:"detail,omitempty"`
-	Default     bool   `json:"default"`               // what the change after the snapshot touched
+	Default     bool   `json:"default"`               // ticked to begin with
 	Unavailable string `json:"unavailable,omitempty"` // why it can't be rolled back
 
 	match     []string // scope keys naming it
@@ -40,30 +40,66 @@ type Row struct {
 	files     []fileChange
 }
 
-// Diff is what rolling back to a snapshot changes.
+// Diff is what rolling back to a restore point changes.
 type Diff struct {
-	Snapshot Summary `json:"snapshot"`
-	Rows     []Row   `json:"rows"`
+	Point Summary `json:"point"`
+	Rows  []Row   `json:"rows"`
 	// Shared folders are left out: other instances use them too.
 	Shared []string `json:"shared,omitempty"`
 	// Partial folders were too big to keep whole.
 	Partial []string `json:"partial,omitempty"`
-	// Undoable: a rollback takes a snapshot first (snapshots are on).
+	// Undoable: a rollback keeps the instance first (the history is on).
 	Undoable bool `json:"undoable"`
 }
 
-// Diff compares a snapshot with the instance as it is now.
+// Diff compares a restore point with the instance as it is now. Every row
+// starts ticked: rolling back to a point puts all of it back.
 func (s *Service) Diff(ctx context.Context, inst, id string) (Diff, error) {
 	unlock := s.lock(inst)
 	defer unlock()
-	sn, err := s.get(inst, id)
+	p, newest, err := s.point(inst, id)
 	if err != nil {
 		return Diff{}, err
 	}
-	return s.diff(ctx, inst, sn)
+	sn, err := readLayer(s.dir(inst), p.ID)
+	if err != nil {
+		return Diff{}, err
+	}
+	sn.Scope = nil
+	d, err := s.diff(ctx, inst, sn)
+	d.Point = summary(p, newest)
+	return d, err
 }
 
-func (s *Service) diff(ctx context.Context, inst string, sn Snapshot) (Diff, error) {
+// layer reads one layer of an open session (for Undo).
+func (s *Service) layer(inst, id string) (Layer, error) {
+	dir := s.dir(inst)
+	l, err := readLayer(dir, id)
+	if err != nil {
+		if _, perr := s.pointOf(inst, id); perr == nil {
+			return Layer{}, ErrSquashed
+		}
+		return Layer{}, err
+	}
+	return l, nil
+}
+
+// pointOf finds the point a change (by its layer's id) belongs to.
+func (s *Service) pointOf(inst, change string) (Point, error) {
+	for _, p := range points(s.dir(inst)) {
+		for _, c := range p.Changes {
+			if c.ID == change {
+				return p, nil
+			}
+		}
+		if p.ID == change {
+			return p, nil
+		}
+	}
+	return Point{}, ErrUnknown
+}
+
+func (s *Service) diff(ctx context.Context, inst string, sn Layer) (Diff, error) {
 	in, err := s.d.Instances.Get(inst)
 	if err != nil {
 		return Diff{}, err
@@ -82,7 +118,7 @@ func (s *Service) diff(ctx context.Context, inst string, sn Snapshot) (Diff, err
 			shared[tree] = true
 		}
 	}
-	d := Diff{Snapshot: s.summary(sn), Rows: []Row{}, Partial: sn.Partial, Undoable: s.enabled()}
+	d := Diff{Rows: []Row{}, Partial: sn.Partial, Undoable: s.enabled()}
 	for top := range shared {
 		d.Shared = append(d.Shared, top)
 	}
@@ -127,10 +163,10 @@ func (s *Service) diff(ctx context.Context, inst string, sn Snapshot) (Diff, err
 	return d, nil
 }
 
-// itemRows pairs the snapshot's items with the instance's: by item (kind
+// itemRows pairs the layer's items with the instance's: by item (kind
 // and path), then by project or mod id (an update usually renames the
 // file). Ambiguous matches stay apart, as a restore and a removal.
-func (s *Service) itemRows(game string, sn Snapshot, cur content.State, shared map[string]bool) []Row {
+func (s *Service) itemRows(game string, sn Layer, cur content.State, shared map[string]bool) []Row {
 	keep := func(it content.StateItem) bool { return !shared[it.Kind.Top()] }
 	was := slices.DeleteFunc(slices.Clone(sn.State.Items), func(it content.StateItem) bool { return !keep(it) })
 	now := slices.DeleteFunc(slices.Clone(cur.Items), func(it content.StateItem) bool { return !keep(it) })
@@ -201,7 +237,7 @@ func (s *Service) itemRows(game string, sn Snapshot, cur content.State, shared m
 	return rows
 }
 
-// itemRow is the change that puts one item back as the snapshot had it
+// itemRow is the change that puts one item back as the layer had it
 // (snap nil: added since, cur nil: removed since).
 func (s *Service) itemRow(game string, snap, cur *content.StateItem) (Row, bool) {
 	r := Row{snap: snap, cur: cur}
@@ -275,17 +311,17 @@ func linked(game, dir string) bool {
 
 func on(rel string) bool { return !strings.HasSuffix(rel, content.Disabled) }
 
-// fileChange is one file a rollback writes back (from the snapshot) or
+// fileChange is one file a rollback writes back (from the layer) or
 // deletes (snap nil: it wasn't there).
 type fileChange struct {
 	rel  string
 	snap *File
 }
 
-// fileChanges compares the snapshot's files with the game folder: changed
+// fileChanges compares the layer's files with the game folder: changed
 // and removed ones come back, ones added since in a kept tree go. Files a
 // partial tree couldn't keep are left alone.
-func (s *Service) fileChanges(inst string, sn Snapshot, shared map[string]bool) ([]fileChange, error) {
+func (s *Service) fileChanges(inst string, sn Layer, shared map[string]bool) ([]fileChange, error) {
 	game, err := os.OpenRoot(s.d.Instances.GameDir(inst))
 	if err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -103,6 +104,8 @@ func (e *env) exists(rel string) bool {
 	return err == nil
 }
 
+// take keeps the instance before a change and returns the layer's id (the
+// point's too when it opens a session).
 func (e *env) take(title string, scope ...string) string {
 	e.t.Helper()
 	id := e.svc.NewID()
@@ -155,6 +158,8 @@ func (e *env) update() {
 	_ = os.Remove(filepath.Join(e.game, "config", "gone.toml"))
 }
 
+func (e *env) layerCount() int { return len(ids(e.svc.dir(e.id), layersDir)) }
+
 func TestDiffAndPartialRollback(t *testing.T) {
 	e := newEnv(t, false)
 	e.setup()
@@ -168,12 +173,9 @@ func TestDiffAndPartialRollback(t *testing.T) {
 	}
 	for name, w := range want {
 		r := row(d, name)
-		if r.Change != w[0] || r.From != w[1] || r.To != w[2] || r.Unavailable != "" {
+		if r.Change != w[0] || r.From != w[1] || r.To != w[2] || r.Unavailable != "" || !r.Default {
 			t.Fatalf("%s: %+v", name, r)
 		}
-	}
-	if !row(d, "a").Default || !row(d, "b").Default || row(d, "c").Default || row(d, "d").Default || row(d, "Config files").Default {
-		t.Fatalf("defaults follow the scope: %+v", d.Rows)
 	}
 	if r := row(d, "Config files"); r.Detail != "2 files come back, 1 new file goes" {
 		t.Fatalf("files: %q", r.Detail)
@@ -198,6 +200,9 @@ func TestDiffAndPartialRollback(t *testing.T) {
 	}
 	if e.exists("mods/a-1.0.jar") || !e.exists("mods/a-2.0.jar") {
 		t.Fatal("the rollback wasn't undone")
+	}
+	if l := e.svc.List(e.id); len(l) != 1 || len(l[0].Changes) != 3 {
+		t.Fatalf("the rollbacks are changes of the same session: %+v", l)
 	}
 
 	// Everything goes back.
@@ -232,26 +237,106 @@ func TestDiffAndPartialRollback(t *testing.T) {
 	}
 }
 
-func TestUnchangedConfigIsLinkedNotCopied(t *testing.T) {
+// Every change before the next launch is one restore point; each keeps its
+// own layer for Undo until the game runs.
+func TestSessionGathersChangesUntilLaunch(t *testing.T) {
+	e := newEnv(t, false)
+	e.setup()
+	first := e.take("updating a", content.ScopeRel("mods/a-1.0.jar"))
+	_ = os.Remove(filepath.Join(e.game, "mods", "a-1.0.jar"))
+	e.mod("a-2.0.jar", "a", "2.0")
+	second := e.take("updating b", content.ScopeRel("mods/b.jar"))
+	e.mod("b.jar", "b", "2.0")
+	third := e.take("updating c", content.ScopeRel("mods/c.jar"))
+	e.mod("c.jar", "c", "2.0")
+
+	l := e.svc.List(e.id)
+	if len(l) != 1 || l[0].ID != first || len(l[0].Changes) != 3 || l[0].Sealed != 0 || l[0].Expires != 0 {
+		t.Fatalf("one open session: %+v", l)
+	}
+	// Undo of the middle change puts back only b.
+	if _, err := e.svc.Undo(e.ctx, e.id, second); err != nil {
+		t.Fatal(err)
+	}
+	if !e.exists("mods/a-2.0.jar") || e.read("mods/b.jar") == e.read("mods/c.jar") {
+		t.Fatal("undo changed more than its change")
+	}
+	if r := row(e.diff(first), "b"); r.Name != "" {
+		t.Fatalf("b is back as it was: %+v", r)
+	}
+
+	// Launching seals the session: one layer is left, the changes are listed.
+	e.svc.Seal(e.id)
+	if n := e.layerCount(); n != 1 {
+		t.Fatalf("%d layers after sealing", n)
+	}
+	l = e.svc.List(e.id)
+	if len(l) != 1 || l[0].Sealed == 0 || len(l[0].Changes) != 4 || slices.ContainsFunc(l[0].Changes, func(c Change) bool { return c.Undoable }) {
+		t.Fatalf("%+v", l)
+	}
+	if _, err := e.svc.Undo(e.ctx, e.id, third); !errors.Is(err, ErrSquashed) {
+		t.Fatalf("undo after the game ran: %v", err)
+	}
+	if r := row(e.diff(first), "c"); r.From != "2.0" || r.To != "1.0" {
+		t.Fatalf("the point still rolls c back: %+v", r)
+	}
+
+	// The next change opens a new session.
+	next := e.take("updating d")
+	if l := e.svc.List(e.id); len(l) != 2 || l[0].ID != next {
+		t.Fatalf("%+v", l)
+	}
+}
+
+// A point made by hand seals the open session and stands alone.
+func TestManualPointStandsAlone(t *testing.T) {
+	e := newEnv(t, false)
+	e.setup()
+	open := e.take("updating a")
+	manual, err := e.svc.Create(e.ctx, e.id)
+	if err != nil || !manual.Manual || manual.Sealed == 0 {
+		t.Fatalf("%+v %v", manual, err)
+	}
+	e.now = e.now.Add(time.Second)
+	after := e.take("updating b")
+	l := e.svc.List(e.id)
+	if len(l) != 3 || l[0].ID != after || l[1].ID != manual.ID || l[2].ID != open || l[2].Sealed == 0 {
+		t.Fatalf("%+v", l)
+	}
+}
+
+func TestObjectsAreSharedAcrossLayers(t *testing.T) {
 	e := newEnv(t, false)
 	e.setup()
 	first := e.take("first")
 	e.write("config/a.toml", "x=2")
 	second := e.take("second")
-	same := func(rel string) bool {
-		a, err1 := os.Stat(filepath.Join(e.svc.dir(e.id), first, filesDir, rel))
-		b, err2 := os.Stat(filepath.Join(e.svc.dir(e.id), second, filesDir, rel))
-		return err1 == nil && err2 == nil && os.SameFile(a, b)
+	dir := e.svc.dir(e.id)
+	a, _ := readLayer(dir, first)
+	b, _ := readLayer(dir, second)
+	sha := func(l Layer, rel string) string {
+		for _, f := range l.Files {
+			if f.Rel == rel {
+				return f.SHA1
+			}
+		}
+		return ""
 	}
-	if !same("config/gone.toml") {
-		t.Fatal("an unchanged file was copied again")
+	if sha(a, "config/gone.toml") == "" || sha(a, "config/gone.toml") != sha(b, "config/gone.toml") || sha(a, "config/a.toml") == sha(b, "config/a.toml") {
+		t.Fatal("objects by content")
 	}
-	if same("config/a.toml") {
-		t.Fatal("a changed file was linked")
+	if b.Size != int64(len("x=2")) {
+		t.Fatalf("the second layer added %d bytes", b.Size)
 	}
-	sn, err := read(e.svc.dir(e.id), second)
-	if err != nil || sn.Size != int64(len("x=2")) {
-		t.Fatalf("size counts copies only: %+v %v", sn.Size, err)
+	n := 0
+	_ = filepath.WalkDir(filepath.Join(dir, objectsDir), func(_ string, d fs.DirEntry, _ error) error {
+		if d != nil && !d.IsDir() {
+			n++
+		}
+		return nil
+	})
+	if n != 3 { // a.toml twice over, gone.toml once
+		t.Fatalf("%d objects", n)
 	}
 }
 
@@ -283,10 +368,10 @@ func TestFailedCommitPutsEveryFileBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A version the instance store refuses fails the commit, last.
-	dir := filepath.Join(e.svc.dir(e.id), snap)
-	sn, _ := read(e.svc.dir(e.id), snap)
-	sn.Version.Minecraft = "not a version!"
-	if err := write(dir, sn); err != nil {
+	dir := e.svc.dir(e.id)
+	l, _ := readLayer(dir, snap)
+	l.Version.Minecraft = "not a version!"
+	if err := writeJSON(dir, layersDir, snap, l); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.svc.Rollback(e.ctx, e.id, snap, []string{"version", row(e.diff(snap), "a").Key, "files"}); err == nil {
@@ -301,9 +386,9 @@ func TestInPlaceFilesAreKeptAndRestoredAsCopies(t *testing.T) {
 	e := newEnv(t, true)
 	e.setup()
 	snap := e.take("updating a")
-	sn, _ := read(e.svc.dir(e.id), snap)
+	l, _ := readLayer(e.svc.dir(e.id), snap)
 	var a content.StateItem
-	for _, it := range sn.State.Items {
+	for _, it := range l.State.Items {
 		if it.Name == "a" {
 			a = it
 		}
@@ -328,49 +413,74 @@ func TestExpiryKeepAndTurningOff(t *testing.T) {
 	releaseAge = 0 // the store's clock is the real one
 	e.setup()
 	old := e.take("updating a")
+	e.svc.Seal(e.id)
 	kept := e.take("updating b")
 	if _, err := e.svc.SetKeep(e.id, kept, true); err != nil {
 		t.Fatal(err)
 	}
-	sn, _ := read(e.svc.dir(e.id), old)
+	e.svc.Seal(e.id)
+	current := e.take("updating c")
+	l, _ := readLayer(e.svc.dir(e.id), old)
 	var a content.StateItem
-	for _, it := range sn.State.Items {
+	for _, it := range l.State.Items {
 		if it.Name == "a" {
 			a = it
 		}
 	}
-	e.update() // a-1.0 is now only in the snapshots
+	e.update() // a-1.0 is now only in the history
 	if err := e.content.Scan(e.ctx, e.id, content.Mods); err != nil {
 		t.Fatal(err)
 	}
 	e.now = e.now.Add(Life + time.Hour)
-	if got := e.svc.List(e.id); len(got) != 1 || got[0].ID != kept || got[0].Expires != 0 {
+	if got := e.svc.List(e.id); len(got) != 2 || got[0].ID != current || got[1].ID != kept || got[1].Expires != 0 {
 		t.Fatalf("list %+v", got)
 	}
 	e.svc.Purge(e.now)
-	if _, err := os.Stat(filepath.Join(e.svc.dir(e.id), old)); !os.IsNotExist(err) {
-		t.Fatal("an expired snapshot was kept")
+	if _, err := readPoint(e.svc.dir(e.id), old); err == nil {
+		t.Fatal("an expired point was kept")
 	}
 	if _, ok := e.store.Blob(a.SHA1); !ok {
-		t.Fatal("a kept snapshot's file was freed")
+		t.Fatal("a kept point's file was freed")
 	}
 	e.on = false
 	e.svc.Purge(e.now)
-	if len(e.svc.List(e.id)) != 1 {
-		t.Fatal("turning snapshots off deleted a kept one")
+	if l := e.svc.List(e.id); len(l) != 1 || l[0].ID != kept {
+		t.Fatalf("turning the history off: %+v", l)
 	}
 	if err := e.svc.Delete(e.id, kept); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := e.store.Blob(a.SHA1); ok {
-		t.Fatal("deleting the last snapshot didn't free its old file")
+		t.Fatal("deleting the last point didn't free its old file")
+	}
+	if e.layerCount() != 0 {
+		t.Fatal("layers left behind")
 	}
 	if e.svc.NewID() != "" {
-		t.Fatal("snapshots are off")
+		t.Fatal("the history is off")
 	}
 }
 
-func TestTrashedInstanceKeepsItsSnapshotsReferenced(t *testing.T) {
+// The newest sealed point is always kept, so there is one step back however
+// long ago the last change was.
+func TestNewestSealedPointStays(t *testing.T) {
+	e := newEnv(t, false)
+	e.setup()
+	first := e.take("updating a")
+	e.svc.Seal(e.id)
+	e.now = e.now.Add(30 * 24 * time.Hour)
+	e.svc.Purge(e.now)
+	if l := e.svc.List(e.id); len(l) != 1 || l[0].ID != first || l[0].Expires != 0 {
+		t.Fatalf("%+v", l)
+	}
+	e.take("updating b")
+	e.svc.Seal(e.id)
+	if l := e.svc.List(e.id); len(l) != 1 || l[0].ID == first {
+		t.Fatalf("the older point should expire now: %+v", l)
+	}
+}
+
+func TestTrashedInstanceKeepsItsHistoryReferenced(t *testing.T) {
 	e := newEnv(t, false)
 	e.setup()
 	e.take("updating a")
@@ -384,53 +494,59 @@ func TestTrashedInstanceKeepsItsSnapshotsReferenced(t *testing.T) {
 	}
 }
 
-func TestTamperedSnapshotWritesNothingOutside(t *testing.T) {
+func TestTamperedHistoryWritesNothingOutside(t *testing.T) {
 	e := newEnv(t, false)
 	e.setup()
 	snap := e.take("updating a")
-	dir := filepath.Join(e.svc.dir(e.id), snap)
-	sn, _ := read(e.svc.dir(e.id), snap)
-	good := sn.State.Items[0]
+	dir := e.svc.dir(e.id)
+	l, _ := readLayer(dir, snap)
+	good := l.State.Items[0]
 	for _, rel := range []string{"../../evil.jar", "mods/../../evil.jar", "/abs/evil.jar", "saves/w/level.jar", "mods/sub/x.jar", "config/x.jar"} {
 		it := good
 		it.Rel, it.ID = rel, "0123456789abcdef"
-		sn.State.Items = append(sn.State.Items, it)
+		l.State.Items = append(l.State.Items, it)
 	}
 	for _, rel := range []string{"../evil.toml", "saves/w/level.dat", "mods/x.jar", ".quartz/removed/x", "config/x.toml" + instance.NewSuffix} {
-		sn.Files = append(sn.Files, File{Rel: rel, Size: 1, SHA1: good.SHA1})
+		l.Files = append(l.Files, File{Rel: rel, Size: 1, SHA1: good.SHA1})
 	}
-	// A kept copy swapped for a link out of the snapshot.
+	// A kept object swapped for a link out of the history.
+	var gone File
+	for _, f := range l.Files {
+		if f.Rel == "config/gone.toml" {
+			gone = f
+		}
+	}
 	outside := filepath.Join(t.TempDir(), "secret")
 	_ = os.WriteFile(outside, []byte("old"), 0o600)
-	link := filepath.Join(dir, filesDir, "config", "gone.toml")
-	_ = os.Remove(link)
-	if err := os.Symlink(outside, link); err != nil {
+	obj := filepath.Join(dir, objectsDir, filepath.FromSlash(objectRel(gone.SHA1)))
+	_ = os.Remove(obj)
+	if err := os.Symlink(outside, obj); err != nil {
 		t.Skip("no symlinks here")
 	}
-	if err := write(dir, sn); err != nil {
+	if err := writeJSON(dir, layersDir, snap, l); err != nil {
 		t.Fatal(err)
 	}
-	got, err := read(e.svc.dir(e.id), snap)
+	got, err := readLayer(dir, snap)
 	if err != nil || len(got.State.Items) != 3 || slices.ContainsFunc(got.Files, func(f File) bool { return !inTree(f.Rel, Trees) }) {
 		t.Fatalf("tampered entries were read: %+v", got)
 	}
 	_ = os.Remove(filepath.Join(e.game, "config", "gone.toml"))
 	if _, err := e.svc.Rollback(e.ctx, e.id, snap, []string{"files"}); err == nil {
-		t.Fatalf("a linked copy was restored: %v", err)
+		t.Fatalf("a linked object was restored: %v", err)
 	}
 	if e.exists("config/gone.toml") {
-		t.Fatal("a file came back from outside the snapshot")
+		t.Fatal("a file came back from outside the history")
 	}
-	// A snapshot folder whose json names another id is ignored.
-	sn.ID = "1111111111111-abcd"
-	data, _ := json.Marshal(sn)
-	_ = os.WriteFile(filepath.Join(dir, metaName), data, 0o600)
+	// A layer whose json names another id is ignored.
+	l.ID = "1111111111111-abcd"
+	data, _ := json.Marshal(l)
+	_ = os.WriteFile(filepath.Join(dir, layersDir, snap+jsonExt), data, 0o600)
 	if _, err := e.svc.Diff(e.ctx, e.id, snap); !errors.Is(err, ErrUnknown) {
 		t.Fatalf("mismatched id read: %v", err)
 	}
 }
 
-func TestAroundSnapshotsAndRecordsTheLoaderUpdate(t *testing.T) {
+func TestAroundKeepsAndRecordsTheLoaderUpdate(t *testing.T) {
 	e := newEnv(t, false)
 	e.setup()
 	err := e.svc.Around(e.ctx, e.id, "updating Fabric 0.16.10", "Updated Fabric 0.16.10", func() error {
@@ -441,7 +557,7 @@ func TestAroundSnapshotsAndRecordsTheLoaderUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	list := e.svc.List(e.id)
-	if len(list) != 1 || list[0].Title != "updating Fabric 0.16.10" || list[0].Reason != "loader" {
+	if len(list) != 1 || len(list[0].Changes) != 1 || list[0].Changes[0].Title != "updating Fabric 0.16.10" || list[0].Changes[0].Reason != "loader" {
 		t.Fatalf("%+v", list)
 	}
 	if a := e.content.Activity(e.id); len(a) != 1 || a[0].Snapshot != list[0].ID || a[0].Title != "Updated Fabric 0.16.10" {

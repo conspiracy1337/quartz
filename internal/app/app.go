@@ -663,9 +663,16 @@ func (a *app) buildContent() error {
 	a.buildUpdater()
 	a.drops = api.NewDrops(a.bus)
 	a.opens = api.NewOpens(a.bus)
-	// Edits to files the game owns wait for it to exit.
 	a.bus.Subscribe(events.GameState, func(p any) {
-		if st, ok := p.(launch.State); ok && st.State == "exited" {
+		st, ok := p.(launch.State)
+		switch {
+		case !ok:
+		case st.State == "running":
+			// The game runs with this state: the changes made since the last
+			// launch become one restore point.
+			safe.Go(a.log, "seal restore point", func() { a.snapshots.Seal(st.InstanceID) })
+		case st.State == "exited":
+			// Edits to files the game owns wait for it to exit.
 			a.content.GameExited(st.InstanceID)
 		}
 	})

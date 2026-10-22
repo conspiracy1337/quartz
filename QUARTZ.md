@@ -310,7 +310,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 **Overview** ([Overview.svelte](frontend/src/routes/instance/Overview.svelte), [content/activity.go](internal/content/activity.go))
 - **Activity feed:** All, Sessions or Changes.
   - Sessions: played, crashed, failed to start, screenshots taken.
-  - Changes: content added, updated, removed or rolled back. A change whose snapshot is still kept has **Roll back**, which opens the rollback dialog on it.
+  - Changes: content added, updated, removed or rolled back. A change whose restore point is still kept has **Roll back**, which opens the rollback dialog on that point.
 - **Details:** Minecraft, loader, Java, memory, content counts, created date, folder.
 - **Updates:** pending updates with a Review button.
 - **Protection and sync:**
@@ -328,7 +328,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Every identified mod moves to its build for the target.
   - Mods with no build are turned off but stay in the folder. Unknown mods are left alone.
   - The instance itself changes last, so a failed download leaves it untouched.
-- **Keep the loader up to date:** before a launch, the loader moves to the newest stable build, after a snapshot, and the activity feed records it. Being offline, or a snapshot that fails, never blocks the launch: the installed build is used.
+- **Keep the loader up to date:** before a launch, the loader moves to the newest stable build, after a layer is kept (see Restore points), and the activity feed records it. Being offline, or keeping a layer that fails, never blocks the launch: the installed build is used.
 - **Follow the latest Minecraft release:** once every mod supports the newest release, the launcher offers a switch. It only offers; you switch yourself. Checked at start and every 6 h. [follow.go](internal/follow/follow.go)
 
 **Instance settings** ([InstanceSettings.svelte](frontend/src/routes/instance/InstanceSettings.svelte))
@@ -438,8 +438,8 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 - **Integrity:** a sha1 collision with different content is refused.
 - **Cleanup:**
   - Two-phase GC: unused blobs are marked first and deleted after a grace period.
-  - References are counted from instance indexes, trashed instances, held removals and snapshots that haven't expired.
-  - An old version only a snapshot kept is deleted as soon as that snapshot expires or is deleted, without the grace period.
+  - References are counted from instance indexes, trashed instances, held removals and restore points that haven't expired.
+  - An old version only a restore point kept is deleted as soon as that point expires, is deleted or is sealed past it, without the grace period.
   - Settings → Storage shows the unused size and has a "Clean up" button.
 
 **Identification and packwiz** ([content/identify.go](internal/content/identify.go), [packwiz.go](internal/content/packwiz/packwiz.go))
@@ -474,7 +474,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Downloads are hash-verified. Files over 512 MB are refused, and file names are sanitised.
   - A new file with the old one's name is placed beside it and swapped in with one rename, so a failure keeps the old file.
   - Renames are followed in the resource-pack list and in the active shader and its settings.
-  - A "Saving a snapshot" step runs after the downloads and before any file changes; when it fails, nothing changes. Once the job is done a toast offers **Undo**.
+  - A "Saving a snapshot" step (the layer of the restore point) runs after the downloads and before any file changes; when it fails, nothing changes. Once the job is done a toast offers **Undo**.
 - **Check all instances:** one palette command. It checks instances one after another to respect rate limits.
 
 **Installing from Browse** ([content/install.go](internal/content/install.go), [Install.svelte](frontend/src/lib/overlays/Install.svelte))
@@ -490,23 +490,25 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - What the install replaces, and the dependencies with their sizes.
   - A memory warning ("X GB suits N mods").
 
-**Snapshots and rollback** ([snapshot/](internal/snapshot/snapshot.go), [content/snapshot.go](internal/content/snapshot.go), [Rollback.svelte](frontend/src/lib/overlays/Rollback.svelte))
-- **When:** before every update (one, several or all), a "Change version…" or install that replaces items or turns dependencies on, a Minecraft or loader change (including follow-latest), a modpack update or going back, and the loader update at launch. The player can also **Create snapshot** in the dialog.
-- **What it keeps:**
+**Restore points and rollback** ([snapshot/](internal/snapshot/snapshot.go), [content/snapshot.go](internal/content/snapshot.go), [Rollback.svelte](frontend/src/lib/overlays/Rollback.svelte))
+- **Model (git-like):** before every change a **layer** is written: a manifest of the instance as it was. Jars are named by their store blob; other files go into the instance's own object store (`history/objects/ab/<sha1>`), each content once, so a file unchanged across layers costs nothing again. The player sees **restore points**: every change made between two launches is one session, whose point is the instance as it was last played. Launching seals the session and keeps only its first layer plus the list of its changes; until then each change keeps its own layer, so its **Undo** puts back just that change. **+** in the dialog makes a point by hand, which seals the open session and stands alone. [take.go](internal/snapshot/take.go), [objects.go](internal/snapshot/objects.go)
+- **When a layer is written:** before every update (one, several or all), a "Change version…" or install that replaces items or turns dependencies on, a Minecraft or loader change (including follow-latest), a modpack update or going back, the loader update at launch, and every rollback.
+- **What a layer keeps:**
   - Every mod, resource pack, shader pack and data pack by its store blob, on or off, with its `.pw.toml` (so locks come back). Files the store didn't have (another launcher's folder) are copied into it first.
   - The resource pack list and the active shader.
   - The Minecraft version, loader and build, the modpack record and `modpack.json`.
-  - `config/` and `defaultconfigs/` as copies (64 MB per file, 20,000 files and 512 MB per folder; more marks the folder partial), plus the old copies of every other file a modpack update changes. A file unchanged since the previous snapshot is a hardlink to its copy there.
+  - `config/` and `defaultconfigs/` (64 MB per file, 20,000 files and 512 MB per folder; more marks the folder partial), plus every other file a modpack update changes. A file whose size and time match the newest layer's isn't read again.
   - Never worlds, nor folders shared with other instances (the dialog names them). Folder packs aren't kept.
-- **Lifetime:** 7 days, then the snapshot and the old files only it kept are deleted. **Keep this snapshot** keeps one until it is deleted. Snapshots travel with a trashed instance.
+- **Lifetime:** a point lasts 7 days after the game runs past it; the open session and the newest sealed point never expire, so there is always one step back. **Keep this restore point** keeps one until it is deleted. Removing a point drops its layers, the objects no layer names and the old jars only it kept. The history travels with a trashed instance.
 - **Rolling back** (instance menu **Roll back…**, Overview activity, the crash dialog, or **Undo** on the toast after a change):
-  - The dialog lists the snapshots ("Before updating 12 mods", age, "Expires in N days" or Kept) and what rolling back to the picked one changes: each item ("Sodium 0.6.0 → 0.5.11", "comes back", "added since, will be removed", "turns back on"), Minecraft and loader, the modpack version, the resource packs and shader in use, and config files.
-  - What the snapshot's change touched starts ticked; untick anything to keep it, which rolls back single mods of a bigger update.
+  - The dialog (board A) shows the points on a timeline, each with up to three of its changes ("Updated 12 mods", "Installed Distant Horizons") and a badge: Crashed for the point the game crashed after, Kept, the days left, or how long ago the open session last changed. **+** and the bin sit beside them; deleting asks first.
+  - On the right, what rolling back to the picked point changes: each item ("Sodium 0.6.0 → 0.5.11", "comes back", "added since, will be removed", "turns back on"), Minecraft and loader, the modpack version, the resource packs and shader in use, and config files. Everything starts ticked; untick anything to keep it, which rolls back single mods of a bigger set of changes.
+  - Undo on a change's toast rolls back what that change touched, from its own layer; once the game has run it says the change can only be rolled back with its whole point.
   - Items are matched by path, then by project or mod id, so an update that renamed a file pairs up.
   - All or nothing: every file is staged beside its target, then swapped in; the version and modpack record are written last, and a failure puts every file back.
-  - A rollback takes a snapshot first, so its toast has **Undo** too.
+  - A rollback is itself a change of the open session, so its toast has **Undo** too.
   - Refused while the game or a hosted server runs, or a download for the instance is still running.
-- **Setting:** Settings → Storage → **Take a snapshot before updates** (on). Turning it off stops automatic snapshots and deletes the ones not kept at once; kept ones stay and a rollback then can't be undone.
+- **Setting:** Settings → Storage → **Keep restore points before changes** (on). Turning it off stops new layers and deletes every point not kept at once; kept ones stay and a rollback then can't be undone.
 
 **Server and client split** ([content/server.go](internal/content/server.go))
 - Mods are split into server and client-only using the mod's own metadata, Modrinth's `server_side` field, or the packwiz side.
@@ -611,7 +613,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - A mod you removed stays removed.
   - A file the pack dropped is deleted only if you never changed it.
 - **All or nothing:** every new file is staged beside its target first, then swapped in. A failure at any point puts every file back and leaves the manifest, version and pack record unchanged.
-- A snapshot is taken after the downloads and before any file is swapped, so the update can be rolled back (see Snapshots and rollback).
+- A layer is kept after the downloads and before any file is swapped, so the update can be rolled back (see Restore points and rollback).
 - **Back up worlds first** is optional and zips every world.
 - The update is disabled while the game is running.
 
@@ -834,7 +836,7 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
   - out of memory (heap or native)
   - a native crash: a graphics driver's library (nvoglv64, atio6axx, ig*icd, Mesa's drivers…) is the graphics cause; any other library is named
   - graphics driver
-- **Rollback offer:** when a change was made since the game last closed normally, a card names it ("Updating 12 mods 2 hours ago, after the game last closed normally.") with **Roll back…**.
+- **Rollback offer:** when changes were made since the game last closed normally, a card names them ("Updated 12 mods and installed Distant Horizons 2 hours ago, after the game last closed normally.") with **Roll back…**, which opens the dialog on their restore point.
 - **One-click fixes:** **Update and relaunch** or **Disable it and relaunch**. The culprit mod is shown with its name, version and icon.
 - **Trace:** limited to 40 lines (exception, Caused-by chain, mod lines; for a native crash, its signal and crashing frame). Obfuscated class names show as "a game class".
 - **Also:** open the crash report, copy debug info, upload, and launch again.
@@ -1197,7 +1199,8 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 | | Watch the Downloads folder | toggle (on) |
 | | Proxy | System / None / Custom → type, host + port, user, password (keychain) |
 | Downloads › Mod updates | Mod update channel | Release / Beta / Alpha |
-| Storage › Snapshots | Take a snapshot before updates | toggle (on) |
+| Storage › Screenshots | Compress new screenshots | select (High quality) |
+| Storage › Restore points | Keep restore points before changes | toggle (on) |
 | Integrations | Discord status | toggle |
 | | Open Modrinth and CurseForge links | toggle |
 | Appearance › Layout | Density | Comfortable / Compact |
@@ -1216,7 +1219,8 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 - **Storage page** ([Storage.svelte](frontend/src/routes/settings/Storage.svelte)):
   - The data folder's location, noting portable mode.
   - Trashed instances, each with days left, Restore and Delete now.
-  - Snapshots: **Take a snapshot before updates** (on).
+  - Screenshots: **Compress new screenshots** (High quality).
+  - Restore points: **Keep restore points before changes** (on).
   - Clean up old logs and unused store files, showing "X freed".
 - **Updates page** ([Updates.svelte](frontend/src/routes/settings/Updates.svelte)): launcher version, update status, Check now.
 - **About page:** version, system, data folder, total playtime, "Telemetry: None".
@@ -1374,7 +1378,7 @@ Gathered here from the sections above for quick review.
     - Native dialogs are the only way a click picks a path.
     - [drops.go](internal/api/drops.go), [opens.go](internal/api/opens.go), [dialogs.go](internal/api/dialogs.go)
   - **Parsers with caps:** NBT (depth 512, 32 MB), SQLite (depth 32, loop guard), PNG (canonical re-encode), Markdown/HTML changelogs flattened to plain text. [nbt.go](internal/core/nbt/nbt.go), [sqlitero.go](internal/core/sqlitero/sqlitero.go), [pngx.go](internal/core/pngx/pngx.go), [docs.go](internal/core/docs/docs.go)
-  - **Snapshots are read as untrusted:** ids, item paths (only right inside their kind's folder), file paths (never in worlds, content, launcher or game folders) and sha1s are checked; a kept file is read through `os.Root` and must match its size and sha1 before it is put back; kept copies are never hardlinked into a game folder. [snapshot.go](internal/snapshot/snapshot.go), [rollback.go](internal/snapshot/rollback.go)
+  - **The history is read as untrusted:** ids, item paths (only right inside their kind's folder), file paths (never in worlds, content, launcher or game folders) and sha1s are checked; an object is read through `os.Root`, must be a regular file (a link out is refused) and must match its size and sha1 before it is put back; objects are never hardlinked into a game folder. [snapshot.go](internal/snapshot/snapshot.go), [rollback.go](internal/snapshot/rollback.go)
   - **Strict CLI and link parsing:**
     - Links are checked against an allowlist of shapes.
     - No link can launch a game.
@@ -1414,7 +1418,7 @@ Gathered here from the sections above for quick review.
   - Content scans are incremental and stat-only for unchanged files, with up to 8 workers and merged concurrent scans. [scan.go](internal/content/scan.go)
   - Loader processor steps are skipped when their outputs already match. [processing.go](internal/loader/processing.go)
   - A fully installed version starts with no network.
-- **Cheap snapshots:** jars are named by their store blob, not copied; config files unchanged since the last snapshot are hardlinks; a rollback compares files by size and time before hashing. [snapshot/take.go](internal/snapshot/take.go)
+- **Cheap history:** jars are named by their store blob, not copied; other files are stored once per content; a file whose size and time match the newest layer isn't read again; changes between two launches share one restore point; a rollback compares files by size and time before hashing. [snapshot/take.go](internal/snapshot/take.go)
 - **No duplicate files:**
   - Content-addressed store with reflink → hardlink → copy placement: FICLONE, APFS `clonefile`, ReFS block cloning, or `copy_file_range`. [linkx.go](internal/core/linkx/linkx.go)
   - Natives and client jars are shared across loaders and versions where possible.

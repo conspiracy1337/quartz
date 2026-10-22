@@ -158,12 +158,17 @@ export interface SwitchResult { job: string; updated: number; disabled: string[]
 /** A content change in the Overview feed (Go's log of additions, updates and removals). */
 export interface ContentChange { at: number; kind: 'added' | 'updated' | 'removed' | 'rolledback'; title: string; detail: string; snapshot?: string }
 
-// ---- snapshots ----
-/** A change running as a job, and the snapshot taken before it ("" or absent when snapshots are off). */
+// ---- restore points ----
+/** A change running as a job, and the layer kept before it, which its Undo rolls back ("" or absent when the history is off). */
 export interface Started { job: string; snapshot?: string }
-/** An instance as it was before a change; `expires` is absent when kept. */
-export interface SnapshotSummary { id: string; at: number; title: string; reason: string; keep: boolean; expires?: number; size: number }
-/** One change a rollback can undo: `from` is now, `to` how the snapshot has it. */
+/** One change made after a restore point; `undoable` while the game hasn't run since (its own Undo). */
+export interface RestoreChange { id: string; at: number; title: string; reason: string; undoable: boolean }
+/**
+ * An instance as it was last played, before the changes made since (or as it was when the player made
+ * the point by hand). `sealed` once the game ran with the changes; `expires` is absent when it doesn't.
+ */
+export interface RestorePoint { id: string; at: number; sealed?: number; keep: boolean; manual: boolean; expires?: number; changes: RestoreChange[] }
+/** One change a rollback can undo: `from` is now, `to` how the restore point has it. */
 export interface SnapshotRow {
   key: string;
   /** A content kind, or version | pack | packs | shader | files. */
@@ -174,11 +179,11 @@ export interface SnapshotRow {
   to?: string;
   icon?: string;
   detail?: string;
-  /** What the change after the snapshot touched: ticked to start with. */
+  /** Ticked to start with. */
   default: boolean;
   unavailable?: string;
 }
-export interface SnapshotDiff { snapshot: SnapshotSummary; rows: SnapshotRow[]; shared?: string[]; partial?: string[]; undoable: boolean }
+export interface SnapshotDiff { point: RestorePoint; rows: SnapshotRow[]; shared?: string[]; partial?: string[]; undoable: boolean }
 export interface RollbackResult { restored: number; snapshot?: string }
 
 // ---- home ----
