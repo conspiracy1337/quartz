@@ -185,7 +185,7 @@ func TestContentServiceWithRealMods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.tasks.Wait(ctx, job); err != nil {
+	if err := h.tasks.Wait(ctx, job.Job); err != nil {
 		t.Fatal(err)
 	}
 	after, err := svc.List(ctx, in.ID, content.Mods)
@@ -236,7 +236,7 @@ func TestNoRiskInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.tasks.Wait(ctx, job); err != nil {
+	if err := h.tasks.Wait(ctx, job.Job); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := svc.List(ctx, in.ID, content.Mods)

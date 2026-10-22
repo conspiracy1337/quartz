@@ -216,7 +216,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
     ] }
     ```
 
-    `id` (at most 100 bytes), `title` (at most 200 characters), `published` (RFC 3339) and `url` are required. `image` is optional and must be on a `remoteimg` host. Entries that fail a check are skipped. The newest 5 show. Delete an entry to retire it. The response is capped at 64 KB, so send `Cache-Control: no-cache` with an `ETag`.
+    `id` (at most 100 bytes), `title` (at most 200 characters), `published` (RFC 3339) and `url` are required. `image` is optional and must be on a `remoteimg` host. Entries that fail a check are skipped. The first 5 valid entries show in the order listed, so list a post first to pin it. Delete an entry to retire it. The response is capped at 64 KB, so send `Cache-Control: no-cache` with an `ETag`.
   - [NewsBanner.svelte](frontend/src/lib/components/NewsBanner.svelte), [home.go](internal/home/home.go)
 - **Servers card:** servers from every instance, merged by address.
   - Filters: All or Online. Refresh forces a fresh ping.
