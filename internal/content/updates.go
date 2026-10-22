@@ -82,8 +82,9 @@ type plan struct {
 	query modplatform.Query
 	items map[string]*planned
 	order []string
-	// enable lists turned-off items the plan needs on (installed dependencies).
-	enable []string
+	// enable maps the turned-off items the plan needs on (installed
+	// dependencies) from their dependency id to their item.
+	enable map[string]string
 }
 
 // planned is one file a check (or a version switch) will put in place.
@@ -97,7 +98,6 @@ type planned struct {
 	p        modplatform.Project
 	provider modplatform.Provider
 	dir      string // where a new item goes ("" for the kind's folder)
-	optional bool   // installed only when picked
 }
 
 func randomID() string {

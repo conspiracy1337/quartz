@@ -2,7 +2,7 @@
   import { api } from '$lib/api';
   import type { Loader, ProjectVersion, Src } from '$lib/api/types';
   import { bytes, compact, dailyUsers, errorText, shortMonthDay, shortDate } from '$lib/format';
-  import { ANY_LOADER_NAMES, LOADER_NAMES, SRC_NAMES, isModLoader, projectType } from '$lib/labels';
+  import { ANY_LOADER_NAMES, CHANNEL_BADGE, LOADER_NAMES, SRC_NAMES, isModLoader, projectType } from '$lib/labels';
   import { artOf } from '$lib/look';
   import { lastCount, query, rememberCount } from '$lib/query.svelte';
   import { go, href, isPackSource } from '$lib/router.svelte';
@@ -26,8 +26,6 @@
 
   const CHANNELS = ['Release', 'Beta', 'Alpha'] as const;
   const SOURCES = ['modrinth', 'curseforge', 'norisk'] as const;
-  /** A version's channel as one boxed letter: green R, orange B, red A. */
-  const CHANNEL_BADGE = { Release: 'badge-ok', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
 
   const instances = query(() => api.instances.list(), 'instances.list');
   const target = $derived(browseTarget(instances.data ?? [], session.browseTarget));
@@ -71,6 +69,7 @@
   // An update offered last visit keeps its button's place while the versions load (as the update banner does).
   const updateKey = $derived(`project.update.${id}.${target?.id ?? ''}`);
   $effect(() => void (!versions.loading && versions.data && target && p?.installed && rememberCount(updateKey, latest ? 1 : 0)));
+  const updatesHref = $derived(target ? href({ name: 'instance', id: target.id, tab: kind?.content ?? 'mods', sub: 'updates' }) : '');
   const forTarget = $derived(target ? `${target.name} (${target.minecraft}${target.loader ? `, ${LOADER_NAMES[target.loader.kind]}` : ''})` : '');
 
   // The install buttons rest until the install starts (or its dialog opens).
@@ -109,7 +108,8 @@
         </div>
         <!-- A modpack installs as its own instance, so only content gets the instance chooser. -->
         {#if kind?.content}
-          <SplitButton size="lg" accent disabled={!target || installing} onclick={() => install()} menuLabel="Choose instance" expanded={!!chooser} onmenu={choose}>Install</SplitButton>
+          <!-- Installed in the target: the main part updates it (when it can) or rests; ▾ still picks another instance. -->
+          <SplitButton size="lg" accent href={p.installed && latest ? updatesHref : undefined} disabled={!target || installing || !!p.installed} onclick={() => install()} menuLabel="Choose instance" expanded={!!chooser} onmenu={choose}>{p.installed ? (latest ? 'Update' : 'Installed') : 'Install'}</SplitButton>
         {:else}
           <button class="btn btn-accent btn-lg" disabled={!kind} onclick={() => install()}>Install</button>
         {/if}
@@ -134,7 +134,7 @@
             {#if target && p.installed}
               <section style="display: flex; flex-direction: column; gap: 6px"><h2 class="h3">For {target.name}</h2>
                 <div class="small muted">{`Version ${p.installed.version.split('+')[0]} is installed.${latest ? ` ${latest.number.split('+')[0]} is available.` : ''}`}</div>
-                {#if latest}<a href={href({ name: 'instance', id: target.id, tab: kind?.content ?? 'mods', sub: 'updates' })} class="btn btn-sm">Update to {latest.number.split('+')[0]}</a>
+                {#if latest}<a href={updatesHref} class="btn btn-sm">Update to {latest.number.split('+')[0]}</a>
                 {:else if versions.loading && lastCount(updateKey)}<span class="sk" style="height: 28px; width: 120px" aria-hidden="true"></span>{/if}
               </section>
               <div class="divider"></div>

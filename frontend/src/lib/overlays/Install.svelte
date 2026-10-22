@@ -2,7 +2,7 @@
   import { api } from '../api';
   import type { ContentKind, InstallDep, InstallPlan, Src } from '../api/types';
   import { bytes, errorText, gb, plural } from '../format';
-  import { LOADER_NAMES, PROJECT_TYPES } from '../labels';
+  import { CHANNEL_BADGE, LOADER_NAMES, PROJECT_TYPES } from '../labels';
   import { downloading } from '../instanceActions';
   import { artOf, memoryShort } from '../look';
   import { prefs } from '../prefs.svelte';
@@ -29,17 +29,22 @@
   });
   const waiting = $derived(content === 'datapacks' && !world);
   const plan = query(() => (waiting ? Promise.resolve(undefined) : made ? Promise.resolve(made) : api.browse.planInstall(instanceId, content, world, ref, source, version)));
-  let optional = $state<Record<string, boolean>>({});
+  /** Every dependency is ticked until the player unticks it. */
+  let unticked = $state<Record<string, boolean>>({});
   let busy = $state(false);
 
   const p = $derived(plan.data);
   const noun = $derived(PROJECT_TYPES.find((t) => t.content === content)?.noun ?? 'mod');
-  const count = $derived(p ? 1 + p.deps.filter((d) => (d.required && !d.installed && !d.unavailable) || (!d.required && optional[d.id] !== false)).length : 1);
+  const ticked = (d: InstallDep) => !d.unavailable && !unticked[d.id];
+  /** The project and the new dependencies it brings; an installed one only updates (or turns on). */
+  const count = $derived(1 + (p?.deps.filter((d) => ticked(d) && !d.installed).length ?? 0));
+  const updates = $derived(p?.deps.filter((d) => ticked(d) && d.update).length ?? 0);
   function depNote(d: InstallDep): string {
+    if (d.update) return `Installed ${d.update}, updates to ${d.version}`;
     if (!d.required) return d.summary ? `Optional, ${d.summary}` : 'Optional';
     if (d.unavailable) return 'Required, no build for this version';
-    if (d.off) return 'Required, turned off; will be turned on';
-    return d.installed ? 'Required, already installed' : 'Required';
+    if (!ticked(d)) return 'Required, left out';
+    return d.off ? 'Required, turned off; will be turned on' : 'Required';
   }
   // Only a mod is built for a loader; a pack fits by the game version alone.
   const loader = $derived(content === 'mods' && inst.data?.loader ? `, ${LOADER_NAMES[inst.data.loader.kind]}` : '');
@@ -51,8 +56,8 @@
     if (!p) return;
     busy = true;
     try {
-      const picked = p.deps.filter((d) => !d.required && optional[d.id] !== false).map((d) => d.id);
-      const job = await api.browse.applyInstall(p.planId, picked);
+      const skip = p.deps.filter((d) => !d.unavailable && !ticked(d)).map((d) => d.id);
+      const job = await api.browse.applyInstall(p.planId, skip);
       session.close();
       await downloading(job);
     } catch (e) {
@@ -71,7 +76,7 @@
     {/if}
     <span>Version</span>
     {#if p && !p.version}<span class="muted">No version for {inst.data?.minecraft ?? ''}{loader}</span>
-    {:else}<span class="mono trunc">{p?.version ?? ''} for {inst.data?.minecraft ?? ''}{loader}</span>{/if}
+    {:else}<span style="display: flex; gap: 8px; align-items: center; min-width: 0"><span class="mono trunc">{p?.version ?? ''} for {inst.data?.minecraft ?? ''}{loader}</span>{#if p?.channel}<span class="badge {CHANNEL_BADGE[p.channel]}">{p.channel}</span>{/if}</span>{/if}
     {#if p?.replaces}<span>Installed</span><span class="mono trunc">{p.replaces}</span>{/if}
   </div>
   {#if p?.deps.length}
@@ -80,10 +85,10 @@
       <div class="list">
         {#each p.deps as d (d.id)}
           <div class="dep">
-            {#if d.required}<Check on={true} />{:else}<Check on={optional[d.id] !== false} label="Include {d.name}" onchange={(v) => (optional[d.id] = v)} />{/if}
+            {#if d.unavailable}<Check on={false} />{:else}<Check on={ticked(d)} label="Include {d.name}" onchange={(v) => (unticked[d.id] = !v)} />{/if}
             <Tile art={d.art ?? artOf(d.name, d.icon)} style="width: 28px; height: 28px; flex-basis: 28px" />
             <span style="min-width: 0"><span class="trunc" style="display: block">{d.name}</span><span class="small faint trunc" style="display: block">{depNote(d)}</span></span>
-            {#if d.unavailable}<span class="badge badge-warn">Missing</span>{:else if d.installed}<span class="badge badge-accent">Installed</span>{:else}<span class="mono small muted">{bytes(d.size)}</span>{/if}
+            {#if d.unavailable}<span class="badge badge-warn">Missing</span>{:else if d.update}<span class="badge badge-accent">Update</span>{:else if d.installed}<span class="badge badge-accent">Installed</span>{:else}<span class="mono small muted">{bytes(d.size)}</span>{/if}
           </div>
         {/each}
       </div>
@@ -98,7 +103,7 @@
     </div>
   {/if}
   {#if plan.error}<p class="small" style="margin: 0; color: var(--danger)">{errorText(plan.error)}</p>{/if}
-  {#snippet foot()}<button class="btn" onclick={() => session.close()}>Cancel</button><button class="btn btn-accent" disabled={!p?.version || busy} onclick={install}>Install {plural(count, noun)}</button>{/snippet}
+  {#snippet foot()}<button class="btn" onclick={() => session.close()}>Cancel</button><button class="btn btn-accent" disabled={!p?.version || busy} onclick={install}>Install {plural(count, noun)}{updates ? `, update ${updates}` : ''}</button>{/snippet}
 </Dialog>
 
 <style>
