@@ -6,7 +6,7 @@ package assets
 
 import _ "embed"
 
-// Icon is the launcher's icon (1024 px PNG), the one appicon.png.
+// Icon is the launcher's icon (512 px PNG), the one appicon.png.
 //
 //go:embed appicon.png
 var Icon []byte
