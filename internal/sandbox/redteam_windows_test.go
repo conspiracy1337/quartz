@@ -176,7 +176,8 @@ func runProbe(t *testing.T, e *winEnv, preset string, set rules.Settings) map[st
 		GameDir:  e.game,
 		Scratch:  e.scratch,
 		Data:     e.data,
-		Read:     []string{JavaRoot(e.javaBin), e.jarDir, filepath.Join(e.root, "store", "libraries")},
+		Java:     JavaRoot(e.javaBin),
+		Read:     []string{e.jarDir, filepath.Join(e.root, "store", "libraries")},
 	}
 	t.Cleanup(func() { _ = New(Config{DataRoot: e.root}).Forget(r.Instance) })
 
@@ -580,7 +581,7 @@ func fileExists(p string) bool  { _, err := os.Stat(p); return err == nil }
 func runSpec(e *winEnv, s rules.Settings, instance string, env []string) (Run, procx.Spec) {
 	r := Run{
 		Instance: instance, Rules: s, GameDir: e.game, Scratch: e.scratch, Data: e.data,
-		Read: []string{JavaRoot(e.javaBin), e.jarDir, filepath.Join(e.root, "store", "libraries")},
+		Java: JavaRoot(e.javaBin), Read: []string{e.jarDir, filepath.Join(e.root, "store", "libraries")},
 	}
 	return r, procx.Spec{Argv: []string{e.javaBin, "-jar", e.jarPath}, Dir: e.game, Env: env}
 }
@@ -627,7 +628,7 @@ public class ServerSpike { public static void main(String[] a) throws Exception 
 	// Headless under Strict (Internet=LAN) — the server keeps the LAN network.
 	r := Run{Instance: instance, Rules: rules.Default().Apply(rules.Strict, runtime.GOOS), Headless: true,
 		GameDir: e.game, Scratch: e.scratch, Data: e.data,
-		Read: []string{JavaRoot(javaBin), e.jarDir, filepath.Join(e.root, "store", "libraries")}}
+		Java: JavaRoot(javaBin), Read: []string{e.jarDir, filepath.Join(e.root, "store", "libraries")}}
 	spec, j, err := New(Config{DataRoot: e.root}).Wrap(r, procx.Spec{Argv: []string{javaBin, "-jar", jar}, Dir: e.game, Env: FilterEnv(os.Environ())})
 	if err != nil {
 		t.Fatalf("Wrap(headless): %v", err)

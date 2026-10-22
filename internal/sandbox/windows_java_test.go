@@ -41,7 +41,7 @@ func TestJavaSecurityLoads(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	r := Run{Instance: "java-security-test", Rules: rules.Default(), GameDir: game, Scratch: scratch, Data: data, Read: []string{JavaRoot(javaBin)}}
+	r := Run{Instance: "java-security-test", Rules: rules.Default(), GameDir: game, Scratch: scratch, Data: data, Java: JavaRoot(javaBin)}
 	spec, j, err := New(Config{DataRoot: root}).Wrap(r, procx.Spec{
 		Argv: []string{javaBin, "-XshowSettings:security:properties", "-version"}, Dir: game, Env: FilterEnv(os.Environ()),
 	})

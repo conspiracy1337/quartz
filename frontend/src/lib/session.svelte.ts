@@ -205,6 +205,8 @@ class Session {
         if (this.launch?.instanceId === f.instanceId) this.launch = null;
         if (f.code === 'no-account') this.open({ kind: 'add-account', mode: 'offline' });
         else if (f.code === 'sign-in-expired') this.open({ kind: 'add-account', mode: 'browser', ...(f.accountId ? { accountId: f.accountId } : {}) });
+        // Java 24+ in the Windows sandbox needs one approval; playing again asks for it.
+        else if (f.code === 'sandbox-approval') this.notify({ tone: 'error', subject: "Couldn't start the game", text: f.message, action: { label: 'Approve', run: () => this.play(f.instanceId) } });
         else if (f.code !== 'cancelled') this.notify({ tone: 'error', subject: "Couldn't start the game", text: errorText(f.message) });
       }),
       onEvent<GameState>('game:state', (g) => {

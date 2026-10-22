@@ -155,6 +155,10 @@ func capabilitySID(name string) (*windows.SID, error) {
 	return unsafe.Slice(caps, nc)[0].Copy()
 }
 
+// storeCapability names the capability every run carries for the shared
+// store, Java and the parent folders on the way to them.
+const storeCapability = "quartz.store"
+
 // windowStation is the capability that lets a contained game confine and
 // move the mouse cursor (ClipCursor, SetCursorPos), which Minecraft needs to
 // look around: the interactive window station grants it WINSTA_WRITEATTRIBUTES,
@@ -205,7 +209,7 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 	if err != nil {
 		return procx.Spec{}, nil, err
 	}
-	store, err := capabilitySID("quartz.store")
+	store, err := capabilitySID(storeCapability)
 	if err != nil {
 		return procx.Spec{}, nil, err
 	}
@@ -245,7 +249,7 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 	for _, d := range r.Redirects {
 		grants = append(grants, grant{d.To, sid, accessModify})
 	}
-	for _, p := range r.Read {
+	for _, p := range r.reads() {
 		grants = append(grants, grant{p, store, accessRead})
 	}
 	capFor := func(kind, path string, l rules.Level) (*windows.SID, error) {
@@ -292,6 +296,9 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 				s.c.Log.Debug("sandbox: a parent folder kept its access", "path", p, "err", err)
 			}
 		}
+	}
+	if err := s.allowJavaListing(r.Java, store); err != nil {
+		return procx.Spec{}, nil, err
 	}
 	// After the game folder's grant, so the modify it hands down can be sealed
 	// back out. A protected folder (mods) and a store file in a content folder

@@ -136,7 +136,7 @@ func (b *linuxBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Ja
 		a.Tmpfs(s.c.DataRoot)
 	}
 	bound := slices.Clone(systemDirs)
-	for _, p := range r.Read {
+	for _, p := range r.reads() {
 		bindRead(&a, p, &bound)
 	}
 	// Libraries the player's environment points the game at (outside the

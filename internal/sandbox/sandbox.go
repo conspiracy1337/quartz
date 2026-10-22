@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/procx"
@@ -34,6 +35,9 @@ type Run struct {
 	Scratch  string // this run's own folder (exists; the sandbox may write files there)
 	Data     string // the instance's persistent sandbox data (caches, mods' own config)
 	Read     []string
+	// Java is the Java runtime's folder (JavaRoot): read-only like Read, and
+	// on Windows its parent folders can be listed, which Java 24+ needs.
+	Java string
 	// Write are other read-write folders (a hosted server's worlds).
 	Write []string
 	// Redirects are folders inside read-only ones the game must write (its
@@ -51,6 +55,14 @@ type Run struct {
 	Headless bool
 	// GameMode registers the game with GameMode from outside (Linux).
 	GameMode bool
+}
+
+// reads are the read-only folders: Read and the Java runtime.
+func (r Run) reads() []string {
+	if r.Java == "" {
+		return r.Read
+	}
+	return append(slices.Clone(r.Read), r.Java)
 }
 
 // protectedFolders are the game folders a run reads but never changes. A
@@ -200,6 +212,11 @@ func (s *Service) Status() Status { return s.b.status() }
 
 // ErrUnavailable is returned when the sandbox can't start on this system.
 var ErrUnavailable = errors.New("the sandbox can't start")
+
+// ErrApproval is returned on Windows when Java 24+ needs the one-time
+// administrator approval (letting games list the folders above Java) and it
+// was declined.
+var ErrApproval = errors.New("sandboxing this Java needs a one-time Windows approval")
 
 // Wrap returns spec run inside r's sandbox. It fails closed: nothing runs
 // unsandboxed because the sandbox couldn't be built.

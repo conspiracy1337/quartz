@@ -23,6 +23,7 @@ import (
 // per probe ("ok" or the error).
 func TestMain(m *testing.M) {
 	landlock.Main() // the fixture's runs go through this binary as the shim
+	Main()          // and the Windows administrator helper (allowJavaListing)
 	if os.Getenv("QUARTZ_SANDBOX_HELPER") != "" {
 		helper()
 		return
