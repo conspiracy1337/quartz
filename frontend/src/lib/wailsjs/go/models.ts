@@ -3002,6 +3002,20 @@ export namespace servers {
 	        this.address = source["address"];
 	    }
 	}
+	export class Removed {
+	    instance: string;
+	    token: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Removed(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.instance = source["instance"];
+	        this.token = source["token"];
+	    }
+	}
 	export class Server {
 	    index: number;
 	    name: string;

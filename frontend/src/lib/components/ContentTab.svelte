@@ -1,6 +1,8 @@
 <script lang="ts" module>
-  export type SortKey = 'state' | 'name' | 'status' | 'version' | 'source' | 'mode' | 'players' | 'ping';
-  type Sort = { key: SortKey; dir: 1 | -1 } | null;
+  import type { Sort as By } from '../sort';
+
+  export type SortKey = 'state' | 'name' | 'status' | 'version' | 'source' | 'mode';
+  type Sort = By<SortKey>;
   // The sort each tab was left on, kept while the launcher runs.
   const sorts: Partial<Record<string, Sort>> = {};
 </script>
@@ -11,23 +13,24 @@
   import { managed } from '../api/content';
   import type { AddResult, ContentItem, ContentKind, ContentStatus, Source } from '../api/types';
   import { onEvent } from '../bridge';
-  import { players, plural, searchIn, sentenceList } from '../format';
-  import { lastChips, query, rememberChips, rememberCount, skeletonRows, type ChipRow } from '../query.svelte';
+  import { plural, searchIn, sentenceList } from '../format';
+  import { lastChips, query, rememberChips, rememberCount, SKELETON, skeletonRows, type ChipRow } from '../query.svelte';
   import { revs } from '../revs.svelte';
   import { projectKindOf } from '../labels';
   import { go, href } from '../router.svelte';
-  import { pickRows } from '../selection';
+  import { noTextPick, Picker } from '../selection.svelte';
+  import { instanceRow, instanceScope } from '../servers';
   import { session } from '../session.svelte';
+  import { names, nextSort, text } from '../sort';
   import Check from '../ui/Check.svelte';
   import Icon from '../ui/Icon.svelte';
   import Menu, { below } from '../ui/Menu.svelte';
   import SearchField from '../ui/SearchField.svelte';
-  import ServerPing from '../ui/ServerPing.svelte';
-  import ServerVersion from '../ui/ServerVersion.svelte';
   import SortTitle from '../ui/SortTitle.svelte';
   import SplitButton from '../ui/SplitButton.svelte';
   import Toggle from '../ui/Toggle.svelte';
   import Empty from '../ui/Empty.svelte';
+  import ServerTable from './ServerTable.svelte';
 
   /** The one list used by Mods, Resource packs, Shaders, Data packs, Worlds and Servers. */
   /** chip names the filter chip to start on (Host's Review opens "Client only"). */
@@ -52,19 +55,19 @@
     worlds: { noun: 'worlds', primary: 'Add world', toggles: false, projects: false, browse: true,
       // Survival and Creative always (as designed), then any other mode a world here has.
       chips: (items) => [all, ...[...new Set(['Survival', 'Creative', ...items.map((c) => c.group).filter((g): g is string => !!g)])].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
-    servers: { noun: 'servers', primary: 'Add server', toggles: false, projects: false,
-      chips: () => [all, { label: 'Online', test: (c) => c.online === true }] },
+    // Servers filter by Online inside their table (ServerTable), as on Home.
+    servers: { noun: 'servers', primary: 'Add server', toggles: false, projects: false, chips: () => [] },
   };
   // Where a row came from: the platform's logo, or a file icon.
   const SOURCES: Record<Source, [Source, string]> = { modrinth: ['modrinth', 'Modrinth'], curseforge: ['curseforge', 'CurseForge'], norisk: ['norisk', 'NoRisk'], file: ['file', 'Added from file'] };
-  const SKELETON: [string, string][] = [['42%', '22%'], ['30%', '24%'], ['48%', '18%'], ['36%', '20%'], ['56%', '30%'], ['40%', '16%'], ['44%', '26%'], ['32%', '20%']];
 
   const cfg = $derived(CONFIG[kind]);
   // Worlds are deleted (as their menu says), everything else is removed.
   const removeLabel = $derived(kind === 'worlds' ? 'Delete' : 'Remove');
+  const serverScope = $derived(instanceScope(instanceId));
   const isManaged = $derived(managed(kind));
-  // Worlds and servers have their own row menus and actions (WorldsMenu, ServersMenu).
-  const hasMenu = $derived(isManaged || kind === 'worlds' || kind === 'servers');
+  // Worlds have their own row menu and actions (WorldsMenu); servers are ServerTable's.
+  const hasMenu = $derived(isManaged || kind === 'worlds');
   const info = query(() => (managed(kind) ? api.content.info(instanceId) : Promise.resolve(null)));
   const EMPTY: Record<ContentKind, string> = {
     mods: 'No mods yet.', resourcepacks: 'No resource packs yet.', shaders: 'No shader packs yet.',
@@ -103,14 +106,13 @@
       started = true;
     }
   });
-  // The table: three layouts, each with its column titles (ContentTable.dc.html). `cls` is the
-  // cell's alignment class, shared by the title and the rows.
+  // The table: two layouts, each with its column titles (ContentTable.dc.html); servers are
+  // ServerTable's. `cls` is the cell's alignment class, shared by the title and the rows.
   type Col = { key?: SortKey; label: string; cls?: string };
   const layout = $derived(isManaged ? 'managed' : kind);
   const COLUMNS = $derived<Col[]>(
     isManaged ? [{ key: 'state', label: 'State' }, { label: '' }, { key: 'name', label: 'Name' }, { key: 'status', label: 'Status', cls: 'c-stat' }, { key: 'version', label: 'Version' }, { key: 'source', label: 'Platform', cls: 'cc opt' }]
-    : kind === 'worlds' ? [{ label: '' }, { key: 'name', label: 'Name' }, { label: '' }, { key: 'mode', label: 'Mode' }]
-    : [{ label: '' }, { key: 'name', label: 'Name' }, { key: 'version', label: 'Version', cls: 'end' }, { key: 'players', label: 'Players', cls: 'end' }, { key: 'ping', label: 'Ping', cls: 'end' }],
+    : [{ label: '' }, { key: 'name', label: 'Name' }, { label: '' }, { key: 'mode', label: 'Mode' }],
   );
   // A column title sorts by it, again the other way, a third time back to the tab's own order:
   // by name, or as Go lists them (resource packs' load order, worlds by last played, servers as saved).
@@ -118,22 +120,15 @@
   let sortBy = $state({ ...sorts });
   const sort = $derived(sortBy[kind] === undefined ? (DEFAULT_SORT[kind] ?? null) : sortBy[kind]);
   function sortOn(key: SortKey) {
-    const next: Sort = sort?.key !== key ? { key, dir: 1 } : sort.dir === 1 ? { key, dir: -1 } : (DEFAULT_SORT[kind] ?? null);
-    sortBy[kind] = sorts[kind] = next;
+    sortBy[kind] = sorts[kind] = nextSort(sort, key, DEFAULT_SORT[kind] ?? null);
   }
-  const names = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-  // Text sorts with empty cells last; numbers sort the useful end first (most players, lowest ping).
-  const text = (a: string, b: string) => (a && b ? names.compare(a, b) : Number(!a) - Number(!b));
-  const NONE = 1e9;
   const COMPARE: Record<SortKey, (a: ContentItem, b: ContentItem) => number> = {
     state: (a, b) => Number(isOn(b)) - Number(isOn(a)),
     name: (a, b) => names.compare(a.name, b.name),
     status: (a, b) => text(badge(a)?.text ?? '', badge(b)?.text ?? ''),
-    version: (a, b) => (kind === 'servers' ? text(a.server?.online ? a.server.version : '', b.server?.online ? b.server.version : '') : text(a.meta, b.meta)),
+    version: (a, b) => text(a.meta, b.meta),
     source: (a, b) => text(a.source ? SOURCES[a.source][1] : '', b.source ? SOURCES[b.source][1] : ''),
     mode: (a, b) => text(a.meta, b.meta),
-    players: (a, b) => (b.server?.players?.online ?? -1) - (a.server?.players?.online ?? -1),
-    ping: (a, b) => (a.server?.pingMs ?? NONE) - (b.server?.pingMs ?? NONE),
   };
   // Search finds names and file names.
   const matches = (c: ContentItem, q: string) => c.name.toLowerCase().includes(q) || !!c.file?.toLowerCase().includes(q);
@@ -171,47 +166,26 @@
     return `${sentenceList(names.length > 3 ? [...names.slice(0, 2), `${names.length - 2} more`] : names)} ${names.length === 1 ? 'needs' : 'need'} ${ids.length === 1 ? 'it' : 'them'}`;
   }
 
-  // Selecting rows for bulk actions, by the box before each row's ⋮ (the title row's box
-  // picks every shown row): Ctrl-click a row ticks it, Shift-click picks the range from the
-  // last one, Esc clears.
-  let picked = $state<Record<string, boolean>>({});
-  let anchor: string | null = null;
-  const selected = $derived(rows.filter((c) => picked[c.id]));
-  const allPicked = $derived(shown.length > 0 && shown.every((c) => picked[c.id]));
-  function pickAll(on: boolean) {
-    for (const c of shown) picked[c.id] = on;
-  }
+  // Selecting rows for bulk actions (Picker): the box before each row's ⋮, Ctrl/Shift-click, Esc.
+  const picker = new Picker(() => shown.map((x) => x.id));
+  const selected = $derived(rows.filter((c) => picker.picked[c.id]));
   $effect(() => {
     void kind;
     void instanceId;
-    picked = {};
+    picker.clear();
   });
-  function pick(c: ContentItem, on: boolean, range = false) {
-    anchor = pickRows(picked, shown.map((x) => x.id), c.id, on, anchor, range);
-  }
-  /** A click on a row with Ctrl (or Cmd) or Shift selects instead of doing what it hit. */
+  $effect(() => picker.escape());
   function rowClick(e: MouseEvent, c: ContentItem) {
     swallow(e);
-    if (!(e.ctrlKey || e.metaKey || e.shiftKey)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    pick(c, e.shiftKey || !picked[c.id], e.shiftKey);
+    picker.click(e, c.id);
   }
-  $effect(() => {
-    if (!selected.length) return;
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !session.overlay) picked = {};
-    };
-    window.addEventListener('keydown', esc);
-    return () => window.removeEventListener('keydown', esc);
-  });
   const updatable = $derived(selected.filter((c) => c.status?.kind === 'update'));
   async function bulkSet(on: boolean, list = selected) {
     const ids = list.map((c) => c.id);
     try {
       const need = on ? '' : await needs(ids);
       await api.content.setEnabledMany(instanceId, kind, ids, on);
-      picked = {};
+      picker.clear();
       if (need) session.notify({ subject: plural(ids.length, cfg.noun.replace(/s$/, '')), text: `turned off. ${need}.` });
     } catch (e) {
       session.fail(on ? 'Turn on' : 'Turn off', e);
@@ -220,8 +194,8 @@
   async function bulkRemove() {
     if (!isManaged) {
       try {
-        await (kind === 'worlds' ? removeWorlds(selected) : removeServers(selected));
-        picked = {};
+        await removeWorlds(selected);
+        picker.clear();
       } catch (e) {
         session.fail(removeLabel, e);
       }
@@ -231,7 +205,7 @@
     try {
       const need = await needs(ids);
       const token = await api.content.remove(instanceId, kind, ids);
-      picked = {};
+      picker.clear();
       session.notify({ subject: plural(ids.length, cfg.noun.replace(/s$/, '')), text: need ? `removed. ${need}.` : 'removed', undo: () => void api.content.undo(instanceId, token).catch((e: unknown) => session.fail('Undo', e)) });
     } catch (e) {
       session.fail('Remove', e);
@@ -239,7 +213,7 @@
   }
   function bulkUpdate() {
     session.updatePick = new Set(updatable.map((c) => c.id));
-    picked = {};
+    picker.clear();
     review(pending);
   }
 
@@ -251,17 +225,6 @@
     rememberCount(`review.${instanceId}.${kind}`, n);
     go({ name: 'instance', id: instanceId, tab: kind, sub: 'updates' });
   };
-  async function refreshServers() {
-    checking = true;
-    try {
-      await api.servers.list(instanceId, true);
-      revs.bump('servers');
-    } catch (e) {
-      session.fail('Refresh', e);
-    } finally {
-      checking = false;
-    }
-  }
   async function checkUpdates() {
     if (pending > 0) return review(pending);
     checking = true;
@@ -287,17 +250,13 @@
     }
   }
 
-  // A row menu's Play or Join opens the game straight into that world or server.
-  function rowAction(c: ContentItem) {
-    if (kind === 'worlds') return session.play(instanceId, '', { kind: 'world', target: c.id });
-    const address = api.servers.entry(instanceId, c.id)?.address;
-    session.play(instanceId, '', address ? { kind: 'server', target: address } : undefined);
-  }
+  // A world's Play opens the game straight into it.
+  const play = (c: ContentItem) => session.play(instanceId, '', { kind: 'world', target: c.id });
 
   /** "Northwatch was deleted" for one row, "3 worlds deleted" for several. */
   const gone = (list: ContentItem[], verb: string) =>
     list.length === 1 ? { subject: list[0]!.name, text: `was ${verb}` } : { subject: plural(list.length, cfg.noun.replace(/s$/, '')), text: verb };
-  // Worlds and servers go in one call, so one Undo brings them all back.
+  // Worlds go in one call, so one Undo brings them all back.
   async function removeWorlds(list: ContentItem[]) {
     const token = await api.worlds.remove(instanceId, list.map((c) => c.id));
     revs.bump('worlds');
@@ -305,22 +264,6 @@
   }
   async function exportWorld(c: ContentItem) {
     if (await api.worlds.export(instanceId, c.id)) session.notify({ subject: c.name, text: 'was exported' });
-  }
-  async function removeServers(list: ContentItem[]) {
-    const refs = list.flatMap((c) => {
-      const e = api.servers.entry(instanceId, c.id);
-      return e ? [{ index: e.index, address: e.address }] : [];
-    });
-    if (!refs.length) return;
-    const token = await api.servers.remove(instanceId, refs);
-    revs.bump('servers');
-    session.notify({ ...gone(list, 'removed'), undo: () => void api.servers.undo(instanceId, token).then(() => revs.bump('servers')).catch((err: unknown) => session.fail('Undo', err)) });
-  }
-  async function moveServer(c: ContentItem, by: number) {
-    const e = api.servers.entry(instanceId, c.id);
-    if (!e) return;
-    await api.servers.move(instanceId, e.index, e.address, by);
-    revs.bump('servers');
   }
 
   // The row's "…" menu (composed from the Accounts "…" menu).
@@ -472,11 +415,13 @@
   <!-- One line whatever the data: the search gives way first (280 down to 160 px), then the chips scroll. -->
   <div class="ct-tools">
     <SearchField bind:value={search} label="Search" placeholder={searchIn(cfg.noun, items.data?.length)} style="flex: 0 1000 280px; min-width: 160px" />
-    <div class="ct-chips">
-      {#each chipRow as ch, i (ch.label)}
-        <button class="chip" class:on={chip === i} onclick={() => (chip = i)} aria-pressed={chip === i}>{ch.label}<span class="count">{ch.count}</span></button>
-      {/each}
-    </div>
+    {#if chipRow.length}
+      <div class="ct-chips">
+        {#each chipRow as ch, i (ch.label)}
+          <button class="chip" class:on={chip === i} onclick={() => (chip = i)} aria-pressed={chip === i}>{ch.label}<span class="count">{ch.count}</span></button>
+        {/each}
+      </div>
+    {/if}
     <div style="flex: 1 1 0"></div>
     {#if cfg.projects || cfg.browse}
       <SplitButton accent href={href({ name: 'browse', type: projectKindOf(kind), instance: instanceId })} menuLabel="More ways to add {cfg.noun}" expanded={!!addMenu} onmenu={openAddMenu}><Icon name="plus" size={14} sw={2} />{cfg.primary}</SplitButton>
@@ -484,18 +429,19 @@
       <button class="btn btn-accent" onclick={primary}><Icon name="plus" size={14} sw={2} />{cfg.primary}</button>
     {/if}
   </div>
+  {#if kind === 'servers'}
+    <ServerTable rows={items.data && shown.map((c) => instanceRow(c, instanceId))} scope={serverScope} skeleton={skeleton.length} empty={items.data?.length ? 'Nothing matches this filter.' : EMPTY.servers} />
+  {:else}
   <div class="list list-fill" use:listKeys>
-    <!-- Column titles sort; the last cells hold select-all and the tab's check (updates, servers). -->
+    <!-- Column titles sort; the last cells hold select-all and the tab's check (updates). -->
     <div class="row row-head crow {layout}">
       {#each COLUMNS as col, k (k)}
         <span class={col.cls}>{#if col.key}{@const key = col.key}<SortTitle label={col.label} dir={sort?.key === key ? sort.dir : 0} onclick={() => sortOn(key)} />{:else}{col.label}{/if}</span>
       {/each}
-      <span class="cc"><Check on={allPicked} label="Select every shown {cfg.noun.replace(/s$/, '')}" onchange={pickAll} /></span>
+      <span class="cc"><Check on={picker.all} label="Select every shown {cfg.noun.replace(/s$/, '')}" onchange={(v) => picker.pickAll(v)} /></span>
       <span class="cc">
         {#if isManaged}
           <button class="btn-bare" aria-label={pending ? `Review ${plural(pending, 'update')}` : 'Check for updates'} title={pending ? `Review ${plural(pending, 'update')}` : 'Check for updates'} disabled={checking} onclick={checkUpdates}><Icon name="update" size={16} class={checking ? 'spin' : ''} /></button>
-        {:else if kind === 'servers'}
-          <button class="btn-bare" aria-label="Refresh" title="Refresh" disabled={checking} onclick={refreshServers}><Icon name="refresh" size={14} sw={1.8} class={checking ? 'spin' : ''} /></button>
         {/if}
       </span>
     </div>
@@ -503,9 +449,9 @@
       {#each shown as c (c.id)}
         {@const on = isOn(c)}
         {@const b = badge(c)}
-        <div class="row crow {layout}" class:sel={!!picked[c.id]} class:off={cfg.toggles && !on} class:drag={drag?.id === c.id} style={drag ? `transform: translateY(${shift(c)}px)` : undefined}
+        <div class="row crow {layout}" class:sel={!!picker.picked[c.id]} class:off={cfg.toggles && !on} class:drag={drag?.id === c.id} style={drag ? `transform: translateY(${shift(c)}px)` : undefined}
           role={reorderable && c.enabled ? 'listitem' : undefined} onpointerdown={(e) => dragStart(e, c)} onpointermove={dragMove} onpointerup={dragEnd} onpointercancel={dragEnd}
-          onclickcapture={(e) => rowClick(e, c)} onmousedown={(e) => (e.shiftKey || e.ctrlKey || e.metaKey) && e.preventDefault()} ondragstart={(e) => reorderable && e.preventDefault()}>
+          onclickcapture={(e) => rowClick(e, c)} onmousedown={noTextPick} ondragstart={(e) => reorderable && e.preventDefault()}>
           {#if layout === 'managed'}
             <span>{#if cfg.toggles}<Toggle {on} label="Enable {c.name}" onchange={() => flip(c)} />{/if}</span>
             <span class="media dim" style="background: {c.art.background}">{c.art.initial ?? ''}</span>
@@ -513,20 +459,13 @@
             <span class="c-stat">{#if b}<span class="badge trunc {b.cls}">{b.text}</span>{/if}</span>
             <span class="mono muted trunc" title={c.meta}>{c.meta}</span>
             <span class="cc opt dim">{#if c.source}<span class="src" title={SOURCES[c.source][1]}><Icon name={SOURCES[c.source][0]} size={16} /></span>{/if}</span>
-            <span class="cc"><Check on={!!picked[c.id]} label="Select {c.name}" onchange={(v) => pick(c, v)} /></span>
-          {:else if layout === 'worlds'}
+            <span class="cc"><Check on={!!picker.picked[c.id]} label="Select {c.name}" onchange={(v) => picker.pick(c.id, v)} /></span>
+          {:else}
             <span class="media" style="background: {c.art.background}"></span>
             <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint" style="display: block">{c.sub}</span></span>
             <span class="c-stat">{#if b}<span class="badge trunc {b.cls}">{b.text}</span>{/if}</span>
             <span class="muted trunc">{c.meta}</span>
-            <span class="cc"><Check on={!!picked[c.id]} label="Select {c.name}" onchange={(v) => pick(c, v)} /></span>
-          {:else}
-            <span class="media" style="background: {c.art.background}"></span>
-            <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{c.name}</span><span class="trunc small faint mono" style="display: block">{c.sub}</span></span>
-            <span class="end">{#if c.server}<ServerVersion server={c.server} />{/if}</span>
-            <span class="end mono muted tnum trunc">{players(c.server?.players)}</span>
-            <span class="end"><ServerPing ms={c.server?.pingMs} /></span>
-            <span class="cc"><Check on={!!picked[c.id]} label="Select {c.name}" onchange={(v) => pick(c, v)} /></span>
+            <span class="cc"><Check on={!!picker.picked[c.id]} label="Select {c.name}" onchange={(v) => picker.pick(c.id, v)} /></span>
           {/if}
           <button class="btn btn-icon btn-sm btn-ghost" aria-label="More for {c.name}" aria-haspopup="menu" disabled={!hasMenu} onclick={(e) => openMenu(e, c)}><Icon name="more" size={14} /></button>
         </div>
@@ -541,21 +480,20 @@
           <div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: {a}"></div><div class="sk" style="height: 10px; width: {w}"></div></div>
           {#if layout === 'managed'}
             <div></div><div class="sk" style="height: 10px; width: 56px"></div><div class="cc opt"><div class="sk" style="width: 16px; height: 16px"></div></div><div class="cc"><div class="sk" style="width: 16px; height: 16px"></div></div>
-          {:else if layout === 'worlds'}
-            <div></div><div class="sk" style="height: 10px; width: 64px"></div><div class="cc"><div class="sk" style="width: 16px; height: 16px"></div></div>
           {:else}
-            <div class="end"><div class="sk" style="height: 20px; width: 52px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 56px"></div></div><div class="end"><div class="sk" style="height: 10px; width: 64px"></div></div><div class="cc"><div class="sk" style="width: 16px; height: 16px"></div></div>
+            <div></div><div class="sk" style="height: 10px; width: 64px"></div><div class="cc"><div class="sk" style="width: 16px; height: 16px"></div></div>
           {/if}
           <div></div>
         </div>
       {/each}
     {/if}
   </div>
+  {/if}
   {#if selected.length}
     <!-- Composed from the update review's footer: what is selected, and what to do with it. -->
     <div class="bulk">
       <span class="small faint tnum" style="margin-right: auto">{selected.length} selected</span>
-      <button class="btn" onclick={() => (picked = {})}>Cancel</button>
+      <button class="btn" onclick={() => picker.clear()}>Cancel</button>
       <button class="btn" onclick={bulkRemove}>{removeLabel}</button>
       {#if cfg.toggles}
         <button class="btn" onclick={() => bulkSet(false)}>Turn off</button>
@@ -584,24 +522,13 @@
   <Menu x={menu.x} y={menu.y} label="More for {c.name}" onclose={() => (menu = null)}>
     {#if kind === 'worlds'}
       <!-- WorldsMenu.dc.html, led by Play as the servers' menu is led by Join. -->
-      <button class="mi" role="menuitem" onclick={() => act(async () => rowAction(c), 'Play')}><Icon name="play" size={14} /><span>Play</span><span></span></button>
+      <button class="mi" role="menuitem" onclick={() => act(async () => play(c), 'Play')}><Icon name="play" size={14} /><span>Play</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(async () => session.open({ kind: 'rename-world', instanceId, folder: c.id, name: c.name }), 'Rename')}><Icon name="file" size={14} /><span>Rename</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(async () => session.copy(await api.worlds.seed(instanceId, c.id), 'Seed'), 'Copy seed')}><Icon name="link" size={14} /><span>Copy seed</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => exportWorld(c), 'Export')}><Icon name="download" size={14} /><span>Export as .zip</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(async () => session.open({ kind: 'copy-world', instanceId, folder: c.id, name: c.name, sub: `${c.sub.split(', ').at(-1)}, ${c.meta}` }), 'Copy')}><Icon name="library" size={14} /><span>Copy to instance…</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => api.worlds.showInFolder(instanceId, c.id), 'Show in folder')}><Icon name="folder" size={14} /><span>Show in folder</span><span></span></button>
       <button class="mi" role="menuitem" onclick={() => act(() => removeWorlds([c]), 'Delete')}><Icon name="trash" size={14} /><span>Delete</span><span></span></button>
-    {:else if kind === 'servers'}
-      <!-- ServersMenu.dc.html -->
-      {@const entry = api.servers.entry(instanceId, c.id)}
-      <button class="mi" role="menuitem" onclick={() => act(async () => rowAction(c), 'Join')}><Icon name="play" size={14} /><span>Join</span><span></span></button>
-      <button class="mi" role="menuitem" onclick={() => act(async () => session.open({ kind: 'server', instanceId, ...(entry ? { entry } : {}) }), 'Edit')}><Icon name="file" size={14} /><span>Edit</span><span></span></button>
-      <button class="mi" role="menuitem" onclick={() => act(() => session.copy(entry?.address ?? '', 'Address'), 'Copy address')}><Icon name="link" size={14} /><span>Copy address</span><span></span></button>
-      <div class="divider" style="margin: 4px 0"></div>
-      <button class="mi" role="menuitem" onclick={() => act(() => moveServer(c, -1), 'Move up')}><Icon name="chevron-up" size={14} /><span>Move up</span><span></span></button>
-      <button class="mi" role="menuitem" onclick={() => act(() => moveServer(c, 1), 'Move down')}><Icon name="chevron-down" size={14} /><span>Move down</span><span></span></button>
-      <div class="divider" style="margin: 4px 0"></div>
-      <button class="mi" role="menuitem" onclick={() => act(() => removeServers([c]), 'Remove')}><Icon name="trash" size={14} /><span>Remove</span><span></span></button>
     {:else}
     {#if kind === 'resourcepacks' && c.enabled}
       <button class="mi" role="menuitem" onclick={() => act(() => move(c, -1), 'Move up')}><Icon name="chevron-up" size={14} /><span>Move up</span><span></span></button>
@@ -633,23 +560,16 @@
   /* The .tabs idiom; the padding keeps focus rings inside the scroll box. */
   .ct-chips{display:flex;gap:6px;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:3px;margin:-3px}
   /* Columns (ContentTable.dc.html). Mods and packs: state, icon, name, status, version, platform,
-     select, more. Worlds: icon, name, status, mode, select, more. Servers: icon, name, then version,
-     players and ping in equal columns with a wider gap, select, more. Play and Join live in the ⋮ menu. */
+     select, more. Worlds: icon, name, status, mode, select, more; Play lives in the ⋮ menu. */
   .crow.managed{grid-template-columns:30px 32px minmax(0,1fr) 136px 72px 48px 28px 28px}
   .crow.worlds{grid-template-columns:32px minmax(0,1fr) 112px 104px 28px 28px}
-  .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,120px) 28px 28px;column-gap:24px}
   @media (max-width:1100px){
     .crow.managed{grid-template-columns:30px 32px minmax(0,1fr) 136px 72px 28px 28px}
     .crow .opt{display:none}
-    .crow.servers{grid-template-columns:32px minmax(0,1fr) repeat(3,96px) 28px 28px;column-gap:16px}
   }
   /* Status is right-aligned with room before the version. */
   .c-stat{display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0;margin-right:16px}
-  .end{display:flex;justify-content:flex-end;align-items:center;min-width:0}
-  .cc{display:flex;justify-content:center;align-items:center}
   .src{width:20px;height:20px;display:grid;place-items:center;color:var(--faint)}
-  .media{width:32px;height:32px;border-radius:6px;display:grid;place-items:center;font-weight:600;font-size:13px;color:#0a0a0b}
-  .bulk{flex:none;display:flex;justify-content:flex-end;gap:8px;align-items:center}
   /* Dragging a resource pack: the held row rides above the others, which slide to make room. */
   .crow[role="listitem"]{cursor:grab}
   .crow.drag{position:relative;z-index:1;cursor:grabbing;background:var(--raise);user-select:none}

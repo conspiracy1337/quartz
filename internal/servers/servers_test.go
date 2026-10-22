@@ -228,3 +228,31 @@ func TestHomeMerges(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveEverywhere(t *testing.T) {
+	e := newEnv(t)
+	_ = e.svc.Add(e.a.ID, Entry{Name: "Friends SMP", Address: "smp.kestrel.gg"})
+	_ = e.svc.Add(e.a.ID, Entry{Name: "Old", Address: "old.example.net"})
+	_ = e.svc.Add(e.b.ID, Entry{Name: "Hypixel", Address: "mc.hypixel.net"})
+	_ = e.svc.Add(e.b.ID, Entry{Name: "friends", Address: "SMP.Kestrel.gg.:25565"})
+	addresses := func(id string) string {
+		l, _ := e.svc.entries(id)
+		var out []string
+		for _, s := range l {
+			out = append(out, s.Address)
+		}
+		return strings.Join(out, " ")
+	}
+	gone, err := e.svc.RemoveEverywhere([]string{"smp.kestrel.gg", "not a host:x"})
+	if err != nil || len(gone) != 2 || addresses(e.a.ID) != "old.example.net" || addresses(e.b.ID) != "mc.hypixel.net" {
+		t.Fatalf("remove %+v %v %q %q", gone, err, addresses(e.a.ID), addresses(e.b.ID))
+	}
+	for _, r := range gone {
+		if err := e.svc.Undo(r.Instance, r.Token); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if addresses(e.a.ID) != "smp.kestrel.gg old.example.net" || addresses(e.b.ID) != "mc.hypixel.net SMP.Kestrel.gg.:25565" {
+		t.Fatalf("undo %q %q", addresses(e.a.ID), addresses(e.b.ID))
+	}
+}

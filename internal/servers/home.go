@@ -154,3 +154,44 @@ func (s *Service) FinishRun(f *launch.Finished) {
 	s.joined[f.InstanceID] = clone
 	s.mu.Unlock()
 }
+
+// Removed is one instance's part of RemoveEverywhere, for Undo on that instance.
+type Removed struct {
+	Instance string `json:"instance"`
+	Token    string `json:"token"`
+}
+
+// RemoveEverywhere takes the servers with these merged IDs (Home's rows) out of
+// every instance that lists them. Each instance gets its own Undo token; if one
+// fails, the ones already done are put back so nothing is half removed.
+func (s *Service) RemoveEverywhere(keys []string) ([]Removed, error) {
+	want := map[string]bool{}
+	for _, k := range keys {
+		want[k] = true
+	}
+	var done []Removed
+	for _, in := range s.d.Instances.List() {
+		list, err := s.entries(in.ID)
+		if err != nil {
+			continue
+		}
+		var refs []Ref
+		for _, sv := range list {
+			if a, err := slp.Parse(sv.Address); err == nil && want[a.Key()] {
+				refs = append(refs, Ref{Index: sv.Index, Address: sv.Address})
+			}
+		}
+		if len(refs) == 0 {
+			continue
+		}
+		token, err := s.Remove(in.ID, refs)
+		if err != nil {
+			for _, r := range done {
+				_ = s.Undo(r.Instance, r.Token)
+			}
+			return nil, err
+		}
+		done = append(done, Removed{Instance: in.ID, Token: token})
+	}
+	return done, nil
+}
