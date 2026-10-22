@@ -4,6 +4,7 @@
   import { Day, fullDate, gb, plural } from '$lib/format';
   import { loaderLabel } from '$lib/labels';
   import { lastCount, query, skeletonRows } from '$lib/query.svelte';
+  import { pointOf } from '$lib/restore';
   import { href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
@@ -19,10 +20,10 @@
   // Keyed, so going back to Overview shows them at once; the page is remounted per instance.
   // svelte-ignore state_referenced_locally
   const activity = query(() => api.instances.activity(i.id), `activity.${i.id}`);
-  // Changes whose snapshot is still kept can be rolled back from the feed.
+  // A change whose restore point is still kept can be rolled back from the feed (to that point).
   // svelte-ignore state_referenced_locally
-  const snapshots = query(() => api.snapshots.list(i.id), `snapshots.${i.id}`);
-  const kept = $derived(new Set((snapshots.data ?? []).map((s) => s.id)));
+  const points = query(() => api.snapshots.list(i.id), `snapshots.${i.id}`);
+  const pointFor = (change: string) => pointOf(points.data ?? [], change)?.id;
   // svelte-ignore state_referenced_locally
   const updates = query(() => api.instances.pendingUpdates(i.id), `updates.${i.id}`);
   let filter = $state<'all' | ActivityKind>('all');
@@ -57,7 +58,7 @@
           <div class="ev">
             <span class="ev-ic" style="color: {TONES[e.tone]}" aria-hidden="true"><Icon name={e.icon} size={14} sw={1.8} outline /></span>
             <span style="min-width: 0"><span class="trunc" style="display: block">{e.title}</span><span class="trunc small faint" style="display: block">{e.detail}</span></span>
-            <span class="ev-end">{#if e.snapshot && kept.has(e.snapshot)}{@const snap = e.snapshot}<button class="btn btn-sm btn-ghost" onclick={() => session.open({ kind: 'rollback', instanceId: i.id, snapshot: snap })}>Roll back</button>{/if}<span class="small faint tnum">{Day(e.at)}</span></span>
+            <span class="ev-end">{#if e.snapshot && pointFor(e.snapshot)}{@const point = pointFor(e.snapshot)}<button class="btn btn-sm btn-ghost" onclick={() => session.open({ kind: 'rollback', instanceId: i.id, snapshot: point })}>Roll back</button>{/if}<span class="small faint tnum">{Day(e.at)}</span></span>
           </div>
         {:else}
           {#if activity.data}<Empty text="No activity yet. Sessions and changes show up here." />

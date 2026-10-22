@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"regexp"
+	"slices"
 
 	"quartz/internal/content"
 	"quartz/internal/launch"
@@ -20,7 +21,7 @@ type SnapshotsDeps struct {
 	Content *content.Service
 }
 
-// Snapshots exposes the snapshots taken before changes, and rollbacks.
+// Snapshots exposes the instance history: restore points and rollbacks.
 type Snapshots struct {
 	ctx *Ctx
 	d   SnapshotsDeps
@@ -50,7 +51,7 @@ func checkSnapshot(id, snap string) error {
 	return nil
 }
 
-// List names an instance's snapshots, newest first.
+// List names an instance's restore points, newest first.
 func (s *Snapshots) List(id string) ([]snapshot.Summary, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
@@ -58,7 +59,7 @@ func (s *Snapshots) List(id string) ([]snapshot.Summary, error) {
 	return s.d.Service.List(id), nil
 }
 
-// Diff lists what rolling back to a snapshot would change.
+// Diff lists what rolling back to a restore point would change.
 func (s *Snapshots) Diff(id, snap string) (snapshot.Diff, error) {
 	if err := checkSnapshot(id, snap); err != nil {
 		return snapshot.Diff{}, err
@@ -66,7 +67,7 @@ func (s *Snapshots) Diff(id, snap string) (snapshot.Diff, error) {
 	return s.d.Service.Diff(s.ctx.Get(), id, snap)
 }
 
-// Create takes a snapshot now.
+// Create makes a restore point now.
 func (s *Snapshots) Create(id string) (snapshot.Summary, error) {
 	if err := checkInstanceID(id); err != nil {
 		return snapshot.Summary{}, err
@@ -74,7 +75,7 @@ func (s *Snapshots) Create(id string) (snapshot.Summary, error) {
 	return s.d.Service.Create(s.ctx.Get(), id)
 }
 
-// SetKeep keeps a snapshot until deleted, or lets it expire again.
+// SetKeep keeps a restore point until deleted, or lets it expire again.
 func (s *Snapshots) SetKeep(id, snap string, keep bool) (snapshot.Summary, error) {
 	if err := checkSnapshot(id, snap); err != nil {
 		return snapshot.Summary{}, err
@@ -82,7 +83,7 @@ func (s *Snapshots) SetKeep(id, snap string, keep bool) (snapshot.Summary, error
 	return s.d.Service.SetKeep(id, snap, keep)
 }
 
-// Delete removes a snapshot now.
+// Delete removes a restore point now.
 func (s *Snapshots) Delete(id, snap string) error {
 	if err := checkSnapshot(id, snap); err != nil {
 		return err
@@ -90,7 +91,7 @@ func (s *Snapshots) Delete(id, snap string) error {
 	return s.d.Service.Delete(id, snap)
 }
 
-// Rollback puts the picked changes (row keys) back as the snapshot has them.
+// Rollback puts the picked changes (row keys) back as the restore point has them.
 func (s *Snapshots) Rollback(id, snap string, keys []string) (snapshot.Result, error) {
 	if err := checkSnapshot(id, snap); err != nil {
 		return snapshot.Result{}, err
@@ -109,7 +110,8 @@ func (s *Snapshots) Rollback(id, snap string, keys []string) (snapshot.Result, e
 	return s.d.Service.Rollback(s.ctx.Get(), id, snap, keys)
 }
 
-// Undo rolls back what the change after a snapshot touched (the Undo toast).
+// Undo rolls back one change (by the id its activity entry and Started
+// carry) while the game hasn't run since: the Undo toast.
 func (s *Snapshots) Undo(id, snap string) (snapshot.Result, error) {
 	if err := checkSnapshot(id, snap); err != nil {
 		return snapshot.Result{}, err
@@ -120,8 +122,9 @@ func (s *Snapshots) Undo(id, snap string) (snapshot.Result, error) {
 	return s.d.Service.Undo(s.ctx.Get(), id, snap)
 }
 
-// Suspect is the newest change since the game last closed normally, which
-// the crash dialog offers to roll back (nil when there is none).
+// Suspect is the newest restore point with changes made since the game last
+// closed normally, which the crash dialog offers to roll back (nil when
+// there is none).
 func (s *Snapshots) Suspect(id string) (*snapshot.Summary, error) {
 	if err := checkInstanceID(id); err != nil {
 		return nil, err
@@ -134,9 +137,9 @@ func (s *Snapshots) Suspect(id string) (*snapshot.Summary, error) {
 			}
 		}
 	}
-	for _, sn := range s.d.Service.List(id) {
-		if sn.Reason != "rollback" && sn.Reason != "manual" && sn.At > clean {
-			return &sn, nil
+	for _, p := range s.d.Service.List(id) {
+		if !p.Manual && p.At > clean && slices.ContainsFunc(p.Changes, func(c snapshot.Change) bool { return c.Reason != "rollback" }) {
+			return &p, nil
 		}
 	}
 	return nil, nil

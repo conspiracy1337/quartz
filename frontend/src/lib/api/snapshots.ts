@@ -1,5 +1,6 @@
-// Snapshots taken before updates and version changes, and rolling back to
-// them: Go's snapshot service. The preview keeps its edits in memory.
+// Restore points (the changes made between two launches, kept so they can be
+// rolled back) and the layers behind each change's Undo: Go's snapshot
+// service. The preview keeps its edits in memory.
 import { bridged } from '../bridge';
 import { revs } from '../revs.svelte';
 import * as Go from '../wailsjs/go/api/Snapshots';
@@ -19,18 +20,18 @@ const diff = bridged(Go.Diff, mock.diff);
 const suspect = bridged(Go.Suspect, mock.suspect);
 
 export const snapshotsApi = {
-  /** An instance's snapshots that haven't expired, newest first. */
+  /** An instance's restore points that haven't expired, newest first. */
   list: (id: string) => revs.load('snapshots', () => list(id)),
-  /** What rolling back to a snapshot would change, row by row. */
-  diff: (id: string, snap: string) => revs.load(['snapshots', 'content', 'instances'], () => diff(id, snap)),
-  /** The newest change since the game last closed normally (the crash dialog's offer), or null. */
+  /** What rolling back to a restore point would change, row by row (all ticked). */
+  diff: (id: string, point: string) => revs.load(['snapshots', 'content', 'instances'], () => diff(id, point)),
+  /** The newest restore point with changes since the game last closed normally (the crash dialog's offer), or null. */
   suspect: (id: string) => revs.load('snapshots', () => suspect(id)),
   create: edit(bridged(Go.Create, mock.create)),
-  /** Keeps a snapshot until deleted, or lets it expire 7 days after it was taken. */
+  /** Keeps a restore point until deleted, or lets it expire 7 days after the game ran past it. */
   setKeep: edit(bridged(Go.SetKeep, mock.setKeep)),
   remove: edit(bridged(Go.Delete, mock.remove)),
-  /** Puts the picked rows (by key) back; the result names the snapshot that undoes it. */
+  /** Puts the picked rows (by key) back; the result names the change that undoes it. */
   rollback: edit(bridged(Go.Rollback, mock.rollback)),
-  /** Rolls back what the change after a snapshot touched (the Undo toast). */
+  /** Rolls back one change (the Undo toast), while the game hasn't run since. */
   undo: edit(bridged(Go.Undo, mock.undo)),
 };

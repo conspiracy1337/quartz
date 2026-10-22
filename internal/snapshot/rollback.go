@@ -3,9 +3,6 @@ package snapshot
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,32 +17,46 @@ import (
 // Result is what a rollback did.
 type Result struct {
 	Restored int `json:"restored"` // changes rolled back
-	// Snapshot was taken before the rollback, to undo it ("" when off).
+	// Snapshot is the layer kept before the rollback, to undo it ("" when
+	// the history is off).
 	Snapshot string `json:"snapshot,omitempty"`
 }
 
-// Undo rolls back what the change after a snapshot touched (its default rows).
+// Undo rolls back one change of the open session (by its layer's id): what
+// it touched, as it was just before it.
 func (s *Service) Undo(ctx context.Context, inst, id string) (Result, error) {
-	return s.rollback(ctx, inst, id, func(r Row) bool { return r.Default })
+	unlock := s.lock(inst)
+	defer unlock()
+	l, err := s.layer(inst, id)
+	if err != nil {
+		return Result{}, err
+	}
+	return s.rollback(ctx, inst, l, func(r Row) bool { return r.Default })
 }
 
-// Rollback puts the picked rows (by Key) back as the snapshot has them, all
-// or nothing. A snapshot is taken first, so the rollback can be undone.
+// Rollback puts the picked rows (by Key) back as the restore point has
+// them, all or nothing. The instance is kept first, as a change of the open
+// session, so the rollback can be undone.
 func (s *Service) Rollback(ctx context.Context, inst, id string, keys []string) (Result, error) {
+	unlock := s.lock(inst)
+	defer unlock()
+	p, _, err := s.point(inst, id)
+	if err != nil {
+		return Result{}, err
+	}
+	l, err := readLayer(s.dir(inst), p.ID)
+	if err != nil {
+		return Result{}, err
+	}
 	want := map[string]bool{}
 	for _, k := range keys {
 		want[k] = true
 	}
-	return s.rollback(ctx, inst, id, func(r Row) bool { return want[r.Key] })
+	return s.rollback(ctx, inst, l, func(r Row) bool { return want[r.Key] })
 }
 
-func (s *Service) rollback(ctx context.Context, inst, id string, pick func(Row) bool) (Result, error) {
-	unlock := s.lock(inst)
-	defer unlock()
-	sn, err := s.get(inst, id)
-	if err != nil {
-		return Result{}, err
-	}
+// rollback puts the picked rows of l back; the instance's lock is held.
+func (s *Service) rollback(ctx context.Context, inst string, sn Layer, pick func(Row) bool) (Result, error) {
 	d, err := s.diff(ctx, inst, sn)
 	if err != nil {
 		return Result{}, err
@@ -67,10 +78,11 @@ func (s *Service) rollback(ctx context.Context, inst, id string, pick func(Row) 
 		}
 		req := content.SnapshotReq{ID: before, Title: "rolling back " + titleOf(sn), Reason: "rollback", Scope: scope}
 		if err := s.take(ctx, inst, req); err != nil {
-			s.d.Log.Warn("snapshots: snapshot before a rollback failed", "instance", inst, "err", err)
+			s.d.Log.Warn("history: keeping the instance before a rollback failed", "instance", inst, "err", err)
 			return Result{}, content.ErrSnapshot
 		}
 	}
+	dir := s.dir(inst)
 	r := content.Restore{}
 	version, pack := false, false
 	var names []string
@@ -88,7 +100,7 @@ func (s *Service) rollback(ctx context.Context, inst, id string, pick func(Row) 
 			sh := sn.State.Shader
 			r.Shader = &sh
 		case "files":
-			r.Files = s.fileOps(inst, sn, row.files)
+			r.Files = fileOps(dir, row.files)
 		default:
 			r.Items = append(r.Items, itemOp(row))
 		}
@@ -108,15 +120,16 @@ func (s *Service) rollback(ctx context.Context, inst, id string, pick func(Row) 
 	return Result{Restored: len(picked), Snapshot: before}, nil
 }
 
-// titleOf is what a snapshot was taken before.
-func titleOf(sn Snapshot) string {
-	if sn.Title == "" {
-		return "your snapshot"
+// titleOf is what a layer was kept before: its change, or the day for a
+// point made by hand.
+func titleOf(l Layer) string {
+	if l.Title == "" {
+		return time.UnixMilli(l.At).Format("Jan 2, 15:04")
 	}
-	return sn.Title
+	return l.Title
 }
 
-// itemOp puts one item back: the file there now goes, the snapshot's comes.
+// itemOp puts one item back: the file there now goes, the layer's comes.
 func itemOp(r Row) content.ItemOp {
 	var op content.ItemOp
 	if r.cur != nil {
@@ -128,55 +141,23 @@ func itemOp(r Row) content.ItemOp {
 	return op
 }
 
-// fileOps writes files back from the snapshot's copies; files it didn't
+// fileOps writes files back from the object store; files the layer didn't
 // have are deleted.
-func (s *Service) fileOps(inst string, sn Snapshot, changes []fileChange) []content.FileOp {
-	from := filepath.Join(s.dir(inst), sn.ID, filesDir)
+func fileOps(dir string, changes []fileChange) []content.FileOp {
 	ops := make([]content.FileOp, 0, len(changes))
 	for _, c := range changes {
 		op := content.FileOp{Rel: c.rel}
 		if f := c.snap; f != nil {
-			op.Write = func(dst string) error { return restoreFile(from, *f, dst) }
+			op.Write = func(dst string) error { return writeKept(dir, *f, dst) }
 		}
 		ops = append(ops, op)
 	}
 	return ops
 }
 
-// restoreFile copies a kept file to dst, checking it is the file that was
-// kept (a snapshot folder may have been tampered with), and gives it its
-// old time, so the next comparison sees it unchanged.
-func restoreFile(from string, f File, dst string) error {
-	root, err := os.OpenRoot(from)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = root.Close() }()
-	src, err := root.Open(f.Rel)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = src.Close() }()
-	if info, err := src.Stat(); err != nil || !info.Mode().IsRegular() || info.Size() != f.Size {
-		return errKept
-	}
-	n, sum, err := copyHashed(dst, io.LimitReader(src, f.Size+1))
-	if err != nil {
-		return err
-	}
-	if n != f.Size || sum != f.SHA1 {
-		_ = os.Remove(dst)
-		return errKept
-	}
-	t := time.Unix(0, f.ModNS)
-	return os.Chtimes(dst, t, t)
-}
-
-var errKept = errors.New("snapshot: a kept file changed, so it can't be put back")
-
 // commit puts the version and the modpack back once the files are in
 // place; a step that fails undoes the ones before it.
-func (s *Service) commit(inst string, sn Snapshot, version, pack bool) func() error {
+func (s *Service) commit(inst string, sn Layer, version, pack bool) func() error {
 	return func() error {
 		in, err := s.d.Instances.Get(inst)
 		if err != nil {
@@ -207,7 +188,7 @@ func (s *Service) commit(inst string, sn Snapshot, version, pack bool) func() er
 			undo = append(undo, func() {
 				_, _ = s.d.Instances.Update(inst, func(i *instance.Instance) error { i.Pack = in.Pack; return nil })
 			})
-			if sn.Manifest {
+			if sn.Manifest != "" {
 				if err := s.restoreManifest(inst, sn); err != nil {
 					return fail(err)
 				}
@@ -217,9 +198,9 @@ func (s *Service) commit(inst string, sn Snapshot, version, pack bool) func() er
 	}
 }
 
-// restoreManifest writes the snapshot's modpack.json back.
-func (s *Service) restoreManifest(inst string, sn Snapshot) error {
-	data, err := fsx.ReadCapped(filepath.Join(s.dir(inst), sn.ID, modpack.ManifestName), maxMeta)
+// restoreManifest writes the layer's modpack.json back.
+func (s *Service) restoreManifest(inst string, sn Layer) error {
+	data, err := readObject(s.dir(inst), sn.Manifest)
 	if err != nil {
 		return err
 	}

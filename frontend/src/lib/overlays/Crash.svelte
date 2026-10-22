@@ -1,10 +1,11 @@
 <script lang="ts">
   import { api } from '../api';
   import { contentArt } from '../api/content';
-  import type { CrashCause } from '../api/types';
+  import type { CrashCause, RestorePoint } from '../api/types';
   import { plural, since } from '../format';
   import { undoable } from '../instanceActions';
   import { query } from '../query.svelte';
+  import { changeLabel } from '../restore';
   import { go } from '../router.svelte';
   import { session } from '../session.svelte';
   import { tasks } from '../tasks.svelte';
@@ -16,7 +17,7 @@
   let { instanceId, runId, file }: Props = $props();
   const inst = query(() => api.instances.get(instanceId));
   const info = query(() => (file ? api.logs.crashFile(instanceId, file) : api.logs.crash(instanceId, runId ?? '')));
-  // The newest change since the game last closed normally: likely what broke it.
+  // The changes made since the game last closed normally: likely what broke it.
   const suspect = query(() => api.snapshots.suspect(instanceId));
   let busy = $state(false);
 
@@ -70,7 +71,14 @@
     }
   }
 
-  /** Opens the rollback dialog on the change the crash came after. */
+  /** "Updated 12 mods and installed Distant Horizons 2 hours ago, after the game last closed normally." */
+  function suspectText(p: RestorePoint) {
+    const names = p.changes.map((c, k) => (k ? changeLabel(c.title).replace(/^./, (ch) => ch.toLowerCase()) : changeLabel(c.title)));
+    const listed = names.length > 2 ? `${names.slice(0, 2).join(', ')} and ${plural(names.length - 2, 'more change')}` : names.join(' and ');
+    return `${listed} ${since(p.changes.at(-1)?.at ?? p.at)}, after the game last closed normally.`;
+  }
+
+  /** Opens the rollback dialog on the restore point the crash came after. */
   function rollBack(id: string) {
     session.open({ kind: 'rollback', instanceId, snapshot: id });
   }
@@ -99,7 +107,7 @@
     <!-- Composed from the Install dialog's info card. -->
     <div class="card" style="padding: 10px 12px; display: grid; grid-template-columns: 16px minmax(0,1fr) auto; gap: 10px; align-items: center; border-color: color-mix(in srgb, var(--info) 30%, var(--line))">
       <Icon name="rotate-left" size={16} sw={1.8} color="var(--info)" />
-      <span class="small muted">{s.title.charAt(0).toUpperCase()}{s.title.slice(1)} {since(s.at)}, after the game last closed normally.</span>
+      <span class="small muted">{suspectText(s)}</span>
       <button class="btn btn-sm" onclick={() => rollBack(s.id)}>Roll back…</button>
     </div>
   {/if}

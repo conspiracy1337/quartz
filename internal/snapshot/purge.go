@@ -3,16 +3,14 @@ package snapshot
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"quartz/internal/content"
 	"quartz/internal/content/store"
 	"quartz/internal/core/safe"
 )
 
-// dirs lists the snapshot folders of every instance, live and trashed
-// (a trashed instance keeps its snapshots until it is purged with it).
+// dirs lists the history folders of every instance, live and trashed (a
+// trashed instance keeps its history until it is purged with it).
 func (s *Service) dirs() []string {
 	var out []string
 	for _, in := range s.d.Instances.List() {
@@ -24,28 +22,33 @@ func (s *Service) dirs() []string {
 	return out
 }
 
-// Refs yields the blobs of every snapshot that hasn't expired, for the
-// store's garbage collection.
+// Refs yields the blobs of every layer of a point that hasn't expired, for
+// the store's garbage collection.
 func (s *Service) Refs(yield func(sha1 string)) error {
 	now := s.now()
 	for _, dir := range s.dirs() {
-		for _, sn := range list(dir) {
-			if s.expired(sn, now) {
-				continue
-			}
-			for _, it := range sn.State.Items {
-				yield(it.SHA1)
+		list := points(dir)
+		newest := newestSealed(list)
+		live := map[string]bool{}
+		for _, p := range list {
+			live[p.ID] = !s.expired(p, newest, now)
+		}
+		for _, l := range layers(dir) {
+			if live[l.Point] {
+				for _, it := range l.State.Items {
+					yield(it.SHA1)
+				}
 			}
 		}
 	}
 	return nil
 }
 
-// Purge deletes expired snapshots (all not kept when snapshots are turned
-// off) and snapshots a crash left half written, then frees the old files
-// only they kept.
+// Purge deletes expired points (every unkept one when the history is
+// turned off), layers no point owns and objects no layer names, then frees
+// the old files only they kept.
 func (s *Service) Purge(now time.Time) {
-	var freed []content.StateItem
+	var freed []string
 	removed := 0
 	for _, in := range s.d.Instances.List() {
 		unlock := s.lock(in.ID)
@@ -57,62 +60,55 @@ func (s *Service) Purge(now time.Time) {
 	}
 	s.release(freed)
 	if removed > 0 {
-		s.d.Log.Info("snapshots: removed expired snapshots", "count", removed)
+		s.d.Log.Info("history: removed expired restore points", "count", removed)
 		s.emit()
 	}
 	s.arm()
 }
 
-// purgeDir purges one instance's snapshots, adding the items of the ones
-// it removed to freed.
-func (s *Service) purgeDir(dir string, now time.Time, freed *[]content.StateItem) (removed int) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return 0
-	}
-	for _, e := range entries {
-		p := filepath.Join(dir, e.Name())
-		if base, ok := strings.CutSuffix(e.Name(), tmpExt); ok && ValidID(base) {
-			if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > time.Hour {
-				_ = os.RemoveAll(p)
-			}
+// purgeDir purges one instance's history, adding the blobs of what it
+// removed to freed.
+func (s *Service) purgeDir(dir string, now time.Time, freed *[]string) (removed int) {
+	list := points(dir)
+	newest := newestSealed(list)
+	live := map[string]bool{}
+	for _, p := range list {
+		if !s.expired(p, newest, now) {
+			live[p.ID] = true
 			continue
 		}
-		if !e.IsDir() || !ValidID(e.Name()) {
-			continue
-		}
-		sn, err := read(dir, e.Name())
-		if err != nil {
-			_ = os.RemoveAll(p) // unreadable: it can't be rolled back to anyway
-			continue
-		}
-		if s.expired(sn, now) && os.RemoveAll(p) == nil {
-			*freed = append(*freed, sn.State.Items...)
+		if f, err := removePoint(dir, p); err == nil {
+			*freed = append(*freed, f...)
 			removed++
 		}
 	}
+	// Layers whose point is gone or unreadable can't be rolled back to.
+	for _, l := range layers(dir) {
+		if !live[l.Point] && os.Remove(filepath.Join(dir, layersDir, l.ID+jsonExt)) == nil {
+			for _, it := range l.State.Items {
+				*freed = append(*freed, it.SHA1)
+			}
+		}
+	}
+	sweep(dir)
 	return removed
 }
 
-// release deletes the blobs of items no snapshot or instance uses any more.
-func (s *Service) release(items []content.StateItem) {
-	if len(items) == 0 || s.d.Store == nil {
+// release deletes the blobs no history or instance uses any more.
+func (s *Service) release(sha1s []string) {
+	if len(sha1s) == 0 || s.d.Store == nil {
 		return
-	}
-	sha1s := make([]string, len(items))
-	for i, it := range items {
-		sha1s[i] = it.SHA1
 	}
 	freed, n, err := s.d.Store.Release(store.Union(s.d.Content.Refs, s.Refs), sha1s, releaseAge)
 	if err != nil {
-		s.d.Log.Warn("snapshots: freeing old files failed", "err", err)
+		s.d.Log.Warn("history: freeing old files failed", "err", err)
 	} else if n > 0 {
-		s.d.Log.Info("snapshots: freed old files", "files", n, "bytes", freed)
+		s.d.Log.Info("history: freed old files", "files", n, "bytes", freed)
 	}
 }
 
-// Start purges once and then whenever the next snapshot expires.
-func (s *Service) Start() { safe.Go(s.d.Log, "purge snapshots", func() { s.Purge(s.now()) }) }
+// Start purges once and then whenever the next point expires.
+func (s *Service) Start() { safe.Go(s.d.Log, "purge history", func() { s.Purge(s.now()) }) }
 
 // Close stops the expiry timer.
 func (s *Service) Close() {
@@ -124,16 +120,15 @@ func (s *Service) Close() {
 	}
 }
 
-// arm sets the timer for the next snapshot to expire (a timer, not polling).
+// arm sets the timer for the next point to expire (a timer, not polling).
 func (s *Service) arm() {
 	now := s.now()
 	var next time.Time
 	for _, in := range s.d.Instances.List() {
-		for _, sn := range list(s.dir(in.ID)) {
-			if sn.Keep {
-				continue
-			}
-			if at := time.UnixMilli(sn.At).Add(Life); next.IsZero() || at.Before(next) {
+		list := points(s.dir(in.ID))
+		newest := newestSealed(list)
+		for _, p := range list {
+			if at := expires(p, newest); !at.IsZero() && (next.IsZero() || at.Before(next)) {
 				next = at
 			}
 		}
@@ -148,6 +143,6 @@ func (s *Service) arm() {
 		return
 	}
 	s.timer = time.AfterFunc(max(next.Sub(now), time.Minute), func() {
-		safe.Run(s.d.Log, "purge snapshots", func() { s.Purge(s.now()) })
+		safe.Run(s.d.Log, "purge history", func() { s.Purge(s.now()) })
 	})
 }

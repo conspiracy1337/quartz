@@ -3489,6 +3489,26 @@ export namespace skins {
 
 export namespace snapshot {
 	
+	export class Change {
+	    id: string;
+	    at: number;
+	    title: string;
+	    reason: string;
+	    undoable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Change(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.at = source["at"];
+	        this.title = source["title"];
+	        this.reason = source["reason"];
+	        this.undoable = source["undoable"];
+	    }
+	}
 	export class Row {
 	    key: string;
 	    kind: string;
@@ -3522,11 +3542,11 @@ export namespace snapshot {
 	export class Summary {
 	    id: string;
 	    at: number;
-	    title: string;
-	    reason: string;
+	    sealed?: number;
 	    keep: boolean;
+	    manual: boolean;
 	    expires?: number;
-	    size: number;
+	    changes: Change[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Summary(source);
@@ -3536,15 +3556,33 @@ export namespace snapshot {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.at = source["at"];
-	        this.title = source["title"];
-	        this.reason = source["reason"];
+	        this.sealed = source["sealed"];
 	        this.keep = source["keep"];
+	        this.manual = source["manual"];
 	        this.expires = source["expires"];
-	        this.size = source["size"];
+	        this.changes = this.convertValues(source["changes"], Change);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class Diff {
-	    snapshot: Summary;
+	    point: Summary;
 	    rows: Row[];
 	    shared?: string[];
 	    partial?: string[];
@@ -3556,7 +3594,7 @@ export namespace snapshot {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.snapshot = this.convertValues(source["snapshot"], Summary);
+	        this.point = this.convertValues(source["point"], Summary);
 	        this.rows = this.convertValues(source["rows"], Row);
 	        this.shared = source["shared"];
 	        this.partial = source["partial"];
