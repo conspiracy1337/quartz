@@ -647,7 +647,7 @@ func (s *Store) Get(id string) (Instance, error) {
 func (s *Store) commandKey() []byte {
 	s.keyOnce.Do(func() {
 		path := filepath.Join(filepath.Dir(s.dir), "commands.key")
-		if b, err := os.ReadFile(path); err == nil && len(b) == sha256.Size {
+		if b, err := os.ReadFile(path); err == nil && len(b) == sha256.Size { //nolint:gosec // the launcher's own key file in its data folder
 			s.key = b
 			return
 		}
