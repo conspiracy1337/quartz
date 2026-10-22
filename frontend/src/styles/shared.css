@@ -46,3 +46,10 @@
 .picker-fill{flex:1 1 auto;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch}
 .picker-fill > section{display:flex;flex-direction:column;min-height:0}
 .picker-fill > section > .list{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+
+/* Table cells (ContentTab, ServerTable): right-aligned, centred, and the row's 32px picture. */
+.end{display:flex;justify-content:flex-end;align-items:center;min-width:0}
+.cc{display:flex;justify-content:center;align-items:center}
+.media{width:32px;height:32px;border-radius:6px;display:grid;place-items:center;font-weight:600;font-size:13px;color:#0a0a0b}
+/* A table's bulk bar under it: what is selected, and what to do with it. */
+.bulk{flex:none;display:flex;justify-content:flex-end;gap:8px;align-items:center}

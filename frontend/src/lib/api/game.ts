@@ -117,6 +117,8 @@ export const homeApi = {
   ),
   week: () => revs.load('instances', bridged(HomeGo.Week, (): DayPlay[] => home.week)),
   servers: (force = false) => revs.load('servers', bridged(() => HomeGo.Servers(force).then((l) => l.map(toMerged)), () => home.servers)),
+  /** Takes Home's rows out of every instance that lists them; each part comes back with servers.undo. */
+  removeServers: bridged(HomeGo.RemoveServers, (_keys: string[]): servers.Removed[] => [{ instance: 'preview', token: 'preview' }]),
   recentShots: () => revs.load('screenshots', bridged(() => HomeGo.RecentShots().then((l) => l.map(toShot)), () => home.recentShots)),
   disk: bridged(HomeGo.Disk, (): DiskSpace => ({ free: 120e9, low: false })),
   /** What's wrong with where the data folder is: "bang" ("!" in the path), "temp", or "". */

@@ -33,6 +33,12 @@ func (h *Home) Servers(force bool) ([]servers.Merged, error) {
 	return asListErr(h.d.Servers.Home(h.ctx.Get(), force))
 }
 
+// RemoveServers takes Home's rows (by merged ID) out of every instance that
+// lists them; each part comes back with Servers.Undo on its instance.
+func (h *Home) RemoveServers(keys []string) ([]servers.Removed, error) {
+	return asListErr(h.d.Servers.RemoveEverywhere(keys))
+}
+
 // RecentShots is the newest screenshots across instances.
 func (h *Home) RecentShots() []screenshots.Shot { return asList(h.d.Screenshots.Recent(6)) }
 

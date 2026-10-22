@@ -18,6 +18,10 @@ export function RecentShots() {
   return window['go']['api']['Home']['RecentShots']();
 }
 
+export function RemoveServers(arg1) {
+  return window['go']['api']['Home']['RemoveServers'](arg1);
+}
+
 export function Servers(arg1) {
   return window['go']['api']['Home']['Servers'](arg1);
 }

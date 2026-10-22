@@ -12,6 +12,8 @@ export function News():Promise<home.News>;
 
 export function RecentShots():Promise<Array<screenshots.Shot>>;
 
+export function RemoveServers(arg1:Array<string>):Promise<Array<servers.Removed>>;
+
 export function Servers(arg1:boolean):Promise<Array<servers.Merged>>;
 
 export function Week():Promise<Array<home.Day>>;

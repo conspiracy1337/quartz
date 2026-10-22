@@ -76,6 +76,9 @@ export function rememberCount(key: string, n: number) {
   }
 }
 
+/** A skeleton row's two lines (name, then the line under it), cycled down a list so it doesn't look stamped. */
+export const SKELETON: [string, string][] = [['42%', '22%'], ['30%', '24%'], ['48%', '18%'], ['36%', '20%'], ['56%', '30%'], ['40%', '16%'], ['44%', '26%'], ['32%', '20%']];
+
 /** Skeleton rows for a keyed list: as many as it had last time (at least 1), else `fallback`. */
 export function skeletonRows(key: string, fallback: number): number {
   const n = lastCount(key);
