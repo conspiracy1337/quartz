@@ -337,6 +337,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Java runtime: automatic or any detected runtime.
   - Min and max memory in MB, with "This PC has N GB. X GB suits N mods."
   - JVM arguments.
+  - **ZGC for LOD mods:** when Distant Horizons or Voxy is installed, turned on or imported with an instance (Minecraft 1.17 and later), the instance switches to `-XX:+UseZGC`. An instance following the global settings gets its own copy of them with the global collector swapped; one with its own settings gets ZGC only if its arguments pick no collector. It happens only when the mod arrives, so a collector you pick afterwards stays. The activity feed says so. [lodgc.go](internal/app/lodgc.go), [jvmargs.go](internal/instance/jvmargs.go)
 - **Game window:**
   - Width × height, start fullscreen.
   - When the game starts: keep the launcher open, hide it, or close it.
@@ -742,6 +743,7 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
   - The saved `cmd.txt` is redacted.
 - **JVM arguments:**
   - `-Xms`/`-Xmx` and the user's JVM args, split shell-style without a shell.
+  - With `-XX:+UseZGC` on Java 21 or 22, `-XX:+ZGenerational` is added at launch (never saved: Java 23 makes it the default and later versions drop the flag).
   - `-Dlog4j2.formatMsgNoLookups=true` is always set (Log4Shell), and so is a UTF-8 console (`stdout.encoding`, `stderr.encoding` and their pre-18 `sun.*` names), so text isn't garbled on Windows code pages. Games and hosted servers share this list. [java/env.go](internal/java/env.go)
   - LWJGL 2 versions on Linux get `-DLWJGL_DISABLE_XRANDR=true` when there's no `xrandr` program, which they'd crash without.
   - The log4j config file.

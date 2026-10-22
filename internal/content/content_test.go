@@ -572,6 +572,15 @@ func TestSharedFolderItems(t *testing.T) {
 	if !e.svc.AnyHasMod("SODIUM") || e.svc.AnyHasMod("xaerominimap") {
 		t.Fatal("AnyHasMod")
 	}
+	if !e.svc.HasEnabledMod(e.id, "sodium") {
+		t.Fatal("HasEnabledMod")
+	}
+	if err := e.svc.SetEnabled(ctx, e.id, Mods, e.list(Mods)[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if e.svc.HasEnabledMod(e.id, "sodium") || !e.svc.AnyHasMod("sodium") {
+		t.Fatal("a turned-off mod")
+	}
 }
 
 func TestLinkedModsFolderIsListedAndLeftAlone(t *testing.T) {

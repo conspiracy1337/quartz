@@ -340,7 +340,8 @@ const minMemoryMB = 1024
 // ownMemory turns the Java card's override on with mb of memory, starting
 // from the global values as switching the override on in settings does.
 func ownMemory(st instance.Settings, g settings.Java, mb int) instance.Settings {
-	st.Java = instance.JavaSettings{Override: true, MemoryMinMB: min(g.MemoryMinMB, mb), MemoryMaxMB: mb, JVMArgs: g.JVMArgs}
+	st.Java = instance.OwnJava(g)
+	st.Java.MemoryMinMB, st.Java.MemoryMaxMB = min(g.MemoryMinMB, mb), mb
 	return st
 }
 

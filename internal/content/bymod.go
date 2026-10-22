@@ -2,6 +2,7 @@ package content
 
 import (
 	"context"
+	"quartz/internal/instance"
 	"slices"
 	"strings"
 )
@@ -36,26 +37,36 @@ func (s *Service) ByModID(ctx context.Context, id, modID, file string) (Row, boo
 // AnyHasMod reports whether any instance has one of these mods installed,
 // from the indexes (no scan): Syncing greys out mod data nobody can make.
 func (s *Service) AnyHasMod(modIDs ...string) bool {
-	for _, in := range s.d.Instances.List() {
-		ix, err := s.idx.get(in.ID)
-		if err != nil {
+	return slices.ContainsFunc(s.d.Instances.List(), func(in instance.Instance) bool { return s.hasMod(in.ID, false, modIDs) })
+}
+
+// HasEnabledMod reports whether the instance has one of these mods turned
+// on, from its index (no scan).
+func (s *Service) HasEnabledMod(id string, modIDs ...string) bool { return s.hasMod(id, true, modIDs) }
+
+// hasMod looks for one of modIDs among the instance's mods; enabled leaves
+// out turned-off ones.
+func (s *Service) hasMod(id string, enabled bool, modIDs []string) bool {
+	ix, err := s.idx.get(id)
+	if err != nil {
+		return false
+	}
+	mods := entriesOf(ix.Get(), Mods)
+	sha := make([]string, 0, len(mods))
+	for _, e := range mods {
+		sha = append(sha, e.SHA1)
+	}
+	known := s.cat.many(sha)
+	for _, e := range mods {
+		if enabled && strings.HasSuffix(e.Rel, Disabled) {
 			continue
 		}
-		idx := ix.Get()
-		mods := entriesOf(idx, Mods)
-		sha := make([]string, 0, len(mods))
-		for _, e := range mods {
-			sha = append(sha, e.SHA1)
+		info := known[e.SHA1].Info
+		if e.Dir {
+			info = e.Info
 		}
-		known := s.cat.many(sha)
-		for _, e := range mods {
-			info := known[e.SHA1].Info
-			if e.Dir {
-				info = e.Info
-			}
-			if info != nil && slices.ContainsFunc(modIDs, func(id string) bool { return strings.EqualFold(info.ID, id) }) {
-				return true
-			}
+		if info != nil && slices.ContainsFunc(modIDs, func(m string) bool { return strings.EqualFold(info.ID, m) }) {
+			return true
 		}
 	}
 	return false
