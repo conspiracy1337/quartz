@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -111,12 +112,21 @@ func TestCheckReviewApply(t *testing.T) {
 	if err != nil || len(notes) != 2 || notes[0].ID != "2.0" || notes[0].Items[0] != "Faster" || notes[1].ID != "1.5" {
 		t.Fatalf("%+v %v", notes, err)
 	}
-	job, err := e.svc.ApplyUpdates(rev.CheckID, []string{rev.Updates[0].ID, rev.Updates[1].ID})
+	snaps := &fakeSnapshots{svc: e.svc}
+	e.svc.d.Snapshots = snaps
+	started, err := e.svc.ApplyUpdates(rev.CheckID, []string{rev.Updates[0].ID, rev.Updates[1].ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := eng.Wait(ctx, job); err != nil {
+	if err := eng.Wait(ctx, started.Job); err != nil {
 		t.Fatal(err)
+	}
+	if started.Snapshot != "s1" || len(snaps.taken) != 1 {
+		t.Fatalf("snapshot %+v %+v", started, snaps.taken)
+	}
+	if r := snaps.taken[0]; r.Title != "updating 2 mods" || !slices.Contains(r.Scope, "rel:mods/alpha.jar") ||
+		!slices.Contains(r.Scope, ScopeProject("modrinth", "PB")) || len(snaps.saw) != 1 || snaps.saw[0].SHA1 != oldSHA {
+		t.Fatalf("the snapshot must see the old file: %+v %+v", r, snaps.saw)
 	}
 	mods := filepath.Join(e.game, "mods")
 	for name, want := range map[string]bool{"alpha-2.0.jar.disabled": true, "alpha.jar.disabled": false, "betalib-1.0.jar": true} {
@@ -128,7 +138,7 @@ func TestCheckReviewApply(t *testing.T) {
 	if pw, ok := pws["alpha-2.0.jar"]; !ok || pw.Modrinth.Version != "a2" {
 		t.Fatalf("metadata %+v", pws)
 	}
-	if a := e.svc.Activity(e.id); len(a) == 0 || a[0].Title != "Updated 2 mods" {
+	if a := e.svc.Activity(e.id); len(a) == 0 || a[0].Title != "Updated 2 mods" || a[0].Snapshot != "s1" {
 		t.Fatalf("%+v", a)
 	}
 	rows = e.list(Mods)
@@ -264,11 +274,11 @@ func TestUpdateUnderTheSameName(t *testing.T) {
 	if err != nil || len(rev.Updates) != 1 {
 		t.Fatalf("%+v %v", rev, err)
 	}
-	job, err := e.svc.ApplyUpdates(rev.CheckID, []string{rev.Updates[0].ID})
+	started, err := e.svc.ApplyUpdates(rev.CheckID, []string{rev.Updates[0].ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := eng.Wait(ctx, job); err != nil {
+	if err := eng.Wait(ctx, started.Job); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(filepath.Join(e.game, "mods", "alpha.jar")) //nolint:gosec // test temp dir
@@ -280,5 +290,43 @@ func TestUpdateUnderTheSameName(t *testing.T) {
 	}
 	if info, err := os.Stat(e.svc.d.Store.Path(oldSHA)); err == nil && info.Mode().Perm()&0o222 != 0 {
 		t.Fatal("the old blob must stay sealed")
+	}
+}
+
+// fakeSnapshots records the snapshots content asks for and what the
+// instance had at that moment.
+type fakeSnapshots struct {
+	svc   *Service
+	taken []SnapshotReq
+	saw   []StateItem
+}
+
+func (f *fakeSnapshots) NewID() string { return "s1" }
+
+func (f *fakeSnapshots) Take(ctx context.Context, id string, r SnapshotReq) error {
+	st, err := f.svc.State(ctx, id, true)
+	f.taken, f.saw = append(f.taken, r), st.Items
+	return err
+}
+
+func TestValidItemRel(t *testing.T) {
+	for rel, want := range map[string]bool{
+		"mods/a.jar": true, "mods/a.jar.disabled": true, "mods/A.JAR": true, "mods/sub/a.jar": false, "mods/a.zip": false,
+		"../mods/a.jar": false, "mods/../a.jar": false, "/mods/a.jar": false, "mods\\a.jar": false, "mods/.a.jar": false,
+		"mods/a.jar" + instance.NewSuffix: false, "config/a.jar": false,
+	} {
+		if got := ValidItemRel(Mods, rel); got != want {
+			t.Errorf("mods %q = %v", rel, got)
+		}
+	}
+	for rel, want := range map[string]bool{
+		"saves/World/datapacks/p.zip": true, "saves/../datapacks/p.zip": false, "saves/World/p.zip": false, "saves/.x/datapacks/p.zip": false,
+	} {
+		if got := ValidItemRel(DataPacks, rel); got != want {
+			t.Errorf("datapacks %q = %v", rel, got)
+		}
+	}
+	if ValidItemRel("nope", "mods/a.jar") || !ValidItemRel(Shaders, "shaderpacks/s.zip") {
+		t.Error("kinds")
 	}
 }

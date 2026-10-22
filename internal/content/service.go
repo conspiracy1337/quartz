@@ -37,7 +37,9 @@ type Deps struct {
 	// Picture maps a platform picture URL to its same-origin address ("" to
 	// drop it); nil leaves pictures out.
 	Picture func(url string) string
-	Log     *slog.Logger
+	// Snapshots keeps instances as they were before changes; nil keeps none.
+	Snapshots Snapshotter
+	Log       *slog.Logger
 }
 
 // Changed is the content:changed payload.
@@ -111,7 +113,7 @@ func (s *Service) emit(id string, k Kind) {
 // base is the folder an instance's items of kind k live under: the game
 // folder, or the shared folder when the instance shares theirs. Item paths
 // (Entry.Rel) are relative to it either way.
-func (s *Service) base(id string, k Kind) string { return s.d.Instances.Base(id, k.top()) }
+func (s *Service) base(id string, k Kind) string { return s.d.Instances.Base(id, k.Top()) }
 
 // abs is where an instance-relative path really is.
 func (s *Service) abs(id, rel string) string { return s.d.Instances.Path(id, rel) }

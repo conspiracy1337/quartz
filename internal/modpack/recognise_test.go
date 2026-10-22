@@ -87,7 +87,7 @@ func TestRecogniseFindsTheInstalledVersion(t *testing.T) {
 	}
 	// A pack linked without a manifest (a recorded link) gets one from its
 	// installed version at the first review.
-	_ = os.Remove(filepath.Join(env.insts.Dir(in.ID), manifestName))
+	_ = os.Remove(filepath.Join(env.insts.Dir(in.ID), ManifestName))
 	d, err := env.svc.Diff(ctx, in.ID, "V3")
 	if err != nil || d.To != "3.0" || len(d.Rows) != 2 {
 		t.Fatalf("diff %+v %v", d, err)

@@ -3,7 +3,8 @@
   import { api } from '$lib/api';
   import type { ContentKind, Instance, ModUpdate, UpdateReview } from '$lib/api/types';
   import { hasBridge } from '$lib/bridge';
-  import { bytes } from '$lib/format';
+  import { bytes, plural } from '$lib/format';
+  import { undoable } from '$lib/instanceActions';
   import { prefs } from '$lib/prefs.svelte';
   import { lastCount, rememberCount, skeletonRows } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
@@ -91,9 +92,10 @@
     if (!review || busy) return;
     busy = true;
     try {
-      const job = await api.content.apply(review.checkId, chosen.map((u) => u.id));
+      const started = await api.content.apply(review.checkId, chosen.map((u) => u.id));
       api.content.forget(i.id, kind);
-      if (job) await tasks.load();
+      if (started.job) await tasks.load();
+      void undoable(i.id, started, count === 1 ? chosen[0]!.name : plural(count, kind === 'mods' ? 'mod' : 'item'), 'updated');
       go({ name: 'instance', id: i.id, tab: kind });
     } catch (e) {
       session.fail('Update', e);

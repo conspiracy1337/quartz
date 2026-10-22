@@ -315,15 +315,16 @@ func newer(v modplatform.Version, have *Ident, src modplatform.Source, project s
 }
 
 // ApplyInstall downloads the plan's version and its dependencies, except the
-// ones skipped, and puts them in place as one job.
-func (s *Service) ApplyInstall(planID string, skip []string) (string, error) {
+// ones skipped, and puts them in place as one job. An install that replaces
+// or turns on items the instance has takes a snapshot first.
+func (s *Service) ApplyInstall(planID string, skip []string) (Started, error) {
 	pl, err := s.plan(planID)
 	if err != nil {
-		return "", err
+		return Started{}, err
 	}
 	main, ok := pl.items["main"]
 	if !ok {
-		return "", ErrNoVersion
+		return Started{}, ErrNoVersion
 	}
 	var picked []*planned
 	for _, key := range pl.order {
@@ -335,7 +336,7 @@ func (s *Service) ApplyInstall(planID string, skip []string) (string, error) {
 	}
 	in, err := s.d.Instances.Get(pl.inst)
 	if err != nil {
-		return "", err
+		return Started{}, err
 	}
 	title := "Installing " + main.name
 	if main.item != "" {
@@ -348,6 +349,7 @@ func (s *Service) ApplyInstall(planID string, skip []string) (string, error) {
 			enable = append(enable, item)
 		}
 	}
+	var scope []string
 	if len(enable) > 0 {
 		finish = func(ctx context.Context) error {
 			for _, item := range enable {
@@ -357,8 +359,21 @@ func (s *Service) ApplyInstall(planID string, skip []string) (string, error) {
 			}
 			return nil
 		}
+		for _, item := range enable {
+			if e, err := s.entry(pl.inst, item); err == nil {
+				scope = append(scope, ScopeRel(e.Rel))
+			}
+		}
 	}
-	return s.submit(pl.inst, pl.kind, title, in.Name, picked, func() {
+	var snap *SnapshotReq
+	if replaces(picked) || len(enable) > 0 {
+		doing := "installing " + main.name
+		if main.item != "" {
+			doing = fmt.Sprintf("changing %s to %s", main.name, main.v.Number)
+		}
+		snap = s.snapshot(doing, "install", scopeOf(picked, scope...))
+	}
+	job, err := s.submit(pl.inst, pl.kind, title, in.Name, picked, func() {
 		names := make([]string, len(picked))
 		for i, pi := range picked {
 			names[i] = pi.name
@@ -367,8 +382,20 @@ func (s *Service) ApplyInstall(planID string, skip []string) (string, error) {
 		if main.item != "" {
 			a = Activity{Kind: "updated", Title: fmt.Sprintf("Changed %s to %s", main.name, main.v.Number)}
 		}
+		a.Snapshot = snap.id()
 		s.record(pl.inst, a)
-	}, finish)
+	}, finish, snap)
+	return Started{Job: job, Snapshot: snap.id()}, err
+}
+
+// replaces reports whether any planned file replaces an item the instance has.
+func replaces(picked []*planned) bool {
+	for _, pi := range picked {
+		if pi.item != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // installDir is where a new item of a kind goes.

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"quartz/internal/content"
 	"quartz/internal/core/hashx"
 	"quartz/internal/instance"
 	"quartz/internal/modplatform"
@@ -167,12 +168,21 @@ func TestUpdateKeepsEdits(t *testing.T) {
 	saves := filepath.Join(game, "saves", "World")
 	_ = os.MkdirAll(saves, 0o700)
 	_ = os.WriteFile(filepath.Join(saves, "level.dat"), []byte("lvl"), 0o600)
-	job, err := env.svc.Update(ctx, in.ID, "", true)
+	snaps := &recordSnapshots{game: game}
+	env.svc.u.Snapshots = snaps
+	started, err := env.svc.Update(ctx, in.ID, "", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := env.eng.Wait(ctx, job); err != nil {
+	if err := env.eng.Wait(ctx, started.Job); err != nil {
 		t.Fatal(err)
+	}
+	if started.Snapshot != "s1" || len(snaps.taken) != 1 || snaps.taken[0].Title != "updating Pack to 2.0" {
+		t.Fatalf("snapshot %+v %+v", started, snaps.taken)
+	}
+	if files := snaps.taken[0].Files; !slices.Contains(files, "config/x.toml") || !slices.Contains(files, "config/z.toml") ||
+		!slices.Contains(snaps.taken[0].Scope, content.ScopePack) || snaps.x != "x1" {
+		t.Fatalf("the snapshot must name the pack's files and see them as they were: %+v (x %q)", snaps.taken[0], snaps.x)
 	}
 	read := func(rel string) string {
 		b, err := os.ReadFile(filepath.Join(game, rel)) //nolint:gosec // test
@@ -215,15 +225,15 @@ func TestStem(t *testing.T) {
 func TestUpdateRollsBackOnFailure(t *testing.T) {
 	ctx, env, in, game := packUpdate(t)
 	// b.jar can't be set aside: a folder sits where its old copy would go.
-	_ = os.MkdirAll(filepath.Join(game, "mods", "b.jar"+oldSuffix, "x"), 0o700)
+	_ = os.MkdirAll(filepath.Join(game, "mods", "b.jar"+instance.OldSuffix, "x"), 0o700)
 	if av := env.svc.CheckUpdates(ctx); len(av) != 1 {
 		t.Fatalf("available %+v", av)
 	}
-	job, err := env.svc.Update(ctx, in.ID, "", false)
+	started, err := env.svc.Update(ctx, in.ID, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := env.eng.Wait(ctx, job); err == nil {
+	if err := env.eng.Wait(ctx, started.Job); err == nil {
 		t.Fatal("the update succeeded")
 	}
 	read := func(rel string) string {
@@ -234,7 +244,7 @@ func TestUpdateRollsBackOnFailure(t *testing.T) {
 		return string(b)
 	}
 	for rel, want := range map[string]string{"mods/a.jar.disabled": "A1", "mods/b.jar": "B1", "mods/c.jar": "<missing>",
-		"config/x.toml": "x1", "config/y.toml": "mine", "config/z.toml": "<missing>", "config/x.toml" + newSuffix: "<missing>"} {
+		"config/x.toml": "x1", "config/y.toml": "mine", "config/z.toml": "<missing>", "config/x.toml" + instance.NewSuffix: "<missing>"} {
 		if got := read(rel); got != want {
 			t.Errorf("%s = %q, want %q", rel, got, want)
 		}
@@ -270,4 +280,20 @@ func TestNewestStaysOnTheInstancesLine(t *testing.T) {
 	if !onLine(modplatform.Version{Game: []string{"1.20.1"}, Loaders: []string{"mrpack"}}, in) {
 		t.Fatal("a version naming no loader was ruled out")
 	}
+}
+
+// recordSnapshots records the snapshots an update asks for, and a config
+// file as it was at that moment.
+type recordSnapshots struct {
+	game  string
+	taken []content.SnapshotReq
+	x     string
+}
+
+func (r *recordSnapshots) NewID() string { return "s1" }
+
+func (r *recordSnapshots) Take(_ context.Context, _ string, req content.SnapshotReq) error {
+	b, _ := os.ReadFile(filepath.Join(r.game, "config", "x.toml")) //nolint:gosec // test
+	r.taken, r.x = append(r.taken, req), string(b)
+	return nil
 }

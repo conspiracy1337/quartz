@@ -60,11 +60,11 @@ func TestPlanAndApplyInstallWithDependencies(t *testing.T) {
 			t.Fatalf("dep %d = %+v, want %+v", i, d, w)
 		}
 	}
-	job, err := e.svc.ApplyInstall(pl.PlanID, []string{"dep-modrinth-PO"}) // Indium left out
+	started, err := e.svc.ApplyInstall(pl.PlanID, []string{"dep-modrinth-PO"}) // Indium left out
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := eng.Wait(ctx, job); err != nil {
+	if err := eng.Wait(ctx, started.Job); err != nil {
 		t.Fatal(err)
 	}
 	for name, want := range map[string]bool{"iris-1.8.jar": true, "sodium-0.6.jar": true, "indium-1.0.jar": false} {
@@ -154,14 +154,14 @@ func TestBlockedFileWaitsForTheDownloadsFolder(t *testing.T) {
 	if err != nil || !pl.Blocked {
 		t.Fatalf("plan %+v %v", pl, err)
 	}
-	job, err := e.svc.ApplyInstall(pl.PlanID, nil)
+	started, err := e.svc.ApplyInstall(pl.PlanID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	waiting := func() bool {
 		for _, j := range eng.Snapshot().Active {
 			for _, st := range j.Steps {
-				if j.ID == job && st.State == tasks.StepWarn && st.Name == "1 mod needs a manual download" {
+				if j.ID == started.Job && st.State == tasks.StepWarn && st.Name == "1 mod needs a manual download" {
 					return true
 				}
 			}
@@ -173,7 +173,7 @@ func TestBlockedFileWaitsForTheDownloadsFolder(t *testing.T) {
 			t.Fatal("no waiting step")
 		}
 	}
-	if v, err := e.svc.d.Manual.View(job); err != nil || len(v.Items) != 1 || v.Items[0].Name != "Balm" {
+	if v, err := e.svc.d.Manual.View(started.Job); err != nil || len(v.Items) != 1 || v.Items[0].Name != "Balm" {
 		t.Fatalf("view %+v %v", v, err)
 	}
 	if !e.svc.Busy(e.id) {
@@ -184,7 +184,7 @@ func TestBlockedFileWaitsForTheDownloadsFolder(t *testing.T) {
 	}
 	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if err := eng.Wait(wctx, job); err != nil {
+	if err := eng.Wait(wctx, started.Job); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(e.game, "mods", "balm-1.0.jar")); err != nil {
@@ -246,11 +246,11 @@ func TestInstallDependencyEdges(t *testing.T) {
 		t.Errorf("the pinned version must be used, not the newest")
 	}
 	eng := e.withTasks(cdn{main.File.URL: mainJar, beta.File.URL: betaJar, pinned.File.URL: pinnedJar})
-	job, err := e.svc.ApplyInstall(pl.PlanID, []string{"dep-modrinth-PV"}) // a required one left out
+	started, err := e.svc.ApplyInstall(pl.PlanID, []string{"dep-modrinth-PV"}) // a required one left out
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := eng.Wait(ctx, job); err != nil {
+	if err := eng.Wait(ctx, started.Job); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(e.game, "mods", "pinned.jar")); err == nil {

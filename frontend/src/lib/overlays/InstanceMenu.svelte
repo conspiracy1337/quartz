@@ -47,6 +47,7 @@
     <button class="mi" role="menuitem" onclick={() => act(() => duplicate(i))}><Icon name="plus" size={14} /><span>Duplicate</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'shortcut', instanceId: i.id }))}><Icon name="link" size={14} /><span>Create shortcut…</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => repair(i))}><Icon name="refresh" size={14} /><span>Repair game files</span><span></span></button>
+    <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'rollback', instanceId: i.id }))}><Icon name="rotate-left" size={14} /><span>Roll back…</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => move(i))}><Icon name="folder" size={14} /><span>Move game folder</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => trash(i))}><Icon name="trash" size={14} /><span>Delete</span><span></span></button>
   {/if}

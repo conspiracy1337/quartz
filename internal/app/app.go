@@ -82,6 +82,7 @@ import (
 	"quartz/internal/settings"
 	"quartz/internal/shortcuts"
 	"quartz/internal/skins"
+	"quartz/internal/snapshot"
 	"quartz/internal/syncing"
 	"quartz/internal/theme"
 	"quartz/internal/update"
@@ -130,6 +131,10 @@ type app struct {
 	sandbox   *sandbox.Service
 	host      *host.Service
 	content   *content.Service
+	snapshots *snapshot.Service
+	// refs are the blobs anything still uses (instances and snapshots), for
+	// the store's cleanup.
+	refs      store.Refs
 	platforms []modplatform.Platform // Modrinth first, then CurseForge
 	manual    *manual.Service        // files only the CurseForge website serves
 	store     *store.Store
@@ -225,7 +230,8 @@ func Run(o Options) error {
 				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Unwatch: a.gameWatch.Forget, Rewatch: a.gameWatch.Watch, Worlds: a.worlds, Servers: a.servers,
 				Syncing: a.syncing, Shortcuts: a.shortcuts, Follow: a.follow, Opens: a.opens, Blobs: a.store,
 			}),
-			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
+			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Refs: a.refs, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),
+			api.NewSnapshots(a.ctx, api.SnapshotsDeps{Service: a.snapshots, Runs: a.launcher.Runs, Hosting: a.host.Running, Busy: a.launcher.Busy, Content: a.content}),
 			api.NewBrowse(a.ctx, a.browse, a.worlds),
 			api.NewImports(a.ctx, api.ImportsDeps{Reader: a.packRead, Packs: a.packs, Drops: a.drops, Opens: a.opens, Picture: a.pictures.Src, Icons: a.icons, Banners: a.banners}),
 			api.NewModpacks(a.ctx, api.ModpacksDeps{Packs: a.packs, Busy: a.launcher.Busy}),
@@ -444,6 +450,7 @@ func (a *app) buildTasks() error {
 		Views:     runview.New(runview.Config{Retitle: worlds.Retitle, Log: a.log}),
 		Hosted:    func(id, folder string) bool { return a.host.HostedWorld(id) == folder },
 		Sandbox:   a.sandbox, StoreRead: storeRead,
+		Around: a.snapshots.Around,
 	})
 	a.host = host.New(host.Deps{
 		Instances: a.instances, Installer: a.installer, Java: a.java, Tasks: eng, Content: a.content, Store: a.store,
@@ -558,7 +565,7 @@ func (a *app) buildBrowse(dl *download.Downloader) {
 				_ = a.content.Scan(ctx, id, k) // a failed scan runs again when a tab opens
 			}
 		},
-	}, modpack.UpdateDeps{Known: a.content.Known, Record: a.content.Record, Channel: channel})
+	}, modpack.UpdateDeps{Known: a.content.Known, Record: a.content.Record, Channel: channel, Snapshots: a.snapshots, Track: a.content.Track})
 	a.follow = follow.New(follow.Deps{
 		Instances: a.instances.List, Latest: a.behind, Running: func(id string) bool { return a.launcher.Busy(id) }, Bus: a.bus,
 		Compat: func(ctx context.Context, id, mc string) (content.Compat, error) {
@@ -632,10 +639,17 @@ func (a *app) buildContent() error {
 		Platforms: providers,
 		Manual:    a.manual,
 		Picture:   a.pictures.Src,
+		Snapshots: lateSnapshots{a},
 	}, a.paths.Content())
 	if err != nil {
 		return fmt.Errorf("loading content: %w", err)
 	}
+	a.snapshots = snapshot.New(snapshot.Deps{
+		Instances: a.instances, Content: a.content, Store: a.store, Bus: a.bus, Log: a.log,
+		Enabled: func() bool { return a.settings.Get().Storage.Snapshots },
+	})
+	a.refs = store.Union(a.content.Refs, a.snapshots.Refs)
+	a.watchSnapshots()
 	exe, err := desktop.Executable()
 	if err != nil {
 		a.log.Warn("can't find the launcher's program file: no shortcuts", "err", err)
@@ -655,6 +669,27 @@ func (a *app) buildContent() error {
 		a.log.Info("CurseForge is not set up in this build", "env", brand.EnvCurseForgeKey)
 	}
 	return nil
+}
+
+// lateSnapshots hands content the snapshot service, which is built after it.
+type lateSnapshots struct{ a *app }
+
+func (l lateSnapshots) NewID() string { return l.a.snapshots.NewID() }
+func (l lateSnapshots) Take(ctx context.Context, id string, r content.SnapshotReq) error {
+	return l.a.snapshots.Take(ctx, id, r)
+}
+
+// watchSnapshots deletes the snapshots nobody kept as soon as snapshots are
+// turned off.
+func (a *app) watchSnapshots() {
+	on := a.settings.Get().Storage.Snapshots
+	a.bus.Subscribe(events.SettingsChanged, func(p any) {
+		next := p.(settings.Settings).Storage.Snapshots
+		if on && !next {
+			safe.Go(a.log, "purge snapshots", func() { a.snapshots.Purge(time.Now()) })
+		}
+		on = next
+	})
 }
 
 // gameStarted hides the launcher until the game exits when the player asked
@@ -744,6 +779,7 @@ func (a *app) startup(ctx context.Context) {
 	a.reportCrash()
 	a.stopCheck = a.scheduleUpdates()
 	a.stopPurge = a.purgeTrash()
+	a.snapshots.Start()
 	a.stopPacks = a.checkPacks()
 	wruntime.OnFileDrop(ctx, a.drops.Receive)
 	a.act(a.args)
@@ -823,7 +859,8 @@ func (a *app) cleanup() {
 		a.log.Info("emptied old trash", "instances", n)
 	}
 	a.syncing.PurgeTrash(time.Now())
-	if freed, n, err := a.store.GC(a.content.Refs, storeGrace); err != nil {
+	a.snapshots.Purge(time.Now())
+	if freed, n, err := a.store.GC(a.refs, storeGrace); err != nil {
 		a.log.Warn("cleaning the content store failed", "err", err)
 	} else if n > 0 {
 		a.log.Info("cleaned the content store", "files", n, "bytes", freed)
@@ -837,6 +874,7 @@ func (a *app) shutdown(context.Context) {
 	if a.stopPacks != nil {
 		a.stopPacks()
 	}
+	a.snapshots.Close()
 	if a.stopCheck != nil {
 		a.stopCheck()
 	}

@@ -3,8 +3,8 @@
 // "<key>:changed" event inside the app, or by the screen that made the change.
 import { onEvent } from './bridge';
 
-export type RevKey = 'accounts' | 'instances' | 'content' | 'modpacks' | 'manual' | 'worlds' | 'servers' | 'screenshots' | 'sync';
-const KEYS: RevKey[] = ['accounts', 'instances', 'content', 'modpacks', 'manual', 'worlds', 'servers', 'screenshots', 'sync'];
+export type RevKey = 'accounts' | 'instances' | 'content' | 'modpacks' | 'manual' | 'worlds' | 'servers' | 'screenshots' | 'sync' | 'snapshots';
+const KEYS: RevKey[] = ['accounts', 'instances', 'content', 'modpacks', 'manual', 'worlds', 'servers', 'screenshots', 'sync', 'snapshots'];
 
 class Revisions {
   accounts = $state(0);
@@ -16,6 +16,7 @@ class Revisions {
   servers = $state(0);
   screenshots = $state(0);
   sync = $state(0);
+  snapshots = $state(0);
 
   /** Reads the keys (so the calling query tracks them), then loads. */
   load<T>(keys: RevKey | RevKey[], fn: () => Promise<T>): Promise<T> {

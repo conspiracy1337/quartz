@@ -205,7 +205,7 @@ func (s *Service) Placer(id string) func(rel, dst string) (bool, error) {
 }
 
 // Busy reports whether a content job for the instance (install, update,
-// version switch) is still queued, waiting or running: its folder must stay
+// version switch, modpack update) is still queued, waiting or running: its folder must stay
 // where it is until the job ends.
 func (s *Service) Busy(id string) bool {
 	s.jobsMu.Lock()
@@ -222,8 +222,9 @@ func (s *Service) Busy(id string) bool {
 	return false
 }
 
-// tracked remembers a job submitted for an instance, dropping ones that ended.
-func (s *Service) tracked(inst, job string) {
+// Track remembers a job submitted for an instance (by this service or
+// another, such as a modpack update), dropping ones that ended.
+func (s *Service) Track(inst, job string) {
 	active := map[string]bool{}
 	for _, j := range s.d.Tasks.Snapshot().Active {
 		active[j.ID] = true

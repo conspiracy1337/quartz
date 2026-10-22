@@ -91,11 +91,13 @@ export interface TrashEntry { key: string; id: string; name: string; art: Art; i
 export type ActivityKind = 'session' | 'change';
 export interface ActivityEvent {
   kind: ActivityKind;
-  icon: 'play' | 'arrow-up' | 'plus' | 'warn' | 'camera' | 'trash';
+  icon: 'play' | 'arrow-up' | 'plus' | 'warn' | 'camera' | 'trash' | 'rotate-left';
   tone: 'muted' | 'accent' | 'danger';
   title: string;
   detail: string;
   at: number;
+  /** The snapshot taken before this change, to roll it back. */
+  snapshot?: string;
 }
 
 export interface PendingUpdate { name: string; art: Art; from: string; to: string }
@@ -154,7 +156,30 @@ export interface Compat { matching: number; total: number; unknown?: number }
 /** What a version switch did with the mods. */
 export interface SwitchResult { job: string; updated: number; disabled: string[]; unknown: string[] }
 /** A content change in the Overview feed (Go's log of additions, updates and removals). */
-export interface ContentChange { at: number; kind: 'added' | 'updated' | 'removed'; title: string; detail: string }
+export interface ContentChange { at: number; kind: 'added' | 'updated' | 'removed' | 'rolledback'; title: string; detail: string; snapshot?: string }
+
+// ---- snapshots ----
+/** A change running as a job, and the snapshot taken before it ("" or absent when snapshots are off). */
+export interface Started { job: string; snapshot?: string }
+/** An instance as it was before a change; `expires` is absent when kept. */
+export interface SnapshotSummary { id: string; at: number; title: string; reason: string; keep: boolean; expires?: number; size: number }
+/** One change a rollback can undo: `from` is now, `to` how the snapshot has it. */
+export interface SnapshotRow {
+  key: string;
+  /** A content kind, or version | pack | packs | shader | files. */
+  kind: string;
+  change: 'changed' | 'enable' | 'disable' | 'restore' | 'remove' | 'set';
+  name: string;
+  from?: string;
+  to?: string;
+  icon?: string;
+  detail?: string;
+  /** What the change after the snapshot touched: ticked to start with. */
+  default: boolean;
+  unavailable?: string;
+}
+export interface SnapshotDiff { snapshot: SnapshotSummary; rows: SnapshotRow[]; shared?: string[]; partial?: string[]; undoable: boolean }
+export interface RollbackResult { restored: number; snapshot?: string }
 
 // ---- home ----
 export interface Alert { tone: 'warn' | 'info'; subject: string; text: string; action: string; target: AlertTarget }

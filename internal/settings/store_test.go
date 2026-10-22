@@ -40,3 +40,22 @@ func TestSuggestedMaxMemory(t *testing.T) {
 		}
 	}
 }
+
+func TestSnapshotsAreOnUnlessTurnedOff(t *testing.T) {
+	dir := t.TempDir()
+	partial := filepath.Join(dir, "partial.json")
+	if err := os.WriteFile(partial, []byte(`{"general":{"setupDone":true}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Open(partial, events.NewBus(), nil)
+	if err != nil || !st.Get().Storage.Snapshots {
+		t.Fatal("a file without the setting keeps snapshots on", err)
+	}
+	off := filepath.Join(dir, "off.json")
+	if err := os.WriteFile(off, []byte(`{"storage":{"snapshots":false}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := Open(off, events.NewBus(), nil); err != nil || st.Get().Storage.Snapshots {
+		t.Fatal("turning snapshots off sticks", err)
+	}
+}

@@ -32,7 +32,9 @@ export type Overlay =
   | { kind: 'rename'; instanceId: string }
   | { kind: 'look'; instanceId: string }
   | { kind: 'shortcut'; instanceId: string }
-  | { kind: 'export'; instanceId: string };
+  | { kind: 'export'; instanceId: string }
+  /** Roll back to a snapshot (one picked, or the newest). */
+  | { kind: 'rollback'; instanceId: string; snapshot?: string };
 
 export type AddAccountMode = 'browser' | 'code' | 'offline';
 

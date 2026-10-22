@@ -11,7 +11,7 @@ import * as misc from './mock/misc';
 import type {
   BulkCheck,
   AddResult, Art, Compat, ContentChange, ContentInfo, ContentItem, ContentKind, ContentStatus,
-  PendingUpdate, Source, StoreUsage, UpdateReview, ChangelogVersion,
+  PendingUpdate, Source, Started, StoreUsage, UpdateReview, ChangelogVersion,
 } from './types';
 
 /** The kinds the content service manages; worlds and servers have their own services. */
@@ -160,8 +160,8 @@ export const contentApi = {
   changelog: bridged(Go.Changelog, mock.changelog),
   /** Checks the mods of every instance; lists the ones with updates. */
   checkAll: bridged(Go.CheckAll, (): BulkCheck[] => [{ instanceId: 'fo', name: 'Fabulously Optimized', updates: 2 }]),
-  /** Starts the update job; resolves with its id. */
-  apply: bridged(Go.ApplyUpdates, (_check: string, _ids: string[]) => ''),
+  /** Starts the update job after a snapshot; resolves with both. */
+  apply: bridged(Go.ApplyUpdates, (_check: string, _ids: string[]): Started => ({ job: '' })),
   compatibility: bridged(
     (id: string, mc: string, loader: string) => Go.Compatibility(id, mc, loader),
     (_id: string, mc: string, _loader: string): Compat | null => (mc.startsWith('1.21') ? { matching: 41, total: 48 } : null),

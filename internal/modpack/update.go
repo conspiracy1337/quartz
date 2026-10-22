@@ -45,6 +45,11 @@ type UpdateDeps struct {
 	// Record adds an activity entry to an instance.
 	Record  func(id string, a content.Activity)
 	Channel func() modplatform.Channel
+	// Snapshots keeps the instance as it was before an update; nil keeps none.
+	Snapshots content.Snapshotter
+	// Track marks an update job as the instance's, so its folder stays put
+	// until the job ends (content.Service.Track); nil in tests.
+	Track func(id, job string)
 }
 
 // Available is a newer version of an instance's pack.
@@ -758,37 +763,43 @@ func (s *Service) changelog(ctx context.Context, o Origin) string {
 
 // Update moves an instance to the reviewed version (version, or the one the
 // last check offered when "") as one job: an optional world backup, the new
-// files, any manual downloads and the game, then the three-way update of
-// the game folder.
-func (s *Service) Update(ctx context.Context, id, version string, backupWorlds bool) (string, error) {
+// files, any manual downloads and the game, then a snapshot and the
+// three-way update of the game folder.
+func (s *Service) Update(ctx context.Context, id, version string, backupWorlds bool) (content.Started, error) {
 	in, err := s.d.Instances.Get(id)
 	if err != nil {
-		return "", err
+		return content.Started{}, err
 	}
 	if in.Pack == nil || in.InPlace {
-		return "", ErrNoPack
+		return content.Started{}, ErrNoPack
 	}
 	next, err := s.next(ctx, in, version)
 	if err != nil {
-		return "", err
+		return content.Started{}, err
 	}
 	target, err := s.target(ctx, next)
 	if err != nil {
-		return "", err
+		return content.Started{}, err
 	}
 	work := filepath.Join(s.d.Staging, newToken())
 	if err := os.MkdirAll(work, 0o700); err != nil {
-		return "", err
+		return content.Started{}, err
 	}
 	meta := tasks.Meta{Title: in.Name, Subtitle: "Updating to " + next.Version, Art: in.TaskArt(), Kind: "update"}
 	files, set, spec, err := s.filesSpec(meta, next, work)
 	if err != nil {
 		_ = os.RemoveAll(work)
-		return "", err
+		return content.Started{}, err
 	}
 	if err := s.d.Instances.CheckGameDir(id); err != nil {
 		_ = os.RemoveAll(work)
-		return "", err
+		return content.Started{}, err
+	}
+	var snap *content.SnapshotReq
+	if s.u.Snapshots != nil {
+		if sid := s.u.Snapshots.NewID(); sid != "" {
+			snap = &content.SnapshotReq{ID: sid, Title: fmt.Sprintf("updating %s to %s", next.Name, next.Version), Reason: "modpack"}
+		}
 	}
 	game := s.d.Instances.GameDir(id)
 	if backupWorlds {
@@ -801,7 +812,7 @@ func (s *Service) Update(ctx context.Context, id, version string, backupWorlds b
 		}))
 	}
 	spec.After("Updating", tasks.Count, tasks.Func("update the pack", func(ctx context.Context) error {
-		if err := s.apply(ctx, in, next, files, set, target, work); err != nil {
+		if err := s.apply(ctx, in, next, files, set, target, work, snap); err != nil {
 			return &netx.PermanentError{Err: err}
 		}
 		return nil
@@ -810,7 +821,7 @@ func (s *Service) Update(ctx context.Context, id, version string, backupWorlds b
 		g, err := s.d.Prepare(ctx, target, game, meta)
 		if err != nil {
 			_ = os.RemoveAll(work)
-			return "", err
+			return content.Started{}, err
 		}
 		if g != nil {
 			spec = g.Append(spec)
@@ -822,13 +833,20 @@ func (s *Service) Update(ctx context.Context, id, version string, backupWorlds b
 	}
 	if err != nil {
 		_ = os.RemoveAll(work)
-		return "", err
+		return content.Started{}, err
+	}
+	if s.u.Track != nil {
+		s.u.Track(id, job)
 	}
 	go func() { //nolint:gosec // G118: the job outlives the request
 		_ = s.d.Tasks.Wait(context.Background(), job)
 		_ = os.RemoveAll(work)
 	}()
-	return job, nil
+	started := content.Started{Job: job}
+	if snap != nil {
+		started.Snapshot = snap.ID
+	}
+	return started, nil
 }
 
 // commit records the new version: manifest, game and loader, pack. A step
@@ -901,8 +919,10 @@ func (s *Service) baseline(dir string, p *Pack) (Manifest, error) {
 	return m, writeManifest(dir, m)
 }
 
-// apply runs the three-way update in the game folder and records the new version.
-func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, files []planned, set *manual.Set, t install.Target, work string) error {
+// apply runs the three-way update in the game folder and records the new
+// version. snap (nil: none) keeps the instance as it was first, with the old
+// copies of every file the update changes.
+func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, files []planned, set *manual.Set, t install.Target, work string, snap *content.SnapshotReq) error {
 	old, err := s.manifest(ctx, in)
 	if err != nil {
 		return err
@@ -926,12 +946,24 @@ func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, f
 	}
 	abs := func(rel string) string { return s.d.Instances.Path(in.ID, rel) }
 	changes, _ := plan(old, want, diskOf(abs))
+	if snap != nil {
+		req := *snap
+		req.Scope = []string{content.ScopeVersion, content.ScopePack, content.ScopeFiles}
+		for _, c := range changes {
+			req.Scope = append(req.Scope, content.ScopeRel(c.rel))
+			req.Files = append(req.Files, c.rel)
+		}
+		if err := s.u.Snapshots.Take(ctx, in.ID, req); err != nil {
+			s.d.Log.Warn("modpack: snapshot before an update failed", "instance", in.ID, "err", err)
+			return content.ErrSnapshot
+		}
+	}
 	byPath := map[string]planned{}
 	for _, f := range files {
 		byPath[strings.TrimSuffix(f.Path, ".disabled")] = f
 	}
-	sw := newSwap(s.d.Instances, in.ID)
-	defer sw.close()
+	sw := instance.NewSwap(s.d.Instances, in.ID)
+	defer sw.Close()
 	// Every new file is placed beside its target first; only once all of
 	// them are there are the old ones swapped out, so a failure part way
 	// leaves the game folder as it was (XMCL stages its updates the same way).
@@ -946,14 +978,14 @@ func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, f
 		var err error
 		switch f, ok := byPath[c.rel]; {
 		case c.w.Layer:
-			err = sw.stage(name, func(dst string) error {
+			err = sw.Stage(name, func(dst string) error {
 				_, err := linkx.Place(filepath.Join(layers, filepath.FromSlash(c.rel)), dst, linkx.Options{NoHardlink: true, Perm: 0o600})
 				return err
 			})
 		case !ok || (f.Blocked() && set != nil && set.Skipped(f.SHA1)):
 			continue // nothing to put there: whatever is there stays
 		default:
-			err = sw.stage(name, func(dst string) error {
+			err = sw.Stage(name, func(dst string) error {
 				sum, err := s.blob(f)
 				if err == nil {
 					_, err = s.d.Store.Place(sum, dst)
@@ -962,7 +994,7 @@ func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, f
 			})
 		}
 		if err != nil {
-			sw.rollback()
+			sw.Rollback()
 			return err
 		}
 	}
@@ -971,11 +1003,11 @@ func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, f
 		if c.off {
 			name += ".disabled"
 		}
-		if c.act == actWrite && !sw.isStaged(name) {
+		if c.act == actWrite && !sw.IsStaged(name) {
 			continue // skipped above
 		}
-		if err := sw.replace(c.rel, name, c.act == actWrite); err != nil {
-			sw.rollback()
+		if err := sw.Replace(c.rel, name, c.act == actWrite); err != nil {
+			sw.Rollback()
 			return err
 		}
 	}
@@ -984,10 +1016,10 @@ func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, f
 		m.Files[rel] = ManifestFile{SHA1: w.SHA1, Layer: w.Layer, Off: w.Off}
 	}
 	if err := s.commit(in, next, t, old, m); err != nil {
-		sw.rollback()
+		sw.Rollback()
 		return err
 	}
-	sw.finish()
+	sw.Finish()
 	if s.d.Index != nil {
 		s.d.Index(ctx, in.ID)
 	}
@@ -996,7 +1028,11 @@ func (s *Service) apply(ctx context.Context, in instance.Instance, next *Pack, f
 	delete(s.pending, in.ID)
 	s.mu.Unlock()
 	if s.u.Record != nil {
-		s.u.Record(in.ID, content.Activity{Kind: "updated", Title: fmt.Sprintf("Updated %s to %s", next.Name, next.Version)})
+		a := content.Activity{Kind: "updated", Title: fmt.Sprintf("Updated %s to %s", next.Name, next.Version)}
+		if snap != nil {
+			a.Snapshot = snap.ID
+		}
+		s.u.Record(in.ID, a)
 	}
 	if s.d.Bus != nil {
 		s.d.Bus.Emit(events.InstancesChanged, nil)

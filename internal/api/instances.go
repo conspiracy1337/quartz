@@ -153,15 +153,19 @@ var (
 )
 
 // guard refuses changes to files a game, a hosted server or a content job
-// (install, update, version switch) is using.
-func (s *Instances) guard(id string) error {
-	if s.d.Hosting != nil && s.d.Hosting(id) {
+// (install, update, version switch, modpack update) is using.
+func (s *Instances) guard(id string) error { return guard(id, s.d.Hosting, s.d.Busy, s.d.Content) }
+
+// guard is the check every facade changing an instance's files makes.
+// hosting and c may be nil (tests).
+func guard(id string, hosting, busy func(id string) bool, c *content.Service) error {
+	if hosting != nil && hosting(id) {
 		return ErrHosting
 	}
-	if s.d.Busy(id) {
+	if busy(id) {
 		return ErrBusy
 	}
-	if s.d.Content != nil && s.d.Content.Busy(id) {
+	if c != nil && c.Busy(id) {
 		return ErrContentBusy
 	}
 	return nil

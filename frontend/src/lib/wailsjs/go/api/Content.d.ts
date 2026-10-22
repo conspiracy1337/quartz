@@ -9,9 +9,9 @@ export function AddDropped(arg1:string,arg2:string,arg3:string,arg4:string):Prom
 
 export function AddFiles(arg1:string,arg2:string,arg3:string):Promise<content.AddResult>;
 
-export function ApplyInstall(arg1:string,arg2:Array<string>):Promise<string>;
+export function ApplyInstall(arg1:string,arg2:Array<string>):Promise<content.Started>;
 
-export function ApplyUpdates(arg1:string,arg2:Array<string>):Promise<string>;
+export function ApplyUpdates(arg1:string,arg2:Array<string>):Promise<content.Started>;
 
 export function Changelog(arg1:string,arg2:string):Promise<Array<content.Notes>>;
 

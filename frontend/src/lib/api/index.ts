@@ -29,6 +29,7 @@ import { homeApi, logFilesApi, screenshotsApi, serversApi, worldsApi } from './g
 import { downloadsApi } from './downloads';
 import { hostApi } from './host';
 import { sandboxApi } from './sandbox';
+import { snapshotsApi } from './snapshots';
 import { app, settingsApi, updatesApi } from './system';
 
 export type { AppInfo, CustomCSSState, Settings } from './system';
@@ -106,6 +107,7 @@ export const api = {
     followOffers: () => revs.load('instances', bridged(InstancesGo.FollowOffers, (): FollowOffer[] => [])),
   },
   content: contentApi,
+  snapshots: snapshotsApi,
   home: {
     /** "Needs attention": sign-ins, the data folder, disk space, missing mod dependencies,
         modpack updates and newer releases, merged per kind (see alerts.ts). */

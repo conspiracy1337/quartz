@@ -3,7 +3,7 @@
   import type { ContentKind, InstallDep, InstallPlan, Src } from '../api/types';
   import { bytes, errorText, gb, plural } from '../format';
   import { CHANNEL_BADGE, LOADER_NAMES, PROJECT_TYPES } from '../labels';
-  import { downloading } from '../instanceActions';
+  import { downloading, undoable } from '../instanceActions';
   import { artOf, memoryShort } from '../look';
   import { prefs } from '../prefs.svelte';
   import { query } from '../query.svelte';
@@ -57,9 +57,10 @@
     busy = true;
     try {
       const skip = p.deps.filter((d) => !d.unavailable && !ticked(d)).map((d) => d.id);
-      const job = await api.browse.applyInstall(p.planId, skip);
+      const started = await api.browse.applyInstall(p.planId, skip);
       session.close();
-      await downloading(job);
+      await downloading(started.job);
+      if (p.replaces) void undoable(instanceId, started, p.name, `changed to ${p.version}`);
     } catch (e) {
       busy = false;
       session.notify({ tone: 'error', subject: `Couldn't install ${p.name}`, text: errorText(e) });

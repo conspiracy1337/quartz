@@ -43,7 +43,7 @@ func (s *Service) remove(id string, k Kind, items []string) (string, []string, e
 		return "", nil, err
 	}
 	if k != DataPacks {
-		if info, err := os.Lstat(filepath.Join(s.base(id, k), k.top())); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+		if info, err := os.Lstat(filepath.Join(s.base(id, k), k.Top())); err == nil && info.Mode()&fs.ModeSymlink != 0 {
 			return "", nil, ErrLinkedFolder
 		}
 	}

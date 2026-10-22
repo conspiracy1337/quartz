@@ -235,3 +235,40 @@ func TestCleanDeletesUnusedNow(t *testing.T) {
 		t.Fatal("a blob added moments ago was cleaned")
 	}
 }
+
+func TestReleaseFreesOnlyTheGivenUnusedBlobs(t *testing.T) {
+	s, game := open(t)
+	now := time.Unix(1_000_000, 0)
+	s.now = func() time.Time { return now }
+	blobs := map[string]hashx.Multi{}
+	for _, n := range []string{"gone", "used", "held", "other"} {
+		p := filepath.Join(game, n+".jar")
+		blobs[n] = file(t, p, n)
+		if _, err := s.Adopt(p, blobs[n]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now = now.Add(time.Hour)
+	fresh := file(t, filepath.Join(game, "fresh.jar"), "fresh")
+	if _, err := s.Adopt(filepath.Join(game, "fresh.jar"), fresh); err != nil {
+		t.Fatal(err)
+	}
+	release := s.Hold(blobs["held"].SHA1)
+	defer release()
+	refs := Union(
+		func(yield func(string)) error { yield(blobs["used"].SHA1); return nil },
+		func(func(string)) error { return nil },
+	)
+	ask := []string{blobs["gone"].SHA1, blobs["used"].SHA1, blobs["held"].SHA1, fresh.SHA1}
+	if _, n, err := s.Release(refs, ask, 10*time.Minute); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	if _, ok := s.Blob(blobs["gone"].SHA1); ok {
+		t.Fatal("an unused blob it was asked about was kept")
+	}
+	for _, h := range []string{blobs["used"].SHA1, blobs["held"].SHA1, blobs["other"].SHA1, fresh.SHA1} {
+		if _, ok := s.Blob(h); !ok {
+			t.Fatalf("blob %s was deleted", h)
+		}
+	}
+}

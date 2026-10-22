@@ -2,18 +2,22 @@
   import { api } from '../api';
   import { contentArt } from '../api/content';
   import type { CrashCause } from '../api/types';
-  import { plural } from '../format';
+  import { plural, since } from '../format';
+  import { undoable } from '../instanceActions';
   import { query } from '../query.svelte';
   import { go } from '../router.svelte';
   import { session } from '../session.svelte';
   import { tasks } from '../tasks.svelte';
   import Dialog from '../ui/Dialog.svelte';
+  import Icon from '../ui/Icon.svelte';
 
   /** A run's crash (runId) or a report in crash-reports (file), with its likely cause and fixes. */
   interface Props { instanceId: string; runId?: string | undefined; file?: string | undefined }
   let { instanceId, runId, file }: Props = $props();
   const inst = query(() => api.instances.get(instanceId));
   const info = query(() => (file ? api.logs.crashFile(instanceId, file) : api.logs.crash(instanceId, runId ?? '')));
+  // The newest change since the game last closed normally: likely what broke it.
+  const suspect = query(() => api.snapshots.suspect(instanceId));
   let busy = $state(false);
 
   const sub = $derived.by(() => {
@@ -39,10 +43,13 @@
         go({ name: 'instance', id: instanceId, tab: 'mods', sub: 'updates' });
         return;
       }
-      const job = await api.content.apply(review.checkId, [u.id]);
+      const started = await api.content.apply(review.checkId, [u.id]);
       api.content.forget(instanceId, 'mods');
       session.close();
-      if (await tasks.until(job)) relaunch();
+      if (await tasks.until(started.job)) {
+        relaunch();
+        void undoable(instanceId, started, c.mod.name, 'updated');
+      }
     } catch (e) {
       session.fail('Update', e);
     } finally {
@@ -63,6 +70,11 @@
     }
   }
 
+  /** Opens the rollback dialog on the change the crash came after. */
+  function rollBack(id: string) {
+    session.open({ kind: 'rollback', instanceId, snapshot: id });
+  }
+
   function report() {
     session.close();
     go({ name: 'instance', id: instanceId, tab: 'logs', sub: file ? 'files' : 'history' });
@@ -80,6 +92,15 @@
       <span style="display: flex; flex-direction: column; gap: 6px"><span style="font-weight: 500">{c.title}</span><span class="small muted">{c.text}</span>
         {#if c.fixes.length}<span style="display: flex; gap: 6px; margin-top: 4px">{#if c.fixes.includes('update')}<button class="btn btn-sm btn-accent" disabled={busy} onclick={() => update(c)}>Update and relaunch</button>{/if}{#if c.fixes.includes('disable')}<button class="btn btn-sm" disabled={busy} onclick={() => disable(c)}>Disable it and relaunch</button>{/if}</span>{/if}
       </span>
+    </div>
+  {/if}
+  {#if suspect.data}
+    {@const s = suspect.data}
+    <!-- Composed from the Install dialog's info card. -->
+    <div class="card" style="padding: 10px 12px; display: grid; grid-template-columns: 16px minmax(0,1fr) auto; gap: 10px; align-items: center; border-color: color-mix(in srgb, var(--info) 30%, var(--line))">
+      <Icon name="rotate-left" size={16} sw={1.8} color="var(--info)" />
+      <span class="small muted">{s.title.charAt(0).toUpperCase()}{s.title.slice(1)} {since(s.at)}, after the game last closed normally.</span>
+      <button class="btn btn-sm" onclick={() => rollBack(s.id)}>Roll back…</button>
     </div>
   {/if}
   {#if info.data}

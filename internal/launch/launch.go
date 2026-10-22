@@ -102,6 +102,9 @@ type Config struct {
 	// tests). StoreRead are the store folders a sandboxed game reads.
 	Sandbox   *sandbox.Service
 	StoreRead []string
+	// Around wraps a change the launch makes to the instance (the loader
+	// update): a snapshot first, an activity entry after. nil just changes it.
+	Around func(ctx context.Context, id, doing, done string, change func() error) error
 }
 
 // ModChecker summarises the mods a launch will load. It never blocks a
@@ -620,11 +623,24 @@ func (p *pipeline) updateLoader(ctx context.Context) string {
 		latest, err := p.l.cfg.Loaders.Latest(ctx, k, in.Minecraft)
 		cur := loader.Display(k, in.Minecraft, in.LoaderVersion)
 		if err == nil && latest.ID != in.LoaderVersion && version.Compare(latest.Name, cur) > 0 {
-			if updated, err := p.l.cfg.Instances.Update(in.ID, func(i *instance.Instance) error { i.LoaderVersion = latest.ID; return nil }); err == nil {
-				p.inst = updated
+			change := func() error {
+				updated, err := p.l.cfg.Instances.Update(in.ID, func(i *instance.Instance) error { i.LoaderVersion = latest.ID; return nil })
+				if err == nil {
+					p.inst = updated
+				}
+				return err
+			}
+			if around := p.l.cfg.Around; around != nil {
+				label := loader.Label(k, in.Minecraft, latest.ID)
+				err = around(ctx, in.ID, "updating "+label, "Updated "+label, change)
+			} else {
+				err = change()
+			}
+			if err == nil {
 				p.l.cfg.Bus.Emit(events.InstancesChanged, nil)
 				return "Updated to " + latest.Name
 			}
+			p.l.cfg.Log.Info("updating the loader failed; using the installed build", "instance", in.ID, "err", err)
 		}
 	}
 	return loader.Label(k, in.Minecraft, p.inst.LoaderVersion)

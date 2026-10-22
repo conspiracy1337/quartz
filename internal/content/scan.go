@@ -16,6 +16,7 @@ import (
 	"quartz/internal/content/packwiz"
 	"quartz/internal/core/archive"
 	"quartz/internal/core/hashx"
+	"quartz/internal/instance"
 )
 
 // Jars bigger than this are listed but never opened for metadata.
@@ -197,9 +198,9 @@ func openLinked(game, rel string) (*os.File, error) {
 }
 
 // partial names files still being written by a browser or the launcher
-// (a modpack update stages files as .quartz-new and .quartz-old).
+// (a modpack update or rollback stages files beside their targets).
 func partial(name string) bool {
-	for _, ext := range []string{".part", ".crdownload", ".tmp", ".download", ".quartz-new", ".quartz-old"} {
+	for _, ext := range []string{".part", ".crdownload", ".tmp", ".download", instance.NewSuffix, instance.OldSuffix} {
 		if strings.HasSuffix(strings.ToLower(name), ext) {
 			return true
 		}

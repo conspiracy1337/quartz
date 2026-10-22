@@ -2,6 +2,7 @@
   import { api } from '$lib/api';
   import type { DiffKind, Instance } from '$lib/api/types';
   import { errorText, plural } from '$lib/format';
+  import { undoable } from '$lib/instanceActions';
   import { query } from '$lib/query.svelte';
   import { go, href } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
@@ -47,8 +48,9 @@
   async function update() {
     busy = true;
     try {
-      const job = await api.modpacks.update(i.id, chosen, backup);
-      if (job) await tasks.load();
+      const started = await api.modpacks.update(i.id, chosen, backup);
+      if (started.job) await tasks.load();
+      void undoable(i.id, started, i.pack?.name ?? i.name, 'updated');
       go({ name: 'downloads' });
     } catch (e) {
       busy = false;

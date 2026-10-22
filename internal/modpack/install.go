@@ -525,20 +525,22 @@ type ManifestFile struct {
 	Off   bool   `json:"off,omitempty"`   // the pack ships it turned off
 }
 
-const manifestName = "modpack.json"
+// ManifestName is the file in an instance folder that records what its pack
+// put where.
+const ManifestName = "modpack.json"
 
 func writeManifest(dir string, m Manifest) error {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	return fsx.AtomicWrite(filepath.Join(dir, manifestName), b, fsx.FilePerm)
+	return fsx.AtomicWrite(filepath.Join(dir, ManifestName), b, fsx.FilePerm)
 }
 
 // ReadManifest reads an instance's pack manifest.
 func ReadManifest(dir string) (Manifest, error) {
 	var m Manifest
-	b, err := fsx.ReadCapped(filepath.Join(dir, manifestName), maxManifest)
+	b, err := fsx.ReadCapped(filepath.Join(dir, ManifestName), maxManifest)
 	if err == nil {
 		err = json.Unmarshal(b, &m)
 	}
