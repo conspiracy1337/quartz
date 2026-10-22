@@ -36,4 +36,15 @@ describe('session details', () => {
     ]);
     expect(feed[0]).toMatchObject({ icon: 'camera', tone: 'muted' });
   });
+
+  it('keeps the snapshot a change can be rolled back with', () => {
+    const feed = activityFeed([], [
+      { at: 2, kind: 'updated', title: 'Updated 2 mods', detail: '', snapshot: '1800000000000-a1b2' },
+      { at: 3, kind: 'rolledback', title: 'Rolled back to before updating 2 mods', detail: 'Sodium', snapshot: '1800000000001-c3d4' },
+      { at: 1, kind: 'added', title: 'Added Iris', detail: '' },
+    ]);
+    expect(feed[0]).toMatchObject({ icon: 'rotate-left', tone: 'muted', snapshot: '1800000000001-c3d4' });
+    expect(feed[1]).toMatchObject({ icon: 'arrow-up', snapshot: '1800000000000-a1b2' });
+    expect(feed[2]?.snapshot).toBeUndefined();
+  });
 });

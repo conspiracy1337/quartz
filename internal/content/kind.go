@@ -26,9 +26,9 @@ const (
 	DataPacks     Kind = "datapacks"
 )
 
-// top is the instance folder a kind's items live under (data packs live in
+// Top is the instance folder a kind's items live under (data packs live in
 // worlds); it decides whether they are in the game or the shared folder.
-func (k Kind) top() string {
+func (k Kind) Top() string {
 	switch k {
 	case DataPacks:
 		return "saves"

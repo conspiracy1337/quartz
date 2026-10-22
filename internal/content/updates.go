@@ -401,11 +401,11 @@ func between(all []modplatform.Version, cur *Ident, target modplatform.Version, 
 }
 
 // ApplyUpdates downloads the picked updates into the store and puts them in
-// place, as one job on the Downloads page.
-func (s *Service) ApplyUpdates(checkID string, ids []string) (string, error) {
+// place, as one job on the Downloads page, after a snapshot.
+func (s *Service) ApplyUpdates(checkID string, ids []string) (Started, error) {
 	pl, err := s.plan(checkID)
 	if err != nil {
-		return "", err
+		return Started{}, err
 	}
 	var picked []*planned
 	for _, id := range ids {
@@ -414,26 +414,34 @@ func (s *Service) ApplyUpdates(checkID string, ids []string) (string, error) {
 		}
 	}
 	if len(picked) == 0 {
-		return "", ErrNothingPicked
+		return Started{}, ErrNothingPicked
 	}
 	in, err := s.d.Instances.Get(pl.inst)
 	if err != nil {
-		return "", err
+		return Started{}, err
 	}
+	what := fmt.Sprintf("%d %s", len(picked), noun(pl.kind, len(picked)))
+	if len(picked) == 1 {
+		what = picked[0].name + " to " + picked[0].v.Number
+	}
+	snap := s.snapshot("updating "+what, "update", scopeOf(picked))
 	title := fmt.Sprintf("Updating %d %s", len(picked), noun(pl.kind, len(picked)))
-	return s.submit(pl.inst, pl.kind, title, in.Name, picked, func() {
+	job, err := s.submit(pl.inst, pl.kind, title, in.Name, picked, func() {
 		names := make([]string, len(picked))
 		for i, pi := range picked {
 			names[i] = pi.name
 		}
-		s.record(pl.inst, Activity{Kind: "updated", Title: fmt.Sprintf("Updated %d %s", len(picked), noun(pl.kind, len(picked))), Detail: strings.Join(names, ", ")})
-	}, nil)
+		s.record(pl.inst, Activity{Kind: "updated", Title: fmt.Sprintf("Updated %d %s", len(picked), noun(pl.kind, len(picked))),
+			Detail: strings.Join(names, ", "), Snapshot: snap.id()})
+	}, nil, snap)
+	return Started{Job: job, Snapshot: snap.id()}, err
 }
 
 // submit runs one content job: download every file into the store (files
-// only the website may serve wait for the player, see manual), place each,
-// then finish (a rescan, an activity entry, a version switch).
-func (s *Service) submit(inst string, k Kind, title, subtitle string, picked []*planned, done func(), finish func(context.Context) error) (string, error) {
+// only the website may serve wait for the player, see manual), take the
+// snapshot snap asks for (nil: none), place each file, then finish (a
+// rescan, an activity entry, a version switch).
+func (s *Service) submit(inst string, k Kind, title, subtitle string, picked []*planned, done func(), finish func(context.Context) error, snap *SnapshotReq) (string, error) {
 	var downloads, installs []tasks.Work
 	var needs []manual.Need
 	for _, pi := range picked {
@@ -471,6 +479,14 @@ func (s *Service) submit(inst string, k Kind, title, subtitle string, picked []*
 	if set != nil {
 		spec.Step(manual.Label(len(needs), noun(k, 1)), tasks.Count, set.Work())
 	}
+	if snap != nil {
+		spec.After("Saving a snapshot", tasks.Count, tasks.Func("snapshot", func(ctx context.Context) error {
+			if err := s.take(ctx, inst, snap); err != nil {
+				return &netx.PermanentError{Err: err}
+			}
+			return nil
+		}))
+	}
 	if len(installs) > 0 {
 		spec.After("Installing", tasks.Count, installs...)
 	}
@@ -489,7 +505,7 @@ func (s *Service) submit(inst string, k Kind, title, subtitle string, picked []*
 	}))
 	id, err := s.d.Tasks.Submit(spec)
 	if err == nil {
-		s.tracked(inst, id)
+		s.Track(inst, id)
 	}
 	if set != nil {
 		set.Bind(id)

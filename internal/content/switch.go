@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"quartz/internal/instance"
+	"quartz/internal/loader"
 	"quartz/internal/modplatform"
 )
 
@@ -83,6 +85,7 @@ func (s *Service) compatibility(ctx context.Context, id, mc, loader string, ch m
 // SwitchResult tells the player what a version switch did with their mods.
 type SwitchResult struct {
 	Job      string   `json:"job"`
+	Snapshot string   `json:"snapshot,omitempty"` // taken before the switch
 	Updated  int      `json:"updated"`
 	Disabled []string `json:"disabled"` // no build for the new version: turned off
 	Unknown  []string `json:"unknown"`  // not on a platform: left as they are
@@ -92,12 +95,30 @@ type SwitchResult struct {
 // every identified mod with a build for it gets that build, the others are
 // turned off (kept in the folder), unknown mods are left alone. apply
 // changes the instance itself; it runs last, so a failed download leaves
-// the instance as it was. With nothing to download, apply runs now.
-func (s *Service) Switch(ctx context.Context, id, mc, loader string, ch modplatform.Channel, apply func(context.Context) error) (SwitchResult, error) {
-	if !modLoader(loader) {
-		return SwitchResult{}, apply(ctx)
+// the instance as it was. With nothing to download, apply runs now. A
+// snapshot is taken first either way.
+func (s *Service) Switch(ctx context.Context, id, mc, kind string, ch modplatform.Channel, apply func(context.Context) error) (SwitchResult, error) {
+	in, err := s.d.Instances.Get(id)
+	if err != nil {
+		return SwitchResult{}, err
 	}
-	_, found, err := s.compatibility(ctx, id, mc, loader, ch)
+	doing, done := switchTitles(in, mc, kind)
+	// now applies the switch without a job: snapshot, change, record.
+	now := func(scope []string) (SwitchResult, error) {
+		snap := s.snapshot(doing, "version", scope)
+		if err := s.take(ctx, id, snap); err != nil {
+			return SwitchResult{}, err
+		}
+		if err := apply(ctx); err != nil {
+			return SwitchResult{}, err
+		}
+		s.record(id, Activity{Kind: "updated", Title: done, Snapshot: snap.id()})
+		return SwitchResult{Snapshot: snap.id()}, nil
+	}
+	if !modLoader(kind) {
+		return now([]string{ScopeVersion})
+	}
+	_, found, err := s.compatibility(ctx, id, mc, kind, ch)
 	if err != nil {
 		return SwitchResult{}, fmt.Errorf("content: can't check the mods for %s: %w", mc, err)
 	}
@@ -138,14 +159,37 @@ func (s *Service) Switch(ctx context.Context, id, mc, loader string, ch modplatf
 		}
 		return apply(ctx)
 	}
-	if len(picked) == 0 && len(turnOff) == 0 {
-		return res, apply(ctx)
+	scope := []string{ScopeVersion}
+	for _, item := range turnOff {
+		scope = append(scope, ScopeRel(v.idx.Entries[item].Rel))
 	}
-	in, _ := s.d.Instances.Get(id)
+	if len(picked) == 0 && len(turnOff) == 0 {
+		r, err := now(scope)
+		res.Snapshot = r.Snapshot
+		return res, err
+	}
+	snap := s.snapshot(doing, "version", scopeOf(picked, scope...))
+	res.Snapshot = snap.id()
 	res.Job, err = s.submit(id, Mods, "Moving "+in.Name+" to "+mc, fmt.Sprintf("%d %s to update", len(picked), noun(Mods, len(picked))), picked, func() {
-		s.record(id, Activity{Kind: "updated", Title: "Moved to Minecraft " + mc, Detail: fmt.Sprintf("Updated %d %s", len(picked), noun(Mods, len(picked)))})
-	}, finish)
+		s.record(id, Activity{Kind: "updated", Title: done, Detail: fmt.Sprintf("Updated %d %s", len(picked), noun(Mods, len(picked))), Snapshot: snap.id()})
+	}, finish, snap)
 	return res, err
+}
+
+// switchTitles names a version switch while it runs ("moving to Minecraft
+// 1.21.4", for a snapshot) and once done (for the activity feed).
+func switchTitles(in instance.Instance, mc, kind string) (doing, done string) {
+	switch name := loader.Kind(kind).Name(); {
+	case mc != in.Minecraft:
+		return "moving to Minecraft " + mc, "Moved to Minecraft " + mc
+	case kind == "" && in.Loader != "":
+		old := loader.Kind(in.Loader).Name()
+		return "removing " + old, "Removed " + old
+	case kind != in.Loader:
+		return "switching to " + name, "Switched to " + name
+	default:
+		return "changing the " + name + " version", "Changed the " + name + " version"
+	}
 }
 
 func modLoader(loader string) bool {

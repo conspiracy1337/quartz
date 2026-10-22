@@ -19,6 +19,10 @@
   // Keyed, so going back to Overview shows them at once; the page is remounted per instance.
   // svelte-ignore state_referenced_locally
   const activity = query(() => api.instances.activity(i.id), `activity.${i.id}`);
+  // Changes whose snapshot is still kept can be rolled back from the feed.
+  // svelte-ignore state_referenced_locally
+  const snapshots = query(() => api.snapshots.list(i.id), `snapshots.${i.id}`);
+  const kept = $derived(new Set((snapshots.data ?? []).map((s) => s.id)));
   // svelte-ignore state_referenced_locally
   const updates = query(() => api.instances.pendingUpdates(i.id), `updates.${i.id}`);
   let filter = $state<'all' | ActivityKind>('all');
@@ -53,7 +57,7 @@
           <div class="ev">
             <span class="ev-ic" style="color: {TONES[e.tone]}" aria-hidden="true"><Icon name={e.icon} size={14} sw={1.8} outline /></span>
             <span style="min-width: 0"><span class="trunc" style="display: block">{e.title}</span><span class="trunc small faint" style="display: block">{e.detail}</span></span>
-            <span class="small faint tnum" style="white-space: nowrap">{Day(e.at)}</span>
+            <span class="ev-end">{#if e.snapshot && kept.has(e.snapshot)}{@const snap = e.snapshot}<button class="btn btn-sm btn-ghost" onclick={() => session.open({ kind: 'rollback', instanceId: i.id, snapshot: snap })}>Roll back</button>{/if}<span class="small faint tnum">{Day(e.at)}</span></span>
           </div>
         {:else}
           {#if activity.data}<Empty text="No activity yet. Sessions and changes show up here." />
@@ -122,5 +126,6 @@
   .ev{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px;padding:8px var(--inset);border-top:1px solid var(--line)}
   .up{display:grid;grid-template-columns:20px minmax(0,1fr) auto;column-gap:12px;align-items:center;height:48px;padding:0 var(--inset);border-top:1px solid var(--line)}
   .ov-kv{padding:14px var(--inset);grid-template-columns:96px minmax(0,1fr);row-gap:10px}
+  .ev-end{display:flex;align-items:center;gap:8px;white-space:nowrap}
   .ev-ic{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:var(--raise)}
 </style>

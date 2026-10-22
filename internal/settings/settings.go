@@ -21,6 +21,7 @@ type Settings struct {
 	Java         Java         `json:"java"`
 	Updates      Updates      `json:"updates"`
 	Syncing      Syncing      `json:"syncing"`
+	Storage      Storage      `json:"storage"`
 }
 
 type General struct {
@@ -96,6 +97,13 @@ type Java struct {
 	SuggestMemory  bool   `json:"suggestMemory"`
 }
 
+// Storage holds what the launcher keeps on disk for the player.
+type Storage struct {
+	// Snapshots keeps an instance as it was before each update or version
+	// change for 7 days, so the change can be rolled back.
+	Snapshots bool `json:"snapshots"`
+}
+
 type Updates struct {
 	AutoCheck  bool   `json:"autoCheck"`  // check for launcher updates in the background
 	ModChannel string `json:"modChannel"` // release | beta | alpha
@@ -120,6 +128,7 @@ func Defaults() Settings {
 			JVMArgs: "-XX:+UseG1GC -XX:+ParallelRefProcEnabled", WarnLowMemory: true, SuggestMemory: true,
 		},
 		Updates: Updates{AutoCheck: true, ModChannel: "release"},
+		Storage: Storage{Snapshots: true},
 	}
 }
 

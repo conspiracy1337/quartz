@@ -50,7 +50,7 @@ func (s *Service) Watch(id string) {
 	}
 	dirs := map[string]Kind{}
 	for _, k := range Kinds {
-		dir := s.abs(id, k.top())
+		dir := s.abs(id, k.Top())
 		dirs[dir] = k
 		_ = w.Add(dir) // may not exist yet: its parent's watch adds it once it does
 		_ = w.Add(filepath.Dir(dir))

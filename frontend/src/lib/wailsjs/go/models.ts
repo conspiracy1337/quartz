@@ -1065,6 +1065,7 @@ export namespace content {
 	    kind: string;
 	    title: string;
 	    detail?: string;
+	    snapshot?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Activity(source);
@@ -1076,6 +1077,7 @@ export namespace content {
 	        this.kind = source["kind"];
 	        this.title = source["title"];
 	        this.detail = source["detail"];
+	        this.snapshot = source["snapshot"];
 	    }
 	}
 	export class Rejected {
@@ -1462,9 +1464,24 @@ export namespace content {
 		    return a;
 		}
 	}
+	export class Started {
+	    job: string;
+	    snapshot?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Started(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.job = source["job"];
+	        this.snapshot = source["snapshot"];
+	    }
+	}
 	
 	export class SwitchResult {
 	    job: string;
+	    snapshot?: string;
 	    updated: number;
 	    disabled: string[];
 	    unknown: string[];
@@ -1476,6 +1493,7 @@ export namespace content {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.job = source["job"];
+	        this.snapshot = source["snapshot"];
 	        this.updated = source["updated"];
 	        this.disabled = source["disabled"];
 	        this.unknown = source["unknown"];
@@ -3281,6 +3299,18 @@ export namespace settings {
 	    }
 	}
 	
+	export class Storage {
+	    snapshots: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Storage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.snapshots = source["snapshots"];
+	    }
+	}
 	export class SharedKey {
 	    id: string;
 	    key: string;
@@ -3370,6 +3400,7 @@ export namespace settings {
 	    java: Java;
 	    updates: Updates;
 	    syncing: Syncing;
+	    storage: Storage;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -3385,6 +3416,7 @@ export namespace settings {
 	        this.java = this.convertValues(source["java"], Java);
 	        this.updates = this.convertValues(source["updates"], Updates);
 	        this.syncing = this.convertValues(source["syncing"], Syncing);
+	        this.storage = this.convertValues(source["storage"], Storage);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -3408,6 +3440,7 @@ export namespace settings {
 	
 	
 	
+	
 
 }
 
@@ -3427,6 +3460,118 @@ export namespace skins {
 	        this.slim = source["slim"];
 	    }
 	}
+
+}
+
+export namespace snapshot {
+	
+	export class Row {
+	    key: string;
+	    kind: string;
+	    change: string;
+	    name: string;
+	    from?: string;
+	    to?: string;
+	    icon?: string;
+	    detail?: string;
+	    default: boolean;
+	    unavailable?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Row(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.kind = source["kind"];
+	        this.change = source["change"];
+	        this.name = source["name"];
+	        this.from = source["from"];
+	        this.to = source["to"];
+	        this.icon = source["icon"];
+	        this.detail = source["detail"];
+	        this.default = source["default"];
+	        this.unavailable = source["unavailable"];
+	    }
+	}
+	export class Summary {
+	    id: string;
+	    at: number;
+	    title: string;
+	    reason: string;
+	    keep: boolean;
+	    expires?: number;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Summary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.at = source["at"];
+	        this.title = source["title"];
+	        this.reason = source["reason"];
+	        this.keep = source["keep"];
+	        this.expires = source["expires"];
+	        this.size = source["size"];
+	    }
+	}
+	export class Diff {
+	    snapshot: Summary;
+	    rows: Row[];
+	    shared?: string[];
+	    partial?: string[];
+	    undoable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.snapshot = this.convertValues(source["snapshot"], Summary);
+	        this.rows = this.convertValues(source["rows"], Row);
+	        this.shared = source["shared"];
+	        this.partial = source["partial"];
+	        this.undoable = source["undoable"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result {
+	    restored: number;
+	    snapshot?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.restored = source["restored"];
+	        this.snapshot = source["snapshot"];
+	    }
+	}
+	
 
 }
 

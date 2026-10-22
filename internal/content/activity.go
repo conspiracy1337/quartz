@@ -13,6 +13,8 @@ type Activity struct {
 	Kind   string `json:"kind"`
 	Title  string `json:"title"`
 	Detail string `json:"detail,omitempty"`
+	// Snapshot is the snapshot taken before the change, for rolling it back.
+	Snapshot string `json:"snapshot,omitempty"`
 }
 
 const maxActivity = 100

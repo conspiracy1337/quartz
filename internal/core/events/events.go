@@ -11,9 +11,9 @@ const (
 	SettingsChanged Topic = "settings:changed"
 	CustomCSS       Topic = "theme:custom-css"
 	// AppOpen says App.Pending has something new (a link, a file, an error).
-	AppOpen          Topic = "app:open"
+	AppOpen Topic = "app:open"
 	// UpdateState carries the launcher updater's state (update.State).
-	UpdateState Topic = "update:state"
+	UpdateState      Topic = "update:state"
 	TasksChanged     Topic = "tasks:changed"
 	AccountsChanged  Topic = "accounts:changed"
 	AccountsSignIn   Topic = "accounts:signin"
@@ -33,6 +33,8 @@ const (
 	ServersChanged     Topic = "servers:changed"
 	ScreenshotsChanged Topic = "screenshots:changed"
 	SyncChanged        Topic = "sync:changed"
+	// An instance's snapshots changed (taken, kept, deleted or expired).
+	SnapshotsChanged Topic = "snapshots:changed"
 )
 
 // Sink receives every emitted event, used to bridge events to the UI.

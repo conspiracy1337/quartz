@@ -10,6 +10,8 @@
   import MenuConfirm from '$lib/ui/MenuConfirm.svelte';
   import Setting from '$lib/ui/Setting.svelte';
   import Tile from '$lib/ui/Tile.svelte';
+  import { groupsFor } from '$lib/settings/registry';
+  import SettingsGroup from '$lib/settings/SettingsGroup.svelte';
   import SettingsTab from './SettingsTab.svelte';
 
   const info = query(() => api.app.info(), 'app.info');
@@ -110,6 +112,7 @@
       {/each}
     </div>
   </section>
+  {#each groupsFor('storage') as g (g.group)}<SettingsGroup title={g.group} defs={g.defs} />{/each}
   <section class="grp" aria-label="Clean up">
     <h2 class="h3">Clean up</h2>
     <div class="card">

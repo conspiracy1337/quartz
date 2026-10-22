@@ -1,10 +1,11 @@
 // Actions on one instance that several screens offer (the header's menu and the
 // instance settings), written once so they behave and word themselves the same.
 import { api } from './api';
-import type { ContentKind, Instance, InstallPlan, Src } from './api/types';
+import type { ContentKind, Instance, InstallPlan, RollbackResult, Src, Started } from './api/types';
 
 /** What the shared actions need to know about an instance. */
 type Named = Pick<Instance, 'id' | 'name'>;
+import { plural } from './format';
 import { memoryShort } from './look';
 import { prefs } from './prefs.svelte';
 import { revs } from './revs.svelte';
@@ -77,6 +78,7 @@ export async function switchVersion(i: Instance, minecraft: string, kind: string
     revs.bump('instances');
     const s = v.switch;
     if (s?.job) await tasks.load();
+    if (s) void undoable(i.id, s, i.name, label === 'Mod loader' ? 'changed its mod loader' : `moved to ${label}`);
     const off = s?.disabled.length ?? 0;
     if (off > 0) session.notify({ subject: `${off} ${off === 1 ? 'mod was' : 'mods were'} turned off`, text: `no build for ${label}` });
     else if (s?.unknown.length) session.notify({ subject: label, text: `${s.unknown.length} unidentified ${s.unknown.length === 1 ? 'mod' : 'mods'} kept as they are` });
@@ -88,8 +90,33 @@ export async function switchVersion(i: Instance, minecraft: string, kind: string
   }
 }
 
+/**
+ * The toast after a change that took a snapshot: once its job has finished,
+ * Undo rolls back exactly what the change touched.
+ */
+export async function undoable(instanceId: string, s: Started, subject: string, text = '') {
+  const snap = s.snapshot;
+  if (!snap || !(await tasks.until(s.job))) return;
+  session.notify({ subject, text, undo: () => void undo(instanceId, snap) });
+}
+
+/** Rolls back what the change after a snapshot touched. */
+export async function undo(instanceId: string, snapshot: string) {
+  try {
+    rolledBack(instanceId, await api.snapshots.undo(instanceId, snapshot));
+  } catch (e) {
+    session.fail('Undo', e);
+  }
+}
+
+/** "Rolled back 3 changes", with Undo when a snapshot was taken first. */
+export function rolledBack(instanceId: string, r: RollbackResult) {
+  const before = r.snapshot;
+  session.notify({ subject: `Rolled back ${plural(r.restored, 'change')}`, text: '', ...(before ? { undo: () => void undo(instanceId, before) } : {}) });
+}
+
 /** A started install keeps the page where it is and shows the download queue in a floating panel. */
-export async function downloading(job: unknown) {
+export async function downloading(job: string) {
   if (!job) return;
   await tasks.load();
   session.downloadPanel = true;
@@ -105,7 +132,7 @@ export async function installInto(instanceId: string, ref: string, source: Src, 
     if (content === 'worlds') return await downloading(await api.browse.installWorld(instanceId, ref, version));
     const [plan, inst, info] = await Promise.all([api.browse.planInstall(instanceId, content, '', ref, source, version), api.instances.get(instanceId), api.app.info()]);
     if (!settled(plan, inst, info.memoryMb)) return open(plan);
-    await downloading(await api.browse.applyInstall(plan.planId, []));
+    await downloading((await api.browse.applyInstall(plan.planId, [])).job);
   } catch (e) {
     session.fail('Install', e);
   }

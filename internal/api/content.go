@@ -17,8 +17,10 @@ import (
 
 // ContentDeps are what the content facade works with.
 type ContentDeps struct {
-	Service  *content.Service
-	Store    *store.Store
+	Service *content.Service
+	Store   *store.Store
+	// Refs are every blob still used (instances and snapshots).
+	Refs     store.Refs
 	Settings *settings.Store
 	Drops    *Drops
 	// Watch also follows the shown instance's worlds, screenshots and servers; nil in tests.
@@ -277,17 +279,18 @@ func (c *Content) CheckAll() ([]content.BulkCheck, error) {
 	return asListErr(got, err)
 }
 
-// ApplyUpdates starts the job that installs the picked updates.
-func (c *Content) ApplyUpdates(checkID string, ids []string) (string, error) {
+// ApplyUpdates starts the job that installs the picked updates, after a
+// snapshot to roll them back with.
+func (c *Content) ApplyUpdates(checkID string, ids []string) (content.Started, error) {
 	if !checkIDRe.MatchString(checkID) {
-		return "", ErrBadCheck
+		return content.Started{}, ErrBadCheck
 	}
 	if len(ids) == 0 || len(ids) > 1000 {
-		return "", ErrBadItem
+		return content.Started{}, ErrBadItem
 	}
 	for _, id := range ids {
 		if !updateRe.MatchString(id) {
-			return "", ErrBadItem
+			return content.Started{}, ErrBadItem
 		}
 	}
 	return c.d.Service.ApplyUpdates(checkID, ids)
@@ -351,11 +354,11 @@ func (c *Content) Watch(instanceID string) error {
 }
 
 // Usage sums the shared store and how much of it nothing uses.
-func (c *Content) Usage() (store.Usage, error) { return c.d.Store.Usage(c.d.Service.Refs) }
+func (c *Content) Usage() (store.Usage, error) { return c.d.Store.Usage(c.d.Refs) }
 
 // CleanUp deletes stored files no instance uses any more.
 func (c *Content) CleanUp() (store.Usage, error) {
-	if _, _, err := c.d.Store.Clean(c.d.Service.Refs, cleanGrace); err != nil {
+	if _, _, err := c.d.Store.Clean(c.d.Refs, cleanGrace); err != nil {
 		return store.Usage{}, err
 	}
 	return c.Usage()
@@ -399,14 +402,15 @@ func (c *Content) PlanInstall(instanceID, kind, world, ref, source, version stri
 		Project: r.ID(src), Version: version, Channel: c.channel()})
 }
 
-// ApplyInstall starts the install job, leaving out the dependencies in skip.
-func (c *Content) ApplyInstall(planID string, skip []string) (string, error) {
+// ApplyInstall starts the install job, leaving out the dependencies in
+// skip (after a snapshot when it replaces items the instance has).
+func (c *Content) ApplyInstall(planID string, skip []string) (content.Started, error) {
 	if !planIDRe.MatchString(planID) || len(skip) > 64 {
-		return "", ErrBadCheck
+		return content.Started{}, ErrBadCheck
 	}
 	for _, id := range skip {
 		if !depIDRe.MatchString(id) {
-			return "", ErrBadItem
+			return content.Started{}, ErrBadItem
 		}
 	}
 	return c.d.Service.ApplyInstall(planID, skip)

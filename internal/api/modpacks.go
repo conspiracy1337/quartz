@@ -1,6 +1,7 @@
 package api
 
 import (
+	"quartz/internal/content"
 	"quartz/internal/modpack"
 )
 
@@ -40,13 +41,14 @@ func (m *Modpacks) Diff(instanceID, version string) (*modpack.Diff, error) {
 }
 
 // Update starts the job moving an instance's pack to version ("" for the
-// update the last check found), backing worlds up first when asked.
-func (m *Modpacks) Update(instanceID, version string, backupWorlds bool) (string, error) {
+// update the last check found), backing worlds up first when asked. A
+// snapshot is taken before the files change.
+func (m *Modpacks) Update(instanceID, version string, backupWorlds bool) (content.Started, error) {
 	if err := checkInstanceID(instanceID); err != nil {
-		return "", err
+		return content.Started{}, err
 	}
 	if m.d.Busy(instanceID) {
-		return "", ErrBusy
+		return content.Started{}, ErrBusy
 	}
 	return m.d.Packs.Update(m.ctx.Get(), instanceID, version, backupWorlds)
 }

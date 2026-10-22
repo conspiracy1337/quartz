@@ -30,11 +30,14 @@ export function shotsEvent(r: Run): ActivityEvent[] {
   return [{ kind: 'session', icon: 'camera', tone: 'muted', title: `Took ${r.shots} ${r.shots === 1 ? 'screenshot' : 'screenshots'}`, detail: r.world ?? '', at: r.startedAt + r.lengthMin * 60_000 }];
 }
 
-const CHANGE_ICON = { added: 'plus', updated: 'arrow-up', removed: 'trash' } as const;
+const CHANGE_ICON = { added: 'plus', updated: 'arrow-up', removed: 'trash', rolledback: 'rotate-left' } as const;
 
-/** One content change as a feed entry (Go records seconds). */
+/** One content change as a feed entry (Go records seconds); a change made after a snapshot can be rolled back. */
 export function changeEvent(c: ContentChange): ActivityEvent {
-  return { kind: 'change', icon: CHANGE_ICON[c.kind], tone: c.kind === 'removed' ? 'muted' : 'accent', title: c.title, detail: c.detail ?? '', at: c.at * 1000 };
+  return {
+    kind: 'change', icon: CHANGE_ICON[c.kind], tone: c.kind === 'removed' || c.kind === 'rolledback' ? 'muted' : 'accent', title: c.title, detail: c.detail ?? '', at: c.at * 1000,
+    ...(c.snapshot ? { snapshot: c.snapshot } : {}),
+  };
 }
 
 export function activityFeed(runs: Run[], changes: ContentChange[]): ActivityEvent[] {

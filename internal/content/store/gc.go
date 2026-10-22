@@ -11,6 +11,18 @@ import (
 // Refs calls yield with the sha1 of every blob something still uses.
 type Refs func(yield func(sha1 string)) error
 
+// Union is every blob any of rs references.
+func Union(rs ...Refs) Refs {
+	return func(yield func(sha1 string)) error {
+		for _, r := range rs {
+			if err := r(yield); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
 // Usage sums the store.
 type Usage struct {
 	Blobs       int   `json:"blobs"`
@@ -56,7 +68,7 @@ func (s *Store) Usage(refs Refs) (Usage, error) {
 // temp files. A blob first seen unused is only marked, so a job between
 // download and placement never loses it.
 func (s *Store) GC(refs Refs, grace time.Duration) (freed int64, n int, err error) {
-	return s.collect(refs, func(b Blob, now time.Time) bool {
+	return s.collect(refs, func(_ string, b Blob, now time.Time) bool {
 		return b.Released != 0 && now.Sub(time.Unix(b.Released, 0)) >= grace
 	})
 }
@@ -64,10 +76,26 @@ func (s *Store) GC(refs Refs, grace time.Duration) (freed int64, n int, err erro
 // Clean deletes every blob nothing references now, except blobs added in the
 // last minAge (a job may be about to place them). It is the Clean up button.
 func (s *Store) Clean(refs Refs, minAge time.Duration) (freed int64, n int, err error) {
-	return s.collect(refs, func(b Blob, now time.Time) bool { return now.Sub(time.Unix(b.Added, 0)) >= minAge })
+	return s.collect(refs, func(_ string, b Blob, now time.Time) bool { return now.Sub(time.Unix(b.Added, 0)) >= minAge })
 }
 
-func (s *Store) collect(refs Refs, deletable func(Blob, time.Time) bool) (freed int64, n int, err error) {
+// Release deletes the given blobs now if nothing references them any more
+// (the snapshot that kept an old version expired), without GC's grace.
+// Blobs added in the last minAge are kept, as Clean keeps them.
+func (s *Store) Release(refs Refs, sha1s []string, minAge time.Duration) (freed int64, n int, err error) {
+	if len(sha1s) == 0 {
+		return 0, 0, nil
+	}
+	want := make(map[string]bool, len(sha1s))
+	for _, h := range sha1s {
+		want[h] = true
+	}
+	return s.collect(refs, func(h string, b Blob, now time.Time) bool {
+		return want[h] && now.Sub(time.Unix(b.Added, 0)) >= minAge
+	})
+}
+
+func (s *Store) collect(refs Refs, deletable func(string, Blob, time.Time) bool) (freed int64, n int, err error) {
 	used, err := s.referenced(refs)
 	if err != nil {
 		return 0, 0, err
@@ -79,7 +107,7 @@ func (s *Store) collect(refs Refs, deletable func(Blob, time.Time) bool) (freed 
 			switch {
 			case used[h]:
 				b.Released = 0
-			case deletable(b, now):
+			case deletable(h, b, now):
 				doomed = append(doomed, h)
 				continue
 			case b.Released == 0:

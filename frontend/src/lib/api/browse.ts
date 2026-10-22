@@ -12,7 +12,7 @@ import * as mock from './mock/browse';
 import * as misc from './mock/misc';
 import type {
   BrowseQuery, BrowseResults, ContentKind, DiffKind, ImportPreview, InstallPlan, ManualView, ModpackDiff, PackLook, PackUpdate, PackVersion,
-  CategoryGroup, ProjectKind, ProjectPage, ProjectVersion, Src, VersionNotes,
+  CategoryGroup, ProjectKind, ProjectPage, ProjectVersion, Src, Started, VersionNotes,
 } from './types';
 
 const KINDS: Record<string, DiffKind> = { added: 'Added', updated: 'Updated', removed: 'Removed' };
@@ -39,7 +39,8 @@ export const browseApi = {
   planInstall: bridged(ContentGo.PlanInstall,
     (_instance: string, _kind: ContentKind, _world: string, _ref: string, _src: Src, _version: string): InstallPlan => misc.installPlan),
   /** Starts the install job, leaving out the dependencies in skip; resolves with its id. */
-  applyInstall: bridged(ContentGo.ApplyInstall, (_planId: string, _skip: string[]) => ''),
+  /** Starts the install job (after a snapshot when it replaces items); resolves with both. */
+  applyInstall: bridged(ContentGo.ApplyInstall, (_planId: string, _skip: string[]): Started => ({ job: '' })),
   /** Downloads a CurseForge world (a version, or "" for the newest) into an instance as a job; resolves with its id. */
   installWorld: bridged(BrowseGo.InstallWorld, (_instance: string, _ref: string, _version: string) => ''),
 };
@@ -68,7 +69,7 @@ export const packsApi = {
   /** The review of moving to a version ("" for the one the last check found). */
   diff: bridged((id: string, version: string) => ModpacksGo.Diff(id, version).then((d) => toDiff(d as unknown as GoDiff)), (_id: string, _version: string): ModpackDiff => misc.modpackDiff),
   /** Starts the job moving to a version ("" for the one the last check found), backing worlds up first when asked; resolves with its id. */
-  update: bridged(ModpacksGo.Update, (_id: string, _version: string, _backup: boolean) => ''),
+  update: bridged(ModpacksGo.Update, (_id: string, _version: string, _backup: boolean): Started => ({ job: '' })),
 };
 
 export const manualApi = {
