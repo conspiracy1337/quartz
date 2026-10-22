@@ -11,17 +11,17 @@ import (
 )
 
 // Level is how far the game reaches one thing. Folders take rw, ro or no;
-// Discord and graphics take on or no; internet takes on, lan or no.
+// Discord and graphics take on or no; internet takes on or lan.
 type Level string
 
 // Levels, named as the UI shows them.
 const (
-	RW      Level = "rw"  // Read and write
-	RO      Level = "ro"  // Read only: writes stay private to the run and are dropped
-	Blocked Level = "no"  // Blocked
-	Allowed Level = "on"  // Allowed
-	LAN     Level = "lan" // Internet only: the local network (and VPN) but not the internet
-	Remove  Level = "remove"
+	RW      Level = "rw"     // Read and write
+	RO      Level = "ro"     // Read only: writes stay private to the run and are dropped
+	Blocked Level = "no"     // Blocked
+	Allowed Level = "on"     // Allowed
+	LAN     Level = "lan"    // The local network (and VPN) but not the internet
+	Remove  Level = "remove" // takes one of the player's folders out
 )
 
 // ID names a rule row.
@@ -47,52 +47,43 @@ type Preset string
 const (
 	Standard Preset = "standard"
 	Strict   Preset = "strict"
-	Custom   Preset = "custom"
 )
 
-// Rule is one row: its levels under each preset and the levels an OS can
-// enforce for it (the first is the fallback).
+// Rule is one row: its level under each preset, and the level an OS holds it
+// at whatever the preset (what that OS can enforce).
 type Rule struct {
 	ID       ID
 	Standard Level
 	Strict   Level
-	choices  []Level
-	// fixed lists the OSes that only offer the first choice ("windows").
-	fixed []string
+	fixed    map[string]Level // by GOOS
 }
 
 // Table is every row, in page order.
 var Table = []Rule{
-	{ID: Instance, Standard: RW, Strict: RW, choices: []Level{RW}},
+	{ID: Instance, Standard: RW, Strict: RW},
 	// The instance's mods are store files linked into every instance that
 	// uses them; a game that could write them would reach the others.
-	{ID: Mods, Standard: RO, Strict: RO, choices: []Level{RO}},
-	{ID: Libraries, Standard: RO, Strict: RO, choices: []Level{RO}},
-	{ID: Java, Standard: RO, Strict: RO, choices: []Level{RO}},
-	{ID: Synced, Standard: RW, Strict: RO, choices: []Level{RW, RO, Blocked}},
-	// Internet has three levels. Allowed is the full network; LAN keeps the
-	// local network and VPNs (so a Strict instance can still join or host a
-	// LAN/Radmin game) but not the internet; Blocked removes the network. LAN
-	// is enforced only where the OS can filter by destination (Windows app
-	// container capabilities); Linux and macOS can't allow LAN while blocking
-	// the internet, so they treat LAN as Blocked (see each backend).
-	{ID: Internet, Standard: Allowed, Strict: LAN, choices: []Level{Allowed, LAN, Blocked}},
+	{ID: Mods, Standard: RO, Strict: RO},
+	{ID: Libraries, Standard: RO, Strict: RO},
+	{ID: Java, Standard: RO, Strict: RO},
+	{ID: Synced, Standard: RW, Strict: RO},
+	// Internet: Allowed is the full network; LAN keeps the local network and
+	// VPNs (so a Strict instance can still join or host a LAN/Radmin game) but
+	// not the internet. LAN is enforced only where the OS can filter by
+	// destination (Windows app container capabilities); Linux and macOS keep
+	// the full network for it (see each backend).
+	{ID: Internet, Standard: Allowed, Strict: LAN},
 	// An app container can't open Discord's named pipe.
-	{ID: Discord, Standard: Allowed, Strict: Blocked, choices: []Level{Allowed, Blocked}, fixed: []string{"windows"}},
-	{ID: Graphics, Standard: Allowed, Strict: Allowed, choices: []Level{Allowed}},
-	// Granting a container the whole user profile would rewrite its ACLs.
-	{ID: Home, Standard: Blocked, Strict: Blocked, choices: []Level{Blocked, RO}, fixed: []string{"windows"}},
+	{ID: Discord, Standard: Allowed, Strict: Blocked, fixed: map[string]Level{"windows": Blocked}},
+	{ID: Graphics, Standard: Allowed, Strict: Allowed},
+	{ID: Home, Standard: Blocked, Strict: Blocked},
 }
 
-// Choices are the levels goos can enforce for the rule.
-func (r Rule) Choices(goos string) []Level {
-	if slices.Contains(r.fixed, goos) {
-		return []Level{r.preset(Strict)}
+// Level is the rule's level under preset p on goos.
+func (r Rule) Level(p Preset, goos string) Level {
+	if l, ok := r.fixed[goos]; ok {
+		return l
 	}
-	return r.choices
-}
-
-func (r Rule) preset(p Preset) Level {
 	if p == Strict {
 		return r.Strict
 	}
@@ -123,63 +114,27 @@ type Folder struct {
 
 // Settings are an instance's sandbox choices.
 type Settings struct {
-	On      bool         `json:"on"`
-	Preset  Preset       `json:"preset"`
-	Levels  map[ID]Level `json:"levels,omitempty"` // custom choices; missing rows follow the preset
-	Folders []Folder     `json:"folders,omitempty"`
+	On      bool     `json:"on"`
+	Preset  Preset   `json:"preset"`
+	Folders []Folder `json:"folders,omitempty"`
 }
 
 // Default is a new instance's sandbox: on, Standard.
 func Default() Settings { return Settings{On: true, Preset: Standard} }
 
-// Level is the rule's level on goos: the custom choice if it is one goos can
-// enforce, else the preset's.
+// Level is the rule's level on goos under the chosen preset.
 func (s Settings) Level(id ID, goos string) Level {
 	r, ok := Lookup(id)
 	if !ok {
 		return Blocked
 	}
-	choices := r.Choices(goos)
-	if s.Preset == Custom {
-		if l, ok := s.Levels[id]; ok && slices.Contains(choices, l) {
-			return l
-		}
-	}
-	if l := r.preset(s.Preset); slices.Contains(choices, l) {
-		return l
-	}
-	return choices[0]
+	return r.Level(s.Preset, goos)
 }
 
-// Apply switches to a preset. Standard and Strict reset every row; Custom
-// starts from the levels showing now.
-func (s Settings) Apply(p Preset, goos string) Settings {
-	if p == Custom {
-		levels := map[ID]Level{}
-		for _, r := range Table {
-			levels[r.ID] = s.Level(r.ID, goos)
-		}
-		s.Levels = levels
-	} else {
-		s.Levels = nil
-	}
+// Apply switches to a preset.
+func (s Settings) Apply(p Preset) Settings {
 	s.Preset = p
 	return s
-}
-
-// SetLevel changes one row, which makes the choices Custom. It reports false
-// for a level goos can't enforce for that row.
-func (s Settings) SetLevel(id ID, l Level, goos string) (Settings, bool) {
-	r, ok := Lookup(id)
-	if !ok || !slices.Contains(r.Choices(goos), l) {
-		return s, false
-	}
-	if s.Level(id, goos) == l {
-		return s, true
-	}
-	s = s.Apply(Custom, goos)
-	s.Levels[id] = l
-	return s, true
 }
 
 var folderIDRe = regexp.MustCompile(`^[a-z0-9]{1,16}$`)
@@ -187,21 +142,11 @@ var folderIDRe = regexp.MustCompile(`^[a-z0-9]{1,16}$`)
 // ValidFolderID reports whether s can name one of the player's folders.
 func ValidFolderID(s string) bool { return folderIDRe.MatchString(s) }
 
-// Normalize repairs a hand-edited file: unknown presets, rows, levels and
+// Normalize repairs a hand-edited file: an unknown preset is Standard and
 // malformed folders are dropped.
 func (s Settings) Normalize() Settings {
-	if !slices.Contains([]Preset{Standard, Strict, Custom}, s.Preset) {
+	if s.Preset != Strict {
 		s.Preset = Standard
-	}
-	levels := map[ID]Level{}
-	for id, l := range s.Levels {
-		if r, ok := Lookup(id); ok && slices.Contains(r.choices, l) {
-			levels[id] = l
-		}
-	}
-	s.Levels = nil
-	if s.Preset == Custom && len(levels) > 0 {
-		s.Levels = levels
 	}
 	var folders []Folder
 	for _, f := range s.Folders {

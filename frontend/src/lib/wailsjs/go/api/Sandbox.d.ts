@@ -7,8 +7,6 @@ export function AddFolder(arg1:string):Promise<api.SandboxView>;
 
 export function SetFolder(arg1:string,arg2:string,arg3:string):Promise<api.SandboxView>;
 
-export function SetLevel(arg1:string,arg2:string,arg3:string):Promise<api.SandboxView>;
-
 export function SetOn(arg1:string,arg2:boolean):Promise<api.SandboxView>;
 
 export function SetPreset(arg1:string,arg2:string):Promise<api.SandboxView>;

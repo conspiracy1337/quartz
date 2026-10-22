@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -68,7 +67,7 @@ func TestRedteamEscapes(t *testing.T) {
 		set  rules.Settings
 	}{
 		{"Standard", rules.Default()},
-		{"Strict", rules.Default().Apply(rules.Strict, runtime.GOOS)},
+		{"Strict", rules.Default().Apply(rules.Strict)},
 	} {
 		results[p.name] = runProbe(t, e, p.name, p.set)
 	}

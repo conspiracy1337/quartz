@@ -260,17 +260,6 @@ func TestJailStandard(t *testing.T) {
 	checkPlatform(t, got)
 }
 
-// Blocked is the no-network level (Strict keeps the network: LAN-only on
-// Windows, full elsewhere, since a no-network server is useless).
-func TestJailBlockedHasNoNetwork(t *testing.T) {
-	f := newJailFixture(t)
-	set, _ := rules.Default().SetLevel(rules.Internet, rules.Blocked, runtime.GOOS)
-	got := f.probe(t, set)
-	if got["dial"] == "ok" {
-		t.Error("Blocked reached the network")
-	}
-}
-
 // Stop signals the game's process group (or posts WM_CLOSE, then kills),
 // which reaches the jailed game.
 func TestJailStopReachesGame(t *testing.T) {

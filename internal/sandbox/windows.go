@@ -60,20 +60,16 @@ func newBackend() backend { return &windowsBackend{} }
 // networkCaps are the well-known network capabilities for the Internet level.
 // Allowed reaches the internet and the private (LAN) network; LAN keeps the
 // private network only (LAN and VPN adapters — so a game can still join, and a
-// server still host, a LAN/Radmin game — but not the internet); Blocked grants
-// none. The private-network capability also covers the loopback block's one
-// escape hatch: a VPN adapter, not 127.0.0.1, which the app container still
-// refuses. The same levels apply to a game and a server.
+// server still host, a LAN/Radmin game — but not the internet). The
+// private-network capability also covers the loopback block's one escape
+// hatch: a VPN adapter, not 127.0.0.1, which the app container still refuses.
+// The same levels apply to a game and a server.
 func networkCaps(r Run) []windows.WELL_KNOWN_SID_TYPE {
-	switch r.Level(rules.Internet) {
-	case rules.Allowed:
+	if r.Level(rules.Internet) == rules.Allowed {
 		return []windows.WELL_KNOWN_SID_TYPE{windows.WinCapabilityInternetClientSid,
 			windows.WinCapabilityInternetClientServerSid, windows.WinCapabilityPrivateNetworkClientServerSid}
-	case rules.LAN:
-		return []windows.WELL_KNOWN_SID_TYPE{windows.WinCapabilityPrivateNetworkClientServerSid}
-	default:
-		return nil
 	}
+	return []windows.WELL_KNOWN_SID_TYPE{windows.WinCapabilityPrivateNetworkClientServerSid}
 }
 
 func (b *windowsBackend) status() Status {

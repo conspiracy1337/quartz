@@ -131,7 +131,7 @@ func TestHost(t *testing.T) {
 				t.Fatal(err)
 			}
 			if preset != "" {
-				if in, err = insts.EditSandbox(in.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset), runtime.GOOS); return nil }); err != nil {
+				if in, err = insts.EditSandbox(in.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset)); return nil }); err != nil {
 					t.Fatal(err)
 				}
 			}

@@ -47,7 +47,7 @@ func TestRound3Escapes(t *testing.T) {
 		set  rules.Settings
 	}{
 		{"Standard", rules.Default()},
-		{"Strict", rules.Default().Apply(rules.Strict, runtime.GOOS)},
+		{"Strict", rules.Default().Apply(rules.Strict)},
 	} {
 		e := setupWin(t, javaBin)
 		jar := compileProbe2(t, javacBin, jarBin, e)

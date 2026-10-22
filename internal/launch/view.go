@@ -31,11 +31,8 @@ func (l *Launcher) assemble(sp *spec) error {
 	req := runview.Request{Game: sp.gameDir, Scratch: l.scratch(sp), LiveSaves: locksWorlds(sp)}
 	mode := runview.Shared
 	if sp.sandboxed {
-		switch sp.inst.Sandbox.Level(rules.Synced, runtime.GOOS) {
-		case rules.RO:
+		if sp.inst.Sandbox.Level(rules.Synced, runtime.GOOS) == rules.RO {
 			mode = runview.Private
-		case rules.Blocked:
-			mode = runview.Empty
 		}
 	}
 	if l.cfg.Syncing != nil {
@@ -94,10 +91,10 @@ func (l *Launcher) sandboxRun(sp *spec, argv []string) sandbox.Run {
 	id := sp.inst.ID
 	r := sandbox.Run{
 		Instance: id, Rules: sp.inst.Sandbox, GameDir: sp.gameDir,
-		Scratch:  l.scratch(sp),
-		Write:    []string{filepath.Join(l.scratch(sp), "natives")},
-		Data:     filepath.Join(l.cfg.Instances.Dir(id), "sandbox"),
-		Read:     l.cfg.StoreRead, Java: sandbox.JavaRoot(sp.rt.Path),
+		Scratch: l.scratch(sp),
+		Write:   []string{filepath.Join(l.scratch(sp), "natives")},
+		Data:    filepath.Join(l.cfg.Instances.Dir(id), "sandbox"),
+		Read:    l.cfg.StoreRead, Java: sandbox.JavaRoot(sp.rt.Path),
 		GameMode: sp.eff.Performance.GameMode && runtime.GOOS == "linux",
 	}
 	if sp.inst.ClientJar != nil {

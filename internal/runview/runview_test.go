@@ -237,8 +237,8 @@ func TestBwrapBindAndOverlay(t *testing.T) {
 	closeView(t, first)
 }
 
-// A sandbox's "Read only" and "Blocked" shared folders: the run may write,
-// nothing reaches the shared copy, and the game folder is empty afterwards.
+// A sandbox's "Read only" shared folders: the run may write, nothing reaches
+// the shared copy, and the game folder is empty afterwards.
 func TestThrowawayFolders(t *testing.T) {
 	for _, backend := range []string{"clone", "bwrap"} {
 		t.Run(backend, func(t *testing.T) {
@@ -251,13 +251,13 @@ func TestThrowawayFolders(t *testing.T) {
 			put(t, filepath.Join(other, "mod.toml"), "shared config")
 			r := Request{Game: f.game, Scratch: filepath.Join(f.runs, "1.view"), Folders: []Folder{
 				{Rel: "saves", Shared: f.shared, Mode: Private},
-				{Rel: "config", Shared: other, Mode: Empty},
+				{Rel: "config", Shared: other, Mode: Private},
 			}}
 			v, err := f.a.Assemble(r)
 			if err != nil {
 				t.Fatal(err)
 			}
-			script := `test "$(cat saves/Shared/level.dat)" = "shared v1" && echo -n changed > saves/Shared/level.dat && test ! -e config/mod.toml && echo -n x > config/new.toml`
+			script := `test "$(cat saves/Shared/level.dat)" = "shared v1" && echo -n changed > saves/Shared/level.dat && test "$(cat config/mod.toml)" = "shared config" && echo -n x > config/new.toml`
 			if backend == "bwrap" {
 				f.run(t, v, script)
 			} else {

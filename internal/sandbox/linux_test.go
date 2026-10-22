@@ -86,17 +86,6 @@ func checkPlatform(t *testing.T, got map[string]string) {
 	}
 }
 
-// The Blocked internet level unshares the net namespace, leaving only
-// loopback. (Strict keeps the host network now — a no-network server is
-// useless and outbound abuse isn't the threat.)
-func TestJailBlockedLoopbackOnly(t *testing.T) {
-	f := newJailFixture(t)
-	set, _ := rules.Default().SetLevel(rules.Internet, rules.Blocked, "linux")
-	if got := f.probe(t, set); got["interfaces"] != "1" {
-		t.Errorf("interfaces = %s", got["interfaces"])
-	}
-}
-
 // A process the game leaves running (a mod's daemon) ends with the game,
 // so it can't keep the run, or anything else, alive.
 func TestJailLeftoversEndWithGame(t *testing.T) {

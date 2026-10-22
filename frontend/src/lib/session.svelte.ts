@@ -61,13 +61,19 @@ const STEP_MS = 700;
 const TOAST_MS = 8000;
 const TOAST_QUEUE = 3;
 const HOST_START_MS = 1600;
+/** How long the preview's game or server takes to quit when asked. */
+const PREVIEW_STOP_MS = 3000;
 
 class Session {
   overlay = $state<Overlay | null>(null);
   launch = $state<Launch | null>(null);
   running = $state<Record<string, boolean>>({});
+  /** Games asked to quit: their Stop shows Kill until they exit, and pressing it forces them. */
+  stopping = $state<Record<string, boolean>>({});
   /** The one local server, while it starts or runs. */
   hosting = $state<HostState | null>(null);
+  /** The server was asked to stop: its Stop shows Kill until it has. */
+  hostStopping = $state(false);
   /** Whether its panel shows (the header's address chip toggles it). */
   hostPanel = $state(true);
   /** The panel's server after it stopped (see hostShown). */
@@ -175,17 +181,26 @@ class Session {
     return !!this.running[instanceId] || this.launch?.instanceId === instanceId;
   }
 
-  /** Asks the game to quit (a second click forces it), or cancels a launch still preparing. */
+  /** Asks the game to quit (a second click, on Kill, forces it), or cancels a launch still preparing. */
   stop(instanceId: string) {
     if (!this.running[instanceId] && this.launch?.instanceId === instanceId) {
       this.cancelLaunch();
       return;
     }
+    const kill = !!this.stopping[instanceId];
+    this.stopping[instanceId] = true;
     if (hasBridge()) {
-      api.launch.stop(instanceId).catch((e) => this.fail('Stop', e));
+      api.launch.stop(instanceId).catch((e) => {
+        delete this.stopping[instanceId];
+        this.fail(kill ? 'Kill' : 'Stop', e);
+      });
       return;
     }
-    delete this.running[instanceId];
+    // The preview's game takes a moment to quit, unless it is killed.
+    setTimeout(() => {
+      delete this.running[instanceId];
+      delete this.stopping[instanceId];
+    }, kill ? 0 : PREVIEW_STOP_MS);
   }
 
   /** A ready update stays ready on the next start, so the banner's place is kept for it then. */
@@ -221,7 +236,10 @@ class Session {
           if (this.launch?.instanceId === g.instanceId) this.launch = null;
           return;
         }
-        if (!g.copies) delete this.running[g.instanceId];
+        if (!g.copies) {
+          delete this.running[g.instanceId];
+          delete this.stopping[g.instanceId];
+        }
         revs.bump('instances');
         for (const k of g.kept ?? []) this.notify({ subject: k.world, text: `changed in both copies, kept as ${k.as}` });
         // A crash (or a game that never started) opens the crash dialog with its likely cause.
@@ -272,14 +290,22 @@ class Session {
     }, HOST_START_MS);
   }
 
-  /** Asks the server to save and stop; a second click forces it. */
+  /** Asks the server to save and stop; a second click, on Kill, forces it. */
   stopHost(instanceId: string) {
+    const kill = this.hostStopping;
+    this.hostStopping = true;
     if (hasBridge()) {
-      api.host.stop(instanceId).catch((e) => this.fail('Stop', e));
+      api.host.stop(instanceId).catch((e) => {
+        this.hostStopping = false;
+        this.fail(kill ? 'Kill' : 'Stop', e);
+      });
       return;
     }
-    if (this.hosting) this.hostStopped = { ...this.hosting, state: 'stopped', result: 'ok', players: 0 };
-    this.hosting = null;
+    setTimeout(() => {
+      if (this.hosting) this.hostStopped = { ...this.hosting, state: 'stopped', result: 'ok', players: 0 };
+      this.hosting = null;
+      this.hostStopping = false;
+    }, kill ? 0 : PREVIEW_STOP_MS);
   }
 
   /** Follows the server's state; a server that ends badly says so. */
@@ -288,6 +314,7 @@ class Session {
       this.hosting = h;
       return;
     }
+    this.hostStopping = false;
     if (this.hosting?.runId === h.runId) {
       this.hosting = null;
       this.hostStopped = h;

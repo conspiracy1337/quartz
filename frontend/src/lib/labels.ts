@@ -45,3 +45,6 @@ export const projectKindOf = (c: ContentKind): ProjectKind => PROJECT_TYPES.find
 export const CHANNEL_BADGE = { Release: 'badge-ok', Beta: 'badge-warn', Alpha: 'badge-danger' } as const;
 
 export const SRC_NAMES: Record<Src, string> = { modrinth: 'Modrinth', curseforge: 'CurseForge', norisk: 'NoRisk' };
+
+/** What Upload asks before a log goes to mclo.gs. */
+export const UPLOAD_ASK = 'Upload this log to mclo.gs? Anyone with the link can read it.';

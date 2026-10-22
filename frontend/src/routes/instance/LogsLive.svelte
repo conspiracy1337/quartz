@@ -118,7 +118,6 @@
     <div style="flex: 1 1 0"></div>
     <button class="btn btn-sm" onclick={copy}>Copy</button>
     <button class="btn btn-sm" aria-pressed={wrap} onclick={() => (wrap = !wrap)}>Wrap</button>
-    <button class="btn btn-sm" disabled={source === 'server'} title={source === 'server' ? 'Server logs stay on this computer' : undefined} onclick={() => session.upload(() => api.logs.uploadRun(instanceId, source))}>Upload to mclo.gs</button>
   {/snippet}
   {#snippet rail()}
     <div class="side-label">Running</div>
@@ -145,10 +144,10 @@
 </LogsFrame>
 
 <style>
-  .con{flex:1 1 auto;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#08080a;font-family:var(--mono);font-size:12px;line-height:20px;padding:8px 0}
+  .con{flex:1 1 auto;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--console);font-family:var(--mono);font-size:12px;line-height:20px;padding:8px 0}
   .ln{display:grid;grid-template-columns:72px 44px minmax(0,1fr);gap:12px;padding:0 14px;white-space:pre-wrap}
   .nowrap .ln{white-space:pre;height:20px;overflow:hidden}
-  .ln:hover{background:#111114}
+  .ln:hover{background:color-mix(in srgb,var(--text) 4%,var(--console))}
   .ln .t{color:var(--faint)}
   .lv-INFO{color:var(--muted)} .lv-WARN{color:var(--warn)} .lv-ERROR{color:var(--danger)} .lv-DEBUG{color:var(--faint)}
   .ln.ERROR{background:color-mix(in srgb,var(--danger) 7%,transparent)}

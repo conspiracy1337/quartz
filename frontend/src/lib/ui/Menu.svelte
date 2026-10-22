@@ -1,8 +1,22 @@
 <script lang="ts" module>
-  /** A menu's place under the button that opens it, right-aligned to it. */
+  // The button the next menu opens under (see below), while that menu is about to mount.
+  let opener: { el: HTMLElement; at: number } | null = null;
+  const OPENER_MS = 2000;
+
+  /** A menu's place under the button that opens it, right-aligned to it. Pressing that
+      button again while the menu shows closes it. */
   export function below(e: MouseEvent) {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const el = e.currentTarget as HTMLElement;
+    opener = { el, at: performance.now() };
+    const r = el.getBoundingClientRect();
     return { x: r.right - 240, y: r.bottom + 4 };
+  }
+
+  /** The button a menu mounting now was opened from; a stale one (a below() whose menu never came) is dropped. */
+  function takeOpener(): HTMLElement | null {
+    const o = opener;
+    opener = null;
+    return o && o.el.isConnected && performance.now() - o.at < OPENER_MS ? o.el : null;
   }
 </script>
 
@@ -56,8 +70,30 @@
     const i = items.indexOf(document.activeElement as HTMLElement);
     items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
   }
+  // Its opener shows the menu open while it is.
+  const anchor = takeOpener();
+  $effect(() => {
+    anchor?.setAttribute('aria-expanded', 'true');
+    return () => anchor?.setAttribute('aria-expanded', 'false');
+  });
+
+  /** Eats the click that follows a press on the opener, so it doesn't open the menu again. */
+  function swallowClick(on: HTMLElement) {
+    const eat = (e: MouseEvent) => {
+      if (on.contains(e.target as Node)) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('click', eat, true);
+    // The click comes right after the release; a press dragged away never clicks.
+    window.addEventListener('pointerup', () => setTimeout(() => window.removeEventListener('click', eat, true)), { capture: true, once: true });
+  }
+
   const outside = (e: PointerEvent) => {
-    if (!el?.contains(e.target as Node)) onclose();
+    if (el?.contains(e.target as Node)) return;
+    if (anchor?.contains(e.target as Node)) swallowClick(anchor);
+    onclose();
   };
 </script>
 

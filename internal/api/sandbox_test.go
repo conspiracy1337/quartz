@@ -29,20 +29,16 @@ func TestSandboxFacade(t *testing.T) {
 	if v.Rows[0].Path != "instances/t/" || v.Rows[1].Path != "instances/t/game/mods/" || v.Rows[4].Path != "None shared" || v.Rows[3].Path != "Picked when you play" {
 		t.Fatalf("paths %+v", v.Rows)
 	}
-	if v, err = a.SetLevel(in.ID, "internet", "no"); err != nil || v.Preset != "custom" || v.Rows[5].Level != "no" {
+	if v, err = a.SetPreset(in.ID, "strict"); err != nil || v.Preset != "strict" || v.Rows[5].Level != "lan" || v.Rows[4].Level != "ro" {
 		t.Fatalf("%+v %v", v, err)
 	}
 	if v, err = a.SetPreset(in.ID, "standard"); err != nil || v.Rows[5].Level != "on" {
 		t.Fatalf("%+v %v", v, err)
 	}
-	if _, err := a.SetLevel(in.ID, "instance", "ro"); !errors.Is(err, errBadSandbox) {
-		t.Fatal("the instance row is fixed")
-	}
-	if _, err := a.SetLevel(in.ID, "mods", "rw"); !errors.Is(err, errBadSandbox) {
-		t.Fatal("the mods row is fixed")
-	}
-	if _, err := a.SetPreset(in.ID, "lax"); !errors.Is(err, errBadSandbox) {
-		t.Fatal(err)
+	for _, p := range []string{"lax", "custom"} {
+		if _, err := a.SetPreset(in.ID, p); !errors.Is(err, errBadSandbox) {
+			t.Fatal(p, err)
+		}
 	}
 
 	maps := filepath.Join(t.TempDir(), "maps")

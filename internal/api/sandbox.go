@@ -44,14 +44,13 @@ type Sandbox struct {
 
 func NewSandbox(ctx *Ctx, d SandboxDeps) *Sandbox { return &Sandbox{ctx: ctx, d: d} }
 
-// SandboxRow is one row of "What the game can reach": a rule, or one of the
-// player's own folders.
+// SandboxRow is one row of "What the game can reach": a rule, at the
+// preset's level, or one of the player's own folders, at the level picked.
 type SandboxRow struct {
-	ID      string   `json:"id"`
-	Folder  bool     `json:"folder"`
-	Path    string   `json:"path"` // "" keeps the page's own description
-	Level   string   `json:"level"`
-	Choices []string `json:"choices"`
+	ID     string `json:"id"`
+	Folder bool   `json:"folder"`
+	Path   string `json:"path"` // "" keeps the page's own description
+	Level  string `json:"level"`
 }
 
 // SandboxView is the page's state.
@@ -92,21 +91,12 @@ func (a *Sandbox) view(in instance.Instance) SandboxView {
 		paths[rules.Instance] = a.short(in.Location) + "/"
 	}
 	for _, r := range rules.Table {
-		v.Rows = append(v.Rows, SandboxRow{ID: string(r.ID), Path: paths[r.ID], Level: string(s.Level(r.ID, goos)), Choices: levels(r.Choices(goos))})
+		v.Rows = append(v.Rows, SandboxRow{ID: string(r.ID), Path: paths[r.ID], Level: string(s.Level(r.ID, goos))})
 	}
 	for _, f := range s.Folders {
-		v.Rows = append(v.Rows, SandboxRow{ID: f.ID, Folder: true, Path: a.short(f.Path), Level: string(f.Level),
-			Choices: append(levels(rules.FolderChoices), string(rules.Remove))})
+		v.Rows = append(v.Rows, SandboxRow{ID: f.ID, Folder: true, Path: a.short(f.Path), Level: string(f.Level)})
 	}
 	return v
-}
-
-func levels(ls []rules.Level) []string {
-	out := make([]string, len(ls))
-	for i, l := range ls {
-		out[i] = string(l)
-	}
-	return out
 }
 
 // short shows a path inside the data folder relative to it, one in the
@@ -177,25 +167,13 @@ func (a *Sandbox) SetOn(id string, on bool) (SandboxView, error) {
 	return a.edit(id, func(s *rules.Settings) error { s.On = on; return nil })
 }
 
-// SetPreset picks Standard, Strict or Custom.
+// SetPreset picks Standard or Strict.
 func (a *Sandbox) SetPreset(id, preset string) (SandboxView, error) {
 	p := rules.Preset(preset)
-	if !slices.Contains([]rules.Preset{rules.Standard, rules.Strict, rules.Custom}, p) {
+	if p != rules.Standard && p != rules.Strict {
 		return SandboxView{}, errBadSandbox
 	}
-	return a.edit(id, func(s *rules.Settings) error { *s = s.Apply(p, runtime.GOOS); return nil })
-}
-
-// SetLevel changes one rule, which makes the choices Custom.
-func (a *Sandbox) SetLevel(id, rule, level string) (SandboxView, error) {
-	return a.edit(id, func(s *rules.Settings) error {
-		next, ok := s.SetLevel(rules.ID(rule), rules.Level(level), runtime.GOOS)
-		if !ok {
-			return errBadSandbox
-		}
-		*s = next
-		return nil
-	})
+	return a.edit(id, func(s *rules.Settings) error { *s = s.Apply(p); return nil })
 }
 
 // AddFolder asks for a folder (a native dialog; the path never comes from

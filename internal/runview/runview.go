@@ -42,12 +42,11 @@ type Folder struct {
 // Mode is how a run sees a shared folder.
 type Mode string
 
-// Modes. Private and Empty are the sandbox's "Read only" and "Blocked":
-// the run may write, and nothing it writes is kept.
+// Modes. Private is the sandbox's "Read only": the run may write, and
+// nothing it writes is kept.
 const (
 	Shared  Mode = ""        // the real shared copy, changes kept
 	Private Mode = "private" // a throwaway layer over the shared copy
-	Empty   Mode = "empty"   // an empty throwaway folder
 )
 
 // Request describes one run.
@@ -347,9 +346,6 @@ func (a *Assembler) assembleBwrap(v *View, r Request, only map[string]bool, skip
 		case f.Mode == Private:
 			args.TmpOverlay(f.Shared, at)
 			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at, Target: f.Shared})
-		case f.Mode == Empty:
-			args.Tmpfs(at)
-			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at})
 		case only[f.Shared] || f.live:
 			args.Bind(f.Shared, at)
 			v.st.Mounts = append(v.st.Mounts, mount{Kind: bind, Path: at, Target: f.Shared, Worlds: worlds})
@@ -386,14 +382,7 @@ func (a *Assembler) assembleClone(v *View, r Request, only map[string]bool, skip
 			return err // a mount point must be empty (syncing empties it before each launch)
 		}
 		inPlace := v.st.GameDir == r.Game
-		switch f.Mode {
-		case Empty:
-			if err := os.MkdirAll(at, 0o700); err != nil {
-				return err
-			}
-			v.st.Mounts = append(v.st.Mounts, mount{Kind: scratch, Path: at, InPlace: inPlace})
-			continue
-		case Private:
+		if f.Mode == Private {
 			if err := linkx.CloneTree(f.Shared, at); err != nil {
 				return err
 			}

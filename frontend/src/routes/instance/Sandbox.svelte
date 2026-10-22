@@ -9,7 +9,6 @@
   import Icon from '$lib/ui/Icon.svelte';
   import type { IconName } from '$lib/ui/icons';
   import Seg from '$lib/ui/Seg.svelte';
-  import Select from '$lib/ui/Select.svelte';
   import Toggle from '$lib/ui/Toggle.svelte';
 
   interface Props { instance: Instance }
@@ -28,7 +27,9 @@
     graphics: { name: 'Graphics and audio', icon: 'gpu', path: 'GPU, PipeWire, Wayland' },
     home: { name: 'Your home folder', icon: 'house', path: '~/ and other instances' },
   };
-  const PRESETS = [{ value: 'standard', label: 'Standard' }, { value: 'strict', label: 'Strict' }, { value: 'custom', label: 'Custom' }] as const;
+  const PRESETS = [{ value: 'standard', label: 'Standard' }, { value: 'strict', label: 'Strict' }] as const;
+  // The player's own folders pick their access; a rule's level comes from the preset.
+  const FOLDER_LEVELS = [{ value: 'ro', label: 'Read only' }, { value: 'rw', label: 'Read and write' }] as const;
 
   const status = query(() => api.sandbox.status());
   const sb = query(() => api.sandbox.view(i.id));
@@ -52,8 +53,7 @@
   }
   const setOn = (v: boolean) => edit('Sandbox', () => api.sandbox.setOn(i.id, v));
   const setPreset = (p: SandboxPreset) => edit('Sandbox', () => api.sandbox.setPreset(i.id, p));
-  const setLevel = (r: SandboxRow, l: SandboxLevel) =>
-    edit(meta(r).name, () => (r.folder ? api.sandbox.setFolder(i.id, r.id, l) : api.sandbox.setLevel(i.id, r.id, l)));
+  const setFolder = (r: SandboxRow, l: SandboxLevel) => edit(meta(r).name, () => api.sandbox.setFolder(i.id, r.id, l));
   const addFolder = () => edit('Allow another folder', () => api.sandbox.addFolder(i.id));
 </script>
 
@@ -71,16 +71,19 @@
         {#if sb.data}
           {#each sb.data.rows as r (r.id)}
             {@const m = meta(r)}
-            <div class="row acc">
+            <div class="row acc" class:own={r.folder}>
               <span style="color: var(--muted); display: grid; place-items: center" aria-hidden="true"><Icon name={m.icon} size={16} /></span>
               <span style="min-width: 0"><span class="trunc" style="display: block">{m.name}</span><span class="trunc small faint mono" style="display: block">{r.path || m.path}</span></span>
-              <Select value={r.level} options={r.choices.map((c) => ({ value: c, label: LEVELS[c][0] }))} label="{m.name} access" style="height: 28px" fixed onchange={(l) => setLevel(r, l)}>
-                {#snippet current(l)}<span class="lvl {LEVELS[l][1]}">{LEVELS[l][0]}</span>{/snippet}
-              </Select>
+              {#if r.folder}
+                <Seg options={FOLDER_LEVELS} value={r.level === 'rw' ? 'rw' : 'ro'} label="{m.name} access" onchange={(l) => setFolder(r, l)} />
+                <button class="btn btn-icon btn-sm btn-ghost" aria-label="Stop allowing {m.name}" title="Stop allowing this folder" onclick={() => setFolder(r, 'remove')}><Icon name="x" size={12} sw={2} /></button>
+              {:else}
+                <span class="lvl {LEVELS[r.level][1]}">{LEVELS[r.level][0]}</span>
+              {/if}
             </div>
           {/each}
         {:else}
-          {#each { length: 9 } as _, k (k)}<div class="row acc" aria-hidden="true"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk" style="height: 28px; border-radius: var(--radius)"></div></div>{/each}
+          {#each { length: 9 } as _, k (k)}<div class="row acc" aria-hidden="true"><div class="sk" style="width: 16px; height: 16px; border-radius: 4px"></div><div style="display: flex; flex-direction: column; gap: 6px"><div class="sk" style="height: 12px; width: 35%"></div><div class="sk" style="height: 10px; width: 50%"></div></div><div class="sk" style="height: 10px; width: 72px"></div></div>{/each}
         {/if}
       </div>
       <button class="btn" style="align-self: flex-start" onclick={addFolder}>Allow another folder</button>
@@ -90,7 +93,9 @@
 
 <style>
   .acc{grid-template-columns:20px minmax(0,1fr) 128px;height:52px}
-  .lvl{font-size:12px;font-family:var(--mono)}
+  /* The player's folders: their access choice and a remove button, on the rules' right edge. */
+  .acc.own{grid-template-columns:20px minmax(0,1fr) auto 28px}
+  .lvl{font-size:12px;font-family:var(--mono);justify-self:end}
   .l-rw{color:var(--accent)} .l-ro{color:var(--info)} .l-no{color:var(--faint)}
   .off-all{opacity:.4;pointer-events:none}
   .shield{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;flex:0 0 44px}
