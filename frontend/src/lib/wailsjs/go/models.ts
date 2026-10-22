@@ -3238,7 +3238,7 @@ export namespace settings {
 	    muteUnfocused: boolean;
 	    setupDone: boolean;
 	    keys?: Record<string, string>;
-	    hiddenNews?: string;
+	    hiddenNews?: string[];
 	    serverOrder?: string[];
 	
 	    static createFrom(source: any = {}) {

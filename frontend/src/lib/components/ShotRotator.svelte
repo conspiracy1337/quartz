@@ -2,43 +2,33 @@
   import { api } from '../api';
   import { day } from '../format';
   import { query } from '../query.svelte';
+  import { Rotation } from '../rotation.svelte';
   import { href } from '../router.svelte';
   import Icon from '../ui/Icon.svelte';
   import Empty from '../ui/Empty.svelte';
 
   /** Recent screenshots from every instance, shown one at a time. */
 
-  const INTERVAL = 5000;
   const shots = query(() => api.home.recentShots());
   const instances = query(() => api.instances.list(), 'instances.list');
-  let i = $state(0);
-  let paused = $state(false);
-
   const list = $derived(shots.data ?? []);
-  const n = $derived(list.length);
-  const cur = $derived(list[i]);
+  const rot = new Rotation(() => list.length);
+  $effect(() => rot.start());
+  const cur = $derived(list[rot.at]);
   const where = $derived(cur ? `${instances.data?.find((x) => x.id === cur.instanceId)?.name ?? ''}, ${day(cur.takenAt)}` : '');
-
-  $effect(() => {
-    const t = setInterval(() => {
-      // Hidden windows (minimised, launcher hidden while playing) don't need to animate.
-      if (!paused && !document.hidden && n > 0) i = (i + 1) % n;
-    }, INTERVAL);
-    return () => clearInterval(t);
-  });
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div class="shr" role="region" aria-roledescription="carousel" aria-label="Recent screenshots" style="font-family: var(--font)"
-  onmouseenter={() => (paused = true)} onmouseleave={() => (paused = false)}>
-  {#each list as s, k (s.id)}<span class="shr-img" class:on={k === i} style="background: {s.art.background}" aria-hidden="true"></span>{/each}
+  onmouseenter={() => (rot.paused = true)} onmouseleave={() => (rot.paused = false)}>
+  {#each list as s, k (s.id)}<span class="shr-img" class:on={k === rot.at} style="background: {s.art.background}" aria-hidden="true"></span>{/each}
   {#if cur}
     <a href={href({ name: 'instance', id: cur.instanceId, tab: 'screenshots', sub: cur.id })} class="shr-hit" aria-label="Open {cur.title}"></a>
     <div class="shr-bar" style="padding: 40px 12px 12px 12px">
       <span class="shr-cap" aria-live="polite"><span class="shr-t">{cur.title}</span><span class="shr-d">{where}</span></span>
-      <span class="shr-dots">{#each list as s, k (s.id)}<button class:on={k === i} onclick={() => (i = k)} aria-label="Show screenshot {k + 1}"></button>{/each}</span>
-      <button class="shr-nv" onclick={() => (i = (i + n - 1) % n)} aria-label="Previous screenshot"><Icon name="chevron-left" size={12} sw={2.2} /></button>
-      <button class="shr-nv" onclick={() => (i = (i + 1) % n)} aria-label="Next screenshot"><Icon name="chevron-right" size={12} sw={2.2} /></button>
+      <span class="shr-dots">{#each list as s, k (s.id)}<button class:on={k === rot.at} onclick={() => (rot.i = k)} aria-label="Show screenshot {k + 1}"></button>{/each}</span>
+      <button class="shr-nv" onclick={() => rot.step(-1)} aria-label="Previous screenshot"><Icon name="chevron-left" size={12} sw={2.2} /></button>
+      <button class="shr-nv" onclick={() => rot.step(1)} aria-label="Next screenshot"><Icon name="chevron-right" size={12} sw={2.2} /></button>
     </div>
   {:else if shots.data}
     <Empty text="Screenshots you take in any instance show up here." style="position: absolute; inset: 0" />

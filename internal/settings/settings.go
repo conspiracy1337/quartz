@@ -36,8 +36,9 @@ type General struct {
 	// Keys are the keyboard shortcuts changed from their defaults, by action
 	// ("palette": "Ctrl+J"); the UI defines the actions.
 	Keys map[string]string `json:"keys,omitempty"`
-	// HiddenNews is the news article Home's strip was dismissed for.
-	HiddenNews string `json:"hiddenNews,omitempty"`
+	// HiddenNews are the news articles dismissed from Home's strip, oldest
+	// first.
+	HiddenNews []string `json:"hiddenNews,omitempty"`
 	// ServerOrder is Home's server list as the player arranged it, by merged
 	// server ID (the normalized address).
 	ServerOrder []string `json:"serverOrder,omitempty"`
@@ -145,6 +146,7 @@ const (
 	maxPathLen  = 4096
 	maxUserLen  = 256
 	maxServers  = 1024
+	maxHidden   = 16
 )
 
 // Normalize replaces every invalid field with its default, field by field, so one
@@ -156,9 +158,7 @@ func (s Settings) Normalize() Settings {
 		s.General.Language = d.General.Language
 	}
 	s.General.StartPage = oneOf(s.General.StartPage, d.General.StartPage, "home", "library", "last-instance")
-	if len(s.General.HiddenNews) > 128 {
-		s.General.HiddenNews = ""
-	}
+	s.General.HiddenNews = cleanHidden(s.General.HiddenNews)
 	s.General.Keys = cleanKeys(s.General.Keys)
 	s.General.ServerOrder = cleanOrder(s.General.ServerOrder)
 
@@ -258,6 +258,18 @@ func cleanKeys(in map[string]string) map[string]string {
 
 // cleanOrder keeps Home's server order to a sane size: at most maxServers IDs,
 // each the length an address can have.
+// cleanHidden keeps the most recent dismissals; older articles have long
+// left the feeds.
+func cleanHidden(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		if id != "" && len(id) <= 128 {
+			out = append(out, id)
+		}
+	}
+	return out[max(0, len(out)-maxHidden):]
+}
+
 func cleanOrder(ids []string) []string {
 	var out []string
 	for _, id := range ids {

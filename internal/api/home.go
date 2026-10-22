@@ -24,8 +24,8 @@ func NewHome(ctx *Ctx, d HomeDeps) *Home { return &Home{ctx: ctx, d: d} }
 // Week is this week's play time per day, Monday first.
 func (h *Home) Week() []home.Day { return asList(h.d.Home.Week()) }
 
-// News is the latest Java Edition article (nil without one).
-func (h *Home) News() (*home.News, error) { return h.d.Home.News(h.ctx.Get()) }
+// News is the latest Java Edition article, then the launcher's own posts.
+func (h *Home) News() ([]home.News, error) { return asListErr(h.d.Home.News(h.ctx.Get())) }
 
 // Servers merges every instance's servers and pings them (force skips the
 // one-minute cache).

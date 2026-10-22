@@ -1,18 +1,22 @@
 // Package home gathers what Home shows that isn't another service's list:
 // this week's play time across every instance, the latest Java Edition
-// article or release from the official launcher's feeds, and whether the
+// article or release from the official launcher's feeds followed by the
+// launcher's own posts, and whether the
 // data folder's drive is running out of space.
 package home
 
 import (
+	"cmp"
 	"context"
-	"net/url"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	"quartz/internal/brand"
 	"quartz/internal/core/httpcache"
+	"quartz/internal/core/netx"
 	"quartz/internal/core/paths"
 	"quartz/internal/core/remoteimg"
 	"quartz/internal/core/sysinfo"
@@ -26,6 +30,8 @@ import (
 const (
 	Feed       = "https://launchercontent.mojang.com/v2/news.json"
 	PatchNotes = "https://launchercontent.mojang.com/v2/javaPatchNotes.json"
+	// QuartzNews is the launcher's own posts, shown after Mojang's.
+	QuartzNews = brand.WebAPI + "news"
 )
 
 const (
@@ -33,6 +39,11 @@ const (
 	// articleBase is where minecraft.net keeps a patch note's article.
 	articleBase = "https://www.minecraft.net/en-us/article/"
 	newsTTL     = time.Hour
+	// maxPosts and maxTitle bound what the launcher's own feed can put in
+	// the rotation.
+	maxPosts = 5
+	maxTitle = 200
+	maxID    = 100 // fits settings' hidden news entries with the prefix
 	// LowDisk is when the drive counts as nearly full.
 	LowDisk = 5 << 30
 )
@@ -44,7 +55,7 @@ type Day struct {
 	Today   bool `json:"today"`
 }
 
-// News is the latest article.
+// News is one article in Home's news strip.
 type News struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
@@ -77,6 +88,10 @@ type Service struct {
 	mu   sync.Mutex
 	week []Day
 	key  string // the day the cached week was counted on
+
+	postsOnce sync.Once
+	posts     []News
+	postsURL  string // tests only
 }
 
 // New returns a Service.
@@ -187,23 +202,55 @@ type patchNotes struct {
 	} `json:"entries"`
 }
 
-// News returns the newest Java Edition article or patch note, or nil when
-// there is none. It fails only when neither feed can be reached.
-func (s *Service) News(ctx context.Context) (*News, error) {
+// posts is the launcher's own news feed.
+type posts struct {
+	Entries []struct {
+		ID        string `json:"id"`
+		Title     string `json:"title"`
+		Published string `json:"published"`
+		URL       string `json:"url"`
+		Image     string `json:"image"`
+	} `json:"entries"`
+}
+
+// News is the newest Java Edition article or patch note, followed by the
+// launcher's own posts, newest first. It fails only when nothing could be
+// reached.
+func (s *Service) News(ctx context.Context) ([]News, error) {
 	var (
 		f          feed
 		notes      patchNotes
+		own        []News
 		ferr, nerr error
 		wg         sync.WaitGroup
 		policy     = httpcache.Policy{TTL: newsTTL}
 	)
 	wg.Go(func() { f, ferr = meta.Fetch[feed](ctx, s.d.Meta, Feed, policy) })
 	wg.Go(func() { notes, nerr = meta.Fetch[patchNotes](ctx, s.d.Meta, PatchNotes, policy) })
+	wg.Go(func() { own = s.Posts(ctx) })
 	wg.Wait()
-	if ferr != nil && nerr != nil {
+	var list []News
+	if n := newer(pick(f, s.d.Pictures), pickNote(notes, s.d.Pictures)); n != nil {
+		list = append(list, *n)
+	}
+	list = append(list, own...)
+	if len(list) == 0 && ferr != nil && nerr != nil {
 		return nil, ferr
 	}
-	return newer(pick(f, s.d.Pictures), pickNote(notes, s.d.Pictures)), nil
+	return list, nil
+}
+
+// Posts is the launcher's own news. It is fetched once per run (the first
+// call waits for it); a failure leaves it empty until the next start.
+func (s *Service) Posts(ctx context.Context) []News {
+	s.postsOnce.Do(func() {
+		// Revalidated every start; the cached copy covers being offline.
+		p, err := meta.Fetch[posts](ctx, s.d.Meta, cmp.Or(s.postsURL, QuartzNews), httpcache.Policy{MaxSize: 64 << 10})
+		if err == nil {
+			s.posts = pickPosts(p, s.d.Pictures)
+		}
+	})
+	return s.posts
 }
 
 func newer(a, b *News) *News {
@@ -244,6 +291,22 @@ func pickNote(n patchNotes, pics *remoteimg.Cache) *News {
 	return best
 }
 
+// pickPosts keeps the launcher's own posts that have a title, a date and a
+// safe link, newest first.
+func pickPosts(p posts, pics *remoteimg.Cache) []News {
+	var list []News
+	for _, e := range p.Entries {
+		at, err := time.Parse(time.RFC3339, e.Published)
+		title := strings.TrimSpace(e.Title)
+		if _, safe := netx.SafeHTTPS(e.URL); err != nil || e.ID == "" || len(e.ID) > maxID || title == "" || utf8.RuneCountInString(title) > maxTitle || !safe {
+			continue
+		}
+		list = append(list, News{ID: "quartz:" + e.ID, Title: title, Source: brand.ShortName, Published: at.UnixMilli(), URL: e.URL, Image: pics.Src(e.Image)})
+	}
+	slices.SortStableFunc(list, func(a, b News) int { return cmp.Compare(b.Published, a.Published) })
+	return list[:min(len(list), maxPosts)]
+}
+
 func article(id, title string, at time.Time, link, image string, pics *remoteimg.Cache) *News {
 	n := &News{ID: id, Title: strings.TrimSpace(title), Source: "minecraft.net", Published: at.UnixMilli(), URL: link}
 	if strings.HasPrefix(image, "/") && pics != nil {
@@ -282,8 +345,8 @@ func articleSlug(title string) string {
 // articleURL allows only https links on minecraft.net, which the UI opens
 // in the browser.
 func articleURL(raw string) bool {
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.User != nil {
+	u, ok := netx.SafeHTTPS(raw)
+	if !ok {
 		return false
 	}
 	h := strings.ToLower(u.Hostname())

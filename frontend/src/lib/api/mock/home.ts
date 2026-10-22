@@ -7,12 +7,10 @@ export const alerts: Alert[] = [
   { tone: 'info', subject: 'Create: Above and Beyond', text: '1.4.1 is out', action: 'Review', target: { kind: 'modpack-update', id: 'cab' } },
 ];
 
-export const news: NewsItem = {
-  title: 'Minecraft: Java Edition 26.2 is out',
-  source: 'minecraft.net',
-  published: daysAgo(26),
-  url: 'https://www.minecraft.net/en-us/articles',
-};
+export const news: NewsItem[] = [
+  { id: 'mc-26-2', title: 'Minecraft: Java Edition 26.2 is out', source: 'minecraft.net', published: daysAgo(26), url: 'https://www.minecraft.net/en-us/articles' },
+  { id: 'quartz:welcome', title: 'Welcome to Quartz Client', source: 'Quartz', published: daysAgo(2), url: 'https://quartz.conspiracy.moe/' },
+];
 
 /** Minutes played per day, Monday to Sunday; the last entry is today. */
 export const week: DayPlay[] = [85, 15, 150, 40, 160, 190, 60].map((minutes, i) => ({ day: i, minutes, today: i === 6 }));

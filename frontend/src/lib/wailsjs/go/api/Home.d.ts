@@ -10,7 +10,7 @@ export function EditServer(arg1:string,arg2:servers.Entry):Promise<string>;
 
 export function FolderProblem():Promise<string>;
 
-export function News():Promise<home.News>;
+export function News():Promise<Array<home.News>>;
 
 export function RecentShots():Promise<Array<screenshots.Shot>>;
 

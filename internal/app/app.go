@@ -775,6 +775,8 @@ func (a *app) startup(ctx context.Context) {
 	}()
 	a.watchDesktop()
 	safe.Go(a.log, "refresh shortcuts", a.shortcuts.Refresh)
+	// The launcher's own news is fetched once per run, ahead of Home asking.
+	safe.Go(a.log, "fetch launcher news", func() { a.home.Posts(ctx) })
 	a.finishUpdate()
 	a.reportCrash()
 	a.stopCheck = a.scheduleUpdates()

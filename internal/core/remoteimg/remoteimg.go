@@ -48,8 +48,8 @@ const (
 // Hosts are the CDNs pictures may come from.
 var Hosts = map[string]bool{
 	"cdn.modrinth.com": true, "media.forgecdn.net": true, "edge.forgecdn.net": true, "mediafilez.forgecdn.net": true,
-	// The official launcher's news pictures (Home's news strip).
-	"launchercontent.mojang.com": true,
+	// The official launcher's and the launcher's own news pictures (Home's news strip).
+	"launchercontent.mojang.com": true, "quartz.conspiracy.moe": true,
 	// Where project descriptions commonly keep their pictures.
 	"i.imgur.com": true, "raw.githubusercontent.com": true, "user-images.githubusercontent.com": true,
 	"private-user-images.githubusercontent.com": true, "media.githubusercontent.com": true,

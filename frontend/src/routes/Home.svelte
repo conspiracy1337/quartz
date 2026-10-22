@@ -12,13 +12,12 @@
   // Home 2.6 "Focus column": alerts, the profile row, the news strip, then servers.
   const alerts = query(() => api.home.alerts(), 'home.alerts');
   const news = query(() => api.home.news(), 'home.news');
-  // Dismissing hides that article for good (the next one shows again).
-  let dismissed = $state(false);
-  const newsHidden = $derived(dismissed || (!!news.data?.id && prefs.value?.general.hiddenNews === news.data.id));
-  function hideNews() {
-    dismissed = true;
-    const id = news.data?.id;
-    if (id) void prefs.update((s) => (s.general.hiddenNews = id));
+  // Dismissing hides that article for good; the strip keeps rotating through the rest.
+  let dismissed = $state<string[]>([]);
+  const shownNews = $derived((news.data ?? []).filter((n) => !dismissed.includes(n.id) && !prefs.value?.general.hiddenNews?.includes(n.id)));
+  function hideNews(id: string) {
+    dismissed.push(id);
+    void prefs.update((s) => (s.general.hiddenNews = [...(s.general.hiddenNews ?? []), id]));
   }
   const wide = new MediaQuery('min-width: 1640px');
 
@@ -29,7 +28,7 @@
   const alertsKnown = $derived(alerts.data !== undefined || !alerts.loading);
   const newsKnown = $derived(news.data !== undefined || !news.loading);
   const showAlerts = $derived(alertsKnown ? (alerts.data?.length ?? 0) > 0 : (lastCount('home.alerts') ?? 0) > 0);
-  const showNews = $derived(newsKnown ? !newsHidden && !!news.data : (lastCount(STRIP) ?? 0) > 0);
+  const showNews = $derived(newsKnown ? shownNews.length > 0 : (lastCount(STRIP) ?? 0) > 0);
   $effect(() => {
     if (newsKnown) rememberCount(STRIP, showNews ? 1 : 0);
   });
@@ -45,7 +44,7 @@
     <div class="cell"><SkinCard scale={wide.current ? 5 : 4} /></div>
     <div class="cell"><ShotRotator /></div>
   </div>
-  {#if showNews}<div class="cell" style="grid-area: news">{#if news.data}<NewsBanner item={news.data} ondismiss={hideNews} />{:else}{@render strip()}{/if}</div>{/if}
+  {#if showNews}<div class="cell" style="grid-area: news">{#if shownNews.length}<NewsBanner items={shownNews} ondismiss={hideNews} />{:else}{@render strip()}{/if}</div>{/if}
   <div class="cell" style="grid-area: servers"><ServerList /></div>
 </div>
 
