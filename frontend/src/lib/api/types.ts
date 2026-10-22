@@ -188,6 +188,8 @@ export interface MergedServer extends ServerStats {
   name: string;
   address: string;
   art: Art;
+  /** Its resource pack setting in the instance Join uses (for Edit). */
+  packs?: ServerEntry['packs'];
   /** Instances that list this server, last used first. */
   instances: string[];
 }

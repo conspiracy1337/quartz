@@ -37,6 +37,9 @@ type General struct {
 	Keys map[string]string `json:"keys,omitempty"`
 	// HiddenNews is the news article Home's strip was dismissed for.
 	HiddenNews string `json:"hiddenNews,omitempty"`
+	// ServerOrder is Home's server list as the player arranged it, by merged
+	// server ID (the normalized address).
+	ServerOrder []string `json:"serverOrder,omitempty"`
 }
 
 type Downloads struct {
@@ -132,6 +135,7 @@ const (
 	maxMemoryMB = 1 << 20
 	maxPathLen  = 4096
 	maxUserLen  = 256
+	maxServers  = 1024
 )
 
 // Normalize replaces every invalid field with its default, field by field, so one
@@ -147,6 +151,7 @@ func (s Settings) Normalize() Settings {
 		s.General.HiddenNews = ""
 	}
 	s.General.Keys = cleanKeys(s.General.Keys)
+	s.General.ServerOrder = cleanOrder(s.General.ServerOrder)
 
 	s.Downloads.Parallel = clamp(s.Downloads.Parallel, 1, 16, d.Downloads.Parallel)
 	s.Downloads.Proxy = oneOf(s.Downloads.Proxy, d.Downloads.Proxy, "system", "none", "custom")
@@ -237,6 +242,18 @@ func cleanKeys(in map[string]string) map[string]string {
 	for k, v := range in {
 		if keyAction.MatchString(k) && keyChord.MatchString(v) && len(out) < 16 {
 			out[k] = v
+		}
+	}
+	return out
+}
+
+// cleanOrder keeps Home's server order to a sane size: at most maxServers IDs,
+// each the length an address can have.
+func cleanOrder(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		if id != "" && len(id) <= 300 && len(out) < maxServers {
+			out = append(out, id)
 		}
 	}
 	return out

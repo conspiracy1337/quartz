@@ -131,3 +131,18 @@ func TestKeysAreCleaned(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestServerOrderIsCleaned(t *testing.T) {
+	s := Defaults()
+	s.General.ServerOrder = []string{"mc.hypixel.net", "", strings.Repeat("x", 301), "smp.kestrel.gg"}
+	if got := s.Normalize().General.ServerOrder; len(got) != 2 || got[1] != "smp.kestrel.gg" {
+		t.Fatal(got)
+	}
+	s.General.ServerOrder = make([]string, maxServers+5)
+	for i := range s.General.ServerOrder {
+		s.General.ServerOrder[i] = "a.gg"
+	}
+	if got := s.Normalize().General.ServerOrder; len(got) != maxServers {
+		t.Fatal(len(got))
+	}
+}

@@ -256,3 +256,29 @@ func TestRemoveEverywhere(t *testing.T) {
 		t.Fatalf("undo %q %q", addresses(e.a.ID), addresses(e.b.ID))
 	}
 }
+
+func TestEditEverywhere(t *testing.T) {
+	e := newEnv(t)
+	_ = e.svc.Add(e.a.ID, Entry{Name: "Friends SMP", Address: "smp.kestrel.gg"})
+	_ = e.svc.Add(e.b.ID, Entry{Name: "Hypixel", Address: "mc.hypixel.net"})
+	_ = e.svc.Add(e.b.ID, Entry{Name: "friends", Address: "SMP.Kestrel.gg.:25565", Packs: "enabled"})
+	if id, err := e.svc.EditEverywhere("smp.kestrel.gg", Entry{Name: "Kestrel", Address: "play.kestrel.gg", Packs: "disabled"}); err != nil || id != "play.kestrel.gg" {
+		t.Fatal(id, err)
+	}
+	for _, id := range []string{e.a.ID, e.b.ID} {
+		l, _ := e.svc.entries(id)
+		last := l[len(l)-1]
+		if last.Name != "Kestrel" || last.Address != "play.kestrel.gg" || last.Packs != "disabled" {
+			t.Fatalf("%s: %+v", id, l)
+		}
+	}
+	if l, _ := e.svc.entries(e.b.ID); l[0].Name != "Hypixel" {
+		t.Fatalf("another server changed: %+v", l)
+	}
+	home, _ := e.svc.Home(context.Background(), false)
+	for _, m := range home {
+		if m.ID == "play.kestrel.gg" && (len(m.Instances) != 2 || m.Packs != "disabled") {
+			t.Fatalf("%+v", m)
+		}
+	}
+}
