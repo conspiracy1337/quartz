@@ -96,15 +96,16 @@ func (s *Store) Duplicate(ctx context.Context, id string, place func(rel, dst st
 	if err := fsx.AtomicWrite(filepath.Join(stage, "instance.json"), data, fsx.FilePerm); err != nil {
 		return Instance{}, err
 	}
-	if err := os.Rename(stage, s.Dir(in.ID)); err != nil {
+	folder := s.folderFor(in.Name, "")
+	if err := os.Rename(stage, filepath.Join(s.dir, folder)); err != nil {
 		return Instance{}, err
 	}
 	done = true
-	f, err := s.open(in.ID)
+	f, err := s.open(folder)
 	if err != nil {
-		_ = os.RemoveAll(s.Dir(in.ID))
+		_ = os.RemoveAll(filepath.Join(s.dir, folder))
 		return Instance{}, err
 	}
-	s.files[in.ID] = f
+	s.files[in.ID], s.folders[in.ID] = f, folder
 	return f.Get(), nil
 }

@@ -86,16 +86,16 @@ func TestTrashRestoreAndPurge(t *testing.T) {
 	if list := s.TrashList(); len(list) != 1 || list[0].Name != "World" {
 		t.Fatalf("trash = %+v", list)
 	}
-	// Someone takes the id meanwhile: the restore gets a new one.
-	if err := os.MkdirAll(filepath.Join(root, "instances", in.ID), 0o700); err != nil {
+	// Something takes its folder meanwhile: it comes back next to it, with its id.
+	if err := os.MkdirAll(filepath.Join(root, "instances", "world"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	back, err := s.Restore(e.Key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if back.ID == in.ID || back.Name != "World" {
-		t.Fatalf("restored = %+v", back)
+	if back.ID != in.ID || back.Name != "World" || s.Dir(back.ID) != filepath.Join(root, "instances", "world-2") {
+		t.Fatalf("restored = %+v at %s", back, s.Dir(back.ID))
 	}
 	if b, _ := os.ReadFile(filepath.Join(s.GameDir(back.ID), "options.txt")); string(b) != "fov:90" {
 		t.Fatal("game files lost in the trash")

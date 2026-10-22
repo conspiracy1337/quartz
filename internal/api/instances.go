@@ -45,8 +45,10 @@ type InstanceDeps struct {
 	// Content counts items and moves mods along with version changes; nil in tests.
 	Content *content.Service
 	// Unwatch stops following an instance's worlds and screenshots before
-	// its folder moves; nil in tests.
-	Unwatch func(id string)
+	// its folder moves, reporting whether it was; Rewatch follows it again.
+	// nil in tests.
+	Unwatch func(id string) bool
+	Rewatch func(id string)
 	// Worlds and Servers count an instance's worlds and servers; nil in tests.
 	Worlds  Counter
 	Servers Counter
@@ -397,11 +399,16 @@ func (s *Instances) UpdateSettings(id string, st instance.Settings) (InstanceVie
 	return s.changed(s.d.Store.SetSettings(id, st))
 }
 
-// Rename changes an instance's name (its folder stays).
+// Rename changes an instance's name and renames its folder to match (the id
+// stays). Like any move of the folder, it waits until nothing uses it.
 func (s *Instances) Rename(id, name string) (InstanceView, error) {
 	if err := checkInstanceID(id); err != nil {
 		return InstanceView{}, err
 	}
+	if err := s.guard(id); err != nil {
+		return InstanceView{}, err
+	}
+	defer s.release(id)()
 	return s.changed(s.d.Store.Rename(id, name))
 }
 
@@ -583,13 +590,24 @@ func (s *Instances) Trash(id string) (instance.TrashEntry, error) {
 }
 
 // release lets go of an instance's folders before they move: open watches
-// hold them, and Windows can't move a folder with anything open inside.
-func (s *Instances) release(id string) {
+// hold them, and Windows can't move a folder with anything open inside. It
+// returns what follows them again where they are now, for a move that keeps
+// the instance (a rename).
+func (s *Instances) release(id string) (rewatch func()) {
+	var content, game bool
 	if s.d.Content != nil {
-		s.d.Content.Forget(id)
+		content = s.d.Content.Forget(id)
 	}
 	if s.d.Unwatch != nil {
-		s.d.Unwatch(id)
+		game = s.d.Unwatch(id)
+	}
+	return func() {
+		if content {
+			s.d.Content.Watch(id)
+		}
+		if game && s.d.Rewatch != nil {
+			s.d.Rewatch(id)
+		}
 	}
 }
 

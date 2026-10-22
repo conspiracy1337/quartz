@@ -2,20 +2,45 @@ package instance
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 	"unicode"
 
+	"quartz/internal/core/fsx"
 	"quartz/internal/sandbox/rules"
 )
 
-// Rename changes the display name only: the id and folder never change.
+// Rename changes an instance's name and renames its folder to match
+// (instances/<slug of the name>); the id never changes, so nothing that names
+// the instance by it needs to follow. A game folder moved elsewhere stays
+// where it is. The caller makes sure nothing has files open in the folder
+// (the game, a server, a download, a watch): Windows can't move it then.
 func (s *Store) Rename(id, name string) (Instance, error) {
 	n, err := cleanName(name)
 	if err != nil {
 		return Instance{}, err
 	}
+	s.mu.Lock()
+	f, ok := s.files[id]
+	if !ok {
+		s.mu.Unlock()
+		return Instance{}, ErrUnknown
+	}
+	from, folder := s.folders[id], s.folderFor(n, s.folders[id])
+	if folder != from {
+		to := filepath.Join(s.dir, folder)
+		// Saves wait while the folder moves, so none lands in the old place.
+		err := f.Relocate(filepath.Join(to, "instance.json"), func() error { return fsx.Rename(filepath.Join(s.dir, from), to) })
+		if err != nil {
+			s.mu.Unlock()
+			s.log.Warn("renaming an instance folder failed", "instance", id, "err", err)
+			return Instance{}, ErrFolderInUse
+		}
+		s.folders[id] = folder
+	}
+	s.mu.Unlock()
 	return s.Update(id, func(in *Instance) error { in.Name = n; return nil })
 }
 

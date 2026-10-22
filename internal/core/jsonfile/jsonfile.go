@@ -215,6 +215,21 @@ func (f *file) schedule() {
 	}
 }
 
+// Relocate runs move, which puts the file's folder somewhere else, and keeps
+// the document at path from then on. Saves wait while move runs, so none
+// lands in the old place; one still pending is written to the new one.
+func (f *file) Relocate(path string, move func() error) error {
+	f.wmu.Lock()
+	defer f.wmu.Unlock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := move(); err != nil {
+		return err
+	}
+	f.path = path
+	return nil
+}
+
 // Flush writes any pending change immediately. Call it on shutdown.
 func (f *file) Flush() error {
 	f.mu.Lock()

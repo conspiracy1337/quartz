@@ -162,8 +162,9 @@ func TestCommandValidation(t *testing.T) {
 
 func TestHostileFolders(t *testing.T) {
 	dir := t.TempDir()
-	// A folder whose file claims another id, and one with an invalid name.
-	for name, body := range map[string]string{"real-1234": `{"id":"other-1234","name":"x"}`, "Bad Name": `{"id":"Bad Name"}`} {
+	// An instance is known by its file's id, whatever its folder is called; an
+	// invalid id, or one another folder already has, is skipped.
+	for name, body := range map[string]string{"a-folder": `{"id":"other-1234","name":"x"}`, "b-copy": `{"id":"other-1234","name":"y"}`, "Bad Name": `{"id":"../x"}`} {
 		_ = os.MkdirAll(filepath.Join(dir, name), 0o700)
 		_ = os.WriteFile(filepath.Join(dir, name, "instance.json"), []byte(body), 0o600)
 	}
@@ -171,8 +172,11 @@ func TestHostileFolders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(s.List()) != 0 {
-		t.Fatalf("hostile folders loaded: %+v", s.List())
+	if l := s.List(); len(l) != 1 || l[0].ID != "other-1234" || s.Dir("other-1234") != filepath.Join(dir, "a-folder") {
+		t.Fatalf("loaded %+v at %s", l, s.Dir("other-1234"))
+	}
+	if l, _ := ReadAll(dir); len(l) != 1 || l[0].ID != "other-1234" {
+		t.Fatalf("ReadAll %+v", l)
 	}
 	if _, err := s.GameDirSafe("../../etc"); err == nil {
 		t.Fatal("traversal id accepted")
@@ -259,5 +263,48 @@ func TestInstanceAccount(t *testing.T) {
 	}
 	if _, err := s.SetSettings(in.ID, Settings{Account: "../x"}); !errors.Is(err, ErrInvalidSettings) {
 		t.Fatalf("bad account id accepted: %v", err)
+	}
+}
+
+func TestRenameMovesTheFolder(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Open(dir, nil)
+	a, _ := s.Create(CreateRequest{Name: "Fabulously Optimized", Minecraft: "1.21.4"})
+	b, _ := s.Create(CreateRequest{Name: "Survival", Minecraft: "1.21.4"})
+	if s.Dir(a.ID) != filepath.Join(dir, "fabulously-optimized") || s.Dir(b.ID) != filepath.Join(dir, "survival") {
+		t.Fatalf("folders %s %s", s.Dir(a.ID), s.Dir(b.ID))
+	}
+	_ = os.WriteFile(filepath.Join(s.GameDir(a.ID), "options.txt"), []byte("fov:90"), 0o600)
+
+	// The slug is taken by the other instance: the folder gets "-2".
+	got, err := s.Rename(a.ID, "Survival")
+	if err != nil || got.ID != a.ID || got.Name != "Survival" || s.Dir(a.ID) != filepath.Join(dir, "survival-2") {
+		t.Fatalf("%+v %v at %s", got, err, s.Dir(a.ID))
+	}
+	if data, _ := os.ReadFile(filepath.Join(s.GameDir(a.ID), "options.txt")); string(data) != "fov:90" {
+		t.Fatal("game files didn't move with the folder")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "fabulously-optimized")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("old folder left behind")
+	}
+	// Another name with the same slug keeps the folder it has.
+	if _, err := s.Rename(a.ID, "SURVIVAL!"); err != nil || s.Dir(a.ID) != filepath.Join(dir, "survival-2") {
+		t.Fatalf("%v at %s", err, s.Dir(a.ID))
+	}
+	// Windows refuses some names for folders.
+	if _, err := s.Rename(b.ID, "Con"); err != nil || s.Dir(b.ID) != filepath.Join(dir, "con-2") {
+		t.Fatalf("%v at %s", err, s.Dir(b.ID))
+	}
+	// A change saved after the rename lands in the new folder, and reopening finds it there.
+	if _, err := s.SetNotes(a.ID, "after"); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Flush()
+	s2, _ := Open(dir, nil)
+	if in, err := s2.Get(a.ID); err != nil || in.Name != "SURVIVAL!" || in.Notes != "after" || s2.Dir(a.ID) != filepath.Join(dir, "survival-2") {
+		t.Fatalf("%+v %v", in, err)
+	}
+	if _, err := s.Rename("nope-0000", "x"); !errors.Is(err, ErrUnknown) {
+		t.Fatal(err)
 	}
 }

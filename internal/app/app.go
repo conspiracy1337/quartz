@@ -222,7 +222,7 @@ func Run(o Options) error {
 			api.NewAccounts(a.ctx, a.accounts, a.skins, a.bus),
 			api.NewInstances(a.ctx, api.InstanceDeps{
 				Store: a.instances, Meta: a.meta, Loaders: a.loaders, Icons: a.icons, Banners: a.banners, Settings: a.settings, Tasks: a.tasks, Bus: a.bus,
-				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Unwatch: a.gameWatch.Forget, Worlds: a.worlds, Servers: a.servers,
+				Running: a.launcher.Running, Busy: a.launcher.Busy, Hosting: a.host.Running, Content: a.content, Unwatch: a.gameWatch.Forget, Rewatch: a.gameWatch.Watch, Worlds: a.worlds, Servers: a.servers,
 				Syncing: a.syncing, Shortcuts: a.shortcuts, Follow: a.follow, Opens: a.opens, Blobs: a.store,
 			}),
 			api.NewContent(a.ctx, api.ContentDeps{Service: a.content, Store: a.store, Settings: a.settings, Drops: a.drops, Watch: a.gameWatch.Watch}),

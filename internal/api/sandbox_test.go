@@ -26,7 +26,7 @@ func TestSandboxFacade(t *testing.T) {
 	if err != nil || !v.On || v.Preset != "standard" || len(v.Rows) != 9 {
 		t.Fatalf("%+v %v", v, err)
 	}
-	if v.Rows[0].Path != "instances/"+in.ID+"/" || v.Rows[1].Path != "instances/"+in.ID+"/game/mods/" || v.Rows[4].Path != "None shared" || v.Rows[3].Path != "Picked when you play" {
+	if v.Rows[0].Path != "instances/t/" || v.Rows[1].Path != "instances/t/game/mods/" || v.Rows[4].Path != "None shared" || v.Rows[3].Path != "Picked when you play" {
 		t.Fatalf("paths %+v", v.Rows)
 	}
 	if v, err = a.SetLevel(in.ID, "internet", "no"); err != nil || v.Preset != "custom" || v.Rows[5].Level != "no" {
