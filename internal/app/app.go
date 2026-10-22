@@ -650,6 +650,7 @@ func (a *app) buildContent() error {
 	})
 	a.refs = store.Union(a.content.Refs, a.snapshots.Refs)
 	a.watchSnapshots()
+	a.watchLODMods()
 	exe, err := desktop.Executable()
 	if err != nil {
 		a.log.Warn("can't find the launcher's program file: no shortcuts", "err", err)

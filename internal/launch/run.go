@@ -160,6 +160,7 @@ func (l *Launcher) command(sp *spec) (procx.Spec, []byte, string, error) {
 		return procx.Spec{}, nil, "", fmt.Errorf("JVM arguments: %w", err)
 	}
 	args = append(args, user...)
+	args = append(args, zgcArgs(user, sp.rt.Major)...)
 	args = append(args, nativeLibraryArgs(eff)...)
 	args = append(args, java.Properties...)
 	args = append(args, legacyLWJGLArgs(res)...)
@@ -510,4 +511,17 @@ func (l *Launcher) finish(r *run, ended time.Time, code int, result Result) {
 			}
 		}
 	}
+}
+
+// zgcArgs makes ZGC generational on Java 21 and 22, where it isn't by
+// default (23 and later are, and drop the flag). It is added at launch, never
+// saved, so the arguments still work after a Java upgrade.
+func zgcArgs(user []string, major int) []string {
+	if (major != 21 && major != 22) || !slices.Contains(user, instance.ZGC) ||
+		slices.ContainsFunc(user, func(w string) bool {
+			return strings.HasPrefix(w, "-XX:+ZGenerational") || strings.HasPrefix(w, "-XX:-ZGenerational")
+		}) {
+		return nil
+	}
+	return []string{"-XX:+ZGenerational"}
 }
