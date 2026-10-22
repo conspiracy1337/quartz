@@ -223,7 +223,9 @@ export interface MergedServer extends ServerStats {
 export interface Screenshot {
   id: string;
   instanceId: string;
+  /** Where it was taken: a world by name, or a server by its name in the list (else its address). */
   world: string;
+  server?: string;
   title: string;
   takenAt: number;
   /** The grid's picture (a thumbnail inside the app). */

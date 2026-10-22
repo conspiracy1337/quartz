@@ -103,6 +103,9 @@ type Storage struct {
 	// Snapshots keeps an instance as it was before each update or version
 	// change for 7 days, so the change can be rolled back.
 	Snapshots bool `json:"snapshots"`
+	// Screenshots re-saves new screenshots as JPEG after the game closes:
+	// off | high | balanced | small (see screenshots.Quality).
+	Screenshots string `json:"screenshots"`
 }
 
 type Updates struct {
@@ -129,7 +132,7 @@ func Defaults() Settings {
 			JVMArgs: "-XX:+UseG1GC -XX:+ParallelRefProcEnabled", WarnLowMemory: true, SuggestMemory: true,
 		},
 		Updates: Updates{AutoCheck: true, ModChannel: "release"},
-		Storage: Storage{Snapshots: true},
+		Storage: Storage{Snapshots: true, Screenshots: "high"},
 	}
 }
 
@@ -164,6 +167,7 @@ func (s Settings) Normalize() Settings {
 
 	s.Downloads.Parallel = clamp(s.Downloads.Parallel, 1, 16, d.Downloads.Parallel)
 	s.Downloads.Proxy = oneOf(s.Downloads.Proxy, d.Downloads.Proxy, "system", "none", "custom")
+	s.Storage.Screenshots = oneOf(s.Storage.Screenshots, d.Storage.Screenshots, "off", "high", "balanced", "small")
 	s.Downloads.ProxyCustom = s.Downloads.ProxyCustom.normalize(d.Downloads.ProxyCustom)
 
 	a := &s.Appearance

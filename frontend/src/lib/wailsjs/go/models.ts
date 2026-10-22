@@ -694,6 +694,20 @@ export namespace api {
 	        this.source = source["source"];
 	    }
 	}
+	export class Uncompressed {
+	    count: number;
+	    bytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Uncompressed(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.count = source["count"];
+	        this.bytes = source["bytes"];
+	    }
+	}
 
 }
 
@@ -2929,6 +2943,7 @@ export namespace screenshots {
 	    id: string;
 	    instanceId: string;
 	    world: string;
+	    server?: string;
 	    title: string;
 	    takenAt: number;
 	    file: string;
@@ -2947,6 +2962,7 @@ export namespace screenshots {
 	        this.id = source["id"];
 	        this.instanceId = source["instanceId"];
 	        this.world = source["world"];
+	        this.server = source["server"];
 	        this.title = source["title"];
 	        this.takenAt = source["takenAt"];
 	        this.file = source["file"];
@@ -3307,6 +3323,7 @@ export namespace settings {
 	
 	export class Storage {
 	    snapshots: boolean;
+	    screenshots: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Storage(source);
@@ -3315,6 +3332,7 @@ export namespace settings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.snapshots = source["snapshots"];
+	        this.screenshots = source["screenshots"];
 	    }
 	}
 	export class SharedKey {

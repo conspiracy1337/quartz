@@ -198,6 +198,25 @@ func (s *Service) entries(id string) ([]Server, error) {
 	return out, nil
 }
 
+// Name is the name the instance's list gives the server at address ("" when
+// it doesn't list it).
+func (s *Service) Name(id, address string) string {
+	want, err := slp.Parse(address)
+	if err != nil {
+		return ""
+	}
+	list, err := s.entries(id)
+	if err != nil {
+		return ""
+	}
+	for _, sv := range list {
+		if a, err := slp.Parse(sv.Address); err == nil && a.Key() == want.Key() {
+			return sv.Name
+		}
+	}
+	return ""
+}
+
 // Count is how many servers an instance lists.
 func (s *Service) Count(id string) int {
 	l, err := s.entries(id)

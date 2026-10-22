@@ -60,5 +60,6 @@ const gridTimes: [number, number, number][] = [[1, 22, 41], [1, 22, 13], [1, 21,
 /** One instance's screenshots (instance Screenshots tab). */
 export const instanceShots: Screenshot[] = gridBgs.map((bg, i) => {
   const [d, h, m] = gridTimes[i]!;
-  return shot('g' + i, 'fo', i < 9 ? 'Northwatch' : 'Creative Plots', 'Screenshot', daysAgo(d, h, m), bg);
+  // The last three were taken on a server.
+  return i < 9 ? shot('g' + i, 'fo', 'Northwatch', 'Northwatch', daysAgo(d, h, m), bg) : { ...shot('g' + i, 'fo', '', 'Friends SMP', daysAgo(d, h, m), bg), server: 'Friends SMP' };
 });

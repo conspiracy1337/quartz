@@ -75,7 +75,8 @@ type run struct {
 	done chan struct{}
 
 	pmu    sync.Mutex
-	server string // the last "Connecting to host, port" (guarded by pmu)
+	server string  // the last "Connecting to host, port" (guarded by pmu)
+	visits []Visit // where the run went, oldest first (guarded by pmu)
 
 	record Record
 	// postExit is the player's after-exit command, with the variables it gets.
@@ -301,22 +302,46 @@ func (l *Launcher) start(ctx context.Context, sp spec) (*run, error) {
 	return r, nil
 }
 
-var connectingRe = regexp.MustCompile(`^Connecting to (\S+), (\d{1,5})$`)
+var (
+	connectingRe = regexp.MustCompile(`^Connecting to (\S+), (\d{1,5})$`)
+	// The integrated server starts for a singleplayer world, and names it
+	// when it saves the world on the way out.
+	worldStartRe = regexp.MustCompile(`^Starting integrated minecraft server version `)
+	worldSaveRe  = regexp.MustCompile(`^Saving chunks for level 'ServerLevel\[(.{1,128})\]'/minecraft:overworld$`)
+)
+
+// visit notes where the run went from one console line.
+func (r *run) visit(msg string, at time.Time) {
+	r.pmu.Lock()
+	defer r.pmu.Unlock()
+	add := func(v Visit) {
+		r.visits = append(r.visits, v)
+		if len(r.visits) > maxVisits {
+			r.visits = r.visits[len(r.visits)-maxVisits:]
+		}
+	}
+	if m := connectingRe.FindStringSubmatch(msg); m != nil {
+		host := m[1]
+		if m[2] != strconv.Itoa(slp.DefaultPort) {
+			host += ":" + m[2]
+		}
+		r.server = host
+		add(Visit{At: at, Server: host})
+	} else if worldStartRe.MatchString(msg) {
+		add(Visit{At: at, World: true})
+	} else if m := worldSaveRe.FindStringSubmatch(msg); m != nil {
+		if n := len(r.visits); n > 0 && r.visits[n-1].World && r.visits[n-1].Name == "" {
+			r.visits[n-1].Name = m[1]
+		}
+	}
+}
 
 // add sees every console line as it is parsed.
 func (r *run) add(line gamelog.Line) {
 	if !r.loaded.Load() && (strings.HasPrefix(line.Message, "Setting user: ") || strings.HasPrefix(line.Message, "Backend library: LWJGL") || strings.HasPrefix(line.Message, "LWJGL Version")) {
 		r.loaded.Store(true)
 	}
-	if m := connectingRe.FindStringSubmatch(line.Message); m != nil {
-		host := m[1]
-		if m[2] != strconv.Itoa(slp.DefaultPort) {
-			host += ":" + m[2]
-		}
-		r.pmu.Lock()
-		r.server = host
-		r.pmu.Unlock()
-	}
+	r.visit(line.Message, time.Now())
 	thread := ""
 	if line.Thread != "" {
 		thread = line.Thread + "/"
@@ -463,8 +488,11 @@ func (l *Launcher) finish(r *run, ended time.Time, code int, result Result) {
 	kept := l.disassemble(&r.sp)
 	gameDir := l.cfg.Instances.GameDir(r.instanceID)
 	runsDir := l.cfg.Instances.RunsDir(r.instanceID)
+	r.pmu.Lock()
+	visits := slices.Clone(r.visits)
+	r.pmu.Unlock()
 	f := &Finished{InstanceID: r.instanceID, GameDir: gameDir, RunsDir: runsDir, Started: r.started, Ended: ended, Record: &r.record,
-		Stopped: r.stopping.Load(), Tail: tail(r.con.Lines(), tailLines)}
+		Stopped: r.stopping.Load(), Tail: tail(r.con.Lines(), tailLines), Visits: visits}
 	for _, fin := range l.cfg.Finishers {
 		fin.FinishRun(f)
 	}
