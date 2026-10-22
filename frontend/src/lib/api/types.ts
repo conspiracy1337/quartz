@@ -204,7 +204,8 @@ export interface ServerStats {
   online: boolean;
   version: string;
   fit: '' | 'ok' | 'minor' | 'major';
-  players?: { online: number; max?: number };
+  /** sample: the players the server lists, when it lists any. */
+  players?: { online: number; max?: number; sample?: string[] };
   pingMs?: number;
 }
 

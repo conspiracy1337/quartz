@@ -39,6 +39,8 @@ export interface HostState {
   address: string;
   players: number;
   max: number;
+  /** Some of the players on, as the server lists them. */
+  sample?: string[];
   result?: 'ok' | 'crash' | 'failed' | 'cancelled';
   message?: string;
 }

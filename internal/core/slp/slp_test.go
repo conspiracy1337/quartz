@@ -10,6 +10,7 @@ import (
 	"image"
 	"image/png"
 	"net"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -166,6 +167,12 @@ func TestPingerCachesAndMerges(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatalf("pinged %d times, want 1", calls.Load())
 	}
+	// Forced right after an answer, it reuses it (two lists on one tick).
+	p.Get(context.Background(), a, -1, true)
+	if calls.Load() != 1 {
+		t.Fatal("force pinged again moments after an answer")
+	}
+	p.Fresh = 0
 	p.Get(context.Background(), a, -1, true)
 	if calls.Load() != 2 {
 		t.Fatal("force did not ping")
@@ -173,6 +180,50 @@ func TestPingerCachesAndMerges(t *testing.T) {
 	p.ping = func(context.Context, Address, int) (*Status, error) { return nil, errors.New("down") }
 	if r := p.Get(context.Background(), Address{Host: "other"}, -1, false); r.Err == nil {
 		t.Fatal("error lost")
+	}
+}
+
+// Two protocols see one live answer: the newest ping's players, whichever
+// protocol it used, with each protocol's own version.
+func TestPingerSharesLiveFields(t *testing.T) {
+	p := NewPinger()
+	var online atomic.Int32
+	p.ping = func(_ context.Context, _ Address, protocol int) (*Status, error) {
+		return &Status{Online: int(online.Add(1)), Protocol: protocol, Version: strconv.Itoa(protocol)}, nil
+	}
+	a := Address{Host: "mc.example.net"}
+	first := p.Get(context.Background(), a, 769, false)
+	time.Sleep(2 * time.Millisecond)
+	p.Fresh = 0
+	second := p.Get(context.Background(), a, 767, true)
+	again := p.Get(context.Background(), a, 769, false)
+	if first.Status.Online != 1 || second.Status.Online != 2 || again.Status.Online != 2 {
+		t.Fatalf("online %d %d %d", first.Status.Online, second.Status.Online, again.Status.Online)
+	}
+	if again.Status.Version != "769" || second.Status.Version != "767" {
+		t.Fatalf("versions %s %s", again.Status.Version, second.Status.Version)
+	}
+	// A newer failure means offline for every protocol.
+	p.ping = func(context.Context, Address, int) (*Status, error) { return nil, errors.New("down") }
+	time.Sleep(2 * time.Millisecond)
+	p.Get(context.Background(), a, 767, true)
+	if r := p.Get(context.Background(), a, 769, false); r.Err == nil {
+		t.Fatal("still online after the newest ping failed")
+	}
+}
+
+func TestSample(t *testing.T) {
+	names := []any{map[string]any{"name": "§aSteve"}, map[string]any{"name": "Al\nex"}, map[string]any{"name": ""}}
+	for range 30 {
+		names = append(names, map[string]any{"name": "x"})
+	}
+	js, _ := json.Marshal(map[string]any{"version": map[string]any{"name": "1.21.4", "protocol": 769}, "players": map[string]any{"max": 20, "online": 40, "sample": names}, "description": "hi"})
+	st, err := decode(js)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Sample) != maxSample || st.Sample[0] != "Steve" || st.Sample[1] != "Alex" {
+		t.Fatalf("%q", st.Sample)
 	}
 }
 
