@@ -76,6 +76,12 @@ func (l *Library) Add(data []byte) (string, error) {
 	if err != nil {
 		return "", ErrNotIcon
 	}
+	return l.AddImage(img)
+}
+
+// AddImage normalises and stores a decoded image (one its caller checked,
+// such as a screenshot bigger than MaxFile).
+func (l *Library) AddImage(img image.Image) (string, error) {
 	out, hash, err := pngx.Encode(l.shape(img, l.side))
 	if err != nil {
 		return "", err

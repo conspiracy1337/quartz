@@ -1048,17 +1048,19 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
 
 **Screenshots** ([screenshots.go](internal/screenshots/screenshots.go), [Screenshots.svelte](frontend/src/routes/instance/Screenshots.svelte), [ScreenshotViewer.svelte](frontend/src/routes/instance/ScreenshotViewer.svelte))
 - **Grid:**
-  - Search by day or world. Chips: All, This week, and one per world.
+  - Search by day, world or server. Chips: All, This week, and one per world or server.
   - **Select** mode to move several screenshots to the trash at once (with Undo).
   - Open folder.
-- **World tagging:** each screenshot is filed under the world played when it was taken. Instances sharing a screenshots folder see each other's tags.
+- **Where it was taken:** the run's console gives a timeline: `Starting integrated minecraft server` opens a world (named by its `Saving chunks for level 'ServerLevel[…]'` line, else by the world the run saved), `Connecting to host, port` a server. Each screenshot is filed under the last place entered before its time, a server by its name in the instance's list (else its address); one taken in the menus gets none. A picture already filed (a shared folder) keeps its label. Instances sharing a screenshots folder see each other's tags. [visit in run.go](internal/launch/run.go)
+- **Compression** (Settings → Storage, on by default at High): after the game closes, the run's new PNG screenshots are re-saved as JPEG (High 92, Balanced 85, Smallest 75), keeping their time and label; one that wouldn't get smaller stays PNG. Pictures are checked before decoding (regular files only, at most 64 MB, 16384 px a side and 64 MP), since a sandboxed game writes this folder; the JPEG is written as a hidden part file and renamed into place. **Compress** in Clean up does the same for every PNG screenshot as a job (asks first: it replaces the files). [compress.go](internal/screenshots/compress.go)
 - **Viewer:**
   - Prev/next (also ← →) and a filmstrip.
-  - Details: file, date, pixel size, file size, world.
+  - Clicking the picture opens it near-fullscreen: the whole window less a 16 px margin, ← → and ‹ › step through, Escape, × or a click beside it close. [ShotLightbox.svelte](frontend/src/lib/overlays/ShotLightbox.svelte)
+  - Details: file, date, pixel size, file size, world or server.
   - Actions:
-    - **Copy image** to the clipboard, without cgo: user32 on Windows, osascript on macOS, wl-copy or xclip on Linux. [clipimg/](internal/core/clipimg/)
-    - **Use as picture** (cropped square) and **Use as banner**
     - **Show in folder** (on Linux it selects the file over D-Bus)
+    - **Copy image** to the clipboard, without cgo: user32 on Windows, osascript on macOS, wl-copy or xclip on Linux. A JPEG goes on as a PNG. [clipimg/](internal/core/clipimg/)
+    - **Use as picture** (cropped square) and **Use as banner**, from screenshots of any size
     - **Move to trash**
 
 ---

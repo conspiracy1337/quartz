@@ -55,7 +55,7 @@ const toMerged = (m: GoMerged): MergedServer => ({
 });
 
 export const toShot = (s: GoShot): Screenshot => ({
-  id: s.id, instanceId: s.instanceId, world: s.world, title: s.title, takenAt: s.takenAt, file: s.file,
+  id: s.id, instanceId: s.instanceId, world: s.world, ...(s.server ? { server: s.server } : {}), title: s.title, takenAt: s.takenAt, file: s.file,
   width: s.width, height: s.height, bytes: s.bytes, art: artOf(s.title, s.thumb), image: s.image,
 });
 
@@ -108,6 +108,10 @@ export const screenshotsApi = {
   useAsBanner: bridged(ScreenshotsGo.UseAsBanner, (_id: string, _name: string) => undefined),
   trash: bridged(ScreenshotsGo.Trash, (_id: string, _names: string[]) => 'preview'),
   undo: bridged(ScreenshotsGo.Undo, (_id: string, _token: string) => undefined),
+  /** How many screenshots are still PNGs, and their size (Settings → Storage). */
+  pngs: () => revs.load('screenshots', bridged(ScreenshotsGo.PNGs, () => ({ count: 312, bytes: 2_840_000_000 }))),
+  /** Re-saves every PNG screenshot as JPEG, as a job; resolves with its id ("" when there are none). */
+  compressAll: bridged(ScreenshotsGo.CompressAll, () => ''),
 };
 
 export const homeApi = {

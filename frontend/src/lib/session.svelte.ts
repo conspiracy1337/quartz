@@ -34,7 +34,9 @@ export type Overlay =
   | { kind: 'shortcut'; instanceId: string }
   | { kind: 'export'; instanceId: string }
   /** Roll back to a snapshot (one picked, or the newest). */
-  | { kind: 'rollback'; instanceId: string; snapshot?: string };
+  | { kind: 'rollback'; instanceId: string; snapshot?: string }
+  /** A screenshot near-fullscreen, from the viewer. */
+  | { kind: 'shot'; instanceId: string; shotId: string };
 
 export type AddAccountMode = 'browser' | 'code' | 'offline';
 

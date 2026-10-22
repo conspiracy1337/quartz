@@ -20,22 +20,24 @@
   let filter = $state<string>('all');
 
   const list = $derived(shots.data ?? []);
-  const worlds = $derived([...new Set(list.map((s) => s.world).filter((w) => w !== ''))]);
+  // Where each was taken: its world, or the server it was on.
+  const place = (s: (typeof list)[number]) => s.server || s.world;
+  const places = $derived([...new Set(list.map(place).filter((p) => p !== ''))]);
   const chips = $derived([
     { key: 'all', label: 'All' },
     { key: 'week', label: 'This week' },
-    ...worlds.map((w) => ({ key: `world:${w}`, label: w })),
+    ...places.map((p) => ({ key: `place:${p}`, label: p })),
   ]);
-  const match = (s: (typeof list)[number], key: string) => key === 'all' || (key === 'week' ? Date.now() - s.takenAt < WEEK : `world:${s.world}` === key);
+  const match = (s: (typeof list)[number], key: string) => key === 'all' || (key === 'week' ? Date.now() - s.takenAt < WEEK : `place:${place(s)}` === key);
   // The chips as shown: until the screenshots are in, the row this tab had last time, so the
   // world chips and the counts hold their place.
   const chipRow = $derived<ChipRow>(shots.data ? chips.map((c) => ({ ...c, count: list.filter((s) => match(s, c.key)).length })) : (lastChips(key) ?? chips.map((c) => ({ ...c, count: 0 }))));
   $effect(() => void (shots.data && rememberChips(key, chipRow)));
   const q = $derived(search.trim().toLowerCase());
-  const found = (s: (typeof list)[number]) => !q || Day(s.takenAt).toLowerCase().includes(q) || s.world.toLowerCase().includes(q);
+  const found = (s: (typeof list)[number]) => !q || Day(s.takenAt).toLowerCase().includes(q) || place(s).toLowerCase().includes(q);
   const shown = $derived(list.filter((s) => match(s, filter) && found(s)));
   // The empty line names what hides the screenshots.
-  const emptyText = $derived(!list.length ? 'No screenshots yet. Press F2 in the game to take one.' : q ? 'No screenshots match this search.' : filter === 'week' ? 'No screenshots this week.' : 'No screenshots from this world.');
+  const emptyText = $derived(!list.length ? 'No screenshots yet. Press F2 in the game to take one.' : q ? 'No screenshots match this search.' : filter === 'week' ? 'No screenshots this week.' : 'No screenshots taken there.');
   const when = (t: number) => `${Day(t)} ${clock(t)}`;
 
   // Select: tiles toggle instead of opening, then the picked ones go to the trash together.

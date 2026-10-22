@@ -50,6 +50,18 @@
       session.fail('Delete old logs', err);
     }
   }
+  // Screenshots still saved as PNG, re-saved as JPEG on request (a job in Downloads).
+  const pngs = query(() => api.screenshots.pngs());
+  const pngDesc = $derived(pngs.data?.count
+    ? `${plural(pngs.data.count, 'screenshot')} saved as PNG, ${bytes(pngs.data.bytes)}. Saving them as JPEG keeps a fraction of that.`
+    : 'Screenshots saved as PNG. Nothing to compress right now.');
+  async function compressAll() {
+    try {
+      if (await api.screenshots.compressAll()) session.notify({ subject: 'Compressing screenshots', text: 'in Downloads' });
+    } catch (err) {
+      session.fail('Compress screenshots', err);
+    }
+  }
   // Keyed: the skeleton has as many rows as the trash had last time (an empty trash is one row).
   const trash = query(() => api.instances.trashList(), 'trash');
   const KEEP_DAYS = 30;
@@ -108,6 +120,8 @@
     <h2 class="h3">Clean up</h2>
     <div class="card">
       <Setting title="Old logs" desc={oldDesc}><button class="btn btn-sm" disabled={!oldLogs.data} onclick={(ev) => confirm.ask(ev, `Delete ${bytes(oldLogs.data ?? 0)} of old logs for good?`, 'Delete', deleteOld)}>Delete old logs</button></Setting>
+      <div class="divider"></div>
+      <Setting title="Screenshots" desc={pngDesc}><button class="btn btn-sm" disabled={!pngs.data?.count} onclick={(ev) => confirm.ask(ev, `Save ${plural(pngs.data?.count ?? 0, 'screenshot')} as JPEG? The PNG files are replaced, at the quality set above.`, 'Compress', compressAll)}>Compress</button></Setting>
       <div class="divider"></div>
       <Setting title="Unused files in the shared store" desc={unusedDesc}><button class="btn btn-sm" disabled={cleaning || !usage.data?.unusedBytes} onclick={(ev) => confirm.ask(ev, `Delete ${bytes(usage.data?.unusedBytes ?? 0)} of files no instance uses? They download again if needed.`, 'Clean up', cleanUp)}>Clean up</button></Setting>
     </div>

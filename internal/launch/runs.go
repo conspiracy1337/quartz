@@ -60,6 +60,19 @@ type Crash struct {
 	Report bool   `json:"report"`           // a crash report was saved with the run
 }
 
+// Visit is a world or server the run went into, from the console: a server
+// by the address it connected to, a world by its name (known once the world
+// is saved; "" until then).
+type Visit struct {
+	At     time.Time
+	World  bool
+	Name   string
+	Server string
+}
+
+// maxVisits caps the visits a run remembers (the newest are kept).
+const maxVisits = 64
+
 // Finished is what a Finisher sees once a game has exited.
 type Finished struct {
 	InstanceID string
@@ -73,6 +86,9 @@ type Finished struct {
 	Stopped bool
 	// Tail is the end of the console, newest last.
 	Tail []gamelog.Line
+	// Visits are the worlds and servers the run went into, oldest first
+	// (none for a run the launcher didn't watch).
+	Visits []Visit
 }
 
 // Finisher adds to a run's record after the game exits and before it is

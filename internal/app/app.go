@@ -249,7 +249,8 @@ func Run(o Options) error {
 			api.NewHome(a.ctx, api.HomeDeps{Home: a.home, Servers: a.servers, Screenshots: a.screenshots}),
 			api.NewWorlds(a.ctx, a.worlds, a.drops),
 			api.NewServers(a.ctx, a.servers),
-			api.NewScreenshots(api.ScreenshotDeps{Service: a.screenshots, Instances: a.instances, Icons: a.icons, Banners: a.banners, Bus: a.bus}),
+			api.NewScreenshots(api.ScreenshotDeps{Service: a.screenshots, Instances: a.instances, Icons: a.icons, Banners: a.banners, Bus: a.bus,
+				Tasks: a.tasks, Quality: a.screenshotQuality}),
 			api.NewSync(a.ctx, a.syncing),
 			api.NewSandbox(a.ctx, api.SandboxDeps{Service: a.sandbox, Store: a.instances, Syncing: a.syncing, Java: a.java, Meta: a.meta,
 				Settings: a.settings, Bus: a.bus, Root: a.paths.Root}),
@@ -489,7 +490,9 @@ func (a *app) buildGame() {
 			return contentmeta.ClientProtocol(filepath.Join(a.paths.Versions(), mc, mc+".jar"))
 		},
 	})
-	a.screenshots = screenshots.New(screenshots.Deps{Instances: a.instances, Images: a.gameImages, Bus: a.bus})
+	a.screenshots = screenshots.New(screenshots.Deps{Instances: a.instances, Images: a.gameImages, Bus: a.bus, Log: a.log,
+		ServerName: func(id, address string) string { return a.servers.Name(id, address) },
+		Quality:    a.screenshotQuality})
 	a.crash = crash.New(crash.Deps{Instances: a.instances, Mods: a.content, Runs: launcherRuns{a}, Redactor: a.redactor})
 	a.logFiles = logfiles.New(logfiles.Deps{
 		Instances: a.instances, Runs: launcherRuns{a}, HTTP: a.http, Redactor: a.redactor,
@@ -937,4 +940,9 @@ func ExitOnError(err error) {
 	}
 	fmt.Fprintln(os.Stderr, brand.Name+":", err)
 	os.Exit(1)
+}
+
+// screenshotQuality is the JPEG quality new screenshots are re-saved at (0 keeps them).
+func (a *app) screenshotQuality() int {
+	return screenshots.Quality(a.settings.Get().Storage.Screenshots)
 }
