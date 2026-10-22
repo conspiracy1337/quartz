@@ -36,7 +36,7 @@
 <aside class="side" style="font-family: var(--font); color: var(--text)">
   <div class="side-brand">
     <Logo />
-    <span class="hide-c">Quartz Client</span>
+    <span class="hide-c h1">Quartz</span>
     <button class="side-back" onclick={back} disabled={!router.canBack} aria-label="Back" title="Back ({keysOf(chords(prefs.value?.general.keys).back).join('+')})"><Icon name="arrow-left" size={16} sw={1.8} /></button>
   </div>
   <button class="side-link" style="border: 1px solid var(--line-2); background: var(--panel); color: var(--faint); text-align: left" onclick={() => session.open({ kind: 'palette', mode: 'commands' })}>
