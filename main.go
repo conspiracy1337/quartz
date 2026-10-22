@@ -13,6 +13,7 @@ import (
 	"quartz/internal/core/paths"
 	"quartz/internal/core/procx"
 	"quartz/internal/intent"
+	"quartz/internal/sandbox"
 )
 
 //go:embed all:frontend/dist
@@ -23,6 +24,7 @@ const restartWait = 15 * time.Second
 
 func main() {
 	landlock.Main() // a sandboxed run's scope shim; returns at once otherwise
+	sandbox.Main()  // the Windows sandbox's administrator helper; likewise
 	wd, _ := os.Getwd()
 	args, err := intent.Parse(os.Args[1:], wd)
 	if err != nil || args.Command.Headless() {

@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"time"
 
 	"quartz/internal/core/linkx"
@@ -98,7 +97,7 @@ func (l *Launcher) sandboxRun(sp *spec, argv []string) sandbox.Run {
 		Scratch:  l.scratch(sp),
 		Write:    []string{filepath.Join(l.scratch(sp), "natives")},
 		Data:     filepath.Join(l.cfg.Instances.Dir(id), "sandbox"),
-		Read:     append(slices.Clone(l.cfg.StoreRead), sandbox.JavaRoot(sp.rt.Path)),
+		Read:     l.cfg.StoreRead, Java: sandbox.JavaRoot(sp.rt.Path),
 		GameMode: sp.eff.Performance.GameMode && runtime.GOOS == "linux",
 	}
 	if sp.inst.ClientJar != nil {

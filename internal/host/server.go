@@ -509,7 +509,7 @@ func (s *Service) spawn(ctx context.Context, srv *server, javaPath string, argv 
 		spec.Env = java.CleanEnv(sandbox.FilterEnv(os.Environ()))
 		r := sandbox.Run{Instance: srv.id, Rules: srv.rules, GameDir: srv.dir, Headless: true,
 			Scratch: filepath.Join(srv.dir, ".quartz", "sandbox"),
-			Read:    append(slices.Clone(s.d.StoreRead), sandbox.JavaRoot(javaPath)), Write: []string{srv.saves}}
+			Read:    s.d.StoreRead, Java: sandbox.JavaRoot(javaPath), Write: []string{srv.saves}}
 		if s.d.Instances != nil {
 			r.Data = filepath.Join(s.d.Instances.Dir(srv.id), "sandbox")
 		}

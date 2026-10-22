@@ -414,6 +414,8 @@ func (l *Launcher) pipeline(ctx context.Context, inst instance.Instance, account
 		f.Code, f.AccountID, f.Message = "sign-in-expired", p.signedIn, "Sign in again: "+auth.Describe(err).Message
 	case ctx.Err() != nil:
 		f.Code, f.Message = "cancelled", "Launch cancelled"
+	case errors.Is(err, sandbox.ErrApproval):
+		f.Code, f.Message = "sandbox-approval", "Sandboxing it needs a one-time Windows approval"
 	case errors.Is(err, sandbox.ErrUnavailable):
 		f.Code, f.Message = "sandbox", "The"+strings.TrimPrefix(err.Error(), "the")
 	}

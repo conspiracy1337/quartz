@@ -90,7 +90,7 @@ func (b *darwinBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *J
 	for _, d := range r.Redirects {
 		write = append(write, d.To)
 	}
-	read := slices.Clone(r.Read)
+	read := slices.Clone(r.reads())
 	for _, f := range r.Rules.Folders {
 		if f.Level == rules.RW {
 			write = append(write, f.Path)
