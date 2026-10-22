@@ -161,7 +161,7 @@
     {#if overlay.kind === 'add-account'}<AddAccount mode={overlay.mode} accountId={overlay.accountId} />
     {:else if overlay.kind === 'install'}<Install {...overlay} />
     {:else if overlay.kind === 'crash'}<Crash instanceId={overlay.instanceId} runId={overlay.runId} file={overlay.file} />
-    {:else if overlay.kind === 'server'}<ServerDialog instanceId={overlay.instanceId} entry={overlay.entry} />
+    {:else if overlay.kind === 'server'}<ServerDialog instanceId={overlay.instanceId} entry={overlay.entry} home={overlay.home} />
     {:else if overlay.kind === 'copy-world'}<CopyWorld {...overlay} />
     {:else if overlay.kind === 'rename-world'}<WorldEdit instanceId={overlay.instanceId} folder={overlay.folder} name={overlay.name} />
     {:else if overlay.kind === 'blocked'}<Blocked jobId={overlay.jobId} />

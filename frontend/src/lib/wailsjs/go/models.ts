@@ -2958,6 +2958,7 @@ export namespace servers {
 	    id: string;
 	    name: string;
 	    address: string;
+	    packs: string;
 	    online: boolean;
 	    version?: string;
 	    players: number;
@@ -2977,6 +2978,7 @@ export namespace servers {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.address = source["address"];
+	        this.packs = source["packs"];
 	        this.online = source["online"];
 	        this.version = source["version"];
 	        this.players = source["players"];
@@ -3213,6 +3215,7 @@ export namespace settings {
 	    setupDone: boolean;
 	    keys?: Record<string, string>;
 	    hiddenNews?: string;
+	    serverOrder?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new General(source);
@@ -3228,6 +3231,7 @@ export namespace settings {
 	        this.setupDone = source["setupDone"];
 	        this.keys = source["keys"];
 	        this.hiddenNews = source["hiddenNews"];
+	        this.serverOrder = source["serverOrder"];
 	    }
 	}
 	export class Integrations {

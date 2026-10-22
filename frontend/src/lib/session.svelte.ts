@@ -20,8 +20,8 @@ export type Overlay =
   | { kind: 'install'; ref: string; source: Src; instanceId: string; content: ContentKind; version?: string; plan?: InstallPlan }
   /** A run's crash (runId), or a report in crash-reports (file). */
   | { kind: 'crash'; instanceId: string; runId?: string; file?: string }
-  /** Add a server, or edit `entry`. */
-  | { kind: 'server'; instanceId: string; entry?: ServerEntry }
+  /** Add a server, or edit `entry`; with `home` (Home's row), in every instance that lists it. */
+  | { kind: 'server'; instanceId: string; entry?: ServerEntry; home?: string }
   | { kind: 'copy-world'; instanceId: string; folder: string; name: string; sub: string }
   | { kind: 'rename-world'; instanceId: string; folder: string; name: string }
   | { kind: 'blocked'; jobId: string }

@@ -3,13 +3,17 @@
   import type { ServerEntry } from '../api/types';
   import { count, errorText } from '../format';
   import { revs } from '../revs.svelte';
+  import { renameInHomeOrder } from '../servers.svelte';
   import { session } from '../session.svelte';
   import Dialog from '../ui/Dialog.svelte';
   import Seg from '../ui/Seg.svelte';
 
-  /** Add server, or Edit {name} (DlgServer.dc.html). The address is pinged as it is typed. */
-  interface Props { instanceId: string; entry?: ServerEntry | undefined }
-  let { instanceId, entry }: Props = $props();
+  /**
+   * Add server, or Edit {name} (DlgServer.dc.html). The address is pinged as it is typed.
+   * home is Home's row (its merged ID): the edit goes to every instance that lists it.
+   */
+  interface Props { instanceId: string; entry?: ServerEntry | undefined; home?: string | undefined }
+  let { instanceId, entry, home }: Props = $props();
 
   // svelte-ignore state_referenced_locally
   let name = $state(entry?.name ?? '');
@@ -54,7 +58,8 @@
     error = '';
     const next = { name: name.trim(), address: address.trim(), packs };
     try {
-      if (entry) await api.servers.edit(instanceId, entry.index, entry.address, next);
+      if (home) renameInHomeOrder(home, await api.home.editServer(home, next));
+      else if (entry) await api.servers.edit(instanceId, entry.index, entry.address, next);
       else await api.servers.add(instanceId, next);
       revs.bump('servers');
       close();

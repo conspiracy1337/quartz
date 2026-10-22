@@ -51,7 +51,7 @@ export const serverItem = (s: GoServer): ContentItem => ({
 const entries = new Map<string, ServerEntry>();
 
 const toMerged = (m: GoMerged): MergedServer => ({
-  id: m.id, name: m.name, address: m.address, ...serverStats(m), art: serverArt(m.name, m.online, m.icon), instances: m.instances,
+  id: m.id, name: m.name, address: m.address, packs: m.packs as ServerEntry['packs'], ...serverStats(m), art: serverArt(m.name, m.online, m.icon), instances: m.instances,
 });
 
 export const toShot = (s: GoShot): Screenshot => ({
@@ -119,6 +119,8 @@ export const homeApi = {
   servers: (force = false) => revs.load('servers', bridged(() => HomeGo.Servers(force).then((l) => l.map(toMerged)), () => home.servers)),
   /** Takes Home's rows out of every instance that lists them; each part comes back with servers.undo. */
   removeServers: bridged(HomeGo.RemoveServers, (_keys: string[]): servers.Removed[] => [{ instance: 'preview', token: 'preview' }]),
+  /** Changes Home's row in every instance that lists it; resolves with the row's ID after the edit. */
+  editServer: bridged(HomeGo.EditServer, (key: string, _e: Omit<ServerEntry, 'index'>) => key),
   recentShots: () => revs.load('screenshots', bridged(() => HomeGo.RecentShots().then((l) => l.map(toShot)), () => home.recentShots)),
   disk: bridged(HomeGo.Disk, (): DiskSpace => ({ free: 120e9, low: false })),
   /** What's wrong with where the data folder is: "bang" ("!" in the path), "temp", or "". */

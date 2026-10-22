@@ -19,7 +19,7 @@
   import { projectKindOf } from '../labels';
   import { go, href } from '../router.svelte';
   import { noTextPick, Picker } from '../selection.svelte';
-  import { instanceRow, instanceScope } from '../servers';
+  import { instanceRow, instanceScope } from '../servers.svelte';
   import { session } from '../session.svelte';
   import { names, nextSort, text } from '../sort';
   import Check from '../ui/Check.svelte';
@@ -30,6 +30,7 @@
   import SplitButton from '../ui/SplitButton.svelte';
   import Toggle from '../ui/Toggle.svelte';
   import Empty from '../ui/Empty.svelte';
+  import OnlineChip from './OnlineChip.svelte';
   import ServerTable from './ServerTable.svelte';
 
   /** The one list used by Mods, Resource packs, Shaders, Data packs, Worlds and Servers. */
@@ -55,7 +56,7 @@
     worlds: { noun: 'worlds', primary: 'Add world', toggles: false, projects: false, browse: true,
       // Survival and Creative always (as designed), then any other mode a world here has.
       chips: (items) => [all, ...[...new Set(['Survival', 'Creative', ...items.map((c) => c.group).filter((g): g is string => !!g)])].map((g) => ({ label: g, test: (c: ContentItem) => c.group === g }))] },
-    // Servers filter by Online inside their table (ServerTable), as on Home.
+    // Servers have a single Online filter (OnlineChip) instead of chips.
     servers: { noun: 'servers', primary: 'Add server', toggles: false, projects: false, chips: () => [] },
   };
   // Where a row came from: the platform's logo, or a file icon.
@@ -415,7 +416,9 @@
   <!-- One line whatever the data: the search gives way first (280 down to 160 px), then the chips scroll. -->
   <div class="ct-tools">
     <SearchField bind:value={search} label="Search" placeholder={searchIn(cfg.noun, items.data?.length)} style="flex: 0 1000 280px; min-width: 160px" />
-    {#if chipRow.length}
+    {#if kind === 'servers'}
+      <OnlineChip key={serverScope.key} />
+    {:else if chipRow.length}
       <div class="ct-chips">
         {#each chipRow as ch, i (ch.label)}
           <button class="chip" class:on={chip === i} onclick={() => (chip = i)} aria-pressed={chip === i}>{ch.label}<span class="count">{ch.count}</span></button>

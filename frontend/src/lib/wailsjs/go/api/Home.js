@@ -6,6 +6,10 @@ export function Disk() {
   return window['go']['api']['Home']['Disk']();
 }
 
+export function EditServer(arg1, arg2) {
+  return window['go']['api']['Home']['EditServer'](arg1, arg2);
+}
+
 export function FolderProblem() {
   return window['go']['api']['Home']['FolderProblem']();
 }

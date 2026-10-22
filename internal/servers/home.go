@@ -16,6 +16,7 @@ type Merged struct {
 	ID      string `json:"id"` // the normalized address
 	Name    string `json:"name"`
 	Address string `json:"address"`
+	Packs   string `json:"packs"` // as the instance Join uses has it, for Edit
 	Status
 	// Instances list this server, the one last used on it first.
 	Instances []string `json:"instances"`
@@ -28,7 +29,7 @@ func (s *Service) Home(ctx context.Context, force bool) ([]Merged, error) {
 	type seen struct {
 		m     Merged
 		saved string
-		names map[string]string    // instance → what it calls the server
+		entry map[string]Entry     // instance → its entry for the server
 		used  map[string]time.Time // instance → when it last joined it
 	}
 	byKey := map[string]*seen{}
@@ -47,15 +48,15 @@ func (s *Service) Home(ctx context.Context, force bool) ([]Merged, error) {
 			k := a.Key()
 			x := byKey[k]
 			if x == nil {
-				x = &seen{m: Merged{ID: k, Name: sv.Name, Address: sv.Address}, names: map[string]string{}, used: map[string]time.Time{}}
+				x = &seen{m: Merged{ID: k, Name: sv.Name, Address: sv.Address}, entry: map[string]Entry{}, used: map[string]time.Time{}}
 				byKey[k] = x
 				order = append(order, k)
 			}
-			if _, dup := x.names[in.ID]; dup {
+			if _, dup := x.entry[in.ID]; dup {
 				continue
 			}
 			x.m.Instances = append(x.m.Instances, in.ID)
-			x.names[in.ID] = sv.Name
+			x.entry[in.ID] = sv.Entry
 			last := joined[k]
 			if last.IsZero() && in.LastPlayed != nil {
 				// Played, but never on this server: after every instance that did.
@@ -73,7 +74,7 @@ func (s *Service) Home(ctx context.Context, force bool) ([]Merged, error) {
 		x := byKey[k]
 		slices.SortStableFunc(x.m.Instances, func(a, b string) int { return x.used[b].Compare(x.used[a]) })
 		first := x.m.Instances[0]
-		x.m.Name = x.names[first]
+		x.m.Name, x.m.Packs = x.entry[first].Name, x.entry[first].Packs
 		// Fit is judged for the instance Join uses: the one last used on it.
 		minecraft := ""
 		if in, err := s.d.Instances.Get(first); err == nil {
@@ -161,26 +162,36 @@ type Removed struct {
 	Token    string `json:"token"`
 }
 
-// RemoveEverywhere takes the servers with these merged IDs (Home's rows) out of
-// every instance that lists them. Each instance gets its own Undo token; if one
-// fails, the ones already done are put back so nothing is half removed.
-func (s *Service) RemoveEverywhere(keys []string) ([]Removed, error) {
+// listed finds the entries with these merged IDs (Home's rows) in every
+// instance, by instance in the store's order.
+func (s *Service) listed(keys ...string) map[string][]Ref {
 	want := map[string]bool{}
 	for _, k := range keys {
 		want[k] = true
 	}
-	var done []Removed
+	out := map[string][]Ref{}
 	for _, in := range s.d.Instances.List() {
 		list, err := s.entries(in.ID)
 		if err != nil {
 			continue
 		}
-		var refs []Ref
 		for _, sv := range list {
 			if a, err := slp.Parse(sv.Address); err == nil && want[a.Key()] {
-				refs = append(refs, Ref{Index: sv.Index, Address: sv.Address})
+				out[in.ID] = append(out[in.ID], Ref{Index: sv.Index, Address: sv.Address})
 			}
 		}
+	}
+	return out
+}
+
+// RemoveEverywhere takes the servers with these merged IDs out of every
+// instance that lists them. Each instance gets its own Undo token; if one
+// fails, the ones already done are put back so nothing is half removed.
+func (s *Service) RemoveEverywhere(keys []string) ([]Removed, error) {
+	byInstance := s.listed(keys...)
+	var done []Removed
+	for _, in := range s.d.Instances.List() {
+		refs := byInstance[in.ID]
 		if len(refs) == 0 {
 			continue
 		}
@@ -194,4 +205,26 @@ func (s *Service) RemoveEverywhere(keys []string) ([]Removed, error) {
 		done = append(done, Removed{Instance: in.ID, Token: token})
 	}
 	return done, nil
+}
+
+// EditEverywhere changes the server with this merged ID in every instance that
+// lists it, so Home's row stays one server. It returns the row's ID after the
+// edit (a new address is a new ID).
+func (s *Service) EditEverywhere(key string, e Entry) (string, error) {
+	e, err := validate(e)
+	if err != nil {
+		return "", err
+	}
+	a, err := slp.Parse(e.Address)
+	if err != nil {
+		return "", err
+	}
+	for id, refs := range s.listed(key) {
+		for _, r := range refs {
+			if err := s.Edit(id, r.Index, r.Address, e); err != nil {
+				return "", err
+			}
+		}
+	}
+	return a.Key(), nil
 }

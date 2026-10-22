@@ -39,6 +39,12 @@ func (h *Home) RemoveServers(keys []string) ([]servers.Removed, error) {
 	return asListErr(h.d.Servers.RemoveEverywhere(keys))
 }
 
+// EditServer changes Home's row (by merged ID) in every instance that lists
+// it and returns the row's ID after the edit.
+func (h *Home) EditServer(key string, e servers.Entry) (string, error) {
+	return h.d.Servers.EditEverywhere(key, e)
+}
+
 // RecentShots is the newest screenshots across instances.
 func (h *Home) RecentShots() []screenshots.Shot { return asList(h.d.Screenshots.Recent(6)) }
 
