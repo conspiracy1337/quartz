@@ -8,6 +8,7 @@ package home
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"sync"
@@ -214,8 +215,8 @@ type posts struct {
 }
 
 // News is the newest Java Edition article or patch note, followed by the
-// launcher's own posts, newest first. It fails only when nothing could be
-// reached.
+// launcher's own posts in the feed's order. It fails only when nothing could
+// be reached.
 func (s *Service) News(ctx context.Context) ([]News, error) {
 	var (
 		f          feed
@@ -245,8 +246,10 @@ func (s *Service) News(ctx context.Context) ([]News, error) {
 func (s *Service) Posts(ctx context.Context) []News {
 	s.postsOnce.Do(func() {
 		// Revalidated every start; the cached copy covers being offline.
-		p, err := meta.Fetch[posts](ctx, s.d.Meta, cmp.Or(s.postsURL, QuartzNews), httpcache.Policy{MaxSize: 64 << 10})
-		if err == nil {
+		// Bytes, not meta.Fetch: each generic Fetch type adds kilobytes.
+		data, err := s.d.Meta.Bytes(ctx, cmp.Or(s.postsURL, QuartzNews), httpcache.Policy{MaxSize: 64 << 10})
+		var p posts
+		if err == nil && json.Unmarshal(data, &p) == nil {
 			s.posts = pickPosts(p, s.d.Pictures)
 		}
 	})
@@ -291,8 +294,9 @@ func pickNote(n patchNotes, pics *remoteimg.Cache) *News {
 	return best
 }
 
-// pickPosts keeps the launcher's own posts that have a title, a date and a
-// safe link, newest first.
+// pickPosts keeps the first few of the launcher's own posts that have a
+// title, a date and a safe link, in the feed's order (the server pins a post
+// by listing it first).
 func pickPosts(p posts, pics *remoteimg.Cache) []News {
 	var list []News
 	for _, e := range p.Entries {
@@ -302,9 +306,11 @@ func pickPosts(p posts, pics *remoteimg.Cache) []News {
 			continue
 		}
 		list = append(list, News{ID: "quartz:" + e.ID, Title: title, Source: brand.ShortName, Published: at.UnixMilli(), URL: e.URL, Image: pics.Src(e.Image)})
+		if len(list) == maxPosts {
+			break
+		}
 	}
-	slices.SortStableFunc(list, func(a, b News) int { return cmp.Compare(b.Published, a.Published) })
-	return list[:min(len(list), maxPosts)]
+	return list
 }
 
 func article(id, title string, at time.Time, link, image string, pics *remoteimg.Cache) *News {

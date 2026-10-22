@@ -107,13 +107,14 @@ func TestPickPosts(t *testing.T) {
 	]}`), &p)
 	pics := remoteimg.New(t.TempDir(), nil, nil)
 	got := pickPosts(p, pics)
-	if len(got) != 2 || got[0].ID != "quartz:new" || got[0].Title != "Quartz 1.0" || got[1].ID != "quartz:old" {
+	// The feed's order stays, so the server can pin a post by listing it first.
+	if len(got) != 2 || got[0].ID != "quartz:old" || got[1].ID != "quartz:new" || got[1].Title != "Quartz 1.0" {
 		t.Fatalf("%+v", got)
 	}
-	if got[0].Image != "" || !strings.HasPrefix(got[1].Image, "/tex/remote/") || got[0].Source != brand.ShortName {
+	if !strings.HasPrefix(got[0].Image, "/tex/remote/") || got[1].Image != "" || got[1].Source != brand.ShortName {
 		t.Fatalf("%+v", got)
 	}
-	// A flood is cut to the newest few.
+	// A flood is cut to the first few.
 	p.Entries = slices.Repeat(p.Entries[:1], maxPosts+3)
 	if n := len(pickPosts(p, nil)); n != maxPosts {
 		t.Fatal(n)
