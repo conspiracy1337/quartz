@@ -3,9 +3,11 @@
   import type { RunResult } from '$lib/api/types';
   import LogsFrame from '$lib/components/LogsFrame.svelte';
   import { Day, clock, hours } from '$lib/format';
+  import { UPLOAD_ASK } from '$lib/labels';
   import { query, skeletonRows } from '$lib/query.svelte';
   import { go } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
+  import ConfirmMenu, { Confirm } from '$lib/ui/ConfirmMenu.svelte';
   import Empty from '$lib/ui/Empty.svelte';
 
   interface Props { instanceId: string }
@@ -27,6 +29,9 @@
     session.runFile = { instanceId, runId, kind, title };
     go({ name: 'instance', id: instanceId, tab: 'logs', sub: 'files' });
   }
+  // Sending logs out asks first: anyone with the link can read them.
+  const confirm = new Confirm();
+  const upload = (e: MouseEvent, runId: string) => confirm.ask(e, UPLOAD_ASK, 'Upload', () => session.upload(() => api.logs.uploadRun(instanceId, runId)), false);
   const debug = async (runId: string) => session.copy(await api.logs.debugInfo(instanceId, runId), 'Debug info');
   const used = $derived({
     java: run?.java ?? '', memory: run ? `${gb(run.memory.min)} to ${gb(run.memory.max)} GB` : '', account: run?.account ?? '', sandbox: run?.sandbox ? `On (${run.sandbox})` : 'Off', mods: run?.mods ? `${run.mods} loaded` : 'None',
@@ -49,7 +54,7 @@
               <div class="row row-sm" style="grid-template-columns: minmax(0,1fr) auto"><span class="mono trunc">launch-command.txt</span><button class="btn btn-sm btn-ghost" onclick={() => open(run.id, 'cmd', 'launch-command.txt')}>Open</button></div>
             </div>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 8px; justify-content: flex-end"><button class="btn btn-sm" onclick={() => debug(run.id)}>Copy debug info</button><button class="btn btn-sm" onclick={() => session.upload(() => api.logs.uploadRun(instanceId, run.id))}>Upload logs</button></div>
+          <div style="display: flex; flex-direction: column; gap: 8px; justify-content: flex-end"><button class="btn btn-sm" onclick={() => debug(run.id)}>Copy debug info</button><button class="btn btn-sm" onclick={(e) => upload(e, run.id)}>Upload logs</button></div>
         </section>
       {/if}
     {:else}
@@ -58,6 +63,7 @@
     {/each}
   </div>
 </LogsFrame>
+<ConfirmMenu {confirm} />
 
 <style>
   /* Four equal columns across the full width. Buttons keep the row's height and colours. */

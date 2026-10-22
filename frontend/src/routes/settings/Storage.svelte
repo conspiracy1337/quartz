@@ -6,8 +6,7 @@
   import { revs } from '$lib/revs.svelte';
   import { go } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
-  import Menu, { below } from '$lib/ui/Menu.svelte';
-  import MenuConfirm from '$lib/ui/MenuConfirm.svelte';
+  import ConfirmMenu, { Confirm } from '$lib/ui/ConfirmMenu.svelte';
   import Setting from '$lib/ui/Setting.svelte';
   import Tile from '$lib/ui/Tile.svelte';
   import { groupsFor } from '$lib/settings/registry';
@@ -17,15 +16,7 @@
   const info = query(() => api.app.info(), 'app.info');
 
   /** Deleting for good asks once more in a menu under the button. */
-  let ask = $state<{ x: number; y: number; text: string; action: string; run: () => void } | null>(null);
-  function confirm(e: MouseEvent, text: string, action: string, run: () => void) {
-    ask = { ...below(e), text, action, run };
-  }
-  function confirmed() {
-    const run = ask?.run;
-    ask = null;
-    run?.();
-  }
+  const confirm = new Confirm();
 
   const usage = query(() => api.content.usage());
   let cleaning = $state(false);
@@ -101,7 +92,7 @@
           <Tile art={e.art} icon={e.icon} loader={e.loader ?? ''} />
           <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{e.name}</span><span class="trunc small faint" style="display: block">Minecraft {e.minecraft}, moved to the trash {ago(e.trashedAt)}</span></span>
           <span class="small muted opt tnum">{plural(daysLeft(e), 'day')} left</span>
-          <span style="display: flex; gap: 6px; justify-content: flex-end"><button class="btn btn-sm" onclick={() => restore(e)}>Restore</button><button class="btn btn-sm btn-danger" onclick={(ev) => confirm(ev, `Delete ${e.name} for good? It can't be restored.`, 'Delete', () => purge(e))}>Delete now</button></span>
+          <span style="display: flex; gap: 6px; justify-content: flex-end"><button class="btn btn-sm" onclick={() => restore(e)}>Restore</button><button class="btn btn-sm btn-danger" onclick={(ev) => confirm.ask(ev, `Delete ${e.name} for good? It can't be restored.`, 'Delete', () => purge(e))}>Delete now</button></span>
         </div>
       {:else}
         {#if trash.data}
@@ -116,17 +107,12 @@
   <section class="grp" aria-label="Clean up">
     <h2 class="h3">Clean up</h2>
     <div class="card">
-      <Setting title="Old logs" desc={oldDesc}><button class="btn btn-sm" disabled={!oldLogs.data} onclick={(ev) => confirm(ev, `Delete ${bytes(oldLogs.data ?? 0)} of old logs for good?`, 'Delete', deleteOld)}>Delete old logs</button></Setting>
+      <Setting title="Old logs" desc={oldDesc}><button class="btn btn-sm" disabled={!oldLogs.data} onclick={(ev) => confirm.ask(ev, `Delete ${bytes(oldLogs.data ?? 0)} of old logs for good?`, 'Delete', deleteOld)}>Delete old logs</button></Setting>
       <div class="divider"></div>
-      <Setting title="Unused files in the shared store" desc={unusedDesc}><button class="btn btn-sm" disabled={cleaning || !usage.data?.unusedBytes} onclick={(ev) => confirm(ev, `Delete ${bytes(usage.data?.unusedBytes ?? 0)} of files no instance uses? They download again if needed.`, 'Clean up', cleanUp)}>Clean up</button></Setting>
+      <Setting title="Unused files in the shared store" desc={unusedDesc}><button class="btn btn-sm" disabled={cleaning || !usage.data?.unusedBytes} onclick={(ev) => confirm.ask(ev, `Delete ${bytes(usage.data?.unusedBytes ?? 0)} of files no instance uses? They download again if needed.`, 'Clean up', cleanUp)}>Clean up</button></Setting>
     </div>
   </section>
-  {#if ask}
-    {@const a = ask}
-    <Menu x={a.x} y={a.y} label={a.action} onclose={() => (ask = null)}>
-      <MenuConfirm text={a.text} action={a.action} oncancel={() => (ask = null)} onconfirm={confirmed} />
-    </Menu>
-  {/if}
+  <ConfirmMenu {confirm} />
 </SettingsTab>
 
 

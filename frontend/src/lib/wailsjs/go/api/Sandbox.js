@@ -10,10 +10,6 @@ export function SetFolder(arg1, arg2, arg3) {
   return window['go']['api']['Sandbox']['SetFolder'](arg1, arg2, arg3);
 }
 
-export function SetLevel(arg1, arg2, arg3) {
-  return window['go']['api']['Sandbox']['SetLevel'](arg1, arg2, arg3);
-}
-
 export function SetOn(arg1, arg2) {
   return window['go']['api']['Sandbox']['SetOn'](arg1, arg2);
 }

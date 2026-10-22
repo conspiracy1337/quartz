@@ -5,7 +5,6 @@ package integration
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -147,7 +146,7 @@ func TestLaunchOffline(t *testing.T) {
 		t.Fatal(err)
 	}
 	if preset != "" {
-		if inst, err = insts.EditSandbox(inst.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset), runtime.GOOS); return nil }); err != nil {
+		if inst, err = insts.EditSandbox(inst.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset)); return nil }); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -270,7 +269,7 @@ func TestTwoCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	if preset != "" {
-		if inst, err = insts.EditSandbox(inst.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset), runtime.GOOS); return nil }); err != nil {
+		if inst, err = insts.EditSandbox(inst.ID, func(s *rules.Settings) error { *s = s.Apply(rules.Preset(preset)); return nil }); err != nil {
 			t.Fatal(err)
 		}
 	}

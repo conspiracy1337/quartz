@@ -55,7 +55,8 @@
         <button class="btn" style="height: 40px; border-color: color-mix(in srgb, var(--accent) 45%, transparent)" title="Server running" aria-pressed={session.hostPanel} onclick={() => (session.hostPanel = !session.hostPanel)}><span class="dot live" aria-hidden="true"></span><span class="mono" style="font-size: 12px">{host.address}</span></button>
       {/if}
       {#if running}
-        <button class="btn btn-stop" onclick={() => session.stop(i.id)}><Icon name="stop" size={12} />Stop</button>
+        {@const kill = session.stopping[i.id]}
+        <button class="btn btn-stop" title={kill ? 'Force the game to quit now' : 'Ask the game to save and quit'} onclick={() => session.stop(i.id)}><Icon name={kill ? 'x' : 'stop'} size={12} sw={kill ? 2.5 : 1.6} />{kill ? 'Kill' : 'Stop'}</button>
       {:else}
         <button class="btn btn-play" onclick={() => session.play(i.id)}><Icon name="play-wide" size={14} />Play</button>
       {/if}

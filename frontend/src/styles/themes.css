@@ -13,7 +13,9 @@
     --line-2:color-mix(in srgb,var(--text) 14%,var(--bg));
     --muted:color-mix(in srgb,var(--text) 63%,var(--bg));
     --faint:color-mix(in srgb,var(--text) 49%,var(--bg));
+    --console:color-mix(in srgb,#000 22%,var(--bg));
   }
+  :root[data-theme="light"]{--console:color-mix(in srgb,var(--text) 3%,var(--bg))}
   /* Density: compact tightens the shared row heights only, so every list stays aligned. */
   :root[data-density="compact"]{--row-sm:32px;--row:40px;--row-lg:48px}
   /* Text size scales the whole interface evenly (see #app below). */

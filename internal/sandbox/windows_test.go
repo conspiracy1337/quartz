@@ -20,8 +20,7 @@ import (
 // and Blocked is none.
 func TestNetworkCaps(t *testing.T) {
 	std := rules.Default()
-	strict := rules.Default().Apply(rules.Strict, "windows")
-	blocked, _ := rules.Default().SetLevel(rules.Internet, rules.Blocked, "windows")
+	strict := rules.Default().Apply(rules.Strict)
 	all := []windows.WELL_KNOWN_SID_TYPE{windows.WinCapabilityInternetClientSid,
 		windows.WinCapabilityInternetClientServerSid, windows.WinCapabilityPrivateNetworkClientServerSid}
 	lan := []windows.WELL_KNOWN_SID_TYPE{windows.WinCapabilityPrivateNetworkClientServerSid}
@@ -32,7 +31,6 @@ func TestNetworkCaps(t *testing.T) {
 	}{
 		{"game-standard", Run{Rules: std}, all},
 		{"game-strict-lan-only", Run{Rules: strict}, lan},
-		{"game-blocked", Run{Rules: blocked}, nil},
 		{"server-standard", Run{Rules: std, Headless: true}, all},
 		{"server-strict-lan-only", Run{Rules: strict, Headless: true}, lan},
 	} {

@@ -84,7 +84,7 @@
   </div>
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 12px 14px 14px">
     <button class="btn btn-sm btn-accent" disabled={host.state !== 'stopped'} onclick={() => session.restartHost(id)}><Icon name="play" size={11} />Start</button>
-    <button class="btn btn-sm btn-danger" disabled={host.state === 'stopped'} onclick={() => session.stopHost(id)}><Icon name="stop" size={10} />Stop</button>
+    <button class="btn btn-sm btn-danger" disabled={host.state === 'stopped'} title={session.hostStopping ? 'Force the server to quit now' : 'Save the world and stop'} onclick={() => session.stopHost(id)}><Icon name={session.hostStopping ? 'x' : 'stop'} size={10} sw={session.hostStopping ? 2.5 : 1.6} />{session.hostStopping ? 'Kill' : 'Stop'}</button>
   </div>
 </section>
 
@@ -94,7 +94,7 @@
   .addr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;height:36px;padding:0 6px 0 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
   .dim{opacity:.55}
   .con-wrap{position:relative}
-  .con-wrap .grow{position:absolute;top:4px;right:4px;background:#08080a}
-  .con{font-family:var(--mono);font-size:11px;line-height:17px;color:var(--muted);background:#08080a;border:1px solid var(--line);border-radius:8px;padding:8px 26px 8px 10px;height:86px;overflow-y:auto;overscroll-behavior:contain;word-break:break-word;cursor:zoom-in}
+  .con-wrap .grow{position:absolute;top:4px;right:4px;background:var(--console)}
+  .con{font-family:var(--mono);font-size:11px;line-height:17px;color:var(--muted);background:var(--console);border:1px solid var(--line);border-radius:8px;padding:8px 26px 8px 10px;height:86px;overflow-y:auto;overscroll-behavior:contain;word-break:break-word;cursor:zoom-in}
   .con.open{height:260px;cursor:auto}
 </style>

@@ -4,6 +4,8 @@
 :root{
   --bg:#0a0a0b; --side:#0c0c0e; --panel:#0f0f11; --raise:#151518; --hover:#1a1a1e; --line:#1e1e22; --line-2:#2a2a30;
   --text:#ededef; --muted:#9a9aa3; --faint:#7a7a83;
+  /* Log and console text sits on this, a step below the page (LogsD's --console). */
+  --console:#08080a;
   --accent:#3ecf8e; --accent-ink:#04140c;
   --ok:#3ecf8e; --warn:#f5b54a; --danger:#f0565b; --info:#6ea8fe;
   --radius:6px; --radius-lg:10px;

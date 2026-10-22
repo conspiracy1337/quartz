@@ -22,7 +22,7 @@
   const when = (t: number) => `${shortMonthDay(t)}, ${clock(t)}`;
 
   // The viewer shows the full picture, letterboxed; the filmstrip keeps the thumbnails.
-  const full = $derived(cur?.image ? `url(${cur.image}) center/contain no-repeat, #08080a` : cur?.art.background);
+  const full = $derived(cur?.image ? `url(${cur.image}) center/contain no-repeat, var(--console)` : cur?.art.background);
 
   async function run(what: string, fn: () => Promise<unknown>, done?: string) {
     try {

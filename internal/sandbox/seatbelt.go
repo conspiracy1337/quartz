@@ -12,9 +12,6 @@ import (
 type seatbelt struct {
 	Read, Write []string // folders or files
 	Protect     []string // folders and files inside Write the game may not change
-	Network     bool
-	HomeRead    string // the home folder, readable when the rule says so
-	Hide        string // the launcher's data folder, hidden again after HomeRead
 	Discord     []string
 	Temp, Cache string // the user's temporary and cache folders (JVM files)
 }
@@ -177,9 +174,7 @@ func quote(p string) (string, error) {
 func (b seatbelt) profile() (string, error) {
 	var sb strings.Builder
 	sb.WriteString(seatbeltBase)
-	if b.Network {
-		sb.WriteString(seatbeltNetwork)
-	}
+	sb.WriteString(seatbeltNetwork) // both Internet levels keep the network here (see darwin.go)
 	rule := func(format string, paths ...string) error {
 		for _, p := range paths {
 			q, err := quote(p)
@@ -194,8 +189,6 @@ func (b seatbelt) profile() (string, error) {
 		format string
 		paths  []string
 	}{
-		{"(allow file-read* (subpath PATH))\n", nonEmpty(b.HomeRead)},
-		{"(deny file-read* file-write* (subpath PATH))\n", nonEmpty(b.Hide)},
 		{"(allow file-read* file-map-executable process-exec file-issue-extension (subpath PATH))\n", b.Read},
 		{"(allow file-write* file-link file-read* file-map-executable process-exec file-issue-extension (subpath PATH))\n", b.Write},
 		{"(deny file-write* file-link (subpath PATH))\n", b.Protect},
@@ -221,11 +214,4 @@ func (b seatbelt) profile() (string, error) {
 	}
 	sb.WriteString(seatbeltProtect)
 	return sb.String(), nil
-}
-
-func nonEmpty(s string) []string {
-	if s == "" {
-		return nil
-	}
-	return []string{s}
 }

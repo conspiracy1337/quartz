@@ -33,7 +33,8 @@
   {#if inst}
     {@const i = inst}
     {#if running}
-      <button class="mi" role="menuitem" onclick={() => act(() => session.stop(i.id))}><Icon name="stop" size={14} /><span>Stop</span><span></span></button>
+      {@const kill = session.stopping[i.id]}
+      <button class="mi" role="menuitem" onclick={() => act(() => session.stop(i.id))}><Icon name={kill ? 'x' : 'stop'} size={14} /><span>{kill ? 'Kill' : 'Stop'}</span><span></span></button>
     {:else}
       <button class="mi" role="menuitem" onclick={() => act(() => session.play(i.id))}><Icon name="play" size={14} /><span>Play</span><span></span></button>
     {/if}
@@ -47,8 +48,8 @@
     <button class="mi" role="menuitem" onclick={() => act(() => duplicate(i))}><Icon name="plus" size={14} /><span>Duplicate</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'shortcut', instanceId: i.id }))}><Icon name="link" size={14} /><span>Create shortcut…</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => repair(i))}><Icon name="refresh" size={14} /><span>Repair game files</span><span></span></button>
-    <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'rollback', instanceId: i.id }))}><Icon name="rotate-left" size={14} /><span>Roll back…</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => move(i))}><Icon name="folder" size={14} /><span>Move game folder</span><span></span></button>
+    <button class="mi" role="menuitem" onclick={() => act(() => session.open({ kind: 'rollback', instanceId: i.id }))}><Icon name="rotate-left" size={14} /><span>Roll back…</span><span></span></button>
     <button class="mi" role="menuitem" onclick={() => act(() => trash(i))}><Icon name="trash" size={14} /><span>Delete</span><span></span></button>
   {/if}
   <div class="divider" style="margin: 4px 0"></div>

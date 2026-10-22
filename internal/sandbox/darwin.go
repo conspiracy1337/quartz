@@ -80,12 +80,11 @@ func canonAll(ps []string) []string {
 }
 
 func (b *darwinBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *Jail, error) {
-	// Network unless Blocked. Seatbelt here doesn't filter by destination, so
-	// the LAN level (local network but not the internet, which Windows
-	// enforces) can't be expressed; since a no-network server is useless and
-	// outbound abuse isn't the threat model, LAN keeps the full network, like
-	// Allowed.
-	sb := seatbelt{Network: r.Level(rules.Internet) != rules.Blocked}
+	// Seatbelt here doesn't filter by destination, so the LAN level (local
+	// network but not the internet, which Windows enforces) can't be
+	// expressed; since a no-network server is useless and outbound abuse isn't
+	// the threat model, LAN keeps the full network, like Allowed.
+	var sb seatbelt
 	write := append([]string{r.GameDir, r.Data}, r.Write...)
 	for _, d := range r.Redirects {
 		write = append(write, d.To)
@@ -103,9 +102,6 @@ func (b *darwinBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *J
 		protect = append(protect, f.Seen)
 	}
 	sb.Read, sb.Write, sb.Protect = canonAll(read), canonAll(write), canonAll(protect)
-	if s.home != "" && r.Level(rules.Home) == rules.RO {
-		sb.HomeRead, sb.Hide = canon(s.home), canon(s.c.DataRoot)
-	}
 	tmp := canon(os.TempDir())
 	if tmp != "" {
 		sb.Temp = tmp

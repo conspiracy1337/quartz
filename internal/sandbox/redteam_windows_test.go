@@ -25,7 +25,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,10 +41,10 @@ import (
 
 type winEnv struct {
 	root, game, data, scratch, instances string
-	store, mod, pack                      string
-	secret, home, other, outside          string
-	survivor, listen                      string
-	jarDir, jarPath, javaBin              string
+	store, mod, pack                     string
+	secret, home, other, outside         string
+	survivor, listen                     string
+	jarDir, jarPath, javaBin             string
 }
 
 func TestRedteamEscapes(t *testing.T) {
@@ -66,7 +65,7 @@ func TestRedteamEscapes(t *testing.T) {
 		set  rules.Settings
 	}{
 		{"Standard", rules.Default()},
-		{"Strict", rules.Default().Apply(rules.Strict, runtime.GOOS)},
+		{"Strict", rules.Default().Apply(rules.Strict)},
 	} {
 		// A fresh fixture per preset: a successful write (a finding under the
 		// current build) mutates the store, so presets must not share state.
@@ -626,7 +625,7 @@ public class ServerSpike { public static void main(String[] a) throws Exception 
 	_, _ = exec.Command(filepath.Join(os.Getenv("SYSTEMROOT"), "System32", "icacls.exe"), jar, "/reset").CombinedOutput()
 
 	// Headless under Strict (Internet=LAN) — the server keeps the LAN network.
-	r := Run{Instance: instance, Rules: rules.Default().Apply(rules.Strict, runtime.GOOS), Headless: true,
+	r := Run{Instance: instance, Rules: rules.Default().Apply(rules.Strict), Headless: true,
 		GameDir: e.game, Scratch: e.scratch, Data: e.data,
 		Java: JavaRoot(javaBin), Read: []string{e.jarDir, filepath.Join(e.root, "store", "libraries")}}
 	spec, j, err := New(Config{DataRoot: e.root}).Wrap(r, procx.Spec{Argv: []string{javaBin, "-jar", jar}, Dir: e.game, Env: FilterEnv(os.Environ())})

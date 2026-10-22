@@ -2,9 +2,11 @@
   import { api } from '$lib/api';
   import LogsFrame from '$lib/components/LogsFrame.svelte';
   import { bytes } from '$lib/format';
+  import { UPLOAD_ASK } from '$lib/labels';
   import { revs } from '$lib/revs.svelte';
   import { query, rememberCount, skeletonRows } from '$lib/query.svelte';
   import { session } from '$lib/session.svelte';
+  import ConfirmMenu, { Confirm } from '$lib/ui/ConfirmMenu.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Empty from '$lib/ui/Empty.svelte';
 
@@ -48,7 +50,10 @@
     }
   }
   const copy = () => session.copy(text.data ?? '', title);
-  const upload = () => session.upload(() => (run ? api.logs.uploadRun(instanceId, run.runId) : api.logs.uploadFile(instanceId, selected)));
+  // Sending a log out asks first: anyone with the link can read it.
+  const confirm = new Confirm();
+  const upload = (e: MouseEvent) =>
+    confirm.ask(e, UPLOAD_ASK, 'Upload', () => session.upload(() => (run ? api.logs.uploadRun(instanceId, run.runId) : api.logs.uploadFile(instanceId, selected))), false);
   /** Splits a line around the first match of Find, case-insensitively (as the live console does). */
   function parts(line: string): [string, string, string] {
     const q = find.trim().toLowerCase();
@@ -99,10 +104,11 @@
     </div>
   </section>
 </LogsFrame>
+<ConfirmMenu {confirm} />
 
 <style>
   /* The file, in a box like the live console. */
-  .lv{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden}
+  .lv{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--console);overflow:hidden}
   .lv-head{display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
   .code{font-family:var(--mono);font-size:12px;line-height:20px;white-space:pre-wrap;color:var(--muted);margin:0}
   .code mark{background:color-mix(in srgb,var(--warn) 30%,transparent);color:var(--text);border-radius:2px}

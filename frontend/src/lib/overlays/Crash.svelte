@@ -114,6 +114,6 @@
 </Dialog>
 
 <style>
-  .trace{font-family:var(--mono);font-size:12px;line-height:19px;color:var(--muted);background:#08080a;border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre;overflow:auto;max-height:132px;margin:0}
+  .trace{font-family:var(--mono);font-size:12px;line-height:19px;color:var(--muted);background:var(--console);border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre;overflow:auto;max-height:132px;margin:0}
   .cause{display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;padding:12px;border-radius:10px;border:1px solid color-mix(in srgb,var(--danger) 30%,var(--line));background:color-mix(in srgb,var(--danger) 5%,var(--panel))}
 </style>

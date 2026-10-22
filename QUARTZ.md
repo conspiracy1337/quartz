@@ -109,6 +109,10 @@ All paths are relative to this folder (`src/`). Frontend paths start with `front
 - Tones: trash (with Undo), info, and error (`role=alert`).
 - A toast can carry an action button such as Review, Open or Console.
 
+**Menus** ([Menu.svelte](frontend/src/lib/ui/Menu.svelte), [ConfirmMenu.svelte](frontend/src/lib/ui/ConfirmMenu.svelte))
+- A menu opened from a button (⋮, a split button's ▾, a confirm) closes when that button is pressed again; Escape, a click elsewhere, scrolling or resizing close it too.
+- Actions that delete for good or send something out ask once more in a menu under their button.
+
 ---
 
 ## 3. Keyboard and command palette
@@ -238,7 +242,7 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
   - Right-click opens the instance menu.
 
 **Instance menu** ([InstanceMenu.svelte](frontend/src/lib/overlays/InstanceMenu.svelte), [instanceActions.ts](frontend/src/lib/instanceActions.ts))
-- Actions: Play/Stop, Rename, Appearance, Open folder, Duplicate, Create shortcut…, Export…, Repair game files, Roll back…, Move game folder, Move to trash.
+- Actions: Play/Stop (Kill while stopping), Open folder, Host, Export…, Rename, Appearance, Duplicate, Create shortcut…, Repair game files, Move game folder, Roll back…, Delete.
 - **Play as:** every account, for a single launch. The default account doesn't change.
 - Opens with right-click, Shift+F10 or the Menu key.
 
@@ -751,7 +755,7 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
   - **Windows:** the game's Java is set to High performance in Windows' graphics preferences, unless the player chose already.
 - **Linux performance:** `gamemoderun` and `mangohud`.
 - **Player commands:** run as argv, never through a shell, with a 10-minute timeout. A failure shows the last lines of output.
-- **Stop:** a gentle quit first (SIGTERM or WM_CLOSE), then a kill after 15 s, so the singleplayer world can save, or at once on a second Stop. The game survives the launcher closing. [procx/](internal/core/procx/)
+- **Stop:** a gentle quit first (SIGTERM or WM_CLOSE), then a kill after 15 s, so the singleplayer world can save. Once asked, Stop turns into **Kill** (header, Library card, instance menu) until the game exits, and Kill ends it at once. The hosted server's Stop does the same (`stop` on its console, then a kill after 30 s). The game survives the launcher closing. [procx/](internal/core/procx/)
 
 **Multiple copies and run views** ([runview.go](internal/runview/runview.go), [merge.go](internal/runview/merge.go), [recover.go](internal/runview/recover.go))
 - **Several at once:** several instances, or the same instance more than once (from Play as), can run together.
@@ -790,12 +794,13 @@ Files: [export.go](internal/exporting/export.go), [list.go](internal/exporting/l
   - Search with highlighting.
   - Wrap mode shows the last 2,000 lines; unwrapped mode is virtualised.
   - Auto-scroll while you're at the bottom.
-- **Actions:** Copy the filtered view, Upload to mclo.gs.
+- **Actions:** Copy the filtered view. Uploading lives in Log files and Launch history.
 - Secrets are redacted and marked.
+- **Console colour:** the live console, the log file viewer, the crash trace and the server console share one `--console` background, a step below the page in every theme.
 
 **Log files** ([LogFiles.svelte](frontend/src/routes/instance/LogFiles.svelte), [logfiles.go](internal/logfiles/logfiles.go))
 - **Lists:** `latest.log` first, then dated logs and crash reports. Gzipped logs are decompressed and viewing is capped at 8 MB.
-- **Viewer:** find with highlighting, coloured WARN/ERROR lines, Copy, Upload.
+- **Viewer:** find with highlighting, coloured WARN/ERROR lines, Copy, Upload. Upload asks first in a menu under the button ("Anyone with the link can read it"), as Launch history's Upload logs does.
 - **Delete old logs:** removes compressed logs older than 30 days, per instance or everywhere, with a size preview.
 
 **Launch history** ([LogHistory.svelte](frontend/src/routes/instance/LogHistory.svelte))
@@ -840,24 +845,22 @@ Files: [sandbox.go](internal/sandbox/sandbox.go), [rules/rules.go](internal/sand
 
 - **Per-instance isolation,** on by default for new instances when the system supports it.
 - **Fails closed:** if the sandbox can't start, the instance doesn't launch, and the launcher says why. The page shows which tool is in use, or why none is available.
-- **Presets:** Standard, Strict, Custom.
+- **Presets:** Standard and Strict. Each rule's level is fixed by the preset and shown as text, not a choice; only your own extra folders pick their access (a Read only / Read and write switch, and × to remove).
 
-| Rule | Standard | Strict | Choices |
-|---|---|---|---|
-| This instance | Read and write | Read and write | fixed |
-| Mods | Read only | Read only | fixed |
-| Shared libraries and assets | Read only | Read only | fixed |
-| Java runtime | Read only | Read only | fixed |
-| Synced folders | Read and write | Read only | rw / ro / blocked |
-| Internet | Allowed | Blocked | on / off |
-| Discord status | Allowed | Blocked | on / off (Windows: blocked only) |
-| Graphics and audio | Allowed | Allowed | fixed |
-| Your home folder | Blocked | Blocked | blocked / ro (Windows: blocked only) |
-| Extra folders | – | – | up to 32, rw / ro / remove |
+| Rule | Standard | Strict |
+|---|---|---|
+| This instance | Read and write | Read and write |
+| Mods | Read only | Read only |
+| Shared libraries and assets | Read only | Read only |
+| Java runtime | Read only | Read only |
+| Synced folders | Read and write | Read only |
+| Internet | Allowed | LAN only (Windows; elsewhere the full network) |
+| Discord status | Allowed | Blocked (Windows: always blocked) |
+| Graphics and audio | Allowed | Allowed |
+| Your home folder | Blocked | Blocked |
+| Extra folders | up to 32, rw / ro | up to 32, rw / ro |
 
-- **Read only or blocked on folders the game writes to:**
-  - "Read only": the game still writes, but into a throwaway layer that is dropped on exit.
-  - "Blocked": the game sees an empty throwaway folder.
+- **Read only on folders the game writes to:** the game still writes, but into a throwaway layer that is dropped on exit.
 - **Mods read only:** a mod's file is its store blob, hardlinked into every instance that uses it where the disk can't clone, so a game that could write `mods/` would change it for all of them, unsandboxed ones too. Writes there go to a throwaway layer (Linux with overlays; a mod's own cache still works) or fail. Resource and shader packs hold no code and stay writable, since in-game drag-drop adds packs there.
 - **Skins:** before 1.21.4 the game saves a skin under the assets and reads it back; each instance gets its own skin cache there (mounted on Linux; elsewhere `assets/skins` itself is writable).
 - **Extra folders** are added through a native dialog only. System roots, the launcher's data, and the home folder (or anything containing it) are refused.

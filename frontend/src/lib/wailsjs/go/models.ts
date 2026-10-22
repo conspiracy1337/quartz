@@ -627,7 +627,6 @@ export namespace api {
 	    folder: boolean;
 	    path: string;
 	    level: string;
-	    choices: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SandboxRow(source);
@@ -639,7 +638,6 @@ export namespace api {
 	        this.folder = source["folder"];
 	        this.path = source["path"];
 	        this.level = source["level"];
-	        this.choices = source["choices"];
 	    }
 	}
 	export class SandboxView {
