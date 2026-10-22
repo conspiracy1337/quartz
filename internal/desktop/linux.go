@@ -65,6 +65,8 @@ func (l linux) mimeDir() string      { return filepath.Join(l.dataHome, "mime") 
 func (l linux) mimePath() string {
 	return filepath.Join(l.mimeDir(), "packages", brand.AppID+".xml")
 }
+// iconPath is in the 512 px folder, the largest every icon theme lists;
+// desktops scale the larger app icon down.
 func (l linux) iconPath() string {
 	return filepath.Join(l.dataHome, "icons", "hicolor", "512x512", "apps", brand.AppID+".png")
 }
