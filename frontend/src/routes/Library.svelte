@@ -62,7 +62,7 @@
             <a class="icard-hit" href={href({ name: 'instance', id: r.id, tab: 'overview' })} aria-label="Open {r.name}"></a>
             {#if session.busy(r.id)}
               {@const kill = session.stopping[r.id]}
-              <button class="btn btn-stop btn-icon play live" style="width: 40px; padding: 0; border-radius: 20px" aria-label="{kill ? 'Kill' : 'Stop'} {r.name}" title={kill ? 'Kill' : 'Stop'} onclick={() => session.stop(r.id)}><Icon name={kill ? 'x' : 'stop'} size={12} sw={kill ? 2.5 : 1.6} /></button>
+              <button class="btn btn-stop btn-icon play live" style="width: 40px; padding: 0; border-radius: 20px" aria-label="{kill ? 'Kill' : 'Stop'} {r.name}" title={kill ? 'Kill' : 'Stop'} onclick={() => session.stop(r.id)}><Icon name={kill ? 'skull' : 'stop'} size={12} /></button>
             {:else}
               <button class="btn btn-play btn-icon play" style="width: 40px; padding: 0; border-radius: 20px" aria-label="Play {r.name}" onclick={() => session.play(r.id)}><Icon name="play" size={14} /></button>
             {/if}

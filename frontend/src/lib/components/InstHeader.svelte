@@ -56,7 +56,7 @@
       {/if}
       {#if running}
         {@const kill = session.stopping[i.id]}
-        <button class="btn btn-stop" title={kill ? 'Force the game to quit now' : 'Ask the game to save and quit'} onclick={() => session.stop(i.id)}><Icon name={kill ? 'x' : 'stop'} size={12} sw={kill ? 2.5 : 1.6} />{kill ? 'Kill' : 'Stop'}</button>
+        <button class="btn btn-stop" title={kill ? 'Force the game to quit now' : 'Ask the game to save and quit'} onclick={() => session.stop(i.id)}><Icon name={kill ? 'skull' : 'stop'} size={12} />{kill ? 'Kill' : 'Stop'}</button>
       {:else}
         <button class="btn btn-play" onclick={() => session.play(i.id)}><Icon name="play-wide" size={14} />Play</button>
       {/if}

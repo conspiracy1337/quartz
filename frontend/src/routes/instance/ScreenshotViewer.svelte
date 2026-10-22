@@ -2,7 +2,9 @@
   import { api } from '$lib/api';
   import { bytes, shortMonthDay, clock } from '$lib/format';
   import { query, skeletonRows } from '$lib/query.svelte';
+  import ZoomPan from '$lib/components/ZoomPan.svelte';
   import { revs } from '$lib/revs.svelte';
+  import { go } from '$lib/router.svelte';
   import { session } from '$lib/session.svelte';
   import Icon from '$lib/ui/Icon.svelte';
 
@@ -12,17 +14,19 @@
   // The grid's key, so a screenshot opened from it shows at once.
   // svelte-ignore state_referenced_locally
   const shots = query(() => api.screenshots.list(instanceId), `screenshots.${instanceId}`);
-  let i = $state(0);
-  $effect(() => {
-    i = Math.max(0, shots.data?.findIndex((s) => s.id === shotId) ?? 0);
-  });
   const list = $derived(shots.data ?? []);
   const n = $derived(list.length);
+  const i = $derived(Math.max(0, list.findIndex((s) => s.id === shotId)));
   const cur = $derived(list[i]);
   const when = (t: number) => `${shortMonthDay(t)}, ${clock(t)}`;
+  // The shown one is the route's, so closing fullscreen can leave this page where it stopped.
+  const show = (k: number) => n && go({ name: 'instance', id: instanceId, tab: 'screenshots', sub: list[(k + n) % n]!.id }, { replace: true });
+  const fullscreen = () => cur && session.open({ kind: 'shot', instanceId, shotId: cur.id });
 
-  // The viewer shows the full picture, letterboxed; the filmstrip keeps the thumbnails.
-  const full = $derived(cur?.image ? `url(${cur.image}) center/contain no-repeat, var(--console)` : cur?.art.background);
+  // The filmstrip follows the arrows.
+  let film = $state<HTMLElement>();
+  $effect(() => film?.children[i]?.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+  let zp = $state<ZoomPan>();
 
   async function run(what: string, fn: () => Promise<unknown>, done?: string) {
     try {
@@ -46,28 +50,32 @@
   }
 
   function keys(e: KeyboardEvent) {
-    // The near-fullscreen view has its own arrows.
-    if (!n || session.overlay) return;
-    if (e.key === 'ArrowLeft') i = (i + n - 1) % n;
-    if (e.key === 'ArrowRight') i = (i + 1) % n;
+    // Fullscreen has its own keys, and a focused field keeps its own.
+    if (!n || session.overlay || (e.target as Element).closest('input, textarea, select, [contenteditable]')) return;
+    if (e.key === 'ArrowLeft') show(i - 1);
+    else if (e.key === 'ArrowRight') show(i + 1);
+    else if (!zp?.key(e)) return;
+    e.preventDefault();
   }
 </script>
 
 <svelte:window onkeydown={keys} />
 
 <div class="vw">
-  <section aria-label="Viewer" style="display: flex; flex-direction: column; min-height: 0; min-width: 0">
-    <div style="flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 40px minmax(0,1fr) 40px; align-items: center; gap: 8px; padding: 16px">
-      <button class="btn btn-icon" onclick={() => (i = (i + n - 1) % n)} aria-label="Previous"><Icon name="chevron-left" size={14} sw={2} /></button>
-      <div style="height: 100%; display: grid; place-items: center; min-width: 0">{#if cur}{@const shot = cur}<button class="pic" aria-label="Open screenshot {when(shot.takenAt)} larger" style="background: {full}" onclick={() => session.open({ kind: 'shot', instanceId, shotId: shot.id })}></button>{:else}<div class="sk" style="width: 100%; aspect-ratio: 16/9; border-radius: 8px"></div>{/if}</div>
-      <button class="btn btn-icon" onclick={() => (i = (i + 1) % n)} aria-label="Next"><Icon name="chevron-right" size={14} sw={2} /></button>
+  <section aria-label="Viewer" class="vw-main">
+    <div class="stage">
+      {#if cur}
+        <ZoomPan bind:this={zp} src={cur.image} art={cur.art.background} size={{ w: cur.width, h: cur.height }} label="Screenshot {when(cur.takenAt)}. Click for fullscreen." onclick={fullscreen} step={(by) => show(i + by)}>
+          {#snippet tools()}<button class="btn btn-sm btn-icon btn-ghost" onclick={fullscreen} aria-label="Fullscreen" title="Fullscreen"><Icon name="expand" size={14} sw={2} /></button>{/snippet}
+        </ZoomPan>
+      {:else}<div class="sk" style="width: 100%; height: 100%"></div>{/if}
     </div>
-    <div class="film" role="listbox" aria-label="Screenshots">
-      {#each list as s, k (s.id)}<button class="fi" class:on={k === i} style="background: {s.art.background}" onclick={() => (i = k)} aria-label={when(s.takenAt)} role="option" aria-selected={k === i}></button>
+    <div class="film" role="listbox" aria-label="Screenshots" bind:this={film}>
+      {#each list as s, k (s.id)}<button class="fi" class:on={k === i} style="background: {s.art.background}" onclick={() => show(k)} aria-label={when(s.takenAt)} role="option" aria-selected={k === i}></button>
       {:else}{#if !shots.data}{#each { length: skeletonRows(`screenshots.${instanceId}`, 8) } as _, k (k)}<div class="fi sk" aria-hidden="true"></div>{/each}{/if}{/each}
     </div>
   </section>
-  <aside aria-label="Details" style="border-left: 1px solid var(--line); padding: 16px 18px; display: flex; flex-direction: column; gap: 14px">
+  <aside aria-label="Details">
     {#if cur}
       <div><h2 class="h3 mono trunc">{cur.file}</h2><div class="small faint tnum">{when(cur.takenAt)}</div></div>
       <div class="kv small" style="grid-template-columns: 76px minmax(0,1fr); row-gap: 8px"><span>Size</span><span class="mono">{cur.width} × {cur.height}</span><span>File</span><span class="mono">{bytes(cur.bytes)}</span><span>{cur.server ? 'Server' : 'World'}</span><span class="trunc">{cur.server || cur.world}</span></div>
@@ -88,9 +96,13 @@
 <style>
   .vw{display:grid;grid-template-columns:minmax(0,1fr) 260px;flex:1 1 auto;min-height:0}
   @media (max-width:1100px){.vw{grid-template-columns:minmax(0,1fr)}.vw aside{display:none}}
-  .film{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;border-top:1px solid var(--line);flex:0 0 auto}
-  .fi{flex:0 0 96px;height:54px;border-radius:6px;border:2px solid transparent;padding:0}
+  .vw-main{display:flex;flex-direction:column;min-height:0;min-width:0}
+  /* The picture takes the page; it letterboxes on the console colour. */
+  .stage{flex:1 1 auto;min-height:0;padding:12px}
+  .stage > :global(*){border-radius:8px;background:var(--console)}
+  .film{display:flex;gap:8px;overflow-x:auto;padding:8px 12px;border-top:1px solid var(--line);flex:0 0 auto}
+  .fi{flex:0 0 80px;height:45px;border-radius:6px;border:2px solid transparent;padding:0}
   .fi.on{border-color:var(--text)}
-  /* The picture opens near-fullscreen on a click. */
-  .pic{width:100%;max-height:100%;aspect-ratio:16/9;border-radius:8px;border:0;padding:0;cursor:zoom-in}
+  /* A panel beside the picture, from the tabs down to the bottom. */
+  aside{border-left:1px solid var(--line);background:var(--panel);padding:12px 16px;display:flex;flex-direction:column;gap:14px;min-height:0;overflow-y:auto}
 </style>
