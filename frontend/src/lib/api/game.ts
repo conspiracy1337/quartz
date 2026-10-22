@@ -37,9 +37,9 @@ export const worldItem = (w: GoWorld): ContentItem => ({
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** What both server lists show of a ping: the version to show and how it fits, players and ping. */
-const serverStats = (s: Pick<GoServer, 'online' | 'version' | 'fit' | 'fitVersion' | 'players' | 'max' | 'pingMs'>): ServerStats => ({
+const serverStats = (s: Pick<GoServer, 'online' | 'version' | 'fit' | 'fitVersion' | 'players' | 'max' | 'pingMs' | 'sample'>): ServerStats => ({
   online: s.online, version: s.fitVersion || s.version || '', fit: (s.fit ?? '') as ServerStats['fit'],
-  ...(s.online ? { players: { online: s.players, ...(s.max ? { max: s.max } : {}) }, ...(s.pingMs ? { pingMs: s.pingMs } : {}) } : {}),
+  ...(s.online ? { players: { online: s.players, ...(s.max ? { max: s.max } : {}), ...(s.sample?.length ? { sample: s.sample } : {}) }, ...(s.pingMs ? { pingMs: s.pingMs } : {}) } : {}),
 });
 
 export const serverItem = (s: GoServer): ContentItem => ({

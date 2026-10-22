@@ -17,7 +17,7 @@ export const week: DayPlay[] = [85, 15, 150, 40, 160, 190, 60].map((minutes, i) 
 
 const lg = (a: string, b: string) => ({ background: `linear-gradient(135deg,${a},${b})` });
 export const servers: MergedServer[] = [
-  { id: 's1', name: 'Friends SMP', address: 'smp.kestrel.gg', version: '1.21.4', fit: 'ok', online: true, players: { online: 6, max: 20 }, pingMs: 21, art: lg('#3ecf8e', '#1d6a4a'), instances: ['fo', 'van'] },
+  { id: 's1', name: 'Friends SMP', address: 'smp.kestrel.gg', version: '1.21.4', fit: 'ok', online: true, players: { online: 6, max: 20, sample: ['Kestrel_Vane', 'NightOwl_42', 'BuilderBea', 'mossy_tim', 'Quillfeather'] }, pingMs: 21, art: lg('#3ecf8e', '#1d6a4a'), instances: ['fo', 'van'] },
   { id: 's2', name: 'Hypixel', address: 'mc.hypixel.net', version: '1.21.4', fit: 'ok', online: true, players: { online: 41208, max: 200000 }, pingMs: 38, art: lg('#f2d45c', '#b8862f'), instances: ['van', 'fo', 'sky'] },
   { id: 's3', name: 'Cobblemon Academy', address: 'play.cobbleacademy.gg', version: '1.21.1', fit: 'ok', online: true, players: { online: 312, max: 500 }, pingMs: 64, art: lg('#f2a25c', '#8f4a1c'), instances: ['cob'] },
   { id: 's4', name: 'Skyblock Network', address: 'sb.islandsmc.net', version: '1.21.1', fit: 'minor', online: true, players: { online: 2940 }, pingMs: 96, art: lg('#5bc0be', '#1f5c5b'), instances: ['sky'] },

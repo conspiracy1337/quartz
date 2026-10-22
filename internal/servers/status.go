@@ -16,7 +16,10 @@ type Status struct {
 	Players int    `json:"players"`
 	Max     int    `json:"max,omitempty"`
 	PingMs  int    `json:"pingMs,omitempty"`
-	Icon    string `json:"icon,omitempty"` // the favicon on the image route
+	// Sample is the players the server lists (some servers list lines of
+	// their own instead, or none).
+	Sample []string `json:"sample,omitempty"`
+	Icon   string   `json:"icon,omitempty"` // the favicon on the image route
 	// Fit is how the server suits the instance's Minecraft version (see fit),
 	// and FitVersion the version to show beside it.
 	Fit        string `json:"fit,omitempty"`
@@ -52,6 +55,7 @@ func (s *Service) status(ctx context.Context, address, minecraft string, force b
 		Players: r.Status.Online,
 		Max:     r.Status.Max,
 		PingMs:  max(1, int(r.Status.Latency.Milliseconds())),
+		Sample:  r.Status.Sample,
 	}
 	if s.d.Favicons != nil && len(r.Status.Favicon) > 0 {
 		st.Icon = s.d.Favicons.Put(r.Status.Favicon)

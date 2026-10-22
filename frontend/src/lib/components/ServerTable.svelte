@@ -4,8 +4,6 @@
   type Key = 'name' | 'version' | 'players' | 'ping';
   // The sort each table (Home, an instance's tab) was left on, kept while the launcher runs.
   const sorts: Partial<Record<string, Sort<Key>>> = {};
-  /** How often an open table pings its servers again. */
-  const REPING_MS = 60_000;
 </script>
 
 <script lang="ts">
@@ -14,7 +12,7 @@
   import { listKeys } from '../listkeys';
   import { query, SKELETON } from '../query.svelte';
   import { noTextPick, Picker } from '../selection.svelte';
-  import { onlineOnly, type ServerRow, type ServerScope } from '../servers.svelte';
+  import { onlineOnly, pingClock, type ServerRow, type ServerScope } from '../servers.svelte';
   import { session } from '../session.svelte';
   import { byStats, names, nextSort } from '../sort';
   import Check from '../ui/Check.svelte';
@@ -26,6 +24,7 @@
   import SortTitle from '../ui/SortTitle.svelte';
   import SplitButton from '../ui/SplitButton.svelte';
   import Tile from '../ui/Tile.svelte';
+  import Players from '../ui/Players.svelte';
   import OnlineChip from './OnlineChip.svelte';
 
   /**
@@ -64,12 +63,9 @@
   const selected = $derived((rows ?? []).filter((r) => picker.picked[r.id]));
   $effect(() => picker.escape());
 
-  // Pinged again every minute while the table shows, quietly (rows update in place). Opening it
-  // re-pings answers older than that already: Go keeps each answer for a minute.
-  $effect(() => {
-    const t = setInterval(() => void scope.refresh().catch(() => {}), REPING_MS);
-    return () => clearInterval(t);
-  });
+  // Pinged again on the shared beat while the table shows, quietly (rows update in place).
+  // Opening it re-pings answers older than a minute already: Go keeps each answer that long.
+  $effect(() => pingClock.join(scope));
 
   // Refresh (the title row's button) shows skeleton rows until the answers are in.
   let refreshing = $state(false);
@@ -135,7 +131,7 @@
         <span class="media" style="background: {r.art.background}"></span>
         <span style="min-width: 0"><span class="trunc" style="display: block; font-weight: 500">{r.name}</span><span class="trunc small faint mono" style="display: block">{r.address}</span></span>
         <span class="end c-ver">{#if r.stats}<ServerVersion server={r.stats} />{/if}</span>
-        <span class="end mono muted tnum trunc">{players(r.stats?.players)}</span>
+        <span class="end mono muted tnum trunc"><Players text={players(r.stats?.players)} online={r.stats?.players?.online ?? 0} sample={r.stats?.players?.sample} /></span>
         <span class="end"><ServerPing ms={r.stats?.pingMs} /></span>
         {#if scope.buttons}
           <!-- Only a server that answered has Join. -->

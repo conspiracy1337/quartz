@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"quartz/internal/core/flightx"
 	"quartz/internal/core/pngx"
@@ -44,8 +45,11 @@ type Status struct {
 	Online   int
 	Max      int
 	MOTD     string // plain text
-	Latency  time.Duration
-	Favicon  []byte // canonical PNG, at most 64×64; nil without one
+	// Sample is the players the server chose to list (often a few of them,
+	// sometimes text lines of its own), plain text.
+	Sample  []string
+	Latency time.Duration
+	Favicon []byte // canonical PNG, at most 64×64; nil without one
 }
 
 // Address is a parsed server address.
@@ -179,6 +183,9 @@ type wire struct {
 	Players struct {
 		Max    int `json:"max"`
 		Online int `json:"online"`
+		Sample []struct {
+			Name string `json:"name"`
+		} `json:"sample"`
 	} `json:"players"`
 	Description json.RawMessage `json:"description"`
 	Favicon     string          `json:"favicon"`
@@ -196,8 +203,32 @@ func decode(js []byte) (*Status, error) {
 		Max:      max(0, w.Players.Max),
 		MOTD:     clip(StripCodes(chatText(w.Description)), 256),
 	}
+	for _, s := range w.Players.Sample {
+		if len(st.Sample) == maxSample {
+			break
+		}
+		if name := clip(StripCodes(noControl(s.Name)), maxSampleName); name != "" {
+			st.Sample = append(st.Sample, name)
+		}
+	}
 	st.Favicon = favicon(w.Favicon)
 	return st, nil
+}
+
+// Limits on the player sample: how many names, and bytes per name.
+const (
+	maxSample     = 20
+	maxSampleName = 48
+)
+
+// noControl drops control characters (a name can't break the line it shows on).
+func noControl(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // favicon accepts only a base64 PNG data URL and returns it re-encoded.
@@ -345,32 +376,50 @@ type Result struct {
 }
 
 // Pinger pings with a short cache, merges concurrent pings of one address and
-// limits how many run at once.
+// limits how many run at once. Every caller sees the same live answer for an
+// address (online, players, ping), whichever protocol it asks with: only the
+// version a server names can depend on the protocol, so that is kept per
+// protocol and the rest comes from the newest ping of the address.
 type Pinger struct {
-	TTL  time.Duration
-	ping func(context.Context, Address, int) (*Status, error)
+	TTL time.Duration
+	// Fresh is how old the address's newest answer may be for a forced Get to
+	// reuse it, so two lists refreshing together ping once.
+	Fresh time.Duration
+	ping  func(context.Context, Address, int) (*Status, error)
 
-	sem   chan struct{}
-	group flightx.Group[Result]
-	mu    sync.Mutex
-	cache map[string]Result
+	sem    chan struct{}
+	group  flightx.Group[Result]
+	mu     sync.Mutex
+	cache  map[string]Result // by address and protocol
+	latest map[string]Result // by address
 }
+
+// versionTTL is how long the version a server named for one protocol is
+// reused while other protocols' pings keep its live fields fresh.
+const versionTTL = 10 * time.Minute
 
 // NewPinger returns a Pinger with a 60 s cache and 8 pings at a time.
 func NewPinger() *Pinger {
-	return &Pinger{TTL: time.Minute, ping: Ping, sem: make(chan struct{}, 8), cache: map[string]Result{}}
+	return &Pinger{TTL: time.Minute, Fresh: 5 * time.Second, ping: Ping, sem: make(chan struct{}, 8), cache: map[string]Result{}, latest: map[string]Result{}}
 }
 
-// Get pings addr unless a fresh result is cached; force skips the cache.
+// Get pings addr unless a fresh result is cached; force skips the cache
+// unless the address answered moments ago.
 func (p *Pinger) Get(ctx context.Context, addr Address, protocol int, force bool) Result {
-	key := addr.Key() + "#" + strconv.Itoa(protocol)
-	if !force {
-		p.mu.Lock()
-		r, ok := p.cache[key]
-		p.mu.Unlock()
-		if ok && time.Since(r.At) < p.TTL {
-			return r
-		}
+	host := addr.Key()
+	key := host + "#" + strconv.Itoa(protocol)
+	p.mu.Lock()
+	r, ok := p.cache[key]
+	last := p.latest[host]
+	p.mu.Unlock()
+	// The live fields are as old as the address's newest answer; the version
+	// this protocol saw may be older, up to versionTTL.
+	age := time.Since(r.At)
+	if last.At.After(r.At) {
+		age = time.Since(last.At)
+	}
+	if ok && time.Since(r.At) < versionTTL && (age < p.Fresh || !force && age < p.TTL) {
+		return live(r, last)
 	}
 	r, err := p.group.Do(ctx, key, func(ctx context.Context) (Result, error) {
 		select {
@@ -383,14 +432,8 @@ func (p *Pinger) Get(ctx context.Context, addr Address, protocol int, force bool
 		r := Result{Status: st, Err: err, At: time.Now()}
 		if !errors.Is(err, context.Canceled) {
 			p.mu.Lock()
-			p.cache[key] = r
-			if len(p.cache) > 512 {
-				for k, old := range p.cache {
-					if time.Since(old.At) >= p.TTL {
-						delete(p.cache, k)
-					}
-				}
-			}
+			p.cache[key], p.latest[host] = r, r
+			p.prune()
 			p.mu.Unlock()
 		}
 		return r, nil
@@ -398,5 +441,36 @@ func (p *Pinger) Get(ctx context.Context, addr Address, protocol int, force bool
 	if err != nil {
 		return Result{Err: err, At: time.Now()} // this caller gave up; others may still wait
 	}
-	return r
+	p.mu.Lock()
+	last = p.latest[host]
+	p.mu.Unlock()
+	return live(r, last)
+}
+
+// prune drops stale answers once the caches grow; p.mu is held.
+func (p *Pinger) prune() {
+	for _, m := range []map[string]Result{p.cache, p.latest} {
+		if len(m) <= 512 {
+			continue
+		}
+		for k, old := range m {
+			if time.Since(old.At) >= p.TTL {
+				delete(m, k)
+			}
+		}
+	}
+}
+
+// live is r with the live fields of last, the address's newest answer, when
+// that is newer: offline if it failed, else its players, ping, MOTD and icon.
+func live(r, last Result) Result {
+	if !last.At.After(r.At) {
+		return r
+	}
+	if last.Err != nil || last.Status == nil || r.Status == nil {
+		return last
+	}
+	st := *r.Status
+	st.Online, st.Max, st.MOTD, st.Sample, st.Latency, st.Favicon = last.Status.Online, last.Status.Max, last.Status.MOTD, last.Status.Sample, last.Status.Latency, last.Status.Favicon
+	return Result{Status: &st, At: last.At}
 }

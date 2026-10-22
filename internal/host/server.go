@@ -600,7 +600,7 @@ func (s *Service) pinger(ctx context.Context, srv *server) {
 		}
 		srv.mu.Lock()
 		// Old servers report no maximum until their first status refresh.
-		srv.st.Players, srv.st.Max = st.Online, cmp.Or(st.Max, srv.opts.MaxPlayers)
+		srv.st.Players, srv.st.Max, srv.st.Sample = st.Online, cmp.Or(st.Max, srv.opts.MaxPlayers), st.Sample
 		srv.mu.Unlock()
 		s.emit(srv)
 	}
@@ -694,7 +694,7 @@ func (s *Service) exited(srv *server, waitErr error) {
 // up, and the UI hears the result.
 func (s *Service) finish(srv *server, result string, err error) {
 	srv.mu.Lock()
-	srv.st.State, srv.st.Stage, srv.st.Result, srv.st.Players = "stopped", "", result, 0
+	srv.st.State, srv.st.Stage, srv.st.Result, srv.st.Players, srv.st.Sample = "stopped", "", result, 0, nil
 	if err != nil {
 		srv.st.Message = err.Error()
 	}

@@ -51,7 +51,7 @@ export const content: Record<ContentKind, ContentItem[]> = {
     R('Nether Hub', '5 months ago, 410 MB', 'Survival', sky('#5a1f1f', '#b8432f', '#3a1414'), '', { group: 'Survival' }),
   ],
   servers: [
-    R('Friends SMP', 'smp.kestrel.gg', '', g('#3ecf8e', '#1d6a4a'), '', { online: true, server: { online: true, version: '1.21.4', fit: 'ok', players: { online: 6, max: 20 }, pingMs: 21 } }),
+    R('Friends SMP', 'smp.kestrel.gg', '', g('#3ecf8e', '#1d6a4a'), '', { online: true, server: { online: true, version: '1.21.4', fit: 'ok', players: { online: 6, max: 20, sample: ['Kestrel_Vane', 'NightOwl_42', 'BuilderBea', 'mossy_tim', 'Quillfeather'] }, pingMs: 21 } }),
     R('Hypixel', 'mc.hypixel.net', '', g('#f2d45c', '#b8862f'), '', { online: true, server: { online: true, version: '1.21.4', fit: 'ok', players: { online: 41208, max: 200000 }, pingMs: 38 } }),
     R('Cobblemon Academy', 'play.cobbleacademy.gg', '', g('#f2a25c', '#8f4a1c'), '', { online: true, server: { online: true, version: '1.21.1', fit: 'minor', players: { online: 312, max: 500 }, pingMs: 64 } }),
     R('Modded Test', 'test.kestrel.gg', '', g('#b48cf2', '#5a3f8f'), '', { online: true, server: { online: true, version: '1.20.1', fit: 'major', players: { online: 0, max: 10 }, pingMs: 182 } }),

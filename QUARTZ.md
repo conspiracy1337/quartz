@@ -1039,6 +1039,9 @@ Files: [host/host.go](internal/host/host.go), [host/server.go](internal/host/ser
   - Follows SRV records.
   - Reports ping, players, a clean version label ("Paper 1.21.4" → "1.21.4"), and "Needs X" when the protocol doesn't match the instance.
   - Favicons are re-encoded and stored by hash.
+  - **Who's on:** hovering a player count (both server tables and the host panel) shows the players the server lists, up to 20, plus "and N more". Formatting codes and control characters are stripped; a server that hides its list shows no card. [Players.svelte](frontend/src/lib/ui/Players.svelte)
+- **One answer per server:** Home and every instance's Servers tab show the same values. The pinger keeps the newest answer per address (online, players, ping, MOTD, icon) and shares it across protocols; only the version a server names is kept per protocol (up to 10 minutes). A forced ping reuses an answer under 5 s old, so lists refreshing together ping once.
+- **One beat:** a single 60 s clock re-pings whatever servers table is on show and keeps its beat across page changes. [servers.svelte.ts](frontend/src/lib/servers.svelte.ts)
 - **Limits:** results are cached for 60 s, with at most 8 pings at once. [servers/status.go](internal/servers/status.go), [favicons.go](internal/servers/favicons.go)
 
 **Screenshots** ([screenshots.go](internal/screenshots/screenshots.go), [Screenshots.svelte](frontend/src/routes/instance/Screenshots.svelte), [ScreenshotViewer.svelte](frontend/src/routes/instance/ScreenshotViewer.svelte))

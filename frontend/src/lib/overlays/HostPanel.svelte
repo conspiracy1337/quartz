@@ -6,6 +6,7 @@
   import { query } from '../query.svelte';
   import { session } from '../session.svelte';
   import Icon from '../ui/Icon.svelte';
+  import Players from '../ui/Players.svelte';
 
   /** Bottom-right panel for the local server (DlgHost.dc.html): it stays after the server
       stops, with Start, until it is closed. */
@@ -15,6 +16,7 @@
   const running = $derived(host.state === 'running');
   const RESULT: Record<string, string> = { crash: 'Crashed', failed: "Didn't start", cancelled: 'Cancelled' };
   const aside = $derived(running ? `${host.players} of ${host.max} players` : host.state === 'starting' ? (host.stage ?? '') : (RESULT[host.result ?? ''] ?? 'Stopped'));
+  const sample = $derived(running ? host.sample : undefined);
   // The command box suggests opping yourself (the design's example, with your name).
   const accounts = query(() => api.accounts.list(), 'accounts');
   const me = $derived(accounts.data?.find((a) => a.isDefault)?.name ?? '');
@@ -72,7 +74,7 @@
   </div>
   <div class="row1">
     <div class="addr" class:dim={!running}><span class="mono trunc">{host.address}</span><button class="btn btn-sm btn-ghost" disabled={!running} onclick={() => void session.copy(host.address, 'Address')}>Copy</button></div>
-    <span class="small faint tnum trunc" style="text-align: right">{aside}</span>
+    <span class="small faint tnum trunc" style="text-align: right"><Players text={aside} online={host.players} {sample} /></span>
   </div>
   <div style="padding: 10px 14px 0">
     <div class="con-wrap">

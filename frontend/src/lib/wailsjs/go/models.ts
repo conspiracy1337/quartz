@@ -2025,6 +2025,7 @@ export namespace host {
 	    address: string;
 	    players: number;
 	    max: number;
+	    sample?: string[];
 	    result?: string;
 	    message?: string;
 	
@@ -2043,6 +2044,7 @@ export namespace host {
 	        this.address = source["address"];
 	        this.players = source["players"];
 	        this.max = source["max"];
+	        this.sample = source["sample"];
 	        this.result = source["result"];
 	        this.message = source["message"];
 	    }
@@ -2986,6 +2988,7 @@ export namespace servers {
 	    players: number;
 	    max?: number;
 	    pingMs?: number;
+	    sample?: string[];
 	    icon?: string;
 	    fit?: string;
 	    fitVersion?: string;
@@ -3006,6 +3009,7 @@ export namespace servers {
 	        this.players = source["players"];
 	        this.max = source["max"];
 	        this.pingMs = source["pingMs"];
+	        this.sample = source["sample"];
 	        this.icon = source["icon"];
 	        this.fit = source["fit"];
 	        this.fitVersion = source["fitVersion"];
@@ -3050,6 +3054,7 @@ export namespace servers {
 	    players: number;
 	    max?: number;
 	    pingMs?: number;
+	    sample?: string[];
 	    icon?: string;
 	    fit?: string;
 	    fitVersion?: string;
@@ -3069,6 +3074,7 @@ export namespace servers {
 	        this.players = source["players"];
 	        this.max = source["max"];
 	        this.pingMs = source["pingMs"];
+	        this.sample = source["sample"];
 	        this.icon = source["icon"];
 	        this.fit = source["fit"];
 	        this.fitVersion = source["fitVersion"];
@@ -3080,6 +3086,7 @@ export namespace servers {
 	    players: number;
 	    max?: number;
 	    pingMs?: number;
+	    sample?: string[];
 	    icon?: string;
 	    fit?: string;
 	    fitVersion?: string;
@@ -3095,6 +3102,7 @@ export namespace servers {
 	        this.players = source["players"];
 	        this.max = source["max"];
 	        this.pingMs = source["pingMs"];
+	        this.sample = source["sample"];
 	        this.icon = source["icon"];
 	        this.fit = source["fit"];
 	        this.fitVersion = source["fitVersion"];

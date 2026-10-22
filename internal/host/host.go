@@ -318,8 +318,10 @@ type State struct {
 	Address string `json:"address"`
 	Players int    `json:"players"`
 	Max     int    `json:"max"`
-	Result  string `json:"result,omitempty"`  // stopped: ok | crash | failed | cancelled
-	Message string `json:"message,omitempty"` // stopped: why it failed
+	// Sample names some of the players on (the server lists up to 12).
+	Sample  []string `json:"sample,omitempty"`
+	Result  string   `json:"result,omitempty"`  // stopped: ok | crash | failed | cancelled
+	Message string   `json:"message,omitempty"` // stopped: why it failed
 }
 
 // LogBatch is what host:log carries.

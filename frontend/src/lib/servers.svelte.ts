@@ -34,6 +34,45 @@ export interface ServerScope {
   move(r: ServerRow, by: number, rows: ServerRow[]): Promise<unknown>;
 }
 
+/** How often the server tables on show ping their servers again. */
+const REPING_MS = 60_000;
+
+/**
+ * One clock for every servers table, so Home and an instance's Servers tab are pinged on the
+ * same beat and show the same answers (Go shares each address's newest answer between them).
+ * It runs while a table shows and keeps its beat across page changes: a table that mounts
+ * shows Go's cached answers and is pinged again on the next beat.
+ */
+class PingClock {
+  #scopes = new Set<ServerScope>();
+  #timer: ReturnType<typeof setTimeout> | undefined;
+  #last = 0;
+
+  /** Pings scope on every beat until the returned function is called. */
+  join(scope: ServerScope): () => void {
+    this.#scopes.add(scope);
+    if (!this.#last) this.#last = Date.now();
+    if (!this.#timer) this.#arm();
+    return () => {
+      this.#scopes.delete(scope);
+      if (this.#scopes.size) return;
+      clearTimeout(this.#timer);
+      this.#timer = undefined;
+    };
+  }
+
+  #arm() {
+    this.#timer = setTimeout(() => this.#tick(), Math.max(0, this.#last + REPING_MS - Date.now()));
+  }
+
+  #tick() {
+    this.#last = Date.now();
+    for (const s of this.#scopes) void s.refresh().catch(() => {});
+    this.#arm();
+  }
+}
+export const pingClock = new PingClock();
+
 /** The Online filter of each table (by its scope's key): on shows only servers that answered. */
 export const onlineOnly = $state<Partial<Record<string, boolean>>>({});
 
