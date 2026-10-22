@@ -2,11 +2,19 @@
   import { api } from '../api';
   import type { NewsItem } from '../api/types';
   import { monthDay } from '../format';
+  import { Rotation } from '../rotation.svelte';
   import Icon from '../ui/Icon.svelte';
 
-  /** The latest minecraft.net article. A strip under 120px tall, a picture tile above that. */
-  interface Props { item: NewsItem; ondismiss: () => void }
-  let { item, ondismiss }: Props = $props();
+  /**
+   * News articles (at least one) shown one at a time, in the order given. A strip under
+   * 120px tall, a picture tile above that.
+   */
+  interface Props { items: NewsItem[]; ondismiss: (id: string) => void }
+  let { items, ondismiss }: Props = $props();
+
+  const rot = new Rotation(() => items.length);
+  $effect(() => rot.start());
+  const item = $derived(items[rot.at]!);
 
   function open(e: MouseEvent) {
     e.preventDefault();
@@ -14,16 +22,18 @@
   }
 </script>
 
-<div class="nb" style="font-family: var(--font)">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div class="nb" role="region" aria-roledescription="carousel" aria-label="News" style="font-family: var(--font)"
+  onmouseenter={() => (rot.paused = true)} onmouseleave={() => (rot.paused = false)} onfocusin={(e) => (rot.paused = (e.target as Element).matches(':focus-visible'))} onfocusout={() => (rot.paused = false)}>
   <div class="nb-grid">
-    <span class="nb-pic" aria-hidden="true">{#if item.image}<span class="nb-art" style="background: url({item.image}) center/cover no-repeat"></span>{:else}<span class="nb-art"><span class="nb-sky"></span><span class="nb-sun"></span><span class="nb-m1"></span><span class="nb-tree"></span><span class="nb-m2"></span></span>{/if}<span class="nb-shade"></span></span>
+    <span class="nb-pic" aria-hidden="true">{#each items as it, k (it.id)}{#if it.image}<span class="nb-art" class:on={k === rot.at} style="background: url({it.image}) center/cover no-repeat"></span>{:else}<span class="nb-art" class:on={k === rot.at}><span class="nb-sky"></span><span class="nb-sun"></span><span class="nb-m1"></span><span class="nb-tree"></span><span class="nb-m2"></span></span>{/if}{/each}<span class="nb-shade"></span></span>
     <span class="nb-txt" aria-hidden="true">
       <span class="nb-ttl">{item.title}</span>
       <span class="nb-meta"><span class="trunc">{item.source}, {monthDay(item.published)}</span><Icon name="external" size={12} sw={2} style="flex: 0 0 12px" /></span>
     </span>
-    <button class="btn btn-sm btn-icon btn-ghost nb-x" aria-label="Hide this article" onclick={ondismiss}><Icon name="x" size={10} sw={2.2} /></button>
+    <button class="btn btn-sm btn-icon btn-ghost nb-x" aria-label="Hide this article" onclick={() => ondismiss(item.id)}><Icon name="x" size={10} sw={2.2} /></button>
   </div>
-  <a class="nb-hit" href={item.url} onclick={open} aria-label="Minecraft news: {item.title}. Opens {item.source} in your browser."></a>
+  <a class="nb-hit" href={item.url} onclick={open} aria-label="{item.source} news: {item.title}. Opens in your browser."></a>
 </div>
 
 <style>
@@ -31,7 +41,9 @@
   .nb{position:absolute;inset:0;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--line);background:var(--panel);container-type:size;color:var(--text)}
   .nb-grid{position:absolute;inset:0;display:grid;grid-template-columns:128px minmax(0,1fr) 28px;align-items:center;column-gap:var(--inset);padding-right:var(--inset)}
   .nb-pic{position:relative;align-self:stretch;overflow:hidden;background:#1a2346}
-  .nb-art{position:absolute;inset:0;transition:transform 600ms var(--ease)}
+  .nb-art{position:absolute;inset:0;opacity:0;transition:transform 600ms var(--ease)}
+  .nb-art.on{opacity:1}
+  @media (prefers-reduced-motion:no-preference){.nb-art{transition:transform 600ms var(--ease),opacity 900ms ease}}
   @media (hover:hover){.nb:has(.nb-hit:hover) .nb-art{transform:scale(1.04)}}
   .nb-sky{position:absolute;inset:0;background:linear-gradient(180deg,#2a2f6e 0%,#7a4f9a 38%,#ff9a5a 70%,#ffd08a 100%)}
   .nb-sun{position:absolute;left:62%;top:38%;width:22%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#fff3c4 0%,#ffc670 45%,transparent 70%)}

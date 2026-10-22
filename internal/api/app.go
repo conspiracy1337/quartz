@@ -2,7 +2,6 @@ package api
 
 import (
 	"errors"
-	"net/url"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -10,6 +9,7 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"quartz/internal/brand"
+	"quartz/internal/core/netx"
 	"quartz/internal/core/paths"
 	"quartz/internal/core/procx"
 	"quartz/internal/core/sysinfo"
@@ -141,8 +141,7 @@ func (a *App) OpenURL(raw string) error {
 }
 
 func checkHTTPS(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+	if _, ok := netx.SafeHTTPS(raw); !ok {
 		return ErrUnsafeURL
 	}
 	return nil

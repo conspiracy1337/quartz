@@ -2,10 +2,19 @@ package home
 
 import (
 	"encoding/json"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"quartz/internal/brand"
+	"quartz/internal/core/httpcache"
+	"quartz/internal/core/remoteimg"
 	"quartz/internal/launch"
+	"quartz/internal/meta"
 )
 
 func TestCountWeek(t *testing.T) {
@@ -80,5 +89,79 @@ func TestArticleSlug(t *testing.T) {
 		if got := articleSlug(title); got != want {
 			t.Errorf("%q: got %q, want %q", title, got, want)
 		}
+	}
+}
+
+func TestPickPosts(t *testing.T) {
+	var p posts
+	_ = json.Unmarshal([]byte(`{"entries":[
+		{"id":"old","title":"Beta","published":"2026-09-01T00:00:00Z","url":"https://quartz.conspiracy.moe/beta","image":"https://quartz.conspiracy.moe/news/beta.png"},
+		{"id":"new","title":" Quartz 1.0 ","published":"2026-10-22T12:00:00Z","url":"https://example.com/launch","image":"https://evil.example/x.png"},
+		{"id":"js","title":"Evil","published":"2026-10-22T00:00:00Z","url":"javascript:alert(1)"},
+		{"id":"http","title":"Plain","published":"2026-10-22T00:00:00Z","url":"http://quartz.conspiracy.moe/"},
+		{"id":"user","title":"Phish","published":"2026-10-22T00:00:00Z","url":"https://quartz.conspiracy.moe@evil.example/"},
+		{"id":"date","title":"Undated","published":"yesterday","url":"https://quartz.conspiracy.moe/"},
+		{"id":"","title":"No id","published":"2026-10-22T00:00:00Z","url":"https://quartz.conspiracy.moe/"},
+		{"id":"empty","title":"  ","published":"2026-10-22T00:00:00Z","url":"https://quartz.conspiracy.moe/"},
+		{"id":"long","title":"`+strings.Repeat("x", maxTitle+1)+`","published":"2026-10-22T00:00:00Z","url":"https://quartz.conspiracy.moe/"}
+	]}`), &p)
+	pics := remoteimg.New(t.TempDir(), nil, nil)
+	got := pickPosts(p, pics)
+	if len(got) != 2 || got[0].ID != "quartz:new" || got[0].Title != "Quartz 1.0" || got[1].ID != "quartz:old" {
+		t.Fatalf("%+v", got)
+	}
+	if got[0].Image != "" || !strings.HasPrefix(got[1].Image, "/tex/remote/") || got[0].Source != brand.ShortName {
+		t.Fatalf("%+v", got)
+	}
+	// A flood is cut to the newest few.
+	p.Entries = slices.Repeat(p.Entries[:1], maxPosts+3)
+	if n := len(pickPosts(p, nil)); n != maxPosts {
+		t.Fatal(n)
+	}
+}
+
+// feeds answers each URL with a fixed status and body.
+type feeds map[string]string
+
+func (f feeds) Do(r *http.Request) (*http.Response, error) {
+	w := httptest.NewRecorder()
+	if body, ok := f[r.URL.String()]; ok {
+		_, _ = w.WriteString(body)
+	} else {
+		w.WriteHeader(http.StatusNotFound)
+	}
+	return w.Result(), nil
+}
+
+func newsService(t *testing.T, f feeds) *Service {
+	t.Helper()
+	cache, err := httpcache.Open(t.TempDir(), f, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return New(Deps{Meta: meta.New(cache)})
+}
+
+func TestNewsPutsMinecraftFirst(t *testing.T) {
+	s := newsService(t, feeds{
+		PatchNotes: `{"entries":[{"title":"Minecraft 26.4 Snapshot 4","id":"s4","date":"2026-10-13T12:05:46.000Z"}]}`,
+		QuartzNews: `{"entries":[{"id":"launch","title":"Quartz 1.0","published":"2026-10-22T12:00:00Z","url":"https://quartz.conspiracy.moe/"}]}`,
+	})
+	got, err := s.News(t.Context())
+	if err != nil || len(got) != 2 || got[0].ID != "s4" || got[1].ID != "quartz:launch" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestNewsWithoutOwnFeed(t *testing.T) {
+	// The launcher's feed isn't there (404): Minecraft news still shows.
+	s := newsService(t, feeds{PatchNotes: `{"entries":[{"title":"Minecraft 26.4 Snapshot 4","id":"s4","date":"2026-10-13T12:05:46.000Z"}]}`})
+	got, err := s.News(t.Context())
+	if err != nil || len(got) != 1 || got[0].ID != "s4" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	// Nothing reachable at all is an error.
+	if _, err := newsService(t, feeds{}).News(t.Context()); err == nil {
+		t.Fatal("no error without any feed")
 	}
 }

@@ -198,13 +198,26 @@ The page is a single "focus column" that never scrolls. Rows with nothing to sho
 
 - **Skin card:** the default account's 3D model with its cape, and a "Played this week" bar chart for Monday to Sunday in local time. Sessions that cross midnight count on both days. [SkinCard.svelte](frontend/src/lib/components/SkinCard.svelte)
 - **Screenshot rotator:** recent screenshots from every instance.
-  - Advances every 5 s and pauses on hover or while the window is hidden. Has dots and arrows.
+  - Advances every 5 s and pauses on hover or while the window is hidden. Has dots and arrows. Uses the same rotation as the news strip.
   - Clicking opens the screenshot in its instance.
   - [ShotRotator.svelte](frontend/src/lib/components/ShotRotator.svelte)
-- **News strip:** the latest Java Edition article from Mojang's launcher feed, cached for 1 h.
-  - Only https minecraft.net links are accepted, and the image is proxied.
-  - Clicking opens the browser. ✕ hides that article for good.
-  - [NewsBanner.svelte](frontend/src/lib/components/NewsBanner.svelte)
+- **News strip:** the latest Java Edition article from Mojang's launcher feed (cached for 1 h), then the launcher's own posts.
+  - Rotates every 5 s, Minecraft first, using the same [rotation](frontend/src/lib/rotation.svelte.ts) as the screenshots. It pauses on hover, on keyboard focus, or while the window is hidden.
+  - Mojang links must be https on minecraft.net; the launcher's own links must be https with no credentials. Images are proxied through `remoteimg`.
+  - Clicking opens the browser. ✕ hides that article for good; the last 16 dismissals are kept in `general.hiddenNews`.
+  - The launcher's posts come from `GET https://quartz.conspiracy.moe/api/news`. They are fetched once per run, starting at launch, and revalidated against the disk cache, which serves the last copy when offline. Any failure, including a 404, means no posts and no retry until the next start.
+
+    ```json
+    { "entries": [
+      { "id": "launch-2026", "title": "Quartz 1.0 is out",
+        "published": "2026-10-22T12:00:00Z",
+        "url": "https://quartz.conspiracy.moe/blog/launch",
+        "image": "https://quartz.conspiracy.moe/news/launch.png" }
+    ] }
+    ```
+
+    `id` (at most 100 bytes), `title` (at most 200 characters), `published` (RFC 3339) and `url` are required. `image` is optional and must be on a `remoteimg` host. Entries that fail a check are skipped. The newest 5 show. Delete an entry to retire it. The response is capped at 64 KB, so send `Cache-Control: no-cache` with an `ETag`.
+  - [NewsBanner.svelte](frontend/src/lib/components/NewsBanner.svelte), [home.go](internal/home/home.go)
 - **Servers card:** servers from every instance, merged by address.
   - Filters: All or Online. Refresh forces a fresh ping.
   - Each row shows favicon, name, address, version badge, players and ping bars.

@@ -111,9 +111,10 @@ export const screenshotsApi = {
 };
 
 export const homeApi = {
+  /** The latest Minecraft article first, then the launcher's own posts. */
   news: bridged(
-    () => HomeGo.News().then((n): NewsItem | null => (n ? { id: n.id, title: n.title, source: n.source, published: n.published, url: n.url, ...(n.image ? { image: n.image } : {}) } : null)).catch(() => null),
-    (): NewsItem | null => home.news,
+    () => HomeGo.News().then((l) => l.map((n): NewsItem => ({ id: n.id, title: n.title, source: n.source, published: n.published, url: n.url, ...(n.image ? { image: n.image } : {}) }))).catch((): NewsItem[] => []),
+    (): NewsItem[] => home.news,
   ),
   week: () => revs.load('instances', bridged(HomeGo.Week, (): DayPlay[] => home.week)),
   servers: (force = false) => revs.load('servers', bridged(() => HomeGo.Servers(force).then((l) => l.map(toMerged)), () => home.servers)),

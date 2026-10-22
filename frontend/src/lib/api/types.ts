@@ -188,8 +188,8 @@ export type AlertTarget =
   | { kind: 'instance'; id: string; tab: 'mods' | 'settings' }
   | { kind: 'modpack-update'; id: string }
   | { kind: 'settings'; tab: 'storage' };
-/** The latest minecraft.net article; `image` is its picture on Go's image route. */
-export interface NewsItem { id?: string; title: string; source: string; published: number; url: string; image?: string }
+/** An article in Home's news strip; `image` is its picture on Go's image route. */
+export interface NewsItem { id: string; title: string; source: string; published: number; url: string; image?: string }
 /** Minutes played on one day of this week (0 is Monday). */
 export interface DayPlay { day: number; minutes: number; today: boolean }
 /** Free space on the data folder's drive; `low` under 5 GB. */

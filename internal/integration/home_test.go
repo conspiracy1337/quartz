@@ -35,7 +35,7 @@ func TestPingPublicServer(t *testing.T) {
 	t.Fatal("no public server answered")
 }
 
-// TestNewsFeed reads the official launcher's feeds and picks a Java article or patch note.
+// TestNewsFeed reads the official launcher's feeds and puts a Java article or patch note first.
 func TestNewsFeed(t *testing.T) {
 	h := newHarness(t)
 	insts, err := instance.Open(filepath.Join(t.TempDir(), "instances"), nil)
@@ -44,10 +44,11 @@ func TestNewsFeed(t *testing.T) {
 	}
 	pics := remoteimg.New(filepath.Join(t.TempDir(), "pics"), h.http, nil)
 	svc := home.New(home.Deps{Instances: insts, Meta: h.meta, Pictures: pics, DataDir: t.TempDir()})
-	n, err := svc.News(h.ctx())
-	if err != nil || n == nil {
-		t.Fatalf("%+v %v", n, err)
+	list, err := svc.News(h.ctx())
+	if err != nil || len(list) == 0 {
+		t.Fatalf("%+v %v", list, err)
 	}
+	n := list[0] // Minecraft's comes first
 	t.Logf("%s (%s) %s image=%q", n.Title, time.UnixMilli(n.Published).Format(time.DateOnly), n.URL, n.Image)
 	if !strings.HasPrefix(n.URL, "https://www.minecraft.net/") || n.Image == "" {
 		t.Fatalf("%+v", n)

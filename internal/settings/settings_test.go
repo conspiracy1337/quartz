@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -144,5 +145,20 @@ func TestServerOrderIsCleaned(t *testing.T) {
 	}
 	if got := s.Normalize().General.ServerOrder; len(got) != maxServers {
 		t.Fatal(len(got))
+	}
+}
+
+func TestHiddenNewsKeepsTheLatest(t *testing.T) {
+	s := Defaults()
+	s.General.HiddenNews = []string{"a", "", strings.Repeat("x", 129), "quartz:b"}
+	if got := s.Normalize().General.HiddenNews; len(got) != 2 || got[1] != "quartz:b" {
+		t.Fatal(got)
+	}
+	s.General.HiddenNews = nil
+	for i := range maxHidden + 3 {
+		s.General.HiddenNews = append(s.General.HiddenNews, strconv.Itoa(i))
+	}
+	if got := s.Normalize().General.HiddenNews; len(got) != maxHidden || got[0] != "3" {
+		t.Fatal(got)
 	}
 }
