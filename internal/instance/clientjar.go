@@ -30,7 +30,7 @@ var ErrClientJarLocked = errors.New("instance: an instance with a custom jar sta
 var sha1Re = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // ClientJarPath is where an instance's custom client jar is.
-func (s *Store) ClientJarPath(id string) string { return filepath.Join(s.dir, id, clientJarFile) }
+func (s *Store) ClientJarPath(id string) string { return filepath.Join(s.Dir(id), clientJarFile) }
 
 // jarName makes a picked file's name safe to show.
 func jarName(n string) string {

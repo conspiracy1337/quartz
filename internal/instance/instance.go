@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -242,6 +243,7 @@ var (
 	ErrBadLoader       = errors.New("instance: unknown mod loader")
 	ErrInvalidSettings = errors.New("instance: invalid settings")
 	ErrGameDirMissing  = errors.New("instance: the game folder isn't there. Is its drive connected?")
+	ErrFolderInUse     = errors.New("instance: couldn't rename the instance's folder. Close any program that has it open and try again")
 )
 
 var (
@@ -402,8 +404,9 @@ type Store struct {
 	trash string // trash/, next to the instances folder
 	log   *slog.Logger
 
-	mu    sync.Mutex
-	files map[string]*jsonfile.Store[Instance]
+	mu      sync.Mutex
+	files   map[string]*jsonfile.Store[Instance]
+	folders map[string]string // id → its folder's name inside dir (the slug of its name)
 
 	keyOnce sync.Once
 	key     []byte // per-install HMAC key authenticating command settings
@@ -440,13 +443,15 @@ func (s *Store) Path(id, rel string) string {
 	return filepath.Join(s.Base(id, rel), filepath.FromSlash(rel))
 }
 
-// Open loads every instance folder in dir. Folders whose name is not a valid
-// id, or whose instance.json names another id, are skipped.
+// Open loads every instance folder in dir. An instance is known by the id in
+// its instance.json, whatever its folder is called; folders without a valid
+// one, or with an id another folder already has, are skipped.
 func Open(dir string, log *slog.Logger) (*Store, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	s := &Store{dir: dir, trash: filepath.Join(filepath.Dir(dir), "trash"), log: log, files: map[string]*jsonfile.Store[Instance]{}}
+	s := &Store{dir: dir, trash: filepath.Join(filepath.Dir(dir), "trash"), log: log,
+		files: map[string]*jsonfile.Store[Instance]{}, folders: map[string]string{}}
 	entries, err := os.ReadDir(dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -456,21 +461,26 @@ func Open(dir string, log *slog.Logger) (*Store, error) {
 			_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 			continue
 		}
-		if !e.IsDir() || !ValidID(e.Name()) {
+		if !e.IsDir() || !exists(filepath.Join(dir, e.Name(), "instance.json")) {
 			continue
 		}
 		f, err := s.open(e.Name())
-		if err != nil || f.Get().ID != e.Name() {
+		id := ""
+		if err == nil {
+			id = f.Get().ID
+		}
+		if _, dup := s.files[id]; err != nil || !ValidID(id) || dup {
 			log.Warn("skipping instance folder", "folder", e.Name(), "err", err)
 			continue
 		}
-		s.files[e.Name()] = f
+		s.files[id], s.folders[id] = f, e.Name()
 	}
 	return s, nil
 }
 
-func (s *Store) open(id string) (*jsonfile.Store[Instance], error) {
-	return jsonfile.Open(fileOptions(filepath.Join(s.dir, id, "instance.json"), s.log))
+// open opens the instance.json in folder (a folder name inside dir).
+func (s *Store) open(folder string) (*jsonfile.Store[Instance], error) {
+	return jsonfile.Open(fileOptions(filepath.Join(s.dir, folder, "instance.json"), s.log))
 }
 
 func fileOptions(path string, log *slog.Logger) jsonfile.Options[Instance] {
@@ -497,15 +507,12 @@ func ReadAll(dir string) ([]Instance, error) {
 			_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 			continue
 		}
-		if !e.IsDir() || !ValidID(e.Name()) {
-			continue
-		}
 		path := filepath.Join(dir, e.Name(), "instance.json")
-		if _, err := os.Stat(path); err != nil {
+		if !e.IsDir() || !exists(path) {
 			continue
 		}
 		in, err := jsonfile.Read(fileOptions(path, nil))
-		if err != nil || in.ID != e.Name() {
+		if err != nil || !ValidID(in.ID) || slices.ContainsFunc(out, func(o Instance) bool { return o.ID == in.ID }) {
 			continue
 		}
 		out = append(out, in)
@@ -514,8 +521,58 @@ func ReadAll(dir string) ([]Instance, error) {
 	return out, nil
 }
 
-// Dir is the instance's folder.
-func (s *Store) Dir(id string) string { return filepath.Join(s.dir, id) }
+// Dir is the instance's folder: instances/<slug of its name>, renamed along
+// with the instance. An id that names no instance gets a path that is no
+// instance's folder.
+func (s *Store) Dir(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dirOf(id)
+}
+
+// dirOf is Dir with s.mu held.
+func (s *Store) dirOf(id string) string {
+	if f, ok := s.folders[id]; ok {
+		return filepath.Join(s.dir, f)
+	}
+	return filepath.Join(s.dir, id)
+}
+
+// folderFor picks the folder for an instance called name: the name's slug,
+// or "<slug>-2", "-3" … when another instance or anything else has that one.
+// own is the instance's current folder ("" for a new one), kept when it is
+// already one of those. s.mu must be held.
+func (s *Store) folderFor(name, own string) string {
+	slug := idSlug(name)
+	if n, ok := strings.CutPrefix(own, slug); ok && (n == "" || numbered.MatchString(n)) {
+		return own
+	}
+	taken := map[string]bool{}
+	for _, f := range s.folders {
+		taken[strings.ToLower(f)] = true
+	}
+	for n := 1; ; n++ {
+		try := slug
+		if n > 1 {
+			try = slug + "-" + strconv.Itoa(n)
+		}
+		if !taken[try] && !reserved[try] && !exists(filepath.Join(s.dir, try)) {
+			return try
+		}
+	}
+}
+
+// numbered is the "-2" folderFor adds to a slug that was taken.
+var numbered = regexp.MustCompile(`^-[0-9]+$`)
+
+// reserved are names Windows refuses for a folder, whatever the case.
+var reserved = func() map[string]bool {
+	m := map[string]bool{"con": true, "prn": true, "aux": true, "nul": true}
+	for i := 1; i <= 9; i++ {
+		m["com"+strconv.Itoa(i)], m["lpt"+strconv.Itoa(i)] = true, true
+	}
+	return m
+}()
 
 // GameDir is the folder the game runs in (.minecraft): instances/<id>/game,
 // or wherever the player moved it.
@@ -526,7 +583,7 @@ func (s *Store) GameDir(id string) string {
 	return s.defaultGameDir(id)
 }
 
-func (s *Store) defaultGameDir(id string) string { return filepath.Join(s.dir, id, "game") }
+func (s *Store) defaultGameDir(id string) string { return filepath.Join(s.Dir(id), "game") }
 
 // CheckGameDir makes sure a game folder outside the data folder is really
 // there before anything writes to it: a folder moved by the launcher must
@@ -549,7 +606,7 @@ func (s *Store) CheckGameDir(id string) error {
 }
 
 // RunsDir holds the instance's launch history.
-func (s *Store) RunsDir(id string) string { return filepath.Join(s.dir, id, "runs") }
+func (s *Store) RunsDir(id string) string { return filepath.Join(s.Dir(id), "runs") }
 
 // List returns all instances, most recently played first, never-played last
 // by creation date.
@@ -696,36 +753,50 @@ func (s *Store) Create(req CreateRequest) (Instance, error) {
 	if !validLook(req.Art, req.Icon, req.Banner) {
 		return Instance{}, fmt.Errorf("%w: icon", ErrInvalidSettings)
 	}
+	s.mu.Lock()
+	id := s.newID(name)
+	s.folders[id] = s.folderFor(name, "")
+	s.mu.Unlock()
 	in := Instance{
-		Version: schema, ID: s.newID(name), Name: name, Art: req.Art, Icon: req.Icon, Banner: req.Banner, Minecraft: req.Minecraft,
+		Version: schema, ID: id, Name: name, Art: req.Art, Icon: req.Icon, Banner: req.Banner, Minecraft: req.Minecraft,
 		Loader: req.Loader, LoaderVersion: req.LoaderVersion, KeepLoaderUpdated: true,
 		Sandbox: rules.Settings{On: req.Sandbox, Preset: rules.Standard}, Created: time.Now().UTC(),
 	}
-	if err := os.MkdirAll(s.GameDir(in.ID), 0o700); err != nil {
-		return Instance{}, err
-	}
-	f, err := s.open(in.ID)
+	f, err := s.create(in)
 	if err != nil {
-		return Instance{}, err
-	}
-	in = f.Set(in)
-	if err := f.Flush(); err != nil {
+		s.mu.Lock()
+		delete(s.folders, id)
+		s.mu.Unlock()
 		return Instance{}, err
 	}
 	s.mu.Lock()
 	s.files[in.ID] = f
 	s.mu.Unlock()
-	return in, nil
+	return f.Get(), nil
 }
 
-// newID builds "<slug>-<4 hex>" from the name; it never changes afterwards.
+// create writes a new instance's folder (already reserved in s.folders).
+func (s *Store) create(in Instance) (*jsonfile.Store[Instance], error) {
+	if err := os.MkdirAll(s.GameDir(in.ID), 0o700); err != nil {
+		return nil, err
+	}
+	f, err := s.open(filepath.Base(s.Dir(in.ID)))
+	if err != nil {
+		return nil, err
+	}
+	f.Set(in)
+	return f, f.Flush()
+}
+
+// newID builds "<slug>-<4 hex>" from the name; it never changes afterwards,
+// even when the instance (and its folder) is renamed. s.mu must be held.
 func (s *Store) newID(name string) string {
 	slug := idSlug(name)
 	for {
 		var r [2]byte
 		_, _ = rand.Read(r[:])
 		id := slug + "-" + hex.EncodeToString(r[:])
-		if _, err := os.Stat(s.Dir(id)); errors.Is(err, os.ErrNotExist) {
+		if _, taken := s.files[id]; !taken && s.folders[id] == "" {
 			return id
 		}
 	}

@@ -41,3 +41,22 @@ func TestOpenTabFolderLeavesAMissingGameFolder(t *testing.T) {
 		t.Fatal("the missing game folder was created")
 	}
 }
+
+// Rename moves the folder, so it waits for the game, and follows a watched instance again afterwards.
+func TestRenameGuardsAndRewatches(t *testing.T) {
+	store, err := instance.Open(filepath.Join(t.TempDir(), "instances"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, _ := store.Create(instance.CreateRequest{Name: "T", Minecraft: "1.21.4"})
+	busy, rewatched := true, ""
+	s := NewInstances(&Ctx{}, InstanceDeps{Store: store, Busy: func(string) bool { return busy },
+		Unwatch: func(string) bool { return true }, Rewatch: func(id string) { rewatched = id }})
+	if _, err := s.Rename(in.ID, "Other"); !errors.Is(err, ErrBusy) || rewatched != "" || filepath.Base(store.Dir(in.ID)) != "t" {
+		t.Fatalf("renamed while running: %v %q %s", err, rewatched, store.Dir(in.ID))
+	}
+	busy = false
+	if _, err := s.Rename(in.ID, " "); !errors.Is(err, instance.ErrBadName) || rewatched != in.ID {
+		t.Fatalf("%v, rewatched %q", err, rewatched)
+	}
+}

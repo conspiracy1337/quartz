@@ -163,15 +163,17 @@ func (s *Service) Refs(yield func(sha1 string)) error {
 }
 
 // Forget flushes and drops an instance's cached index before its folder
-// moves (to the trash, or elsewhere).
-func (s *Service) Forget(id string) {
+// moves (to the trash, elsewhere, or a new name). It reports whether the
+// instance's folders were being watched.
+func (s *Service) Forget(id string) (watching bool) {
 	s.watch.mu.Lock()
-	watching := s.watch.id == id
+	watching = s.watch.id == id
 	s.watch.mu.Unlock()
 	if watching {
 		s.Watch("") // an open watch holds the folders (Windows can't move them)
 	}
 	s.idx.forget(id)
+	return watching
 }
 
 // Placer puts an instance's stored files into a copy of its game folder by

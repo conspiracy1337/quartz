@@ -59,10 +59,11 @@ func (s *Store) Trash(id string, now time.Time) (TrashEntry, error) {
 		return TrashEntry{}, err
 	}
 	dst := filepath.Join(s.trash, key)
-	if err := fsx.Rename(s.Dir(id), dst); err != nil {
+	if err := fsx.Rename(s.dirOf(id), dst); err != nil {
 		return TrashEntry{}, err
 	}
 	delete(s.files, id)
+	delete(s.folders, id)
 	e := entryOf(key, in, now.UnixMilli())
 	if data, err := json.Marshal(trashMeta{TrashedAt: e.TrashedAt}); err == nil {
 		_ = fsx.AtomicWrite(filepath.Join(dst, "trashed.json"), data, fsx.FilePerm)
@@ -126,8 +127,9 @@ func (s *Store) readEntry(key string) (TrashEntry, error) {
 	return entryOf(key, in, at), nil
 }
 
-// Restore brings an instance back. If another instance took its id in the
-// meantime, it comes back under a new one.
+// Restore brings an instance back, into a folder named for it as a new one
+// would be. If another instance took its id in the meantime, it comes back
+// under a new one.
 func (s *Store) Restore(key string) (Instance, error) {
 	e, err := s.readEntry(key)
 	if err != nil {
@@ -135,20 +137,23 @@ func (s *Store) Restore(key string) (Instance, error) {
 	}
 	s.mu.Lock()
 	id := e.ID
-	if _, taken := s.files[id]; taken || exists(s.Dir(id)) {
+	if _, taken := s.files[id]; taken {
 		id = s.newID(e.Name)
 	}
-	src := filepath.Join(s.trash, key)
-	if err := fsx.Rename(src, s.Dir(id)); err != nil {
+	folder := s.folderFor(e.Name, "")
+	dir := filepath.Join(s.dir, folder)
+	if err := fsx.Rename(filepath.Join(s.trash, key), dir); err != nil {
 		s.mu.Unlock()
 		return Instance{}, err
 	}
-	_ = os.Remove(filepath.Join(s.Dir(id), "trashed.json"))
-	f, err := s.open(id)
+	_ = os.Remove(filepath.Join(dir, "trashed.json"))
+	s.folders[id] = folder
+	f, err := s.open(folder)
 	if err == nil {
 		_, err = f.Update(func(in *Instance) error { in.ID = id; return nil })
 	}
 	if err != nil {
+		delete(s.folders, id)
 		s.mu.Unlock()
 		return Instance{}, err
 	}

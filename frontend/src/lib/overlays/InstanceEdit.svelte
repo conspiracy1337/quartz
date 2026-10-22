@@ -40,7 +40,7 @@
 {#if inst.data}
   {@const i = inst.data}
   {#if kind === 'rename'}
-    <PromptDialog title="Rename {i.name}" label="Name" help="Only the name changes; the instance's folder stays where it is." action="Rename" value={i.name} maxlength={64}
+    <PromptDialog title="Rename {i.name}" label="Name" help="Its folder on your computer is renamed to match." action="Rename" value={i.name} maxlength={64}
       submit={async (v) => { await api.instances.rename(i.id, v); revs.bump('instances'); }} onclose={close} />
   {:else if look}
     <Dialog title="Appearance" width={640} onclose={close}>

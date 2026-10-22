@@ -163,3 +163,32 @@ func TestReadLeavesTheFileAlone(t *testing.T) {
 		t.Fatal("Read must not move a corrupt file aside")
 	}
 }
+
+func TestRelocateKeepsPendingSave(t *testing.T) {
+	dir := t.TempDir()
+	from, to := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	_ = os.MkdirAll(from, 0o700)
+	o := opts(filepath.Join(from, "x.json"))
+	o.Delay = time.Hour
+	s, err := Open(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Set(doc{Name: "moved"})
+	if err := s.Relocate(filepath.Join(to, "x.json"), func() error { return os.Rename(from, to) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Read(opts(filepath.Join(to, "x.json"))); err != nil || got.Name != "moved" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if _, err := os.Stat(from); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("the save landed in the old folder")
+	}
+	// A failed move keeps the old path.
+	if err := s.Relocate(filepath.Join(dir, "c", "x.json"), func() error { return errors.New("in use") }); err == nil {
+		t.Fatal("failed move reported success")
+	}
+}
