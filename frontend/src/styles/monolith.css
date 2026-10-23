@@ -91,9 +91,10 @@ a{color:inherit}
 .btn-ghost{border-color:transparent}
 .btn-accent{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:500}
 .btn-accent:hover{background:var(--accent);filter:brightness(1.07)}
-.btn-play{height:40px;padding:0 20px 0 16px;border:0;background:#f4f4f5;color:#0a0a0b;font-weight:600;gap:10px}
+/* Play, Stop and Kill share one width, so the header holds still when they swap; the right inset is the icon's optical offset. */
+.btn-play{height:40px;width:92px;padding:0 4px 0 0;border:0;background:#f4f4f5;color:#0a0a0b;font-weight:600;gap:10px}
 .btn-play:hover{background:#fff}
-.btn-stop{height:40px;padding:0 18px 0 14px;border:0;background:var(--danger);color:#1a0405;font-weight:600;gap:10px}
+.btn-stop{height:40px;width:92px;padding:0 4px 0 0;border:0;background:var(--danger);color:#1a0405;font-weight:600;gap:10px}
 .btn-stop:hover{background:var(--danger);filter:brightness(1.12)}
 .btn-danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
 .btn-danger:hover{background:color-mix(in srgb,var(--danger) 10%,transparent)}
