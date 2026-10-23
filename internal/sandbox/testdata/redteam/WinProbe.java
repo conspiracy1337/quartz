@@ -118,12 +118,12 @@ public class WinProbe {
     }
 
     static void ancestors() {
-        // The launcher grants every ancestor of a reachable folder a "traverse"
-        // ACE - but the mask used is FILE_GENERIC_READ, which includes
-        // FILE_LIST_DIRECTORY. So the shared store capability can LIST ancestor
-        // directories, not merely pass through them: cross-instance discovery.
+        // The game folder's parents are listable by design (names only): mod
+        // loaders resolve it with toRealPath, which FindFirstFile-walks every
+        // element. Sibling instances' contents stay blocked (fs-other-instance).
         listLeak("list-ancestors", env("CANARY_INSTANCES")); // the instances/ dir (siblings)
         listLeak("list-home", env("CANARY_REALHOME"));        // the real %USERPROFILE%
+        realPath("realpath-mods", env("CANARY_GAME"));
     }
 
     static void network() {
@@ -249,6 +249,21 @@ public class WinProbe {
                 Files.write(p, "infected".getBytes(StandardCharsets.UTF_8), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
             }
             line(name, "REACHABLE", "wrote " + p.getFileName());
+        } catch (Exception e) {
+            line(name, "BLOCKED", reason(e));
+        }
+    }
+
+    // realPath resolves game/mods the way Fabric's loader does.
+    static void realPath(String name, String game) {
+        if (game == null || game.isEmpty()) {
+            line(name, "SKIP", "no target");
+            return;
+        }
+        try {
+            Path mods = Path.of(game, "mods");
+            Files.createDirectories(mods);
+            line(name, "OK", mods.toRealPath().toString());
         } catch (Exception e) {
             line(name, "BLOCKED", reason(e));
         }

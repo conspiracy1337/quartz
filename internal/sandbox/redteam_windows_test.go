@@ -105,10 +105,11 @@ func checkInvariants(t *testing.T, results map[string]map[string]string) {
 		// Positive controls: the sandbox did not over-restrict.
 		must("read-store", "OK")
 		must("write-gamedir", "OK")
-		// The real user profile must never be listable from inside the jail,
-		// nor the ancestors of the game folder (no cross-instance discovery).
+		// The real user profile must never be listable from inside the jail.
+		// The game folder's parents are, by design (names only, for mod
+		// loaders' toRealPath); other instances' contents stay blocked above.
 		must("list-home", "BLOCKED")
-		must("list-ancestors", "BLOCKED")
+		must("realpath-mods", "OK")
 		// A process the mod detaches must not outlive the game and jail.
 		must("leftover-alive", "BLOCKED")
 	}
@@ -397,20 +398,9 @@ func sidAllowed(path string, sid *windows.SID) (bool, string) {
 
 func setupWin(t *testing.T, javaBin string) *winEnv {
 	t.Helper()
-	// A drive-root test root, deliberately NOT under %TEMP%/%USERPROFILE%, so
-	// the parent-traverse grants the sandbox applies never touch the real home.
-	base := `C:\quartz-rt`
-	if err := os.MkdirAll(base, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	root, err := os.MkdirTemp(base, fmt.Sprintf("run-%d-", os.Getpid()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = linkx.RemoveJunction(filepath.Join(root, "instances", "a", "game", "breakout"))
-		_ = os.RemoveAll(root)
-	})
+	root := jailRoot(t, fmt.Sprintf("run-%d-", os.Getpid()))
+	// Before the root goes (cleanups run last-first).
+	t.Cleanup(func() { _ = linkx.RemoveJunction(filepath.Join(root, "instances", "a", "game", "breakout")) })
 
 	e := &winEnv{
 		root:      root,

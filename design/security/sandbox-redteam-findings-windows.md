@@ -113,6 +113,17 @@ the production layout (`%LOCALAPPDATA%\quartz\…`) the chain reaches the user p
 (`0x000000A0`) — enough to pass through, without `FILE_LIST_DIRECTORY`. Verified:
 `list-ancestors` → BLOCKED while the game still reaches its granted folders.
 
+**Partly reverted, by decision (2026-10-23).** `Path.toRealPath()` on Windows looks every
+path element up in its parent (FindFirstFile), so mod loaders that resolve the game folder
+(Fabric's `mods`) died with `AccessDeniedException` when the folder's parents were
+traverse-only. The parents of the game folder (and of Java, already since Java 24+ support)
+now carry a non-inherited, name-only list ACE for `quartz.store` (`allowParentListing`,
+`listing_windows.go`). `list-ancestors` is therefore LEAK again, by design: a mod sees
+sibling instance folder *names*, never their contents (`fs-other-instance` stays BLOCKED).
+The harness now asserts `realpath-mods` → OK instead. With the default data root under
+`%LOCALAPPDATA%`, the profile folder's own entry names are listable as well. Java's parents
+already caused that.
+
 ## Defenses that held (confirmed at runtime)
 
 - **Filesystem wall.** The launcher account store, a home-like secret, and another

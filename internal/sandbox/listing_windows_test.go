@@ -36,7 +36,7 @@ func TestWalksJavaHome(t *testing.T) {
 
 // The administrator helper takes folders on a drive and nothing else, and
 // grants them listing alone, on each folder only.
-func TestAllowListing(t *testing.T) {
+func TestGrantListing(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "file.txt")
 	if err := os.WriteFile(file, nil, 0o600); err != nil {
@@ -51,11 +51,11 @@ func TestAllowListing(t *testing.T) {
 		{filepath.Join(dir, "missing")},
 		slices.Repeat([]string{dir}, maxListed+1),
 	} {
-		if err := allowListing(bad); err == nil {
-			t.Errorf("allowListing(%q) was accepted", bad)
+		if err := grantListing(bad); err == nil {
+			t.Errorf("grantListing(%q) was accepted", bad)
 		}
 	}
-	if err := allowListing([]string{dir}); err != nil {
+	if err := grantListing([]string{dir}); err != nil {
 		t.Fatal(err)
 	}
 	store, err := capabilitySID(storeCapability)

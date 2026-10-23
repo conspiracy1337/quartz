@@ -31,12 +31,12 @@ type Status struct {
 type Run struct {
 	Instance string
 	Rules    rules.Settings
-	GameDir  string // where the game runs: read-write
+	GameDir  string // where the game runs: read-write (on Windows its parent folders can be listed)
 	Scratch  string // this run's own folder (exists; the sandbox may write files there)
 	Data     string // the instance's persistent sandbox data (caches, mods' own config)
 	Read     []string
 	// Java is the Java runtime's folder (JavaRoot): read-only like Read, and
-	// on Windows its parent folders can be listed, which Java 24+ needs.
+	// on Windows its parent folders can be listed too.
 	Java string
 	// Write are other read-write folders (a hosted server's worlds).
 	Write []string
@@ -213,10 +213,9 @@ func (s *Service) Status() Status { return s.b.status() }
 // ErrUnavailable is returned when the sandbox can't start on this system.
 var ErrUnavailable = errors.New("the sandbox can't start")
 
-// ErrApproval is returned on Windows when Java 24+ needs the one-time
-// administrator approval (letting games list the folders above Java) and it
-// was declined.
-var ErrApproval = errors.New("sandboxing this Java needs a one-time Windows approval")
+// ErrApproval is returned on Windows when the one-time administrator approval
+// (letting games list the folders above the game and Java) was declined.
+var ErrApproval = errors.New("sandboxing this game needs a one-time Windows approval")
 
 // Wrap returns spec run inside r's sandbox. It fails closed: nothing runs
 // unsandboxed because the sandbox couldn't be built.
