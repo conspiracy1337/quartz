@@ -8,14 +8,20 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
 
-# Editing on Windows can turn tracked files' line endings into CRLF, which git
-# then reports as changed. Put them back to LF. Only files the repository
-# stores as LF are touched, so deliberately mixed test data is left alone.
+# Editing on Windows can turn tracked files' line endings into CRLF and mark
+# them executable, which git then reports as changed. Undo both. Only files the
+# repository stores as LF are converted, so deliberately mixed test data is
+# left alone.
 while IFS= read -r -d '' entry; do
   if [[ $entry == "i/lf "*" w/crlf "* ]]; then
     sed -i 's/\r$//' "${entry#*$'\t'}"
   fi
 done < <(git ls-files --eol -z)
+while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+  if [[ $meta == ":100644 100755 "* ]]; then
+    chmod -x "$path"
+  fi
+done < <(git diff --raw --no-renames -z)
 
 ids=$(go run ./tools/release ldflags)
 flags=(-trimpath -ldflags "-s -w $ids")
