@@ -115,11 +115,11 @@ export function rolledBack(instanceId: string, r: RollbackResult) {
   session.notify({ subject: `Rolled back ${plural(r.restored, 'change')}`, text: '', ...(before ? { undo: () => void undo(instanceId, before) } : {}) });
 }
 
-/** A started install keeps the page where it is and shows the download queue in a floating panel. */
+/** A started install keeps the page where it is and opens the status bar's download queue. */
 export async function downloading(job: string) {
   if (!job) return;
   await tasks.load();
-  session.downloadPanel = true;
+  session.downloadTray = true;
 }
 
 /** Installs a project into an instance. A plan with nothing to decide downloads straight away;

@@ -87,8 +87,6 @@ class Session {
   instanceMenu = $state<{ instanceId: string; x: number; y: number } | null>(null);
   /** The bottom bar's download queue is open. */
   downloadTray = $state(true);
-  /** An install started from Browse or a project page shows its queue in a floating panel until it ends or is closed. */
-  downloadPanel = $state(false);
   /** The instance Browse and project pages install into, once picked (else the most recent). */
   browseTarget = $state<TargetPick | null>(null);
   /** Picks the instance Browse and project pages add to. */
