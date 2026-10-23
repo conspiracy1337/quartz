@@ -43,6 +43,8 @@ export interface HostState {
   sample?: string[];
   result?: 'ok' | 'crash' | 'failed' | 'cancelled';
   message?: string;
+  /** 'sandbox-approval': the server waits for the sandbox's one-time Windows approval. */
+  code?: string;
 }
 
 /** "Survival, played yesterday" or "Creative, 2 weeks ago" (the board's wording). */

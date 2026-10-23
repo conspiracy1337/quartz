@@ -5,6 +5,8 @@ import {sandbox} from '../models';
 
 export function AddFolder(arg1:string):Promise<api.SandboxView>;
 
+export function ApproveListing():Promise<void>;
+
 export function SetFolder(arg1:string,arg2:string,arg3:string):Promise<api.SandboxView>;
 
 export function SetOn(arg1:string,arg2:boolean):Promise<api.SandboxView>;

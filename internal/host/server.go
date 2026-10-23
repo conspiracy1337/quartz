@@ -698,6 +698,9 @@ func (s *Service) finish(srv *server, result string, err error) {
 	if err != nil {
 		srv.st.Message = err.Error()
 	}
+	if errors.Is(err, sandbox.ErrApproval) {
+		srv.st.Code = "sandbox-approval"
+	}
 	srv.stdin = nil
 	con := srv.con
 	srv.mu.Unlock()

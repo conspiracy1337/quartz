@@ -6,6 +6,10 @@ export function AddFolder(arg1) {
   return window['go']['api']['Sandbox']['AddFolder'](arg1);
 }
 
+export function ApproveListing() {
+  return window['go']['api']['Sandbox']['ApproveListing']();
+}
+
 export function SetFolder(arg1, arg2, arg3) {
   return window['go']['api']['Sandbox']['SetFolder'](arg1, arg2, arg3);
 }

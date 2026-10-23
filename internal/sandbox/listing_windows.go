@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -37,49 +38,95 @@ const listArg = "--sandbox-allow-listing"
 const maxListed = 64
 
 // allowParentListing makes the parent folders of the game folder and of Java
-// listable to the store capability, asking for approval once where the player
-// can't change a folder's permissions. Java's parents need it only on Java 24
-// and later, which walk java.home.
+// listable to the store capability. The folders the player can't change wait
+// for ApproveListing: the run fails with ErrApproval, so the launcher can say
+// why before Windows asks. Java's parents need it only on Java 24 and later,
+// which walk java.home.
 func (s *Service) allowParentListing(r Run, store *windows.SID) error {
+	newJava := r.Java != "" && walksJavaHome(r.Java)
 	var denied []string
-	ask := false
-	seen := map[string]bool{}
 	for _, root := range []string{r.GameDir, r.Java} {
 		if root == "" {
 			continue
 		}
-		for p := filepath.Dir(root); !seen[p]; p = filepath.Dir(p) {
-			seen[p] = true
-			if err := grantPath(p, store, accessList, false); err != nil {
-				if !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
-					return fmt.Errorf("can't let the game see the folder %s: %w", p, err)
-				}
-				denied = append(denied, p)
-				ask = ask || root == r.GameDir || walksJavaHome(r.Java)
-			}
-			if p == filepath.Dir(p) {
-				break
-			}
+		d, err := grantParents(root, store)
+		if err != nil {
+			return err
+		}
+		if root == r.GameDir || newJava {
+			denied = append(denied, d...)
 		}
 	}
-	if !ask {
+	if len(denied) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range denied {
+		if !slices.Contains(s.pending, p) {
+			s.pending = append(s.pending, p)
+		}
+	}
+	return ErrApproval
+}
+
+// grantParents makes the folders above dir listable and returns the ones the
+// player can't change.
+func grantParents(dir string, store *windows.SID) ([]string, error) {
+	var denied []string
+	for p := filepath.Dir(dir); ; p = filepath.Dir(p) {
+		if err := grantPath(p, store, accessList, false); err != nil {
+			if !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+				return nil, fmt.Errorf("can't let the game see the folder %s: %w", p, err)
+			}
+			denied = append(denied, p)
+		}
+		if p == filepath.Dir(p) {
+			return denied, nil
+		}
+	}
+}
+
+// ApproveListing asks Windows once (its UAC prompt) to let games list the
+// folders a run waited for, and every folder above the data folder with
+// them, so no instance on that drive asks again.
+func (s *Service) ApproveListing() error {
+	store, err := capabilitySID(storeCapability)
+	if err != nil {
+		return err
+	}
+	folders, err := grantParents(filepath.Join(s.c.DataRoot, "instances"), store)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	for _, p := range s.pending {
+		if !slices.Contains(folders, p) {
+			folders = append(folders, p)
+		}
+	}
+	s.mu.Unlock()
+	if len(folders) == 0 {
 		return nil
 	}
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	s.c.Log.Info("sandbox: asking once to let games list the folders above the game and Java", "folders", denied)
-	code, err := procx.RunElevated(exe, append([]string{listArg}, denied...))
+	s.c.Log.Info("sandbox: asking once to let games list the folders above the game and Java", "folders", folders)
+	code, err := procx.RunElevated(exe, append([]string{listArg}, folders...))
 	if errors.Is(err, procx.ErrDeclined) {
-		return ErrApproval
+		return ErrDeclined
 	}
 	if err != nil {
 		return err
 	}
 	if code != 0 {
-		return fmt.Errorf("letting the game see the folders above it failed (exit code %d)", code)
+		return fmt.Errorf("letting games see the folders above them failed (exit code %d)", code)
 	}
+	s.mu.Lock()
+	s.pending = slices.DeleteFunc(s.pending, func(p string) bool { return slices.Contains(folders, p) })
+	s.mu.Unlock()
 	return nil
 }
 
@@ -106,7 +153,7 @@ func walksJavaHome(java string) bool {
 }
 
 // Main runs the administrator helper when the launcher was started as one
-// (listArg, from allowParentListing) and returns at once otherwise. The helper
+// (listArg, from ApproveListing) and returns at once otherwise. The helper
 // can only make the given folders listable to the store capability, each
 // folder alone: it takes no capability, access or inheritance from outside.
 func Main() {
