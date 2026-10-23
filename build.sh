@@ -8,6 +8,15 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
 
+# Editing on Windows can turn tracked files' line endings into CRLF, which git
+# then reports as changed. Put them back to LF. Only files the repository
+# stores as LF are touched, so deliberately mixed test data is left alone.
+while IFS= read -r -d '' entry; do
+  if [[ $entry == "i/lf "*" w/crlf "* ]]; then
+    sed -i 's/\r$//' "${entry#*$'\t'}"
+  fi
+done < <(git ls-files --eol -z)
+
 ids=$(go run ./tools/release ldflags)
 flags=(-trimpath -ldflags "-s -w $ids")
 
