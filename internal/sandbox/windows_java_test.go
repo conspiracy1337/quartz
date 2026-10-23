@@ -25,16 +25,7 @@ func TestJavaSecurityLoads(t *testing.T) {
 	if javaBin == "" {
 		t.Skip("set QUARTZ_JAVA_BIN to a java.exe to run the sandboxed Java check")
 	}
-	// Under a drive-root folder, not %TEMP%, so the grants never touch the home.
-	base := `C:\quartz-rt`
-	if err := os.MkdirAll(base, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	root, err := os.MkdirTemp(base, "java-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	root := jailRoot(t, "java-")
 	game, data, scratch := filepath.Join(root, "instances", "a", "game"), filepath.Join(root, "instances", "a", "sandbox"), filepath.Join(root, "instances", "a", "runs", "1.view")
 	for _, d := range []string{game, scratch} {
 		if err := os.MkdirAll(d, 0o700); err != nil {

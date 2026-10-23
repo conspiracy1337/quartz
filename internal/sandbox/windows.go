@@ -41,7 +41,8 @@ const (
 	// accessTraverse is FILE_TRAVERSE | FILE_READ_ATTRIBUTES only: enough to
 	// pass through a parent folder on the way to an allowed one, but not
 	// FILE_LIST_DIRECTORY, so the shared store capability can't enumerate the
-	// ancestors (a mod listing a sibling instance, or the user's profile).
+	// ancestors (the user's profile, say). The game folder's and Java's
+	// parents are the exception: see allowParentListing.
 	accessTraverse = 0x000000A0
 	inheritFlags   = 0x3 // OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
 
@@ -293,7 +294,7 @@ func (b *windowsBackend) wrap(s *Service, r Run, spec procx.Spec) (procx.Spec, *
 			}
 		}
 	}
-	if err := s.allowJavaListing(r.Java, store); err != nil {
+	if err := s.allowParentListing(r, store); err != nil {
 		return procx.Spec{}, nil, err
 	}
 	// After the game folder's grant, so the modify it hands down can be sealed

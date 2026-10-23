@@ -14,16 +14,17 @@ import (
 	"quartz/internal/core/procx"
 )
 
-// Java 24 and later load their security settings (java.security) through
-// Path.toRealPath(), which looks every folder of java.home up in its parent
-// (FindFirstFile), from the drive root down. Passing through a folder isn't
-// enough for that: the parent has to be listable, or every game on Java 25
-// dies at startup with "Error loading java.security file". So the Java
-// runtime's parent folders let the store capability list them: their names
-// only, on each folder alone, never what is in their files. The launcher
-// grants the folders the player owns; the others (a drive root, C:\Users)
-// take one administrator approval, which stays for good. An older Java
-// doesn't walk the path, so it never asks.
+// Path.toRealPath() looks every folder of a path up in its parent
+// (FindFirstFile), from the drive root down, so passing through a folder
+// isn't enough for it: the parent has to be listable. Java 24 and later load
+// their security settings (java.security) that way, or every game on Java 25
+// dies at startup with "Error loading java.security file", and mod loaders
+// resolve the game folder that way on any Java (Fabric's mods folder). So the
+// parent folders of the game folder and of the Java runtime let the store
+// capability list them: their names only (a sibling instance's folder name),
+// on each folder alone, never what is in their files. The launcher grants the
+// folders the player owns; the others (a drive root, C:\Users) take one
+// administrator approval, which stays for good.
 
 // accessList is FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | FILE_TRAVERSE |
 // SYNCHRONIZE: what FindFirstFile needs on a parent.
@@ -35,33 +36,40 @@ const listArg = "--sandbox-allow-listing"
 // maxListed bounds the folders one approval covers (a path's depth).
 const maxListed = 64
 
-// allowJavaListing makes java's parent folders listable to the store
-// capability, asking for approval once where the player can't change a
-// folder's permissions.
-func (s *Service) allowJavaListing(java string, store *windows.SID) error {
-	if java == "" {
-		return nil
-	}
+// allowParentListing makes the parent folders of the game folder and of Java
+// listable to the store capability, asking for approval once where the player
+// can't change a folder's permissions. Java's parents need it only on Java 24
+// and later, which walk java.home.
+func (s *Service) allowParentListing(r Run, store *windows.SID) error {
 	var denied []string
-	for p := filepath.Dir(java); ; p = filepath.Dir(p) {
-		if err := grantPath(p, store, accessList, false); err != nil {
-			if !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
-				return fmt.Errorf("can't let the game see the folder %s: %w", p, err)
-			}
-			denied = append(denied, p)
+	ask := false
+	seen := map[string]bool{}
+	for _, root := range []string{r.GameDir, r.Java} {
+		if root == "" {
+			continue
 		}
-		if p == filepath.Dir(p) {
-			break
+		for p := filepath.Dir(root); !seen[p]; p = filepath.Dir(p) {
+			seen[p] = true
+			if err := grantPath(p, store, accessList, false); err != nil {
+				if !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+					return fmt.Errorf("can't let the game see the folder %s: %w", p, err)
+				}
+				denied = append(denied, p)
+				ask = ask || root == r.GameDir || walksJavaHome(r.Java)
+			}
+			if p == filepath.Dir(p) {
+				break
+			}
 		}
 	}
-	if len(denied) == 0 || !walksJavaHome(java) {
+	if !ask {
 		return nil
 	}
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	s.c.Log.Info("sandbox: asking once to let games list the folders above Java", "folders", denied)
+	s.c.Log.Info("sandbox: asking once to let games list the folders above the game and Java", "folders", denied)
 	code, err := procx.RunElevated(exe, append([]string{listArg}, denied...))
 	if errors.Is(err, procx.ErrDeclined) {
 		return ErrApproval
@@ -70,7 +78,7 @@ func (s *Service) allowJavaListing(java string, store *windows.SID) error {
 		return err
 	}
 	if code != 0 {
-		return fmt.Errorf("letting the game see the folders above Java failed (exit code %d)", code)
+		return fmt.Errorf("letting the game see the folders above it failed (exit code %d)", code)
 	}
 	return nil
 }
@@ -98,23 +106,23 @@ func walksJavaHome(java string) bool {
 }
 
 // Main runs the administrator helper when the launcher was started as one
-// (listArg, from allowJavaListing) and returns at once otherwise. The helper
+// (listArg, from allowParentListing) and returns at once otherwise. The helper
 // can only make the given folders listable to the store capability, each
 // folder alone: it takes no capability, access or inheritance from outside.
 func Main() {
 	if len(os.Args) < 2 || os.Args[1] != listArg {
 		return
 	}
-	if err := allowListing(os.Args[2:]); err != nil {
+	if err := grantListing(os.Args[2:]); err != nil {
 		fmt.Fprintf(os.Stderr, "quartz: %v\n", err)
 		os.Exit(1)
 	}
 	os.Exit(0)
 }
 
-// allowListing grants accessList on each folder: a clean absolute path on a
+// grantListing grants accessList on each folder: a clean absolute path on a
 // drive, that exists and is a folder.
-func allowListing(folders []string) error {
+func grantListing(folders []string) error {
 	if len(folders) == 0 || len(folders) > maxListed {
 		return fmt.Errorf("sandbox: %d folders to list", len(folders))
 	}

@@ -23,7 +23,7 @@ import (
 // per probe ("ok" or the error).
 func TestMain(m *testing.M) {
 	landlock.Main() // the fixture's runs go through this binary as the shim
-	Main()          // and the Windows administrator helper (allowJavaListing)
+	Main()          // and the Windows administrator helper (allowParentListing)
 	if os.Getenv("QUARTZ_SANDBOX_HELPER") != "" {
 		helper()
 		return
@@ -100,7 +100,7 @@ func newJailFixture(t *testing.T) *jailFixture {
 	if !st.Available {
 		t.Skip(st.Reason)
 	}
-	root := t.TempDir()
+	root := jailRoot(t, "jail-")
 	f := &jailFixture{root: root, game: filepath.Join(root, "instances", "a", "game"), other: filepath.Join(root, "instances", "b", "game"),
 		secret: filepath.Join(root, "accounts.json"), store: filepath.Join(root, "store", "libraries", "lib.jar"),
 		pack:    filepath.Join(root, "store", "content", "pack.zip"),
