@@ -11,17 +11,22 @@ export PATH="$PATH:/usr/local/go/bin:$HOME/go/bin"
 # Editing on Windows can turn tracked files' line endings into CRLF and mark
 # them executable, which git then reports as changed. Undo both. Only files the
 # repository stores as LF are converted, so deliberately mixed test data is
-# left alone.
-while IFS= read -r -d '' entry; do
-  if [[ $entry == "i/lf "*" w/crlf "* ]]; then
-    sed -i 's/\r$//' "${entry#*$'\t'}"
-  fi
-done < <(git ls-files --eol -z)
-while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
-  if [[ $meta == ":100644 100755 "* ]]; then
-    chmod -x "$path"
-  fi
-done < <(git diff --raw --no-renames -z)
+# left alone. `wails build` also writes the bindings it regenerates as
+# executable, so this runs again after the builds.
+normalize_tree() {
+  local entry meta path
+  while IFS= read -r -d '' entry; do
+    if [[ $entry == "i/lf "*" w/crlf "* ]]; then
+      sed -i 's/\r$//' "${entry#*$'\t'}"
+    fi
+  done < <(git ls-files --eol -z)
+  while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+    if [[ $meta == ":100644 100755 "* ]]; then
+      chmod -x "$path"
+    fi
+  done < <(git diff --raw --no-renames -z)
+}
+normalize_tree
 
 ids=$(go run ./tools/release ldflags)
 flags=(-trimpath -ldflags "-s -w $ids")
@@ -37,3 +42,4 @@ fi
 go run ./tools/release wails build -clean -platform linux/amd64 "${flags[@]}" "${linux_tags[@]}" "$@"
 # Windows next: reuse that frontend (-s) and keep the Linux binary (no -clean).
 go run ./tools/release wails build -s -platform windows/amd64 -o quartz.exe "${flags[@]}" "$@"
+normalize_tree

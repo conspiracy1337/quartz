@@ -2042,6 +2042,7 @@ export namespace host {
 	    sample?: string[];
 	    result?: string;
 	    message?: string;
+	    code?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new State(source);
@@ -2061,6 +2062,7 @@ export namespace host {
 	        this.sample = source["sample"];
 	        this.result = source["result"];
 	        this.message = source["message"];
+	        this.code = source["code"];
 	    }
 	}
 
