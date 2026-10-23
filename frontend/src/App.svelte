@@ -20,6 +20,7 @@
   import ShortcutDialog from '$lib/overlays/ShortcutDialog.svelte';
   import ExportDialog from '$lib/overlays/ExportDialog.svelte';
   import Rollback from '$lib/overlays/Rollback.svelte';
+  import SandboxApproval from '$lib/overlays/SandboxApproval.svelte';
   import ShotFullscreen from '$lib/overlays/ShotFullscreen.svelte';
   import Shortcuts from '$lib/overlays/Shortcuts.svelte';
   import Toast from '$lib/overlays/Toast.svelte';
@@ -167,6 +168,7 @@
     {:else if overlay.kind === 'copy-world'}<CopyWorld {...overlay} />
     {:else if overlay.kind === 'rename-world'}<WorldEdit instanceId={overlay.instanceId} folder={overlay.folder} name={overlay.name} />
     {:else if overlay.kind === 'blocked'}<Blocked jobId={overlay.jobId} />
+    {:else if overlay.kind === 'sandbox-approval'}<SandboxApproval instanceId={overlay.instanceId} then={overlay.then} accountId={overlay.accountId} />
     {:else if overlay.kind === 'host'}<Host instanceId={overlay.instanceId} />
     {:else if overlay.kind === 'palette'}<Palette mode={overlay.mode} />
     {:else if overlay.kind === 'shortcuts'}<Shortcuts />

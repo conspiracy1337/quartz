@@ -26,6 +26,8 @@ export type Overlay =
   | { kind: 'copy-world'; instanceId: string; folder: string; name: string; sub: string }
   | { kind: 'rename-world'; instanceId: string; folder: string; name: string }
   | { kind: 'blocked'; jobId: string }
+  /** The Windows sandbox's one-time approval, explained before Windows asks; then plays or tells to start the server again. */
+  | { kind: 'sandbox-approval'; instanceId: string; then: 'play' | 'host'; accountId?: string }
   | { kind: 'host'; instanceId: string }
   | { kind: 'palette'; mode: 'commands' | 'instances' }
   | { kind: 'shortcuts' }
@@ -228,8 +230,8 @@ class Session {
         if (this.launch?.instanceId === f.instanceId) this.launch = null;
         if (f.code === 'no-account') this.open({ kind: 'add-account', mode: 'offline' });
         else if (f.code === 'sign-in-expired') this.open({ kind: 'add-account', mode: 'browser', ...(f.accountId ? { accountId: f.accountId } : {}) });
-        // Java 24+ in the Windows sandbox needs one approval; playing again asks for it.
-        else if (f.code === 'sandbox-approval') this.notify({ tone: 'error', subject: "Couldn't start the game", text: f.message, action: { label: 'Approve', run: () => this.play(f.instanceId) } });
+        // The Windows sandbox needs one approval; the dialog says why, then plays again.
+        else if (f.code === 'sandbox-approval') this.open({ kind: 'sandbox-approval', instanceId: f.instanceId, then: 'play', ...(f.accountId ? { accountId: f.accountId } : {}) });
         else if (f.code !== 'cancelled') this.notify({ tone: 'error', subject: "Couldn't start the game", text: errorText(f.message) });
       }),
       onEvent<GameState>('game:state', (g) => {
@@ -322,7 +324,8 @@ class Session {
       this.hostStopped = h;
     }
     revs.bump('worlds');
-    if (h.result === 'failed') this.notify({ tone: 'error', subject: "Couldn't start the server", text: h.message ?? '' });
+    if (h.code === 'sandbox-approval') this.open({ kind: 'sandbox-approval', instanceId: h.instanceId, then: 'host' });
+    else if (h.result === 'failed') this.notify({ tone: 'error', subject: "Couldn't start the server", text: h.message ?? '' });
     else if (h.result === 'crash') {
       this.notify({ tone: 'error', subject: 'The server', text: 'stopped unexpectedly', action: { label: 'Console', run: () => go({ name: 'instance', id: h.instanceId, tab: 'logs' }) } });
     }

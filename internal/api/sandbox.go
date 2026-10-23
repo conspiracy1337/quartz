@@ -63,6 +63,10 @@ type SandboxView struct {
 // Status says whether games can be sandboxed on this system, and with what.
 func (a *Sandbox) Status() sandbox.Status { return a.d.Service.Status() }
 
+// ApproveListing asks Windows once (UAC) to let sandboxed games list the
+// folders above them, after the launcher's explanation.
+func (a *Sandbox) ApproveListing() error { return a.d.Service.ApproveListing() }
+
 // View is the instance's sandbox choices with the paths they cover.
 func (a *Sandbox) View(id string) (SandboxView, error) {
 	if err := checkInstanceID(id); err != nil {

@@ -322,6 +322,9 @@ type State struct {
 	Sample  []string `json:"sample,omitempty"`
 	Result  string   `json:"result,omitempty"`  // stopped: ok | crash | failed | cancelled
 	Message string   `json:"message,omitempty"` // stopped: why it failed
+	// Code is "sandbox-approval" for a server that waits for the sandbox's
+	// one-time Windows approval.
+	Code string `json:"code,omitempty"`
 }
 
 // LogBatch is what host:log carries.

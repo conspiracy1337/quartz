@@ -53,4 +53,6 @@ export const sandboxApi = {
   /** Opens a native folder picker; resolves unchanged when cancelled. */
   addFolder: bridged(SandboxGo.AddFolder, (_id: string) => mock.addFolder()),
   setFolder: bridged(SandboxGo.SetFolder, (_id: string, folder: string, l: SandboxLevel) => mock.setFolder(folder, l)),
+  /** Windows' one-time approval (its UAC prompt) to let sandboxed games list the folders above them. */
+  approveListing: bridged(SandboxGo.ApproveListing, () => undefined),
 };

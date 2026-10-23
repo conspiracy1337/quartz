@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sync"
 
 	"quartz/internal/core/fsx"
 	"quartz/internal/core/procx"
@@ -189,6 +190,9 @@ type Service struct {
 	c    Config
 	home string
 	b    backend
+
+	mu      sync.Mutex
+	pending []string // folders waiting for ApproveListing (Windows)
 }
 
 // backend is one OS's sandbox.
@@ -213,9 +217,13 @@ func (s *Service) Status() Status { return s.b.status() }
 // ErrUnavailable is returned when the sandbox can't start on this system.
 var ErrUnavailable = errors.New("the sandbox can't start")
 
-// ErrApproval is returned on Windows when the one-time administrator approval
-// (letting games list the folders above the game and Java) was declined.
+// ErrApproval is returned on Windows when a run needs the one-time
+// administrator approval (ApproveListing: letting games list the folders above
+// the game and Java) first.
 var ErrApproval = errors.New("sandboxing this game needs a one-time Windows approval")
+
+// ErrDeclined is returned when the player dismissed that approval.
+var ErrDeclined = errors.New("the Windows approval was declined")
 
 // Wrap returns spec run inside r's sandbox. It fails closed: nothing runs
 // unsandboxed because the sandbox couldn't be built.
